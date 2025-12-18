@@ -1814,3 +1814,754 @@ export async function initializeDefaultSettings() {
     }
   }
 }
+
+
+// ==================== دوال مؤشرات الأداء المالي (KPIs) ====================
+import { 
+  financialKpis, InsertFinancialKpi,
+  loginAttempts, InsertLoginAttempt,
+  securityAlerts, InsertSecurityAlert,
+  priceChangeLogs, InsertPriceChangeLog,
+  productBatches, InsertProductBatch,
+  inventoryCounts, InsertInventoryCount,
+  inventoryCountItems, InsertInventoryCountItem,
+  permissions, InsertPermission,
+  userPermissions, InsertUserPermission,
+  suggestedPurchaseOrders, InsertSuggestedPurchaseOrder,
+} from "../drizzle/schema";
+
+// حساب مؤشرات الأداء المالي
+export async function calculateFinancialKPIs(startDate: Date, endDate: Date, branchId?: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // الحصول على إجمالي المبيعات
+  const invoicesData = await db.select({
+    total: sql<string>`COALESCE(SUM(${invoices.total}), 0)`,
+    count: sql<number>`COUNT(*)`,
+  }).from(invoices).where(
+    and(
+      gte(invoices.invoiceDate, startDate),
+      lte(invoices.invoiceDate, endDate),
+      eq(invoices.status, 'paid')
+    )
+  );
+
+  // الحصول على تكلفة البضاعة المباعة
+  const costData = await db.select({
+    totalCost: sql<string>`COALESCE(SUM(${invoiceItems.quantity} * p.costPrice), 0)`,
+  }).from(invoiceItems)
+    .innerJoin(invoices, eq(invoiceItems.invoiceId, invoices.id))
+    .innerJoin(products, eq(invoiceItems.productId, products.id))
+    .where(
+      and(
+        gte(invoices.invoiceDate, startDate),
+        lte(invoices.invoiceDate, endDate),
+        eq(invoices.status, 'paid')
+      )
+    );
+
+  // الحصول على إجمالي المصاريف
+  const expensesData = await db.select({
+    total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`,
+  }).from(expenses).where(
+    and(
+      gte(expenses.expenseDate, startDate),
+      lte(expenses.expenseDate, endDate),
+      eq(expenses.status, 'approved')
+    )
+  );
+
+  // الحصول على عدد العملاء الفريدين
+  const customersData = await db.select({
+    count: sql<number>`COUNT(DISTINCT ${invoices.customerId})`,
+  }).from(invoices).where(
+    and(
+      gte(invoices.invoiceDate, startDate),
+      lte(invoices.invoiceDate, endDate)
+    )
+  );
+
+  const totalRevenue = parseFloat(invoicesData[0]?.total || '0');
+  const totalCost = parseFloat(costData[0]?.totalCost || '0');
+  const totalExpenses = parseFloat(expensesData[0]?.total || '0');
+  const invoiceCount = invoicesData[0]?.count || 0;
+  const customerCount = customersData[0]?.count || 0;
+
+  const grossProfit = totalRevenue - totalCost;
+  const netProfit = grossProfit - totalExpenses;
+  const grossProfitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+  const netProfitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+  const averageOrderValue = invoiceCount > 0 ? totalRevenue / invoiceCount : 0;
+
+  // حساب العائد على الاستثمار (ROI) - نسبة مبسطة
+  const totalInvestment = totalCost + totalExpenses;
+  const roi = totalInvestment > 0 ? ((netProfit / totalInvestment) * 100) : 0;
+
+  // نسبة السيولة - نسبة الأصول المتداولة إلى الخصوم المتداولة (مبسطة)
+  const currentRatio = totalExpenses > 0 ? totalRevenue / totalExpenses : 0;
+
+  return {
+    totalRevenue,
+    totalCost,
+    totalExpenses,
+    grossProfit,
+    netProfit,
+    grossProfitMargin: parseFloat(grossProfitMargin.toFixed(4)),
+    netProfitMargin: parseFloat(netProfitMargin.toFixed(4)),
+    roi: parseFloat(roi.toFixed(4)),
+    currentRatio: parseFloat(currentRatio.toFixed(4)),
+    invoiceCount,
+    customerCount,
+    averageOrderValue: parseFloat(averageOrderValue.toFixed(2)),
+  };
+}
+
+// حفظ مؤشرات الأداء المالي
+export async function saveFinancialKPI(data: Omit<InsertFinancialKpi, "id" | "createdAt" | "updatedAt">) {
+  const db = await getDb();
+  if (!db) return null;
+  return await db.insert(financialKpis).values(data);
+}
+
+// الحصول على مؤشرات الأداء المالي
+export async function getFinancialKPIs(periodType: string, limit: number = 12) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(financialKpis)
+    .where(eq(financialKpis.periodType, periodType as any))
+    .orderBy(desc(financialKpis.periodEnd))
+    .limit(limit);
+}
+
+// ==================== دوال محاولات تسجيل الدخول ====================
+
+// تسجيل محاولة دخول
+export async function createLoginAttempt(data: Omit<InsertLoginAttempt, "id" | "createdAt">) {
+  const db = await getDb();
+  if (!db) return null;
+  return await db.insert(loginAttempts).values(data);
+}
+
+// الحصول على محاولات الدخول الفاشلة الأخيرة لمستخدم
+export async function getRecentFailedLoginAttempts(username: string, minutes: number = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const cutoffTime = new Date(Date.now() - minutes * 60 * 1000);
+  return await db.select().from(loginAttempts)
+    .where(and(
+      eq(loginAttempts.username, username),
+      eq(loginAttempts.success, false),
+      gte(loginAttempts.createdAt, cutoffTime)
+    ))
+    .orderBy(desc(loginAttempts.createdAt));
+}
+
+// الحصول على جميع محاولات الدخول
+export async function getAllLoginAttempts(limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(loginAttempts)
+    .orderBy(desc(loginAttempts.createdAt))
+    .limit(limit);
+}
+
+// ==================== دوال تنبيهات الأمان ====================
+
+// إنشاء تنبيه أمان
+export async function createSecurityAlert(data: Omit<InsertSecurityAlert, "id" | "createdAt">) {
+  const db = await getDb();
+  if (!db) return null;
+  return await db.insert(securityAlerts).values(data);
+}
+
+// الحصول على التنبيهات غير المقروءة
+export async function getUnreadSecurityAlerts() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(securityAlerts)
+    .where(eq(securityAlerts.isRead, false))
+    .orderBy(desc(securityAlerts.createdAt));
+}
+
+// الحصول على جميع التنبيهات
+export async function getAllSecurityAlerts(limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(securityAlerts)
+    .orderBy(desc(securityAlerts.createdAt))
+    .limit(limit);
+}
+
+// تحديث حالة التنبيه
+export async function updateSecurityAlert(id: number, data: { isRead?: boolean; isResolved?: boolean; resolvedBy?: number }) {
+  const db = await getDb();
+  if (!db) return;
+  const updateData: any = { ...data };
+  if (data.isResolved) {
+    updateData.resolvedAt = new Date();
+  }
+  await db.update(securityAlerts).set(updateData).where(eq(securityAlerts.id, id));
+}
+
+// ==================== دوال سجل تغييرات الأسعار ====================
+
+// تسجيل تغيير سعر
+export async function createPriceChangeLog(data: Omit<InsertPriceChangeLog, "id" | "createdAt">) {
+  const db = await getDb();
+  if (!db) return null;
+  return await db.insert(priceChangeLogs).values(data);
+}
+
+// الحصول على سجل تغييرات الأسعار لمنتج
+export async function getPriceChangeLogsByProduct(productId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(priceChangeLogs)
+    .where(eq(priceChangeLogs.productId, productId))
+    .orderBy(desc(priceChangeLogs.createdAt));
+}
+
+// الحصول على جميع تغييرات الأسعار
+export async function getAllPriceChangeLogs(limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(priceChangeLogs)
+    .orderBy(desc(priceChangeLogs.createdAt))
+    .limit(limit);
+}
+
+// الحصول على تغييرات الأسعار الكبيرة (أكثر من نسبة معينة)
+export async function getLargePriceChanges(minPercentage: number = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(priceChangeLogs)
+    .where(sql`ABS(${priceChangeLogs.changePercentage}) >= ${minPercentage}`)
+    .orderBy(desc(priceChangeLogs.createdAt));
+}
+
+// ==================== دوال تتبع الدفعات (Batch Tracking) ====================
+
+// إنشاء دفعة جديدة
+export async function createProductBatch(data: Omit<InsertProductBatch, "id" | "createdAt" | "updatedAt">) {
+  const db = await getDb();
+  if (!db) return null;
+  return await db.insert(productBatches).values({
+    ...data,
+    remainingQuantity: data.quantity,
+  });
+}
+
+// الحصول على دفعات منتج
+export async function getProductBatches(productId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(productBatches)
+    .where(eq(productBatches.productId, productId))
+    .orderBy(productBatches.expiryDate);
+}
+
+// الحصول على الدفعات النشطة (FIFO)
+export async function getActiveBatchesFIFO(productId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(productBatches)
+    .where(and(
+      eq(productBatches.productId, productId),
+      eq(productBatches.status, 'active'),
+      sql`${productBatches.remainingQuantity} > 0`
+    ))
+    .orderBy(productBatches.receivedDate);
+}
+
+// الحصول على المنتجات قريبة الانتهاء
+export async function getExpiringProducts(daysAhead: number = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const futureDate = new Date();
+  futureDate.setDate(futureDate.getDate() + daysAhead);
+  
+  return await db.select().from(productBatches)
+    .where(and(
+      eq(productBatches.status, 'active'),
+      sql`${productBatches.remainingQuantity} > 0`,
+      lte(productBatches.expiryDate!, futureDate),
+      gte(productBatches.expiryDate!, new Date())
+    ))
+    .orderBy(productBatches.expiryDate);
+}
+
+// تحديث كمية الدفعة
+export async function updateBatchQuantity(batchId: number, quantityUsed: number) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const batch = await db.select().from(productBatches).where(eq(productBatches.id, batchId)).limit(1);
+  if (batch.length === 0) return;
+  
+  const newQuantity = batch[0].remainingQuantity - quantityUsed;
+  const status = newQuantity <= 0 ? 'depleted' : 'active';
+  
+  await db.update(productBatches).set({
+    remainingQuantity: Math.max(0, newQuantity),
+    status,
+  }).where(eq(productBatches.id, batchId));
+}
+
+// ==================== دوال الجرد الدوري ====================
+
+// توليد رقم الجرد
+export async function generateInventoryCountNumber() {
+  const db = await getDb();
+  if (!db) return `CNT-${Date.now()}`;
+  
+  const lastCount = await db.select({ countNumber: inventoryCounts.countNumber })
+    .from(inventoryCounts)
+    .orderBy(desc(inventoryCounts.id))
+    .limit(1);
+
+  const year = new Date().getFullYear();
+  if (lastCount.length === 0) {
+    return `CNT-${year}-0001`;
+  }
+
+  const lastNumber = lastCount[0].countNumber;
+  const parts = lastNumber.split('-');
+  const sequence = parseInt(parts[2] || '0') + 1;
+  return `CNT-${year}-${sequence.toString().padStart(4, '0')}`;
+}
+
+// إنشاء جرد جديد
+export async function createInventoryCount(data: Omit<InsertInventoryCount, "id" | "createdAt" | "updatedAt" | "countNumber">) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const countNumber = await generateInventoryCountNumber();
+  return await db.insert(inventoryCounts).values({
+    ...data,
+    countNumber,
+  });
+}
+
+// الحصول على جميع عمليات الجرد
+export async function getAllInventoryCounts() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(inventoryCounts)
+    .orderBy(desc(inventoryCounts.countDate));
+}
+
+// الحصول على جرد بالمعرف
+export async function getInventoryCountById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(inventoryCounts).where(eq(inventoryCounts.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// إضافة عنصر للجرد
+export async function addInventoryCountItem(data: Omit<InsertInventoryCountItem, "id" | "createdAt">) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const variance = (data.countedQuantity || 0) - (data.systemQuantity || 0);
+  const varianceValue = variance * parseFloat(data.unitCost as string);
+  
+  return await db.insert(inventoryCountItems).values({
+    ...data,
+    variance,
+    varianceValue: varianceValue.toFixed(2),
+  });
+}
+
+// الحصول على عناصر الجرد
+export async function getInventoryCountItems(countId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(inventoryCountItems)
+    .where(eq(inventoryCountItems.countId, countId));
+}
+
+// تحديث حالة الجرد
+export async function updateInventoryCount(id: number, data: Partial<InsertInventoryCount>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(inventoryCounts).set(data).where(eq(inventoryCounts.id, id));
+}
+
+// حساب إحصائيات الجرد
+export async function calculateInventoryCountStats(countId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const items = await getInventoryCountItems(countId);
+  
+  let totalProducts = items.length;
+  let matchedProducts = 0;
+  let discrepancyProducts = 0;
+  let totalSystemValue = 0;
+  let totalCountedValue = 0;
+  
+  for (const item of items) {
+    const unitCost = parseFloat(item.unitCost as string);
+    totalSystemValue += item.systemQuantity * unitCost;
+    totalCountedValue += item.countedQuantity * unitCost;
+    
+    if (item.variance === 0) {
+      matchedProducts++;
+    } else {
+      discrepancyProducts++;
+    }
+  }
+  
+  const varianceValue = totalCountedValue - totalSystemValue;
+  
+  await updateInventoryCount(countId, {
+    totalProducts,
+    matchedProducts,
+    discrepancyProducts,
+    totalSystemValue: totalSystemValue.toFixed(2),
+    totalCountedValue: totalCountedValue.toFixed(2),
+    varianceValue: varianceValue.toFixed(2),
+  });
+  
+  return {
+    totalProducts,
+    matchedProducts,
+    discrepancyProducts,
+    totalSystemValue,
+    totalCountedValue,
+    varianceValue,
+  };
+}
+
+// ==================== دوال الصلاحيات التفصيلية ====================
+
+// إنشاء صلاحية
+export async function createPermission(data: Omit<InsertPermission, "id" | "createdAt">) {
+  const db = await getDb();
+  if (!db) return null;
+  return await db.insert(permissions).values(data);
+}
+
+// الحصول على جميع الصلاحيات
+export async function getAllPermissions() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(permissions).orderBy(permissions.category, permissions.code);
+}
+
+// الحصول على صلاحيات مستخدم
+export async function getUserPermissions(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select({
+    id: userPermissions.id,
+    permissionId: userPermissions.permissionId,
+    code: permissions.code,
+    name: permissions.name,
+    nameAr: permissions.nameAr,
+    category: permissions.category,
+    grantedAt: userPermissions.grantedAt,
+  }).from(userPermissions)
+    .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
+    .where(eq(userPermissions.userId, userId));
+}
+
+// منح صلاحية لمستخدم
+export async function grantPermission(userId: number, permissionId: number, grantedBy: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  // التحقق من عدم وجود الصلاحية مسبقاً
+  const existing = await db.select().from(userPermissions)
+    .where(and(
+      eq(userPermissions.userId, userId),
+      eq(userPermissions.permissionId, permissionId)
+    )).limit(1);
+  
+  if (existing.length > 0) return existing[0];
+  
+  return await db.insert(userPermissions).values({
+    userId,
+    permissionId,
+    grantedBy,
+  });
+}
+
+// إلغاء صلاحية من مستخدم
+export async function revokePermission(userId: number, permissionId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(userPermissions).where(and(
+    eq(userPermissions.userId, userId),
+    eq(userPermissions.permissionId, permissionId)
+  ));
+}
+
+// التحقق من صلاحية مستخدم
+export async function hasPermission(userId: number, permissionCode: string) {
+  const db = await getDb();
+  if (!db) return false;
+  
+  const result = await db.select().from(userPermissions)
+    .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
+    .where(and(
+      eq(userPermissions.userId, userId),
+      eq(permissions.code, permissionCode)
+    )).limit(1);
+  
+  return result.length > 0;
+}
+
+// إنشاء الصلاحيات الافتراضية
+export async function initializeDefaultPermissions() {
+  const defaultPermissions: Omit<InsertPermission, "id" | "createdAt">[] = [
+    // صلاحيات المستخدمين
+    { code: "users.read", name: "View Users", nameAr: "عرض المستخدمين", category: "users" },
+    { code: "users.create", name: "Create Users", nameAr: "إنشاء مستخدمين", category: "users" },
+    { code: "users.update", name: "Update Users", nameAr: "تعديل المستخدمين", category: "users" },
+    { code: "users.delete", name: "Delete Users", nameAr: "حذف المستخدمين", category: "users" },
+    
+    // صلاحيات المنتجات
+    { code: "products.read", name: "View Products", nameAr: "عرض المنتجات", category: "products" },
+    { code: "products.create", name: "Create Products", nameAr: "إنشاء منتجات", category: "products" },
+    { code: "products.update", name: "Update Products", nameAr: "تعديل المنتجات", category: "products" },
+    { code: "products.delete", name: "Delete Products", nameAr: "حذف المنتجات", category: "products" },
+    { code: "products.price", name: "Change Prices", nameAr: "تغيير الأسعار", category: "products" },
+    
+    // صلاحيات الفواتير
+    { code: "invoices.read", name: "View Invoices", nameAr: "عرض الفواتير", category: "invoices" },
+    { code: "invoices.create", name: "Create Invoices", nameAr: "إنشاء فواتير", category: "invoices" },
+    { code: "invoices.update", name: "Update Invoices", nameAr: "تعديل الفواتير", category: "invoices" },
+    { code: "invoices.void", name: "Void Invoices", nameAr: "إلغاء الفواتير", category: "invoices" },
+    
+    // صلاحيات المشتريات
+    { code: "purchases.read", name: "View Purchases", nameAr: "عرض المشتريات", category: "purchases" },
+    { code: "purchases.create", name: "Create Purchases", nameAr: "إنشاء أوامر شراء", category: "purchases" },
+    { code: "purchases.approve", name: "Approve Purchases", nameAr: "الموافقة على المشتريات", category: "purchases" },
+    
+    // صلاحيات التقارير
+    { code: "reports.sales", name: "View Sales Reports", nameAr: "عرض تقارير المبيعات", category: "reports" },
+    { code: "reports.financial", name: "View Financial Reports", nameAr: "عرض التقارير المالية", category: "reports" },
+    { code: "reports.inventory", name: "View Inventory Reports", nameAr: "عرض تقارير المخزون", category: "reports" },
+    { code: "reports.audit", name: "View Audit Reports", nameAr: "عرض تقارير التدقيق", category: "reports" },
+    
+    // صلاحيات الإعدادات
+    { code: "settings.read", name: "View Settings", nameAr: "عرض الإعدادات", category: "settings" },
+    { code: "settings.manage", name: "Manage Settings", nameAr: "إدارة الإعدادات", category: "settings" },
+    
+    // صلاحيات الأمان
+    { code: "security.alerts", name: "View Security Alerts", nameAr: "عرض تنبيهات الأمان", category: "security" },
+    { code: "security.audit", name: "View Audit Logs", nameAr: "عرض سجلات التدقيق", category: "security" },
+  ];
+  
+  const db = await getDb();
+  if (!db) return;
+  
+  for (const perm of defaultPermissions) {
+    const existing = await db.select().from(permissions).where(eq(permissions.code, perm.code)).limit(1);
+    if (!existing || existing.length === 0) {
+      await createPermission(perm);
+    }
+  }
+}
+
+// ==================== دوال أوامر الشراء المقترحة ====================
+
+// إنشاء اقتراح شراء
+export async function createSuggestedPurchaseOrder(data: Omit<InsertSuggestedPurchaseOrder, "id" | "createdAt" | "updatedAt">) {
+  const db = await getDb();
+  if (!db) return null;
+  return await db.insert(suggestedPurchaseOrders).values(data);
+}
+
+// الحصول على اقتراحات الشراء المعلقة
+export async function getPendingSuggestedPurchaseOrders() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(suggestedPurchaseOrders)
+    .where(eq(suggestedPurchaseOrders.status, 'pending'))
+    .orderBy(desc(suggestedPurchaseOrders.createdAt));
+}
+
+// تحديث حالة اقتراح الشراء
+export async function updateSuggestedPurchaseOrder(id: number, data: Partial<InsertSuggestedPurchaseOrder>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(suggestedPurchaseOrders).set(data).where(eq(suggestedPurchaseOrders.id, id));
+}
+
+// فحص المنتجات منخفضة المخزون وإنشاء اقتراحات
+export async function checkAndCreateReorderSuggestions() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // الحصول على المنتجات منخفضة المخزون
+  const lowStockProducts = await getLowStockProducts();
+  const suggestions = [];
+  
+  for (const product of lowStockProducts) {
+    // التحقق من عدم وجود اقتراح معلق لهذا المنتج
+    const existingSuggestion = await db.select().from(suggestedPurchaseOrders)
+      .where(and(
+        eq(suggestedPurchaseOrders.productId, product.id),
+        eq(suggestedPurchaseOrders.status, 'pending')
+      )).limit(1);
+    
+    if (existingSuggestion.length > 0) continue;
+    
+    // حساب الكمية المقترحة (ضعف الحد الأدنى)
+    const suggestedQuantity = product.minQuantity * 2;
+    
+    const suggestion = await createSuggestedPurchaseOrder({
+      productId: product.id,
+      productName: product.name,
+      productSku: product.sku,
+      currentQuantity: product.quantity,
+      minQuantity: product.minQuantity,
+      suggestedQuantity,
+      averageConsumption: '0.00', // يمكن حسابه من سجل المبيعات
+      lastPurchasePrice: product.costPrice,
+      status: 'pending',
+    });
+    
+    if (suggestion) {
+      suggestions.push(suggestion);
+    }
+  }
+  
+  return suggestions;
+}
+
+// ==================== دوال تقارير التدقيق ====================
+
+// الحصول على ملخص الأنشطة حسب المستخدم
+export async function getActivitySummaryByUser(startDate: Date, endDate: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select({
+    userId: activityLogs.userId,
+    userName: activityLogs.userName,
+    actionCount: sql<number>`COUNT(*)`,
+    createCount: sql<number>`SUM(CASE WHEN ${activityLogs.action} = 'create' THEN 1 ELSE 0 END)`,
+    updateCount: sql<number>`SUM(CASE WHEN ${activityLogs.action} = 'update' THEN 1 ELSE 0 END)`,
+    deleteCount: sql<number>`SUM(CASE WHEN ${activityLogs.action} = 'delete' THEN 1 ELSE 0 END)`,
+  }).from(activityLogs)
+    .where(and(
+      gte(activityLogs.createdAt, startDate),
+      lte(activityLogs.createdAt, endDate)
+    ))
+    .groupBy(activityLogs.userId, activityLogs.userName);
+}
+
+// الحصول على العمليات غير المعتادة
+export async function getUnusualActivities(startDate: Date, endDate: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // العمليات غير المعتادة: حذف كثير، تغييرات أسعار كبيرة، إلخ
+  const deleteActivities = await db.select().from(activityLogs)
+    .where(and(
+      eq(activityLogs.action, 'delete'),
+      gte(activityLogs.createdAt, startDate),
+      lte(activityLogs.createdAt, endDate)
+    ))
+    .orderBy(desc(activityLogs.createdAt));
+  
+  const largePriceChanges = await getLargePriceChanges(20);
+  
+  return {
+    deleteActivities,
+    largePriceChanges,
+  };
+}
+
+// تقرير ABC للمخزون
+export async function getABCInventoryReport() {
+  const db = await getDb();
+  if (!db) return { A: [], B: [], C: [] };
+  
+  // الحصول على المنتجات مع إجمالي المبيعات
+  const productSales = await db.select({
+    productId: invoiceItems.productId,
+    productName: invoiceItems.productName,
+    totalSales: sql<string>`SUM(${invoiceItems.total})`,
+    totalQuantity: sql<number>`SUM(${invoiceItems.quantity})`,
+  }).from(invoiceItems)
+    .groupBy(invoiceItems.productId, invoiceItems.productName)
+    .orderBy(sql`SUM(${invoiceItems.total}) DESC`);
+  
+  // حساب إجمالي المبيعات
+  const totalSales = productSales.reduce((sum, p) => sum + parseFloat(p.totalSales || '0'), 0);
+  
+  // تصنيف المنتجات
+  const A: typeof productSales = [];
+  const B: typeof productSales = [];
+  const C: typeof productSales = [];
+  
+  let cumulativeSales = 0;
+  for (const product of productSales) {
+    const productTotal = parseFloat(product.totalSales || '0');
+    cumulativeSales += productTotal;
+    const percentage = (cumulativeSales / totalSales) * 100;
+    
+    if (percentage <= 80) {
+      A.push(product);
+    } else if (percentage <= 95) {
+      B.push(product);
+    } else {
+      C.push(product);
+    }
+  }
+  
+  return { A, B, C, totalSales };
+}
+
+// تحليل الاتجاهات الشهرية
+export async function getMonthlyTrends(months: number = 12) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const trends = [];
+  const now = new Date();
+  
+  for (let i = 0; i < months; i++) {
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    
+    const salesData = await db.select({
+      total: sql<string>`COALESCE(SUM(${invoices.total}), 0)`,
+      count: sql<number>`COUNT(*)`,
+    }).from(invoices)
+      .where(and(
+        gte(invoices.invoiceDate, monthStart),
+        lte(invoices.invoiceDate, monthEnd),
+        eq(invoices.status, 'paid')
+      ));
+    
+    const expensesData = await db.select({
+      total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`,
+    }).from(expenses)
+      .where(and(
+        gte(expenses.expenseDate, monthStart),
+        lte(expenses.expenseDate, monthEnd),
+        eq(expenses.status, 'approved')
+      ));
+    
+    trends.push({
+      month: monthStart.toISOString().slice(0, 7),
+      monthName: monthStart.toLocaleDateString('ar-SA', { month: 'long', year: 'numeric' }),
+      sales: parseFloat(salesData[0]?.total || '0'),
+      invoiceCount: salesData[0]?.count || 0,
+      expenses: parseFloat(expensesData[0]?.total || '0'),
+      profit: parseFloat(salesData[0]?.total || '0') - parseFloat(expensesData[0]?.total || '0'),
+    });
+  }
+  
+  return trends.reverse();
+}

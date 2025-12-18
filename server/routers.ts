@@ -348,6 +348,75 @@ export const appRouter = router({
           });
         }
         
+        // تسجيل تغييرات الأسعار
+        if (product) {
+          // تسجيل تغيير سعر التكلفة
+          if (data.costPrice && data.costPrice !== product.costPrice) {
+            const oldPrice = parseFloat(product.costPrice);
+            const newPrice = parseFloat(data.costPrice);
+            const changePercentage = oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 0;
+            
+            await db.createPriceChangeLog({
+              productId: id,
+              productName: product.name,
+              productSku: product.sku,
+              priceType: 'cost',
+              oldPrice: product.costPrice,
+              newPrice: data.costPrice,
+              changePercentage: changePercentage.toFixed(2),
+              changedBy: ctx.user.id,
+              changedByName: ctx.user.name || 'مستخدم',
+            });
+            
+            // إنشاء تنبيه إذا كان التغيير كبير (أكثر من 20%)
+            if (Math.abs(changePercentage) >= 20) {
+              await db.createSecurityAlert({
+                alertType: 'price_change',
+                severity: Math.abs(changePercentage) >= 50 ? 'high' : 'medium',
+                title: 'تغيير كبير في سعر التكلفة',
+                message: `تم تغيير سعر تكلفة المنتج "${product.name}" بنسبة ${changePercentage.toFixed(1)}%`,
+                userId: ctx.user.id,
+                userName: ctx.user.name || 'مستخدم',
+                entityType: 'product',
+                entityId: id,
+              });
+            }
+          }
+          
+          // تسجيل تغيير سعر البيع
+          if (data.sellingPrice && data.sellingPrice !== product.sellingPrice) {
+            const oldPrice = parseFloat(product.sellingPrice);
+            const newPrice = parseFloat(data.sellingPrice);
+            const changePercentage = oldPrice > 0 ? ((newPrice - oldPrice) / oldPrice) * 100 : 0;
+            
+            await db.createPriceChangeLog({
+              productId: id,
+              productName: product.name,
+              productSku: product.sku,
+              priceType: 'selling',
+              oldPrice: product.sellingPrice,
+              newPrice: data.sellingPrice,
+              changePercentage: changePercentage.toFixed(2),
+              changedBy: ctx.user.id,
+              changedByName: ctx.user.name || 'مستخدم',
+            });
+            
+            // إنشاء تنبيه إذا كان التغيير كبير (أكثر من 20%)
+            if (Math.abs(changePercentage) >= 20) {
+              await db.createSecurityAlert({
+                alertType: 'price_change',
+                severity: Math.abs(changePercentage) >= 50 ? 'high' : 'medium',
+                title: 'تغيير كبير في سعر البيع',
+                message: `تم تغيير سعر بيع المنتج "${product.name}" بنسبة ${changePercentage.toFixed(1)}%`,
+                userId: ctx.user.id,
+                userName: ctx.user.name || 'مستخدم',
+                entityType: 'product',
+                entityId: id,
+              });
+            }
+          }
+        }
+        
         await db.updateProduct(id, data);
         await db.createActivityLog({
           userId: ctx.user.id,
@@ -2069,6 +2138,333 @@ export const appRouter = router({
     initialize: adminProcedure.mutation(async () => {
       await db.initializeDefaultSettings();
       return { success: true };
+    }),
+  }),
+
+  // ==================== مؤشرات الأداء المالي (KPIs) ====================
+  kpis: router({
+    // حساب مؤشرات الأداء المالي
+    calculate: managerProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.calculateFinancialKPIs(
+          new Date(input.startDate),
+          new Date(input.endDate),
+          input.branchId
+        );
+      }),
+
+    // الحصول على سجل مؤشرات الأداء
+    history: managerProcedure
+      .input(z.object({
+        periodType: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']),
+        limit: z.number().default(12),
+      }))
+      .query(async ({ input }) => {
+        return await db.getFinancialKPIs(input.periodType, input.limit);
+      }),
+
+    // تحليل الاتجاهات الشهرية
+    trends: managerProcedure
+      .input(z.object({ months: z.number().default(12) }).optional())
+      .query(async ({ input }) => {
+        return await db.getMonthlyTrends(input?.months || 12);
+      }),
+
+    // تقرير ABC للمخزون
+    abcReport: managerProcedure.query(async () => {
+      return await db.getABCInventoryReport();
+    }),
+  }),
+
+  // ==================== تنبيهات الأمان ====================
+  security: router({
+    // الحصول على التنبيهات غير المقروءة
+    unreadAlerts: adminProcedure.query(async () => {
+      return await db.getUnreadSecurityAlerts();
+    }),
+
+    // الحصول على جميع التنبيهات
+    allAlerts: adminProcedure
+      .input(z.object({ limit: z.number().default(100) }).optional())
+      .query(async ({ input }) => {
+        return await db.getAllSecurityAlerts(input?.limit || 100);
+      }),
+
+    // تحديث حالة التنبيه
+    updateAlert: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        isRead: z.boolean().optional(),
+        isResolved: z.boolean().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.updateSecurityAlert(input.id, {
+          isRead: input.isRead,
+          isResolved: input.isResolved,
+          resolvedBy: input.isResolved ? ctx.user.id : undefined,
+        });
+        return { success: true };
+      }),
+
+    // محاولات تسجيل الدخول
+    loginAttempts: adminProcedure
+      .input(z.object({ limit: z.number().default(100) }).optional())
+      .query(async ({ input }) => {
+        return await db.getAllLoginAttempts(input?.limit || 100);
+      }),
+
+    // سجل تغييرات الأسعار
+    priceChanges: adminProcedure
+      .input(z.object({ limit: z.number().default(100) }).optional())
+      .query(async ({ input }) => {
+        return await db.getAllPriceChangeLogs(input?.limit || 100);
+      }),
+
+    // تغييرات الأسعار الكبيرة
+    largePriceChanges: adminProcedure
+      .input(z.object({ minPercentage: z.number().default(20) }).optional())
+      .query(async ({ input }) => {
+        return await db.getLargePriceChanges(input?.minPercentage || 20);
+      }),
+  }),
+
+  // ==================== تقارير التدقيق ====================
+  audit: router({
+    // ملخص الأنشطة حسب المستخدم
+    activitySummary: adminProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getActivitySummaryByUser(
+          new Date(input.startDate),
+          new Date(input.endDate)
+        );
+      }),
+
+    // العمليات غير المعتادة
+    unusualActivities: adminProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getUnusualActivities(
+          new Date(input.startDate),
+          new Date(input.endDate)
+        );
+      }),
+  }),
+
+  // ==================== الصلاحيات التفصيلية ====================
+  permissions: router({
+    // الحصول على جميع الصلاحيات
+    list: adminProcedure.query(async () => {
+      return await db.getAllPermissions();
+    }),
+
+    // الحصول على صلاحيات مستخدم
+    userPermissions: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getUserPermissions(input.userId);
+      }),
+
+    // منح صلاحية
+    grant: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        permissionId: z.number(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.grantPermission(input.userId, input.permissionId, ctx.user.id);
+        return { success: true, message: 'تم منح الصلاحية بنجاح' };
+      }),
+
+    // إلغاء صلاحية
+    revoke: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        permissionId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.revokePermission(input.userId, input.permissionId);
+        return { success: true, message: 'تم إلغاء الصلاحية بنجاح' };
+      }),
+
+    // تهيئة الصلاحيات الافتراضية
+    initialize: adminProcedure.mutation(async () => {
+      await db.initializeDefaultPermissions();
+      return { success: true, message: 'تم تهيئة الصلاحيات الافتراضية' };
+    }),
+  }),
+
+  // ==================== إدارة المخزون المتقدمة ====================
+  inventory: router({
+    // تتبع الدفعات
+    batches: router({
+      // الحصول على دفعات منتج
+      byProduct: managerProcedure
+        .input(z.object({ productId: z.number() }))
+        .query(async ({ input }) => {
+          return await db.getProductBatches(input.productId);
+        }),
+
+      // إنشاء دفعة جديدة
+      create: managerProcedure
+        .input(z.object({
+          productId: z.number(),
+          batchNumber: z.string(),
+          quantity: z.number(),
+          costPrice: z.string(),
+          manufacturingDate: z.string().optional(),
+          expiryDate: z.string().optional(),
+          supplierId: z.number().optional(),
+          purchaseOrderId: z.number().optional(),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ input }) => {
+          await db.createProductBatch({
+            ...input,
+            manufacturingDate: input.manufacturingDate ? new Date(input.manufacturingDate) : undefined,
+            expiryDate: input.expiryDate ? new Date(input.expiryDate) : undefined,
+          });
+          return { success: true, message: 'تم إنشاء الدفعة بنجاح' };
+        }),
+
+      // المنتجات قريبة الانتهاء
+      expiring: managerProcedure
+        .input(z.object({ daysAhead: z.number().default(30) }).optional())
+        .query(async ({ input }) => {
+          return await db.getExpiringProducts(input?.daysAhead || 30);
+        }),
+    }),
+
+    // الجرد الدوري
+    counts: router({
+      // الحصول على جميع عمليات الجرد
+      list: managerProcedure.query(async () => {
+        return await db.getAllInventoryCounts();
+      }),
+
+      // الحصول على جرد بالمعرف
+      getById: managerProcedure
+        .input(z.object({ id: z.number() }))
+        .query(async ({ input }) => {
+          const count = await db.getInventoryCountById(input.id);
+          if (!count) return null;
+          const items = await db.getInventoryCountItems(input.id);
+          return { ...count, items };
+        }),
+
+      // إنشاء جرد جديد
+      create: managerProcedure
+        .input(z.object({
+          branchId: z.number().optional(),
+          branchName: z.string().optional(),
+          countDate: z.string(),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          await db.createInventoryCount({
+            ...input,
+            countDate: new Date(input.countDate),
+            createdBy: ctx.user.id,
+            createdByName: ctx.user.name || 'مستخدم',
+          });
+          return { success: true, message: 'تم إنشاء الجرد بنجاح' };
+        }),
+
+      // إضافة عنصر للجرد
+      addItem: managerProcedure
+        .input(z.object({
+          countId: z.number(),
+          productId: z.number(),
+          productName: z.string(),
+          productSku: z.string().optional(),
+          systemQuantity: z.number(),
+          countedQuantity: z.number(),
+          unitCost: z.string(),
+          reason: z.string().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          await db.addInventoryCountItem({
+            ...input,
+            countedBy: ctx.user.id,
+            countedAt: new Date(),
+            status: 'counted',
+          });
+          return { success: true, message: 'تم إضافة العنصر بنجاح' };
+        }),
+
+      // حساب إحصائيات الجرد
+      calculateStats: managerProcedure
+        .input(z.object({ countId: z.number() }))
+        .mutation(async ({ input }) => {
+          const stats = await db.calculateInventoryCountStats(input.countId);
+          return { success: true, stats };
+        }),
+
+      // تحديث حالة الجرد
+      updateStatus: adminProcedure
+        .input(z.object({
+          id: z.number(),
+          status: z.enum(['draft', 'in_progress', 'completed', 'approved']),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          const updateData: any = { status: input.status };
+          if (input.status === 'approved') {
+            updateData.approvedBy = ctx.user.id;
+            updateData.approvedByName = ctx.user.name;
+            updateData.approvedAt = new Date();
+          }
+          await db.updateInventoryCount(input.id, updateData);
+          return { success: true, message: 'تم تحديث حالة الجرد' };
+        }),
+    }),
+
+    // اقتراحات إعادة الطلب
+    reorderSuggestions: router({
+      // الحصول على الاقتراحات المعلقة
+      pending: managerProcedure.query(async () => {
+        return await db.getPendingSuggestedPurchaseOrders();
+      }),
+
+      // فحص وإنشاء اقتراحات جديدة
+      check: managerProcedure.mutation(async () => {
+        const suggestions = await db.checkAndCreateReorderSuggestions();
+        return { 
+          success: true, 
+          message: `تم إنشاء ${suggestions.length} اقتراح جديد`,
+          count: suggestions.length,
+        };
+      }),
+
+      // تحديث حالة الاقتراح
+      updateStatus: managerProcedure
+        .input(z.object({
+          id: z.number(),
+          status: z.enum(['pending', 'approved', 'ordered', 'dismissed']),
+          purchaseOrderId: z.number().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          const updateData: any = { status: input.status };
+          if (input.status === 'approved') {
+            updateData.approvedBy = ctx.user.id;
+            updateData.approvedAt = new Date();
+          }
+          if (input.purchaseOrderId) {
+            updateData.purchaseOrderId = input.purchaseOrderId;
+          }
+          await db.updateSuggestedPurchaseOrder(input.id, updateData);
+          return { success: true, message: 'تم تحديث حالة الاقتراح' };
+        }),
     }),
   }),
 });

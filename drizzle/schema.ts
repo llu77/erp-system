@@ -768,3 +768,227 @@ export const companySettings = mysqlTable("company_settings", {
 
 export type CompanySetting = typeof companySettings.$inferSelect;
 export type InsertCompanySetting = typeof companySettings.$inferInsert;
+
+// ==================== جدول محاولات تسجيل الدخول ====================
+export const loginAttempts = mysqlTable("loginAttempts", {
+  id: int("id").autoincrement().primaryKey(),
+  username: varchar("username", { length: 100 }).notNull(),
+  userId: int("userId"),
+  success: boolean("success").default(false).notNull(),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  location: varchar("location", { length: 255 }),
+  failureReason: varchar("failureReason", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type LoginAttempt = typeof loginAttempts.$inferSelect;
+export type InsertLoginAttempt = typeof loginAttempts.$inferInsert;
+
+// ==================== جدول تنبيهات الأمان ====================
+export const securityAlerts = mysqlTable("securityAlerts", {
+  id: int("id").autoincrement().primaryKey(),
+  alertType: mysqlEnum("alertType", [
+    "failed_login_attempts",    // محاولات دخول فاشلة متتالية
+    "price_change",             // تغيير كبير في الأسعار
+    "bulk_delete",              // حذف كميات كبيرة
+    "new_location",             // وصول من موقع جديد
+    "large_transaction",        // عملية مالية كبيرة
+    "unusual_activity",         // نشاط غير معتاد
+    "low_stock",                // مخزون منخفض
+    "expiring_products"         // منتجات قريبة الانتهاء
+  ]).notNull(),
+  severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).default("medium").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  userId: int("userId"),
+  userName: varchar("userName", { length: 255 }),
+  entityType: varchar("entityType", { length: 50 }),
+  entityId: int("entityId"),
+  metadata: text("metadata"), // JSON للبيانات الإضافية
+  isRead: boolean("isRead").default(false).notNull(),
+  isResolved: boolean("isResolved").default(false).notNull(),
+  resolvedBy: int("resolvedBy"),
+  resolvedAt: timestamp("resolvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SecurityAlert = typeof securityAlerts.$inferSelect;
+export type InsertSecurityAlert = typeof securityAlerts.$inferInsert;
+
+// ==================== جدول سجل تغييرات الأسعار ====================
+export const priceChangeLogs = mysqlTable("priceChangeLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  productId: int("productId").notNull(),
+  productName: varchar("productName", { length: 255 }).notNull(),
+  productSku: varchar("productSku", { length: 50 }),
+  priceType: mysqlEnum("priceType", ["cost", "selling"]).notNull(),
+  oldPrice: decimal("oldPrice", { precision: 12, scale: 2 }).notNull(),
+  newPrice: decimal("newPrice", { precision: 12, scale: 2 }).notNull(),
+  changePercentage: decimal("changePercentage", { precision: 8, scale: 2 }).notNull(),
+  reason: text("reason"),
+  changedBy: int("changedBy").notNull(),
+  changedByName: varchar("changedByName", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PriceChangeLog = typeof priceChangeLogs.$inferSelect;
+export type InsertPriceChangeLog = typeof priceChangeLogs.$inferInsert;
+
+// ==================== جدول تتبع الدفعات (Batch Tracking) ====================
+export const productBatches = mysqlTable("productBatches", {
+  id: int("id").autoincrement().primaryKey(),
+  productId: int("productId").notNull(),
+  batchNumber: varchar("batchNumber", { length: 100 }).notNull(),
+  quantity: int("quantity").default(0).notNull(),
+  remainingQuantity: int("remainingQuantity").default(0).notNull(),
+  costPrice: decimal("costPrice", { precision: 12, scale: 2 }).notNull(),
+  manufacturingDate: timestamp("manufacturingDate"),
+  expiryDate: timestamp("expiryDate"),
+  supplierId: int("supplierId"),
+  purchaseOrderId: int("purchaseOrderId"),
+  receivedDate: timestamp("receivedDate").defaultNow().notNull(),
+  status: mysqlEnum("status", ["active", "depleted", "expired", "recalled"]).default("active").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ProductBatch = typeof productBatches.$inferSelect;
+export type InsertProductBatch = typeof productBatches.$inferInsert;
+
+// ==================== جدول الجرد الدوري ====================
+export const inventoryCounts = mysqlTable("inventoryCounts", {
+  id: int("id").autoincrement().primaryKey(),
+  countNumber: varchar("countNumber", { length: 50 }).notNull().unique(),
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  countDate: timestamp("countDate").notNull(),
+  status: mysqlEnum("status", ["draft", "in_progress", "completed", "approved"]).default("draft").notNull(),
+  totalProducts: int("totalProducts").default(0).notNull(),
+  matchedProducts: int("matchedProducts").default(0).notNull(),
+  discrepancyProducts: int("discrepancyProducts").default(0).notNull(),
+  totalSystemValue: decimal("totalSystemValue", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalCountedValue: decimal("totalCountedValue", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  varianceValue: decimal("varianceValue", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  notes: text("notes"),
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }),
+  approvedBy: int("approvedBy"),
+  approvedByName: varchar("approvedByName", { length: 255 }),
+  approvedAt: timestamp("approvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type InventoryCount = typeof inventoryCounts.$inferSelect;
+export type InsertInventoryCount = typeof inventoryCounts.$inferInsert;
+
+// ==================== جدول تفاصيل الجرد ====================
+export const inventoryCountItems = mysqlTable("inventoryCountItems", {
+  id: int("id").autoincrement().primaryKey(),
+  countId: int("countId").notNull(),
+  productId: int("productId").notNull(),
+  productName: varchar("productName", { length: 255 }).notNull(),
+  productSku: varchar("productSku", { length: 50 }),
+  systemQuantity: int("systemQuantity").default(0).notNull(),
+  countedQuantity: int("countedQuantity").default(0).notNull(),
+  variance: int("variance").default(0).notNull(),
+  unitCost: decimal("unitCost", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  varianceValue: decimal("varianceValue", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  reason: text("reason"),
+  status: mysqlEnum("status", ["pending", "counted", "verified"]).default("pending").notNull(),
+  countedBy: int("countedBy"),
+  countedAt: timestamp("countedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type InventoryCountItem = typeof inventoryCountItems.$inferSelect;
+export type InsertInventoryCountItem = typeof inventoryCountItems.$inferInsert;
+
+// ==================== جدول الصلاحيات التفصيلية ====================
+export const permissions = mysqlTable("permissions", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 100 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  nameAr: varchar("nameAr", { length: 255 }).notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 50 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Permission = typeof permissions.$inferSelect;
+export type InsertPermission = typeof permissions.$inferInsert;
+
+// ==================== جدول صلاحيات المستخدمين ====================
+export const userPermissions = mysqlTable("userPermissions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  permissionId: int("permissionId").notNull(),
+  grantedBy: int("grantedBy").notNull(),
+  grantedAt: timestamp("grantedAt").defaultNow().notNull(),
+});
+
+export type UserPermission = typeof userPermissions.$inferSelect;
+export type InsertUserPermission = typeof userPermissions.$inferInsert;
+
+// ==================== جدول مؤشرات الأداء المالي ====================
+export const financialKpis = mysqlTable("financialKpis", {
+  id: int("id").autoincrement().primaryKey(),
+  periodType: mysqlEnum("periodType", ["daily", "weekly", "monthly", "quarterly", "yearly"]).notNull(),
+  periodStart: timestamp("periodStart").notNull(),
+  periodEnd: timestamp("periodEnd").notNull(),
+  branchId: int("branchId"),
+  
+  // الإيرادات والمصاريف
+  totalRevenue: decimal("totalRevenue", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalCost: decimal("totalCost", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalExpenses: decimal("totalExpenses", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  
+  // الأرباح
+  grossProfit: decimal("grossProfit", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  netProfit: decimal("netProfit", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  
+  // هوامش الربح
+  grossProfitMargin: decimal("grossProfitMargin", { precision: 8, scale: 4 }).default("0.0000").notNull(),
+  netProfitMargin: decimal("netProfitMargin", { precision: 8, scale: 4 }).default("0.0000").notNull(),
+  
+  // مؤشرات إضافية
+  roi: decimal("roi", { precision: 8, scale: 4 }).default("0.0000").notNull(),
+  currentRatio: decimal("currentRatio", { precision: 8, scale: 4 }).default("0.0000").notNull(),
+  
+  // إحصائيات
+  invoiceCount: int("invoiceCount").default(0).notNull(),
+  customerCount: int("customerCount").default(0).notNull(),
+  averageOrderValue: decimal("averageOrderValue", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type FinancialKpi = typeof financialKpis.$inferSelect;
+export type InsertFinancialKpi = typeof financialKpis.$inferInsert;
+
+// ==================== جدول أوامر الشراء المقترحة (إعادة الطلب التلقائي) ====================
+export const suggestedPurchaseOrders = mysqlTable("suggestedPurchaseOrders", {
+  id: int("id").autoincrement().primaryKey(),
+  productId: int("productId").notNull(),
+  productName: varchar("productName", { length: 255 }).notNull(),
+  productSku: varchar("productSku", { length: 50 }),
+  currentQuantity: int("currentQuantity").default(0).notNull(),
+  minQuantity: int("minQuantity").default(0).notNull(),
+  suggestedQuantity: int("suggestedQuantity").default(0).notNull(),
+  averageConsumption: decimal("averageConsumption", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  lastPurchasePrice: decimal("lastPurchasePrice", { precision: 12, scale: 2 }),
+  preferredSupplierId: int("preferredSupplierId"),
+  preferredSupplierName: varchar("preferredSupplierName", { length: 255 }),
+  status: mysqlEnum("status", ["pending", "approved", "ordered", "dismissed"]).default("pending").notNull(),
+  approvedBy: int("approvedBy"),
+  approvedAt: timestamp("approvedAt"),
+  purchaseOrderId: int("purchaseOrderId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SuggestedPurchaseOrder = typeof suggestedPurchaseOrders.$inferSelect;
+export type InsertSuggestedPurchaseOrder = typeof suggestedPurchaseOrders.$inferInsert;

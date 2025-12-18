@@ -29,6 +29,10 @@ import Expenses from "./pages/Expenses";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
 import ProfitLoss from "./pages/ProfitLoss";
+import ExecutiveDashboard from "./pages/ExecutiveDashboard";
+import SecurityAlerts from "./pages/SecurityAlerts";
+import PermissionsManagement from "./pages/PermissionsManagement";
+import AdvancedInventory from "./pages/AdvancedInventory";
 
 function Router() {
   return (
@@ -146,6 +150,30 @@ function Router() {
       <Route path="/profit-loss">
         <DashboardLayout>
           <ProfitLoss />
+        </DashboardLayout>
+      </Route>
+      {/* Executive Dashboard & KPIs */}
+      <Route path="/executive-dashboard">
+        <DashboardLayout>
+          <ExecutiveDashboard />
+        </DashboardLayout>
+      </Route>
+      {/* Security & Audit */}
+      <Route path="/security-alerts">
+        <DashboardLayout>
+          <SecurityAlerts />
+        </DashboardLayout>
+      </Route>
+      {/* Permissions Management */}
+      <Route path="/permissions">
+        <DashboardLayout>
+          <PermissionsManagement />
+        </DashboardLayout>
+      </Route>
+      {/* Advanced Inventory */}
+      <Route path="/advanced-inventory">
+        <DashboardLayout>
+          <AdvancedInventory />
         </DashboardLayout>
       </Route>
       <Route path="/404" component={NotFound} />

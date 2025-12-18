@@ -43,6 +43,10 @@ import {
   FilePlus,
   Wallet,
   Receipt,
+  Shield,
+  Lock,
+  Boxes,
+  TrendingUp,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -72,6 +76,10 @@ const menuItems = [
   { icon: Receipt, label: "المصاريف", path: "/expenses", roles: ["admin", "manager"] },
   { icon: Settings, label: "الإعدادات", path: "/settings", roles: ["admin"] },
   { icon: BarChart3, label: "الأرباح والخسائر", path: "/profit-loss", roles: ["admin", "manager"] },
+  { icon: TrendingUp, label: "لوحة التحكم التنفيذية", path: "/executive-dashboard", roles: ["admin", "manager"] },
+  { icon: Shield, label: "تنبيهات الأمان", path: "/security-alerts", roles: ["admin"] },
+  { icon: Lock, label: "إدارة الصلاحيات", path: "/permissions", roles: ["admin"] },
+  { icon: Boxes, label: "المخزون المتقدم", path: "/advanced-inventory", roles: ["admin", "manager"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
