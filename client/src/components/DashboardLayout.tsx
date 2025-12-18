@@ -41,6 +41,8 @@ import {
   Send,
   ClipboardList,
   FilePlus,
+  Wallet,
+  Receipt,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -66,6 +68,8 @@ const menuItems = [
   { icon: Bell, label: "إرسال إشعار", path: "/notifications/send", roles: ["admin", "manager"] },
   { icon: FilePlus, label: "تقديم طلب", path: "/submit-request", roles: ["admin", "manager", "employee"] },
   { icon: ClipboardList, label: "إدارة الطلبات", path: "/manage-requests", roles: ["admin", "manager"] },
+  { icon: Wallet, label: "مسيرات الرواتب", path: "/payrolls", roles: ["admin", "manager"] },
+  { icon: Receipt, label: "المصاريف", path: "/expenses", roles: ["admin", "manager"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

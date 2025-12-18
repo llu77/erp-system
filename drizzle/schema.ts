@@ -525,3 +525,229 @@ export const employeeRequestLogs = mysqlTable("employeeRequestLogs", {
 
 export type EmployeeRequestLog = typeof employeeRequestLogs.$inferSelect;
 export type InsertEmployeeRequestLog = typeof employeeRequestLogs.$inferInsert;
+
+
+// ==================== جدول مسيرات الرواتب ====================
+/**
+ * Payrolls - مسيرات الرواتب الشهرية
+ * يتم إنشاؤها في يوم 28 من كل شهر
+ */
+export const payrolls = mysqlTable("payrolls", {
+  id: int("id").autoincrement().primaryKey(),
+  payrollNumber: varchar("payrollNumber", { length: 50 }).notNull().unique(),
+  branchId: int("branchId").notNull(),
+  branchName: varchar("branchName", { length: 255 }).notNull(),
+  
+  // فترة المسيرة
+  year: int("year").notNull(),
+  month: int("month").notNull(),
+  periodStart: timestamp("periodStart").notNull(),
+  periodEnd: timestamp("periodEnd").notNull(),
+  
+  // الإجماليات
+  totalBaseSalary: decimal("totalBaseSalary", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalOvertime: decimal("totalOvertime", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalIncentives: decimal("totalIncentives", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalDeductions: decimal("totalDeductions", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalNetSalary: decimal("totalNetSalary", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  employeeCount: int("employeeCount").default(0).notNull(),
+  
+  // الحالة
+  status: mysqlEnum("status", [
+    "draft",        // مسودة
+    "pending",      // قيد المراجعة
+    "approved",     // معتمدة
+    "paid",         // مدفوعة
+    "cancelled"     // ملغاة
+  ]).default("draft").notNull(),
+  
+  // الموافقة
+  approvedBy: int("approvedBy"),
+  approvedByName: varchar("approvedByName", { length: 255 }),
+  approvedAt: timestamp("approvedAt"),
+  paidAt: timestamp("paidAt"),
+  
+  notes: text("notes"),
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Payroll = typeof payrolls.$inferSelect;
+export type InsertPayroll = typeof payrolls.$inferInsert;
+
+// ==================== جدول تفاصيل الرواتب ====================
+/**
+ * Payroll Details - تفاصيل راتب كل موظف
+ * الراتب الأساسي: 2000 ريال
+ * ساعات إضافية: 1000 ريال (إذا مفعل)
+ * حوافز المشرف: 400 ريال
+ */
+export const payrollDetails = mysqlTable("payrollDetails", {
+  id: int("id").autoincrement().primaryKey(),
+  payrollId: int("payrollId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  employeeName: varchar("employeeName", { length: 255 }).notNull(),
+  employeeCode: varchar("employeeCode", { length: 50 }).notNull(),
+  position: varchar("position", { length: 100 }),
+  
+  // مكونات الراتب
+  baseSalary: decimal("baseSalary", { precision: 12, scale: 2 }).default("2000.00").notNull(),
+  overtimeAmount: decimal("overtimeAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  overtimeEnabled: boolean("overtimeEnabled").default(false).notNull(),
+  incentiveAmount: decimal("incentiveAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  isSupervisor: boolean("isSupervisor").default(false).notNull(),
+  
+  // الخصومات
+  deductionAmount: decimal("deductionAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  deductionReason: text("deductionReason"),
+  
+  // السلف المخصومة
+  advanceDeduction: decimal("advanceDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  
+  // الإجمالي
+  grossSalary: decimal("grossSalary", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  totalDeductions: decimal("totalDeductions", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  netSalary: decimal("netSalary", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  
+  // حالة الدفع
+  isPaid: boolean("isPaid").default(false).notNull(),
+  paidAt: timestamp("paidAt"),
+  paymentMethod: varchar("paymentMethod", { length: 50 }),
+  paymentReference: varchar("paymentReference", { length: 100 }),
+  
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PayrollDetail = typeof payrollDetails.$inferSelect;
+export type InsertPayrollDetail = typeof payrollDetails.$inferInsert;
+
+// ==================== جدول إعدادات الموظفين للرواتب ====================
+/**
+ * Employee Salary Settings - إعدادات الراتب لكل موظف
+ */
+export const employeeSalarySettings = mysqlTable("employeeSalarySettings", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull().unique(),
+  
+  // الراتب الأساسي (افتراضي 2000)
+  baseSalary: decimal("baseSalary", { precision: 12, scale: 2 }).default("2000.00").notNull(),
+  
+  // الساعات الإضافية
+  overtimeEnabled: boolean("overtimeEnabled").default(false).notNull(),
+  overtimeRate: decimal("overtimeRate", { precision: 12, scale: 2 }).default("1000.00").notNull(),
+  
+  // هل هو مشرف (يستحق حوافز 400)
+  isSupervisor: boolean("isSupervisor").default(false).notNull(),
+  supervisorIncentive: decimal("supervisorIncentive", { precision: 12, scale: 2 }).default("400.00").notNull(),
+  
+  // خصومات ثابتة
+  fixedDeduction: decimal("fixedDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  fixedDeductionReason: text("fixedDeductionReason"),
+  
+  // معلومات البنك
+  bankName: varchar("bankName", { length: 100 }),
+  bankAccount: varchar("bankAccount", { length: 50 }),
+  iban: varchar("iban", { length: 50 }),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeSalarySetting = typeof employeeSalarySettings.$inferSelect;
+export type InsertEmployeeSalarySetting = typeof employeeSalarySettings.$inferInsert;
+
+// ==================== جدول المصاريف ====================
+/**
+ * Expenses - المصاريف
+ */
+export const expenses = mysqlTable("expenses", {
+  id: int("id").autoincrement().primaryKey(),
+  expenseNumber: varchar("expenseNumber", { length: 50 }).notNull().unique(),
+  
+  // التصنيف
+  category: mysqlEnum("category", [
+    "operational",   // تشغيلية
+    "administrative", // إدارية
+    "marketing",     // تسويقية
+    "maintenance",   // صيانة
+    "utilities",     // مرافق (كهرباء، ماء، إنترنت)
+    "rent",          // إيجار
+    "salaries",      // رواتب
+    "supplies",      // مستلزمات
+    "transportation", // نقل ومواصلات
+    "other"          // أخرى
+  ]).notNull(),
+  
+  // التفاصيل
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  
+  // الفرع (اختياري)
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // تاريخ المصروف
+  expenseDate: timestamp("expenseDate").notNull(),
+  
+  // طريقة الدفع
+  paymentMethod: mysqlEnum("paymentMethod", [
+    "cash",          // نقدي
+    "bank_transfer", // تحويل بنكي
+    "check",         // شيك
+    "credit_card",   // بطاقة ائتمان
+    "other"          // أخرى
+  ]).default("cash").notNull(),
+  paymentReference: varchar("paymentReference", { length: 100 }),
+  
+  // المورد (اختياري)
+  supplierId: int("supplierId"),
+  supplierName: varchar("supplierName", { length: 255 }),
+  
+  // المرفقات
+  attachments: text("attachments"), // JSON array
+  receiptNumber: varchar("receiptNumber", { length: 100 }),
+  
+  // الحالة
+  status: mysqlEnum("status", [
+    "pending",    // قيد المراجعة
+    "approved",   // معتمد
+    "rejected",   // مرفوض
+    "paid"        // مدفوع
+  ]).default("pending").notNull(),
+  
+  // الموافقة
+  approvedBy: int("approvedBy"),
+  approvedByName: varchar("approvedByName", { length: 255 }),
+  approvedAt: timestamp("approvedAt"),
+  rejectionReason: text("rejectionReason"),
+  
+  // التتبع
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Expense = typeof expenses.$inferSelect;
+export type InsertExpense = typeof expenses.$inferInsert;
+
+// ==================== جدول سجل المصاريف ====================
+export const expenseLogs = mysqlTable("expenseLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  expenseId: int("expenseId").notNull(),
+  action: varchar("action", { length: 100 }).notNull(),
+  oldStatus: varchar("oldStatus", { length: 50 }),
+  newStatus: varchar("newStatus", { length: 50 }),
+  performedBy: int("performedBy").notNull(),
+  performedByName: varchar("performedByName", { length: 255 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ExpenseLog = typeof expenseLogs.$inferSelect;
+export type InsertExpenseLog = typeof expenseLogs.$inferInsert;

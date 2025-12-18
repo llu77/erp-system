@@ -915,6 +915,16 @@ export const appRouter = router({
     inventory: protectedProcedure.query(async () => {
       return await db.getInventoryReport();
     }),
+
+    // الطلبات الموافق عليها
+    approvedRequests: managerProcedure
+      .input(z.object({
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await db.getApprovedEmployeeRequests(input?.startDate, input?.endDate);
+      }),
   }),
 
   // ==================== إدارة الفروع ====================
@@ -1571,6 +1581,314 @@ export const appRouter = router({
         return await db.getEmployeeRequestLogs(input.requestId);
       }),
   }),
+
+  // ==================== مسيرات الرواتب ====================
+  payrolls: router({
+    // الحصول على جميع المسيرات
+    list: managerProcedure.query(async () => {
+      return await db.getAllPayrolls();
+    }),
+
+    // الحصول على مسيرات فرع معين
+    byBranch: managerProcedure
+      .input(z.object({ branchId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getPayrollsByBranch(input.branchId);
+      }),
+
+    // الحصول على مسيرة بالمعرف
+    getById: managerProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getPayrollById(input.id);
+      }),
+
+    // الحصول على تفاصيل المسيرة
+    details: managerProcedure
+      .input(z.object({ payrollId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getPayrollDetails(input.payrollId);
+      }),
+
+    // إنشاء مسيرة رواتب شهرية
+    generate: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        branchName: z.string(),
+        year: z.number(),
+        month: z.number(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const payroll = await db.generateMonthlyPayroll(
+            input.branchId,
+            input.branchName,
+            input.year,
+            input.month,
+            ctx.user.id,
+            ctx.user.name || 'مسؤول'
+          );
+          return { success: true, message: 'تم إنشاء مسيرة الرواتب بنجاح', payroll };
+        } catch (error: any) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+        }
+      }),
+
+    // تحديث حالة المسيرة
+    updateStatus: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(['draft', 'pending', 'approved', 'paid', 'cancelled']),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const updateData: any = { status: input.status };
+        
+        if (input.status === 'approved') {
+          updateData.approvedBy = ctx.user.id;
+          updateData.approvedByName = ctx.user.name;
+          updateData.approvedAt = new Date();
+        } else if (input.status === 'paid') {
+          updateData.paidAt = new Date();
+        }
+        
+        await db.updatePayroll(input.id, updateData);
+        
+        const statusNames: Record<string, string> = {
+          draft: 'مسودة',
+          pending: 'قيد المراجعة',
+          approved: 'معتمدة',
+          paid: 'مدفوعة',
+          cancelled: 'ملغاة',
+        };
+        
+        return { success: true, message: `تم تحديث الحالة إلى: ${statusNames[input.status]}` };
+      }),
+
+    // حذف مسيرة
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deletePayroll(input.id);
+        return { success: true, message: 'تم حذف مسيرة الرواتب بنجاح' };
+      }),
+
+    // تحديث تفاصيل راتب موظف
+    updateDetail: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        deductionAmount: z.string().optional(),
+        deductionReason: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updatePayrollDetail(id, data);
+        return { success: true, message: 'تم تحديث بيانات الراتب بنجاح' };
+      }),
+  }),
+
+  // ==================== إعدادات رواتب الموظفين ====================
+  salarySettings: router({
+    // الحصول على إعدادات موظف
+    get: managerProcedure
+      .input(z.object({ employeeId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getEmployeeSalarySetting(input.employeeId);
+      }),
+
+    // الحصول على جميع الإعدادات
+    list: managerProcedure.query(async () => {
+      return await db.getAllEmployeeSalarySettings();
+    }),
+
+    // تحديث إعدادات راتب موظف
+    upsert: adminProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        baseSalary: z.string().default('2000.00'),
+        overtimeEnabled: z.boolean().default(false),
+        overtimeRate: z.string().default('1000.00'),
+        isSupervisor: z.boolean().default(false),
+        supervisorIncentive: z.string().default('400.00'),
+        fixedDeduction: z.string().default('0.00'),
+        fixedDeductionReason: z.string().optional(),
+        bankName: z.string().optional(),
+        bankAccount: z.string().optional(),
+        iban: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.upsertEmployeeSalarySetting(input);
+        return { success: true, message: 'تم حفظ إعدادات الراتب بنجاح' };
+      }),
+
+    // حذف إعدادات
+    delete: adminProcedure
+      .input(z.object({ employeeId: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteEmployeeSalarySetting(input.employeeId);
+        return { success: true, message: 'تم حذف إعدادات الراتب بنجاح' };
+      }),
+  }),
+
+  // ==================== المصاريف ====================
+  expenses: router({
+    // الحصول على جميع المصاريف
+    list: managerProcedure.query(async () => {
+      return await db.getAllExpenses();
+    }),
+
+    // الحصول على مصروف بالمعرف
+    getById: managerProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getExpenseById(input.id);
+      }),
+
+    // الحصول على المصاريف حسب الفترة
+    byDateRange: managerProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getExpensesByDateRange(input.startDate, input.endDate);
+      }),
+
+    // الحصول على المصاريف حسب الفرع
+    byBranch: managerProcedure
+      .input(z.object({ branchId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getExpensesByBranch(input.branchId);
+      }),
+
+    // الحصول على المصاريف المعلقة
+    pending: adminProcedure.query(async () => {
+      return await db.getPendingExpenses();
+    }),
+
+    // إحصائيات المصاريف
+    stats: managerProcedure
+      .input(z.object({
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await db.getExpensesStats(input?.startDate, input?.endDate);
+      }),
+
+    // إنشاء مصروف
+    create: managerProcedure
+      .input(z.object({
+        category: z.enum(['operational', 'administrative', 'marketing', 'maintenance', 'utilities', 'rent', 'salaries', 'supplies', 'transportation', 'other']),
+        title: z.string().min(1),
+        description: z.string().optional(),
+        amount: z.string(),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+        expenseDate: z.string(),
+        paymentMethod: z.enum(['cash', 'bank_transfer', 'check', 'credit_card', 'other']).default('cash'),
+        paymentReference: z.string().optional(),
+        supplierId: z.number().optional(),
+        supplierName: z.string().optional(),
+        receiptNumber: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const expenseNumber = await db.generateExpenseNumber();
+        
+        await db.createExpense({
+          ...input,
+          expenseNumber,
+          expenseDate: new Date(input.expenseDate),
+          status: 'pending',
+          createdBy: ctx.user.id,
+          createdByName: ctx.user.name || 'مستخدم',
+        });
+
+        // إشعار المسؤول
+        await notifyOwner({
+          title: 'مصروف جديد',
+          content: `تم إضافة مصروف جديد: ${input.title} بقيمة ${input.amount} ر.س.`,
+        });
+
+        return { success: true, message: 'تم إضافة المصروف بنجاح' };
+      }),
+
+    // تحديث مصروف
+    update: managerProcedure
+      .input(z.object({
+        id: z.number(),
+        category: z.enum(['operational', 'administrative', 'marketing', 'maintenance', 'utilities', 'rent', 'salaries', 'supplies', 'transportation', 'other']).optional(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        amount: z.string().optional(),
+        expenseDate: z.string().optional(),
+        paymentMethod: z.enum(['cash', 'bank_transfer', 'check', 'credit_card', 'other']).optional(),
+        paymentReference: z.string().optional(),
+        receiptNumber: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, expenseDate, ...data } = input;
+        const updateData: any = { ...data };
+        if (expenseDate) {
+          updateData.expenseDate = new Date(expenseDate);
+        }
+        await db.updateExpense(id, updateData);
+        return { success: true, message: 'تم تحديث المصروف بنجاح' };
+      }),
+
+    // تحديث حالة المصروف
+    updateStatus: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(['pending', 'approved', 'rejected', 'paid']),
+        rejectionReason: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.updateExpenseStatus(
+          input.id,
+          input.status,
+          ctx.user.id,
+          ctx.user.name || 'مسؤول',
+          input.rejectionReason
+        );
+
+        // إنشاء سجل
+        await db.createExpenseLog({
+          expenseId: input.id,
+          action: `تغيير الحالة إلى ${input.status}`,
+          newStatus: input.status,
+          performedBy: ctx.user.id,
+          performedByName: ctx.user.name,
+          notes: input.rejectionReason,
+        });
+
+        const statusNames: Record<string, string> = {
+          pending: 'قيد المراجعة',
+          approved: 'معتمد',
+          rejected: 'مرفوض',
+          paid: 'مدفوع',
+        };
+
+        return { success: true, message: `تم تحديث الحالة إلى: ${statusNames[input.status]}` };
+      }),
+
+    // حذف مصروف
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteExpense(input.id);
+        return { success: true, message: 'تم حذف المصروف بنجاح' };
+      }),
+
+    // سجلات المصروف
+    logs: managerProcedure
+      .input(z.object({ expenseId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getExpenseLogs(input.expenseId);
+      }),
+  }),
+
+
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

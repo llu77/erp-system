@@ -1198,3 +1198,522 @@ export async function getEmployeeRequestsByType(requestType: string) {
     .where(eq(employeeRequests.requestType, requestType as "advance" | "vacation" | "arrears" | "permission" | "objection" | "resignation"))
     .orderBy(desc(employeeRequests.createdAt));
 }
+
+
+// ==================== دوال مسيرات الرواتب ====================
+import {
+  payrolls, InsertPayroll,
+  payrollDetails, InsertPayrollDetail,
+  employeeSalarySettings, InsertEmployeeSalarySetting,
+  expenses, InsertExpense,
+  expenseLogs, InsertExpenseLog,
+} from "../drizzle/schema";
+
+// توليد رقم مسيرة الرواتب
+export async function generatePayrollNumber() {
+  const db = await getDb();
+  if (!db) return `PAY-${Date.now()}`;
+  
+  const lastPayroll = await db.select({ payrollNumber: payrolls.payrollNumber })
+    .from(payrolls)
+    .orderBy(desc(payrolls.id))
+    .limit(1);
+
+  const year = new Date().getFullYear();
+  const month = new Date().getMonth() + 1;
+  if (lastPayroll.length === 0) {
+    return `PAY-${year}${month.toString().padStart(2, '0')}-0001`;
+  }
+
+  const lastNumber = lastPayroll[0].payrollNumber;
+  const parts = lastNumber.split('-');
+  const sequence = parseInt(parts[2] || '0') + 1;
+  return `PAY-${year}${month.toString().padStart(2, '0')}-${sequence.toString().padStart(4, '0')}`;
+}
+
+// الحصول على جميع مسيرات الرواتب
+export async function getAllPayrolls() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(payrolls).orderBy(desc(payrolls.year), desc(payrolls.month));
+}
+
+// الحصول على مسيرات رواتب فرع معين
+export async function getPayrollsByBranch(branchId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(payrolls)
+    .where(eq(payrolls.branchId, branchId))
+    .orderBy(desc(payrolls.year), desc(payrolls.month));
+}
+
+// الحصول على مسيرة رواتب بالمعرف
+export async function getPayrollById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(payrolls).where(eq(payrolls.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// الحصول على مسيرة رواتب لفرع وشهر معين
+export async function getPayrollByBranchAndMonth(branchId: number, year: number, month: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(payrolls)
+    .where(and(
+      eq(payrolls.branchId, branchId),
+      eq(payrolls.year, year),
+      eq(payrolls.month, month)
+    ))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// إنشاء مسيرة رواتب
+export async function createPayroll(data: InsertPayroll) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(payrolls).values(data);
+  return result;
+}
+
+// تحديث مسيرة رواتب
+export async function updatePayroll(id: number, data: Partial<InsertPayroll>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(payrolls).set(data).where(eq(payrolls.id, id));
+}
+
+// حذف مسيرة رواتب
+export async function deletePayroll(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  // حذف التفاصيل أولاً
+  await db.delete(payrollDetails).where(eq(payrollDetails.payrollId, id));
+  await db.delete(payrolls).where(eq(payrolls.id, id));
+}
+
+// ==================== دوال تفاصيل الرواتب ====================
+
+// الحصول على تفاصيل مسيرة رواتب
+export async function getPayrollDetails(payrollId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(payrollDetails)
+    .where(eq(payrollDetails.payrollId, payrollId))
+    .orderBy(payrollDetails.employeeName);
+}
+
+// إنشاء تفاصيل راتب موظف
+export async function createPayrollDetail(data: InsertPayrollDetail) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(payrollDetails).values(data);
+}
+
+// إنشاء تفاصيل رواتب متعددة
+export async function createPayrollDetails(data: InsertPayrollDetail[]) {
+  const db = await getDb();
+  if (!db) return;
+  if (data.length > 0) {
+    await db.insert(payrollDetails).values(data);
+  }
+}
+
+// تحديث تفاصيل راتب
+export async function updatePayrollDetail(id: number, data: Partial<InsertPayrollDetail>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(payrollDetails).set(data).where(eq(payrollDetails.id, id));
+}
+
+// ==================== دوال إعدادات رواتب الموظفين ====================
+
+// الحصول على إعدادات راتب موظف
+export async function getEmployeeSalarySetting(employeeId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(employeeSalarySettings)
+    .where(eq(employeeSalarySettings.employeeId, employeeId))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// الحصول على جميع إعدادات الرواتب
+export async function getAllEmployeeSalarySettings() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(employeeSalarySettings);
+}
+
+// إنشاء أو تحديث إعدادات راتب موظف
+export async function upsertEmployeeSalarySetting(data: InsertEmployeeSalarySetting) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const existing = await getEmployeeSalarySetting(data.employeeId);
+  if (existing) {
+    await db.update(employeeSalarySettings)
+      .set(data)
+      .where(eq(employeeSalarySettings.employeeId, data.employeeId));
+  } else {
+    await db.insert(employeeSalarySettings).values(data);
+  }
+}
+
+// حذف إعدادات راتب موظف
+export async function deleteEmployeeSalarySetting(employeeId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(employeeSalarySettings).where(eq(employeeSalarySettings.employeeId, employeeId));
+}
+
+// ==================== دوال المصاريف ====================
+
+// توليد رقم المصروف
+export async function generateExpenseNumber() {
+  const db = await getDb();
+  if (!db) return `EXP-${Date.now()}`;
+  
+  const lastExpense = await db.select({ expenseNumber: expenses.expenseNumber })
+    .from(expenses)
+    .orderBy(desc(expenses.id))
+    .limit(1);
+
+  const year = new Date().getFullYear();
+  if (lastExpense.length === 0) {
+    return `EXP-${year}-0001`;
+  }
+
+  const lastNumber = lastExpense[0].expenseNumber;
+  const parts = lastNumber.split('-');
+  const sequence = parseInt(parts[2] || '0') + 1;
+  return `EXP-${year}-${sequence.toString().padStart(4, '0')}`;
+}
+
+// الحصول على جميع المصاريف
+export async function getAllExpenses() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(expenses).orderBy(desc(expenses.expenseDate));
+}
+
+// الحصول على المصاريف حسب الفترة
+export async function getExpensesByDateRange(startDate: string, endDate: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(expenses)
+    .where(and(
+      gte(expenses.expenseDate, new Date(startDate)),
+      lte(expenses.expenseDate, new Date(endDate))
+    ))
+    .orderBy(desc(expenses.expenseDate));
+}
+
+// الحصول على المصاريف حسب الفرع
+export async function getExpensesByBranch(branchId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(expenses)
+    .where(eq(expenses.branchId, branchId))
+    .orderBy(desc(expenses.expenseDate));
+}
+
+// الحصول على المصاريف حسب التصنيف
+export async function getExpensesByCategory(category: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(expenses)
+    .where(eq(expenses.category, category as "operational" | "administrative" | "marketing" | "maintenance" | "utilities" | "rent" | "salaries" | "supplies" | "transportation" | "other"))
+    .orderBy(desc(expenses.expenseDate));
+}
+
+// الحصول على مصروف بالمعرف
+export async function getExpenseById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(expenses).where(eq(expenses.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// إنشاء مصروف
+export async function createExpense(data: InsertExpense) {
+  const db = await getDb();
+  if (!db) return null;
+  return await db.insert(expenses).values(data);
+}
+
+// تحديث مصروف
+export async function updateExpense(id: number, data: Partial<InsertExpense>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(expenses).set(data).where(eq(expenses.id, id));
+}
+
+// حذف مصروف
+export async function deleteExpense(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(expenseLogs).where(eq(expenseLogs.expenseId, id));
+  await db.delete(expenses).where(eq(expenses.id, id));
+}
+
+// تحديث حالة المصروف
+export async function updateExpenseStatus(
+  id: number,
+  status: "pending" | "approved" | "rejected" | "paid",
+  approvedBy: number,
+  approvedByName: string,
+  rejectionReason?: string
+) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const updateData: Partial<InsertExpense> = { status };
+  
+  if (status === "approved" || status === "paid") {
+    updateData.approvedBy = approvedBy;
+    updateData.approvedByName = approvedByName;
+    updateData.approvedAt = new Date();
+  } else if (status === "rejected") {
+    updateData.approvedBy = approvedBy;
+    updateData.approvedByName = approvedByName;
+    updateData.rejectionReason = rejectionReason;
+  }
+  
+  await db.update(expenses).set(updateData).where(eq(expenses.id, id));
+}
+
+// إنشاء سجل مصروف
+export async function createExpenseLog(data: Omit<InsertExpenseLog, "id" | "createdAt">) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(expenseLogs).values(data);
+}
+
+// الحصول على سجلات مصروف
+export async function getExpenseLogs(expenseId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(expenseLogs)
+    .where(eq(expenseLogs.expenseId, expenseId))
+    .orderBy(desc(expenseLogs.createdAt));
+}
+
+// إحصائيات المصاريف
+export async function getExpensesStats(startDate?: string, endDate?: string) {
+  const db = await getDb();
+  if (!db) return { total: 0, pending: 0, approved: 0, paid: 0, totalAmount: 0 };
+  
+  let query = db.select().from(expenses);
+  
+  if (startDate && endDate) {
+    query = query.where(and(
+      gte(expenses.expenseDate, new Date(startDate)),
+      lte(expenses.expenseDate, new Date(endDate))
+    )) as typeof query;
+  }
+  
+  const all = await query;
+  
+  const totalAmount = all
+    .filter(e => e.status === "approved" || e.status === "paid")
+    .reduce((sum, e) => sum + parseFloat(e.amount), 0);
+  
+  return {
+    total: all.length,
+    pending: all.filter(e => e.status === "pending").length,
+    approved: all.filter(e => e.status === "approved").length,
+    paid: all.filter(e => e.status === "paid").length,
+    totalAmount,
+  };
+}
+
+// الحصول على المصاريف المعلقة
+export async function getPendingExpenses() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(expenses)
+    .where(eq(expenses.status, "pending"))
+    .orderBy(desc(expenses.createdAt));
+}
+
+// ==================== دوال حساب الرواتب ====================
+
+// حساب راتب موظف
+export function calculateEmployeeSalary(
+  baseSalary: number,
+  overtimeEnabled: boolean,
+  overtimeRate: number,
+  isSupervisor: boolean,
+  supervisorIncentive: number,
+  deductions: number,
+  advanceDeduction: number
+) {
+  const overtime = overtimeEnabled ? overtimeRate : 0;
+  const incentive = isSupervisor ? supervisorIncentive : 0;
+  
+  const grossSalary = baseSalary + overtime + incentive;
+  const totalDeductions = deductions + advanceDeduction;
+  const netSalary = grossSalary - totalDeductions;
+  
+  return {
+    baseSalary,
+    overtimeAmount: overtime,
+    incentiveAmount: incentive,
+    grossSalary,
+    totalDeductions,
+    netSalary,
+  };
+}
+
+// إنشاء مسيرة رواتب شهرية لفرع
+export async function generateMonthlyPayroll(
+  branchId: number,
+  branchName: string,
+  year: number,
+  month: number,
+  createdBy: number,
+  createdByName: string
+) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  // التحقق من عدم وجود مسيرة سابقة
+  const existing = await getPayrollByBranchAndMonth(branchId, year, month);
+  if (existing) {
+    throw new Error("توجد مسيرة رواتب لهذا الشهر بالفعل");
+  }
+  
+  // الحصول على موظفي الفرع
+  const branchEmployees = await getEmployeesByBranch(branchId);
+  if (branchEmployees.length === 0) {
+    throw new Error("لا يوجد موظفين في هذا الفرع");
+  }
+  
+  // الحصول على إعدادات الرواتب
+  const salarySettings = await getAllEmployeeSalarySettings();
+  const settingsMap = new Map(salarySettings.map(s => [s.employeeId, s]));
+  
+  // الحصول على السلف الموافق عليها لهذا الشهر
+  const approvedAdvances = await db.select().from(employeeRequests)
+    .where(and(
+      eq(employeeRequests.requestType, "advance"),
+      eq(employeeRequests.status, "approved")
+    ));
+  
+  const advancesMap = new Map<number, number>();
+  approvedAdvances.forEach(adv => {
+    const current = advancesMap.get(adv.employeeId) || 0;
+    advancesMap.set(adv.employeeId, current + parseFloat(adv.advanceAmount || "0"));
+  });
+  
+  // حساب الرواتب
+  const payrollNumber = await generatePayrollNumber();
+  const periodStart = new Date(year, month - 1, 1);
+  const periodEnd = new Date(year, month, 0);
+  
+  let totalBaseSalary = 0;
+  let totalOvertime = 0;
+  let totalIncentives = 0;
+  let totalDeductions = 0;
+  let totalNetSalary = 0;
+  
+  const details: InsertPayrollDetail[] = [];
+  
+  for (const emp of branchEmployees) {
+    const settings = settingsMap.get(emp.id) || {
+      baseSalary: "2000.00",
+      overtimeEnabled: false,
+      overtimeRate: "1000.00",
+      isSupervisor: false,
+      supervisorIncentive: "400.00",
+      fixedDeduction: "0.00",
+    };
+    
+    const advanceDeduction = advancesMap.get(emp.id) || 0;
+    
+    const salary = calculateEmployeeSalary(
+      parseFloat(settings.baseSalary as string),
+      settings.overtimeEnabled as boolean,
+      parseFloat(settings.overtimeRate as string),
+      settings.isSupervisor as boolean,
+      parseFloat(settings.supervisorIncentive as string),
+      parseFloat(settings.fixedDeduction as string),
+      advanceDeduction
+    );
+    
+    totalBaseSalary += salary.baseSalary;
+    totalOvertime += salary.overtimeAmount;
+    totalIncentives += salary.incentiveAmount;
+    totalDeductions += salary.totalDeductions;
+    totalNetSalary += salary.netSalary;
+    
+    details.push({
+      payrollId: 0, // سيتم تحديثه بعد إنشاء المسيرة
+      employeeId: emp.id,
+      employeeName: emp.name,
+      employeeCode: emp.code,
+      position: emp.position,
+      baseSalary: salary.baseSalary.toFixed(2),
+      overtimeAmount: salary.overtimeAmount.toFixed(2),
+      overtimeEnabled: settings.overtimeEnabled as boolean,
+      incentiveAmount: salary.incentiveAmount.toFixed(2),
+      isSupervisor: settings.isSupervisor as boolean,
+      deductionAmount: parseFloat(settings.fixedDeduction as string).toFixed(2),
+      advanceDeduction: advanceDeduction.toFixed(2),
+      grossSalary: salary.grossSalary.toFixed(2),
+      totalDeductions: salary.totalDeductions.toFixed(2),
+      netSalary: salary.netSalary.toFixed(2),
+    });
+  }
+  
+  // إنشاء المسيرة
+  await db.insert(payrolls).values({
+    payrollNumber,
+    branchId,
+    branchName,
+    year,
+    month,
+    periodStart,
+    periodEnd,
+    totalBaseSalary: totalBaseSalary.toFixed(2),
+    totalOvertime: totalOvertime.toFixed(2),
+    totalIncentives: totalIncentives.toFixed(2),
+    totalDeductions: totalDeductions.toFixed(2),
+    totalNetSalary: totalNetSalary.toFixed(2),
+    employeeCount: branchEmployees.length,
+    status: "draft",
+    createdBy,
+    createdByName,
+  });
+  
+  // الحصول على معرف المسيرة
+  const newPayroll = await getPayrollByBranchAndMonth(branchId, year, month);
+  if (!newPayroll) {
+    throw new Error("فشل في إنشاء مسيرة الرواتب");
+  }
+  
+  // إضافة التفاصيل
+  const detailsWithPayrollId = details.map(d => ({ ...d, payrollId: newPayroll.id }));
+  await createPayrollDetails(detailsWithPayrollId);
+  
+  return newPayroll;
+}
+
+// الحصول على طلبات الموظفين الموافق عليها
+export async function getApprovedEmployeeRequests(startDate?: string, endDate?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  let conditions = [eq(employeeRequests.status, "approved")];
+  
+  if (startDate && endDate) {
+    conditions.push(gte(employeeRequests.reviewedAt!, new Date(startDate)));
+    conditions.push(lte(employeeRequests.reviewedAt!, new Date(endDate)));
+  }
+  
+  return await db.select().from(employeeRequests)
+    .where(and(...conditions))
+    .orderBy(desc(employeeRequests.reviewedAt));
+}
