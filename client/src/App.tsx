@@ -4,32 +4,84 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
+import DashboardLayout from "./components/DashboardLayout";
+
+// Pages
+import Dashboard from "./pages/Dashboard";
+import Users from "./pages/Users";
+import Products from "./pages/Products";
+import Categories from "./pages/Categories";
+import Customers from "./pages/Customers";
+import Suppliers from "./pages/Suppliers";
+import Invoices from "./pages/Invoices";
+import Purchases from "./pages/Purchases";
+import Reports from "./pages/Reports";
+import SendNotification from "./pages/SendNotification";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      {/* Dashboard Routes - All protected with DashboardLayout */}
+      <Route path="/">
+        <DashboardLayout>
+          <Dashboard />
+        </DashboardLayout>
+      </Route>
+      <Route path="/users">
+        <DashboardLayout>
+          <Users />
+        </DashboardLayout>
+      </Route>
+      <Route path="/products">
+        <DashboardLayout>
+          <Products />
+        </DashboardLayout>
+      </Route>
+      <Route path="/categories">
+        <DashboardLayout>
+          <Categories />
+        </DashboardLayout>
+      </Route>
+      <Route path="/customers">
+        <DashboardLayout>
+          <Customers />
+        </DashboardLayout>
+      </Route>
+      <Route path="/suppliers">
+        <DashboardLayout>
+          <Suppliers />
+        </DashboardLayout>
+      </Route>
+      <Route path="/invoices">
+        <DashboardLayout>
+          <Invoices />
+        </DashboardLayout>
+      </Route>
+      <Route path="/purchases">
+        <DashboardLayout>
+          <Purchases />
+        </DashboardLayout>
+      </Route>
+      <Route path="/reports">
+        <DashboardLayout>
+          <Reports />
+        </DashboardLayout>
+      </Route>
+      <Route path="/notifications/send">
+        <DashboardLayout>
+          <SendNotification />
+        </DashboardLayout>
+      </Route>
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
           <Router />
