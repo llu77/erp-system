@@ -17,7 +17,7 @@ export default function Login() {
     onSuccess: (data) => {
       toast.success("تم تسجيل الدخول بنجاح");
       // إعادة تحميل الصفحة لتحديث حالة المصادقة
-      window.location.href = "/dashboard";
+      window.location.href = "/";
     },
     onError: (error) => {
       toast.error(error.message || "فشل تسجيل الدخول");

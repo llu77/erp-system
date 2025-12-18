@@ -99,32 +99,9 @@ export default function DashboardLayout({
   }
 
   if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/5 to-primary/10" dir="rtl">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full bg-card rounded-2xl shadow-xl border">
-          <div className="p-4 bg-primary/10 rounded-full">
-            <Building2 className="h-12 w-12 text-primary" />
-          </div>
-          <div className="flex flex-col items-center gap-4">
-            <h1 className="text-2xl font-bold tracking-tight text-center">
-              نظام ERP الشامل
-            </h1>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
-              نظام متكامل لإدارة الموارد والعمليات التجارية. يرجى تسجيل الدخول للمتابعة.
-            </p>
-          </div>
-          <Button
-            onClick={() => {
-              window.location.href = getLoginUrl();
-            }}
-            size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
-          >
-            تسجيل الدخول
-          </Button>
-        </div>
-      </div>
-    );
+    // توجيه المستخدم غير المسجل إلى صفحة تسجيل الدخول المحلية
+    window.location.href = '/login';
+    return <DashboardLayoutSkeleton />;
   }
 
   return (
