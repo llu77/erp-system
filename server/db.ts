@@ -798,3 +798,200 @@ export async function generateProductSku() {
   const sequence = parseInt(parts[1] || '0') + 1;
   return `PRD-${sequence.toString().padStart(4, '0')}`;
 }
+
+
+// ==================== دوال الفروع ====================
+import { 
+  branches, InsertBranch,
+  employees, InsertEmployee,
+  monthlyRecords, InsertMonthlyRecord,
+  dailyRevenues, InsertDailyRevenue,
+  employeeRevenues, InsertEmployeeRevenue,
+  weeklyBonuses, InsertWeeklyBonus,
+  bonusDetails, InsertBonusDetail,
+  bonusAuditLog, InsertBonusAuditLog,
+  systemLogs, InsertSystemLog,
+} from "../drizzle/schema";
+
+export async function getBranches() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(branches).orderBy(branches.name);
+}
+
+export async function getBranchById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(branches).where(eq(branches.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createBranch(data: InsertBranch) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(branches).values(data);
+}
+
+// ==================== دوال الموظفين ====================
+export async function getAllEmployees() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(employees).orderBy(employees.name);
+}
+
+export async function getEmployeesByBranch(branchId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(employees)
+    .where(and(eq(employees.branchId, branchId), eq(employees.isActive, true)))
+    .orderBy(employees.name);
+}
+
+export async function getEmployeeById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(employees).where(eq(employees.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createEmployee(data: InsertEmployee) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(employees).values(data);
+}
+
+// ==================== دوال السجلات الشهرية ====================
+export async function getMonthlyRecord(branchId: number, year: number, month: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(monthlyRecords)
+    .where(and(
+      eq(monthlyRecords.branchId, branchId),
+      eq(monthlyRecords.year, year),
+      eq(monthlyRecords.month, month)
+    ))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createMonthlyRecord(data: InsertMonthlyRecord) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(monthlyRecords).values(data);
+}
+
+// ==================== دوال الإيرادات اليومية ====================
+export async function createDailyRevenue(data: InsertDailyRevenue) {
+  const db = await getDb();
+  if (!db) return null;
+  return await db.insert(dailyRevenues).values(data);
+}
+
+export async function getDailyRevenuesByDateRange(branchId: number, startDate: string, endDate: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(dailyRevenues)
+    .where(and(
+      eq(dailyRevenues.branchId, branchId),
+      gte(dailyRevenues.date, new Date(startDate)),
+      lte(dailyRevenues.date, new Date(endDate))
+    ))
+    .orderBy(desc(dailyRevenues.date));
+}
+
+// ==================== دوال إيرادات الموظفين ====================
+export async function createEmployeeRevenue(data: InsertEmployeeRevenue) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(employeeRevenues).values(data);
+}
+
+// ==================== دوال البونص الأسبوعي ====================
+export async function getWeeklyBonusesByBranch(branchId: number, limit = 10) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(weeklyBonuses)
+    .where(eq(weeklyBonuses.branchId, branchId))
+    .orderBy(desc(weeklyBonuses.year), desc(weeklyBonuses.month), desc(weeklyBonuses.weekNumber))
+    .limit(limit);
+}
+
+export async function getCurrentWeekBonus(branchId: number, year: number, month: number, weekNumber: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(weeklyBonuses)
+    .where(and(
+      eq(weeklyBonuses.branchId, branchId),
+      eq(weeklyBonuses.year, year),
+      eq(weeklyBonuses.month, month),
+      eq(weeklyBonuses.weekNumber, weekNumber)
+    ))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getPendingBonusRequests() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(weeklyBonuses)
+    .where(eq(weeklyBonuses.status, "requested"))
+    .orderBy(desc(weeklyBonuses.requestedAt));
+}
+
+export async function getBonusDetails(weeklyBonusId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select({
+    id: bonusDetails.id,
+    employeeId: bonusDetails.employeeId,
+    employeeName: employees.name,
+    employeeCode: employees.code,
+    weeklyRevenue: bonusDetails.weeklyRevenue,
+    bonusAmount: bonusDetails.bonusAmount,
+    bonusTier: bonusDetails.bonusTier,
+    isEligible: bonusDetails.isEligible,
+  })
+    .from(bonusDetails)
+    .leftJoin(employees, eq(bonusDetails.employeeId, employees.id))
+    .where(eq(bonusDetails.weeklyBonusId, weeklyBonusId))
+    .orderBy(desc(bonusDetails.bonusAmount));
+}
+
+export async function updateWeeklyBonusStatus(
+  id: number,
+  status: "pending" | "requested" | "approved" | "rejected",
+  userId: number,
+  rejectionReason?: string
+) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const updateData: Partial<InsertWeeklyBonus> = { status };
+  
+  if (status === "requested") {
+    updateData.requestedAt = new Date();
+    updateData.requestedBy = userId;
+  } else if (status === "approved") {
+    updateData.approvedAt = new Date();
+    updateData.approvedBy = userId;
+  } else if (status === "rejected") {
+    updateData.rejectedAt = new Date();
+    updateData.rejectedBy = userId;
+    updateData.rejectionReason = rejectionReason;
+  }
+  
+  await db.update(weeklyBonuses).set(updateData).where(eq(weeklyBonuses.id, id));
+}
+
+// ==================== دوال سجل النظام ====================
+export async function createSystemLog(data: Omit<InsertSystemLog, "id" | "createdAt">) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(systemLogs).values(data);
+}
+
+export async function createBonusAuditLog(data: Omit<InsertBonusAuditLog, "id" | "performedAt">) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(bonusAuditLog).values(data);
+}

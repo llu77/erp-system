@@ -916,6 +916,371 @@ export const appRouter = router({
       return await db.getInventoryReport();
     }),
   }),
+
+  // ==================== إدارة الفروع ====================
+  branches: router({
+    list: protectedProcedure.query(async () => {
+      return await db.getBranches();
+    }),
+
+    create: adminProcedure
+      .input(z.object({
+        code: z.string().min(1),
+        name: z.string().min(1),
+        nameAr: z.string().min(1),
+        address: z.string().optional(),
+        phone: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.createBranch(input);
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'create',
+          entityType: 'branch',
+          details: `تم إنشاء فرع: ${input.nameAr}`,
+        });
+        return { success: true, message: 'تم إنشاء الفرع بنجاح' };
+      }),
+  }),
+
+  // ==================== إدارة الموظفين (للبونص) ====================
+  employees: router({
+    list: protectedProcedure
+      .input(z.object({ branchId: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        if (input?.branchId) {
+          return await db.getEmployeesByBranch(input.branchId);
+        }
+        return await db.getAllEmployees();
+      }),
+
+    listByBranch: protectedProcedure
+      .input(z.object({ branchId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getEmployeesByBranch(input.branchId);
+      }),
+
+    create: managerProcedure
+      .input(z.object({
+        code: z.string().min(1),
+        name: z.string().min(1),
+        branchId: z.number(),
+        phone: z.string().optional(),
+        position: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.createEmployee(input);
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'create',
+          entityType: 'employee',
+          details: `تم إنشاء موظف: ${input.name}`,
+        });
+        return { success: true, message: 'تم إنشاء الموظف بنجاح' };
+      }),
+  }),
+
+  // ==================== إدارة الإيرادات ====================
+  revenues: router({
+    createDaily: managerProcedure
+      .input(z.object({
+        branchId: z.number(),
+        date: z.string(),
+        cash: z.string(),
+        network: z.string(),
+        balance: z.string(),
+        total: z.string(),
+        isMatched: z.boolean(),
+        unmatchReason: z.string().optional(),
+        employeeRevenues: z.array(z.object({
+          employeeId: z.number(),
+          cash: z.string(),
+          network: z.string(),
+          total: z.string(),
+        })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const date = new Date(input.date);
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+
+        // الحصول على أو إنشاء سجل شهري
+        let monthlyRecord = await db.getMonthlyRecord(input.branchId, year, month);
+        if (!monthlyRecord) {
+          const startDate = new Date(year, month - 1, 1);
+          const endDate = new Date(year, month, 0);
+          await db.createMonthlyRecord({
+            branchId: input.branchId,
+            year,
+            month,
+            startDate,
+            endDate,
+            status: "active",
+          });
+          monthlyRecord = await db.getMonthlyRecord(input.branchId, year, month);
+        }
+
+        if (!monthlyRecord) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل إنشاء السجل الشهري' });
+        }
+
+        // إنشاء الإيراد اليومي
+        const result = await db.createDailyRevenue({
+          monthlyRecordId: monthlyRecord.id,
+          branchId: input.branchId,
+          date: new Date(input.date),
+          cash: input.cash,
+          network: input.network,
+          balance: input.balance,
+          total: input.total,
+          isMatched: input.isMatched,
+          unmatchReason: input.unmatchReason,
+          createdBy: ctx.user.id,
+        });
+
+        // إنشاء إيرادات الموظفين وتزامن البونص
+        const dailyRevenueId = Number((result as any)?.[0]?.insertId || result);
+        
+        for (const empRev of input.employeeRevenues) {
+          await db.createEmployeeRevenue({
+            dailyRevenueId,
+            employeeId: empRev.employeeId,
+            cash: empRev.cash,
+            network: empRev.network,
+            total: empRev.total,
+          });
+
+          // تزامن البونص تلقائياً
+          try {
+            const { syncBonusOnRevenueChange } = await import('./bonus/sync');
+            await syncBonusOnRevenueChange(empRev.employeeId, input.branchId, new Date(input.date));
+          } catch (error: any) {
+            console.error('Bonus sync error:', error.message);
+            await db.createSystemLog({
+              level: 'warning',
+              category: 'bonus',
+              message: `فشل تزامن البونص للموظف ${empRev.employeeId}: ${error.message}`,
+              userId: ctx.user.id,
+            });
+          }
+        }
+
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'create',
+          entityType: 'revenue',
+          details: `تم إدخال إيرادات يوم ${input.date}`,
+        });
+
+        return { success: true, message: 'تم حفظ الإيرادات بنجاح' };
+      }),
+
+    getByDateRange: protectedProcedure
+      .input(z.object({
+        branchId: z.number(),
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getDailyRevenuesByDateRange(input.branchId, input.startDate, input.endDate);
+      }),
+  }),
+
+  // ==================== إدارة البونص الأسبوعي ====================
+  bonuses: router({
+    // الحصول على بونص الأسبوع الحالي
+    current: managerProcedure
+      .input(z.object({ branchId: z.number() }))
+      .query(async ({ input }) => {
+        const now = new Date();
+        const day = now.getDate();
+        const month = now.getMonth() + 1;
+        const year = now.getFullYear();
+        
+        // حساب رقم الأسبوع
+        let weekNumber: number;
+        if (day <= 7) weekNumber = 1;
+        else if (day <= 15) weekNumber = 2;
+        else if (day <= 22) weekNumber = 3;
+        else if (day <= 29) weekNumber = 4;
+        else weekNumber = 5;
+
+        const weeklyBonus = await db.getCurrentWeekBonus(input.branchId, year, month, weekNumber);
+        
+        if (!weeklyBonus) {
+          return null;
+        }
+
+        const details = await db.getBonusDetails(weeklyBonus.id);
+        const branch = await db.getBranchById(input.branchId);
+
+        return {
+          ...weeklyBonus,
+          branchName: branch?.nameAr || 'غير محدد',
+          details,
+          eligibleCount: details.filter(d => d.isEligible).length,
+          totalEmployees: details.length,
+        };
+      }),
+
+    // الحصول على بونص أسبوع محدد
+    getWeek: managerProcedure
+      .input(z.object({
+        branchId: z.number(),
+        year: z.number(),
+        month: z.number(),
+        weekNumber: z.number().min(1).max(5),
+      }))
+      .query(async ({ input }) => {
+        const weeklyBonus = await db.getCurrentWeekBonus(
+          input.branchId,
+          input.year,
+          input.month,
+          input.weekNumber
+        );
+        
+        if (!weeklyBonus) {
+          return null;
+        }
+
+        const details = await db.getBonusDetails(weeklyBonus.id);
+        const branch = await db.getBranchById(input.branchId);
+
+        return {
+          ...weeklyBonus,
+          branchName: branch?.nameAr || 'غير محدد',
+          details,
+          eligibleCount: details.filter(d => d.isEligible).length,
+          totalEmployees: details.length,
+        };
+      }),
+
+    // سجل البونص
+    history: managerProcedure
+      .input(z.object({
+        branchId: z.number(),
+        limit: z.number().default(10),
+      }))
+      .query(async ({ input }) => {
+        return await db.getWeeklyBonusesByBranch(input.branchId, input.limit);
+      }),
+
+    // طلب صرف البونص
+    request: managerProcedure
+      .input(z.object({ weeklyBonusId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await db.updateWeeklyBonusStatus(input.weeklyBonusId, 'requested', ctx.user.id);
+        
+        await db.createBonusAuditLog({
+          weeklyBonusId: input.weeklyBonusId,
+          action: 'طلب صرف',
+          oldStatus: 'pending',
+          newStatus: 'requested',
+          performedBy: ctx.user.id,
+          details: 'تم طلب صرف البونص',
+        });
+
+        // إرسال إشعار للمسؤول
+        await notifyOwner({
+          title: 'طلب صرف بونص جديد',
+          content: `تم طلب صرف بونص أسبوعي من ${ctx.user.name || 'مشرف'}`,
+        });
+
+        return { success: true, message: 'تم إرسال طلب الصرف بنجاح' };
+      }),
+
+    // طلبات البونص المعلقة (للمسؤول)
+    pending: adminProcedure.query(async () => {
+      const requests = await db.getPendingBonusRequests();
+      const result = [];
+      
+      for (const req of requests) {
+        const branch = await db.getBranchById(req.branchId);
+        const details = await db.getBonusDetails(req.id);
+        result.push({
+          ...req,
+          branchName: branch?.nameAr || 'غير محدد',
+          details,
+          eligibleCount: details.filter(d => d.isEligible).length,
+          totalEmployees: details.length,
+        });
+      }
+      
+      return result;
+    }),
+
+    // الموافقة على البونص
+    approve: adminProcedure
+      .input(z.object({ weeklyBonusId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await db.updateWeeklyBonusStatus(input.weeklyBonusId, 'approved', ctx.user.id);
+        
+        await db.createBonusAuditLog({
+          weeklyBonusId: input.weeklyBonusId,
+          action: 'موافقة',
+          oldStatus: 'requested',
+          newStatus: 'approved',
+          performedBy: ctx.user.id,
+          details: 'تمت الموافقة على البونص',
+        });
+
+        return { success: true, message: 'تمت الموافقة على البونص بنجاح' };
+      }),
+
+    // رفض البونص
+    reject: adminProcedure
+      .input(z.object({
+        weeklyBonusId: z.number(),
+        reason: z.string().min(1, 'سبب الرفض مطلوب'),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.updateWeeklyBonusStatus(input.weeklyBonusId, 'rejected', ctx.user.id, input.reason);
+        
+        await db.createBonusAuditLog({
+          weeklyBonusId: input.weeklyBonusId,
+          action: 'رفض',
+          oldStatus: 'requested',
+          newStatus: 'rejected',
+          performedBy: ctx.user.id,
+          details: `تم رفض البونص: ${input.reason}`,
+        });
+
+        return { success: true, message: 'تم رفض البونص' };
+      }),
+
+    // تزامن البونص يدوياً
+    sync: managerProcedure
+      .input(z.object({
+        branchId: z.number(),
+        year: z.number(),
+        month: z.number(),
+        weekNumber: z.number().min(1).max(5),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { syncWeeklyBonusForBranch } = await import('./bonus/sync');
+        const result = await syncWeeklyBonusForBranch(
+          input.branchId,
+          input.weekNumber,
+          input.month,
+          input.year
+        );
+
+        if (result.success) {
+          await db.createActivityLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name || 'مستخدم',
+            action: 'sync',
+            entityType: 'bonus',
+            details: `تم تزامن بونص الأسبوع ${input.weekNumber}`,
+          });
+        }
+
+        return result;
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

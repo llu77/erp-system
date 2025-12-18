@@ -241,3 +241,176 @@ export const inventoryMovements = mysqlTable("inventoryMovements", {
 
 export type InventoryMovement = typeof inventoryMovements.$inferSelect;
 export type InsertInventoryMovement = typeof inventoryMovements.$inferInsert;
+
+
+// ==================== جدول الفروع ====================
+export const branches = mysqlTable("branches", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  nameAr: varchar("nameAr", { length: 255 }).notNull(),
+  address: text("address"),
+  phone: varchar("phone", { length: 50 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Branch = typeof branches.$inferSelect;
+export type InsertBranch = typeof branches.$inferInsert;
+
+// ==================== جدول الموظفين (للبونص) ====================
+export const employees = mysqlTable("employees", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  branchId: int("branchId").notNull(),
+  phone: varchar("phone", { length: 50 }),
+  position: varchar("position", { length: 100 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Employee = typeof employees.$inferSelect;
+export type InsertEmployee = typeof employees.$inferInsert;
+
+// ==================== جدول السجلات الشهرية ====================
+export const monthlyRecords = mysqlTable("monthlyRecords", {
+  id: int("id").autoincrement().primaryKey(),
+  branchId: int("branchId").notNull(),
+  year: int("year").notNull(),
+  month: int("month").notNull(),
+  startDate: timestamp("startDate").notNull(),
+  endDate: timestamp("endDate").notNull(),
+  status: mysqlEnum("status", ["active", "closed"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type MonthlyRecord = typeof monthlyRecords.$inferSelect;
+export type InsertMonthlyRecord = typeof monthlyRecords.$inferInsert;
+
+// ==================== جدول الإيرادات اليومية ====================
+export const dailyRevenues = mysqlTable("dailyRevenues", {
+  id: int("id").autoincrement().primaryKey(),
+  monthlyRecordId: int("monthlyRecordId").notNull(),
+  branchId: int("branchId").notNull(),
+  date: timestamp("date").notNull(),
+  cash: decimal("cash", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  network: decimal("network", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  balance: decimal("balance", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  total: decimal("total", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  isMatched: boolean("isMatched").default(true).notNull(),
+  unmatchReason: text("unmatchReason"),
+  createdBy: int("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type DailyRevenue = typeof dailyRevenues.$inferSelect;
+export type InsertDailyRevenue = typeof dailyRevenues.$inferInsert;
+
+// ==================== جدول إيرادات الموظفين ====================
+export const employeeRevenues = mysqlTable("employeeRevenues", {
+  id: int("id").autoincrement().primaryKey(),
+  dailyRevenueId: int("dailyRevenueId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  cash: decimal("cash", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  network: decimal("network", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  total: decimal("total", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeRevenue = typeof employeeRevenues.$inferSelect;
+export type InsertEmployeeRevenue = typeof employeeRevenues.$inferInsert;
+
+// ==================== جدول البونص الأسبوعي ====================
+/**
+ * Weekly Bonuses - Tracks weekly bonus calculations per branch
+ * Week calculation:
+ * - Week 1: Days 1-7
+ * - Week 2: Days 8-15
+ * - Week 3: Days 16-22
+ * - Week 4: Days 23-29
+ * - Week 5: Days 30-31 (remaining days)
+ */
+export const weeklyBonuses = mysqlTable("weeklyBonuses", {
+  id: int("id").autoincrement().primaryKey(),
+  branchId: int("branchId").notNull(),
+  weekNumber: int("weekNumber").notNull(), // 1-5
+  weekStart: timestamp("weekStart").notNull(),
+  weekEnd: timestamp("weekEnd").notNull(),
+  month: int("month").notNull(), // 1-12
+  year: int("year").notNull(),
+  status: mysqlEnum("status", ["pending", "requested", "approved", "rejected"]).default("pending").notNull(),
+  requestedAt: timestamp("requestedAt"),
+  requestedBy: int("requestedBy"),
+  approvedAt: timestamp("approvedAt"),
+  approvedBy: int("approvedBy"),
+  rejectedAt: timestamp("rejectedAt"),
+  rejectedBy: int("rejectedBy"),
+  rejectionReason: text("rejectionReason"),
+  totalAmount: decimal("totalAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WeeklyBonus = typeof weeklyBonuses.$inferSelect;
+export type InsertWeeklyBonus = typeof weeklyBonuses.$inferInsert;
+
+// ==================== جدول تفاصيل البونص ====================
+/**
+ * Bonus Details - Individual employee bonus breakdown
+ * Bonus tiers:
+ * - Tier 5: ≥2400 SAR → 180 SAR
+ * - Tier 4: 2100-2399 SAR → 135 SAR
+ * - Tier 3: 1800-2099 SAR → 95 SAR
+ * - Tier 2: 1500-1799 SAR → 60 SAR
+ * - Tier 1: 1200-1499 SAR → 35 SAR
+ * - None: <1200 SAR → 0 SAR
+ */
+export const bonusDetails = mysqlTable("bonusDetails", {
+  id: int("id").autoincrement().primaryKey(),
+  weeklyBonusId: int("weeklyBonusId").notNull(),
+  employeeId: int("employeeId").notNull(),
+  weeklyRevenue: decimal("weeklyRevenue", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  bonusAmount: decimal("bonusAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  bonusTier: mysqlEnum("bonusTier", ["tier_1", "tier_2", "tier_3", "tier_4", "tier_5", "none"]).notNull(),
+  isEligible: boolean("isEligible").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BonusDetail = typeof bonusDetails.$inferSelect;
+export type InsertBonusDetail = typeof bonusDetails.$inferInsert;
+
+// ==================== جدول سجل البونص ====================
+export const bonusAuditLog = mysqlTable("bonusAuditLog", {
+  id: int("id").autoincrement().primaryKey(),
+  weeklyBonusId: int("weeklyBonusId").notNull(),
+  action: varchar("action", { length: 100 }).notNull(),
+  oldStatus: varchar("oldStatus", { length: 50 }),
+  newStatus: varchar("newStatus", { length: 50 }),
+  performedBy: int("performedBy").notNull(),
+  performedAt: timestamp("performedAt").defaultNow().notNull(),
+  details: text("details"),
+});
+
+export type BonusAuditLog = typeof bonusAuditLog.$inferSelect;
+export type InsertBonusAuditLog = typeof bonusAuditLog.$inferInsert;
+
+// ==================== جدول سجل النظام ====================
+export const systemLogs = mysqlTable("systemLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  level: mysqlEnum("level", ["info", "warning", "error"]).default("info").notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  message: text("message").notNull(),
+  userId: int("userId"),
+  metadata: text("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SystemLog = typeof systemLogs.$inferSelect;
+export type InsertSystemLog = typeof systemLogs.$inferInsert;

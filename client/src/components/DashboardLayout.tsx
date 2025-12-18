@@ -36,6 +36,9 @@ import {
   Bell,
   Settings,
   Building2,
+  Gift,
+  DollarSign,
+  Send,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -44,17 +47,19 @@ import { Button } from "./ui/button";
 import { NotificationBell } from "./NotificationBell";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "لوحة التحكم", path: "/" },
-  { icon: Users, label: "المستخدمين", path: "/users" },
-  { icon: Package, label: "المنتجات", path: "/products" },
-  { icon: Building2, label: "الفئات", path: "/categories" },
-  { icon: UserCircle, label: "العملاء", path: "/customers" },
-  { icon: Truck, label: "الموردين", path: "/suppliers" },
-  { icon: FileText, label: "الفواتير", path: "/invoices" },
-  { icon: ShoppingCart, label: "المشتريات", path: "/purchases" },
-  { icon: BarChart3, label: "التقارير", path: "/reports" },
-  { icon: Bell, label: "إرسال إشعار", path: "/notifications/send" },
-  { icon: Settings, label: "الإعدادات", path: "/settings" },
+  { icon: LayoutDashboard, label: "لوحة التحكم", path: "/", roles: ["admin", "manager", "employee"] },
+  { icon: Users, label: "المستخدمين", path: "/users", roles: ["admin"] },
+  { icon: Package, label: "المنتجات", path: "/products", roles: ["admin", "manager", "employee"] },
+  { icon: Building2, label: "الفئات", path: "/categories", roles: ["admin", "manager"] },
+  { icon: UserCircle, label: "العملاء", path: "/customers", roles: ["admin", "manager", "employee"] },
+  { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager"] },
+  { icon: FileText, label: "الفواتير", path: "/invoices", roles: ["admin", "manager", "employee"] },
+  { icon: ShoppingCart, label: "المشتريات", path: "/purchases", roles: ["admin", "manager"] },
+  { icon: DollarSign, label: "الإيرادات", path: "/revenues", roles: ["admin", "manager"] },
+  { icon: Gift, label: "البونص", path: "/bonuses", roles: ["admin", "manager"] },
+  { icon: Send, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin"] },
+  { icon: BarChart3, label: "التقارير", path: "/reports", roles: ["admin", "manager"] },
+  { icon: Bell, label: "إرسال إشعار", path: "/notifications/send", roles: ["admin", "manager"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -195,13 +200,8 @@ function DashboardLayoutContent({
 
   // Filter menu items based on user role
   const filteredMenuItems = menuItems.filter((item) => {
-    if (item.path === "/users" && user?.role !== "admin") {
-      return false;
-    }
-    if (item.path === "/notifications/send" && user?.role === "employee") {
-      return false;
-    }
-    return true;
+    if (!item.roles) return true;
+    return item.roles.includes(user?.role || "employee");
   });
 
   return (

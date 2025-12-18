@@ -15,6 +15,13 @@
       "when": 1766028952968,
       "tag": "0001_lush_mentor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1766088732658,
+      "tag": "0002_curly_madripoor",
+      "breakpoints": true
     }
   ]
 }

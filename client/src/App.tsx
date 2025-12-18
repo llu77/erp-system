@@ -17,6 +17,9 @@ import Invoices from "./pages/Invoices";
 import Purchases from "./pages/Purchases";
 import Reports from "./pages/Reports";
 import SendNotification from "./pages/SendNotification";
+import Bonuses from "./pages/Bonuses";
+import BonusRequests from "./pages/BonusRequests";
+import Revenues from "./pages/Revenues";
 
 function Router() {
   return (
@@ -70,6 +73,22 @@ function Router() {
       <Route path="/notifications/send">
         <DashboardLayout>
           <SendNotification />
+        </DashboardLayout>
+      </Route>
+      {/* Bonus System Routes */}
+      <Route path="/revenues">
+        <DashboardLayout>
+          <Revenues />
+        </DashboardLayout>
+      </Route>
+      <Route path="/bonuses">
+        <DashboardLayout>
+          <Bonuses />
+        </DashboardLayout>
+      </Route>
+      <Route path="/bonus-requests">
+        <DashboardLayout>
+          <BonusRequests />
         </DashboardLayout>
       </Route>
       <Route path="/404" component={NotFound} />
