@@ -414,3 +414,114 @@ export const systemLogs = mysqlTable("systemLogs", {
 
 export type SystemLog = typeof systemLogs.$inferSelect;
 export type InsertSystemLog = typeof systemLogs.$inferInsert;
+
+// ==================== جدول طلبات الموظفين ====================
+/**
+ * Employee Requests - نظام طلبات الموظفين الشامل
+ * أنواع الطلبات:
+ * - advance: سلفة مالية
+ * - vacation: إجازة
+ * - arrears: صرف متأخرات
+ * - permission: استئذان
+ * - objection: اعتراض على مخالفة
+ * - resignation: استقالة
+ */
+export const employeeRequests = mysqlTable("employeeRequests", {
+  id: int("id").autoincrement().primaryKey(),
+  requestNumber: varchar("requestNumber", { length: 50 }).notNull().unique(),
+  employeeId: int("employeeId").notNull(),
+  employeeName: varchar("employeeName", { length: 255 }).notNull(),
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // نوع الطلب
+  requestType: mysqlEnum("requestType", [
+    "advance",      // سلفة
+    "vacation",     // إجازة
+    "arrears",      // صرف متأخرات
+    "permission",   // استئذان
+    "objection",    // اعتراض على مخالفة
+    "resignation"   // استقالة
+  ]).notNull(),
+  
+  // حالة الطلب
+  status: mysqlEnum("status", [
+    "pending",      // قيد الانتظار
+    "approved",     // موافق عليه
+    "rejected",     // مرفوض
+    "cancelled"     // ملغي
+  ]).default("pending").notNull(),
+  
+  // تفاصيل الطلب العامة
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  
+  // حقول خاصة بالسلفة
+  advanceAmount: decimal("advanceAmount", { precision: 12, scale: 2 }),
+  advanceReason: text("advanceReason"),
+  repaymentMethod: varchar("repaymentMethod", { length: 100 }),
+  
+  // حقول خاصة بالإجازة
+  vacationType: varchar("vacationType", { length: 50 }), // سنوية، مرضية، طارئة، بدون راتب
+  vacationStartDate: timestamp("vacationStartDate"),
+  vacationEndDate: timestamp("vacationEndDate"),
+  vacationDays: int("vacationDays"),
+  
+  // حقول خاصة بصرف المتأخرات
+  arrearsAmount: decimal("arrearsAmount", { precision: 12, scale: 2 }),
+  arrearsPeriod: varchar("arrearsPeriod", { length: 100 }),
+  arrearsDetails: text("arrearsDetails"),
+  
+  // حقول خاصة بالاستئذان
+  permissionDate: timestamp("permissionDate"),
+  permissionStartTime: varchar("permissionStartTime", { length: 10 }),
+  permissionEndTime: varchar("permissionEndTime", { length: 10 }),
+  permissionHours: decimal("permissionHours", { precision: 4, scale: 2 }),
+  permissionReason: text("permissionReason"),
+  
+  // حقول خاصة بالاعتراض
+  objectionType: varchar("objectionType", { length: 100 }), // نوع المخالفة
+  objectionDate: timestamp("objectionDate"),
+  objectionDetails: text("objectionDetails"),
+  objectionEvidence: text("objectionEvidence"), // روابط المرفقات
+  
+  // حقول خاصة بالاستقالة
+  resignationDate: timestamp("resignationDate"),
+  resignationReason: text("resignationReason"),
+  lastWorkingDay: timestamp("lastWorkingDay"),
+  noticePeriod: int("noticePeriod"), // فترة الإشعار بالأيام
+  
+  // حقول الموافقة/الرفض
+  reviewedBy: int("reviewedBy"),
+  reviewedByName: varchar("reviewedByName", { length: 255 }),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewNotes: text("reviewNotes"),
+  rejectionReason: text("rejectionReason"),
+  
+  // حقول إضافية
+  priority: mysqlEnum("priority", ["low", "normal", "high", "urgent"]).default("normal").notNull(),
+  attachments: text("attachments"), // JSON array of attachment URLs
+  
+  // التتبع
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeRequest = typeof employeeRequests.$inferSelect;
+export type InsertEmployeeRequest = typeof employeeRequests.$inferInsert;
+
+// ==================== جدول سجل طلبات الموظفين ====================
+export const employeeRequestLogs = mysqlTable("employeeRequestLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  requestId: int("requestId").notNull(),
+  action: varchar("action", { length: 100 }).notNull(),
+  oldStatus: varchar("oldStatus", { length: 50 }),
+  newStatus: varchar("newStatus", { length: 50 }),
+  performedBy: int("performedBy").notNull(),
+  performedByName: varchar("performedByName", { length: 255 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EmployeeRequestLog = typeof employeeRequestLogs.$inferSelect;
+export type InsertEmployeeRequestLog = typeof employeeRequestLogs.$inferInsert;

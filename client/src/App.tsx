@@ -22,6 +22,8 @@ import BonusRequests from "./pages/BonusRequests";
 import Revenues from "./pages/Revenues";
 import Branches from "./pages/Branches";
 import Employees from "./pages/Employees";
+import SubmitRequest from "./pages/SubmitRequest";
+import ManageRequests from "./pages/ManageRequests";
 
 function Router() {
   return (
@@ -102,6 +104,17 @@ function Router() {
       <Route path="/bonus-requests">
         <DashboardLayout>
           <BonusRequests />
+        </DashboardLayout>
+      </Route>
+      {/* Employee Requests Routes */}
+      <Route path="/submit-request">
+        <DashboardLayout>
+          <SubmitRequest />
+        </DashboardLayout>
+      </Route>
+      <Route path="/manage-requests">
+        <DashboardLayout>
+          <ManageRequests />
         </DashboardLayout>
       </Route>
       <Route path="/404" component={NotFound} />

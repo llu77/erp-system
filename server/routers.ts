@@ -1381,6 +1381,209 @@ export const appRouter = router({
         return result;
       }),
   }),
+
+  // ==================== طلبات الموظفين ====================
+  employeeRequests: router({
+    // قائمة جميع الطلبات (للمدير والمسؤول)
+    list: managerProcedure
+      .input(z.object({
+        status: z.string().optional(),
+        requestType: z.string().optional(),
+        employeeId: z.number().optional(),
+        branchId: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await db.getAllEmployeeRequests(input);
+      }),
+
+    // طلباتي (للموظف)
+    myRequests: protectedProcedure.query(async ({ ctx }) => {
+      // البحث عن الموظف المرتبط بالمستخدم
+      const allEmployees = await db.getAllEmployees();
+      const employee = allEmployees.find(e => e.name === ctx.user.name || e.code === ctx.user.openId);
+      
+      if (!employee) {
+        // إذا لم يكن موظفاً، أرجع الطلبات التي أنشأها المستخدم
+        const allRequests = await db.getAllEmployeeRequests();
+        return allRequests.filter(r => r.employeeName === ctx.user.name);
+      }
+      
+      return await db.getEmployeeRequestsByEmployeeId(employee.id);
+    }),
+
+    // الطلبات المعلقة
+    pending: managerProcedure.query(async () => {
+      return await db.getPendingEmployeeRequests();
+    }),
+
+    // تفاصيل طلب
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getEmployeeRequestById(input.id);
+      }),
+
+    // إحصائيات الطلبات
+    stats: managerProcedure.query(async () => {
+      return await db.getEmployeeRequestsStats();
+    }),
+
+    // إنشاء طلب جديد
+    create: protectedProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        employeeName: z.string(),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+        requestType: z.enum(["advance", "vacation", "arrears", "permission", "objection", "resignation"]),
+        title: z.string(),
+        description: z.string().optional(),
+        priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+        // حقول السلفة
+        advanceAmount: z.number().optional(),
+        advanceReason: z.string().optional(),
+        repaymentMethod: z.string().optional(),
+        // حقول الإجازة
+        vacationType: z.string().optional(),
+        vacationStartDate: z.date().optional(),
+        vacationEndDate: z.date().optional(),
+        vacationDays: z.number().optional(),
+        // حقول صرف المتأخرات
+        arrearsAmount: z.number().optional(),
+        arrearsPeriod: z.string().optional(),
+        arrearsDetails: z.string().optional(),
+        // حقول الاستئذان
+        permissionDate: z.date().optional(),
+        permissionStartTime: z.string().optional(),
+        permissionEndTime: z.string().optional(),
+        permissionHours: z.number().optional(),
+        permissionReason: z.string().optional(),
+        // حقول الاعتراض
+        objectionType: z.string().optional(),
+        objectionDate: z.date().optional(),
+        objectionDetails: z.string().optional(),
+        objectionEvidence: z.string().optional(),
+        // حقول الاستقالة
+        resignationDate: z.date().optional(),
+        resignationReason: z.string().optional(),
+        lastWorkingDay: z.date().optional(),
+        noticePeriod: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.createEmployeeRequest({
+          ...input,
+          advanceAmount: input.advanceAmount?.toString(),
+          arrearsAmount: input.arrearsAmount?.toString(),
+          permissionHours: input.permissionHours?.toString(),
+        });
+
+        if (result) {
+          // تسجيل الإنشاء
+          await db.createEmployeeRequestLog({
+            requestId: Number(result.insertId),
+            action: 'إنشاء طلب',
+            newStatus: 'pending',
+            performedBy: ctx.user.id,
+            performedByName: ctx.user.name || 'مستخدم',
+            notes: `تم إنشاء طلب ${input.title}`,
+          });
+
+          // إشعار المدير
+          await notifyOwner({
+            title: 'طلب جديد من موظف',
+            content: `قدم ${input.employeeName} طلب ${getRequestTypeName(input.requestType)}: ${input.title}`,
+          });
+
+          // إضافة إشعار داخلي
+          await db.createNotification({
+            type: 'system',
+            title: 'طلب جديد',
+            message: `قدم ${input.employeeName} طلب ${getRequestTypeName(input.requestType)}`,
+            relatedType: 'employee_request',
+            relatedId: Number(result.insertId),
+          });
+        }
+
+        return { success: true, message: 'تم تقديم الطلب بنجاح', requestNumber: result?.requestNumber };
+      }),
+
+    // تحديث حالة الطلب (موافقة/رفض)
+    updateStatus: managerProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(["approved", "rejected", "cancelled"]),
+        reviewNotes: z.string().optional(),
+        rejectionReason: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const request = await db.getEmployeeRequestById(input.id);
+        if (!request) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الطلب غير موجود' });
+        }
+
+        const oldStatus = request.status;
+        
+        await db.updateEmployeeRequestStatus(
+          input.id,
+          input.status,
+          ctx.user.id,
+          ctx.user.name || 'مسؤول',
+          input.reviewNotes,
+          input.rejectionReason
+        );
+
+        // تسجيل التغيير
+        await db.createEmployeeRequestLog({
+          requestId: input.id,
+          action: input.status === 'approved' ? 'موافقة' : input.status === 'rejected' ? 'رفض' : 'إلغاء',
+          oldStatus,
+          newStatus: input.status,
+          performedBy: ctx.user.id,
+          performedByName: ctx.user.name || 'مسؤول',
+          notes: input.rejectionReason || input.reviewNotes,
+        });
+
+        // إشعار الموظف
+        const statusText = input.status === 'approved' ? 'تمت الموافقة على' : input.status === 'rejected' ? 'تم رفض' : 'تم إلغاء';
+        await db.createNotification({
+          type: 'system',
+          title: `${statusText} طلبك`,
+          message: `${statusText} طلبك: ${request.title}${input.rejectionReason ? ` - السبب: ${input.rejectionReason}` : ''}`,
+          relatedType: 'employee_request',
+          relatedId: input.id,
+        });
+
+        return { success: true, message: `تم ${statusText} الطلب بنجاح` };
+      }),
+
+    // حذف طلب
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteEmployeeRequest(input.id);
+        return { success: true, message: 'تم حذف الطلب بنجاح' };
+      }),
+
+    // سجلات الطلب
+    logs: protectedProcedure
+      .input(z.object({ requestId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getEmployeeRequestLogs(input.requestId);
+      }),
+  }),
 });
+
+// دالة مساعدة للحصول على اسم نوع الطلب بالعربية
+function getRequestTypeName(type: string): string {
+  const types: Record<string, string> = {
+    advance: 'سلفة',
+    vacation: 'إجازة',
+    arrears: 'صرف متأخرات',
+    permission: 'استئذان',
+    objection: 'اعتراض',
+    resignation: 'استقالة',
+  };
+  return types[type] || type;
+}
 
 export type AppRouter = typeof appRouter;

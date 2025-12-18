@@ -39,6 +39,8 @@ import {
   Gift,
   DollarSign,
   Send,
+  ClipboardList,
+  FilePlus,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -62,6 +64,8 @@ const menuItems = [
   { icon: Send, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin"] },
   { icon: BarChart3, label: "التقارير", path: "/reports", roles: ["admin", "manager"] },
   { icon: Bell, label: "إرسال إشعار", path: "/notifications/send", roles: ["admin", "manager"] },
+  { icon: FilePlus, label: "تقديم طلب", path: "/submit-request", roles: ["admin", "manager", "employee"] },
+  { icon: ClipboardList, label: "إدارة الطلبات", path: "/manage-requests", roles: ["admin", "manager"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

@@ -1019,3 +1019,182 @@ export async function createBonusAuditLog(data: Omit<InsertBonusAuditLog, "id" |
   if (!db) return;
   await db.insert(bonusAuditLog).values(data);
 }
+
+
+// ==================== دوال طلبات الموظفين ====================
+import { employeeRequests, employeeRequestLogs, InsertEmployeeRequest, InsertEmployeeRequestLog } from "../drizzle/schema";
+
+// توليد رقم طلب فريد
+export function generateRequestNumber(): string {
+  const date = new Date();
+  const year = date.getFullYear().toString().slice(-2);
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `REQ-${year}${month}${day}-${random}`;
+}
+
+// إنشاء طلب جديد
+export async function createEmployeeRequest(data: Omit<InsertEmployeeRequest, "id" | "createdAt" | "updatedAt" | "requestNumber">) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const requestNumber = generateRequestNumber();
+  const result = await db.insert(employeeRequests).values({
+    ...data,
+    requestNumber,
+  });
+  
+  return { requestNumber, insertId: result[0].insertId };
+}
+
+// الحصول على جميع الطلبات
+export async function getAllEmployeeRequests(filters?: {
+  status?: string;
+  requestType?: string;
+  employeeId?: number;
+  branchId?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  let query = db.select().from(employeeRequests);
+  
+  const conditions = [];
+  if (filters?.status) {
+    conditions.push(eq(employeeRequests.status, filters.status as "pending" | "approved" | "rejected" | "cancelled"));
+  }
+  if (filters?.requestType) {
+    conditions.push(eq(employeeRequests.requestType, filters.requestType as "advance" | "vacation" | "arrears" | "permission" | "objection" | "resignation"));
+  }
+  if (filters?.employeeId) {
+    conditions.push(eq(employeeRequests.employeeId, filters.employeeId));
+  }
+  if (filters?.branchId) {
+    conditions.push(eq(employeeRequests.branchId, filters.branchId));
+  }
+  
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as typeof query;
+  }
+  
+  return await query.orderBy(desc(employeeRequests.createdAt));
+}
+
+// الحصول على طلب بواسطة المعرف
+export async function getEmployeeRequestById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(employeeRequests)
+    .where(eq(employeeRequests.id, id))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// الحصول على طلبات موظف معين
+export async function getEmployeeRequestsByEmployeeId(employeeId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(employeeRequests)
+    .where(eq(employeeRequests.employeeId, employeeId))
+    .orderBy(desc(employeeRequests.createdAt));
+}
+
+// الحصول على الطلبات المعلقة
+export async function getPendingEmployeeRequests() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(employeeRequests)
+    .where(eq(employeeRequests.status, "pending"))
+    .orderBy(desc(employeeRequests.createdAt));
+}
+
+// تحديث حالة الطلب
+export async function updateEmployeeRequestStatus(
+  id: number,
+  status: "pending" | "approved" | "rejected" | "cancelled",
+  reviewedBy: number,
+  reviewedByName: string,
+  reviewNotes?: string,
+  rejectionReason?: string
+) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const updateData: Partial<InsertEmployeeRequest> = {
+    status,
+    reviewedBy,
+    reviewedByName,
+    reviewedAt: new Date(),
+    reviewNotes,
+  };
+  
+  if (status === "rejected" && rejectionReason) {
+    updateData.rejectionReason = rejectionReason;
+  }
+  
+  await db.update(employeeRequests).set(updateData).where(eq(employeeRequests.id, id));
+}
+
+// تحديث طلب
+export async function updateEmployeeRequest(id: number, data: Partial<InsertEmployeeRequest>) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.update(employeeRequests).set(data).where(eq(employeeRequests.id, id));
+}
+
+// حذف طلب
+export async function deleteEmployeeRequest(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.delete(employeeRequests).where(eq(employeeRequests.id, id));
+}
+
+// إنشاء سجل تدقيق للطلب
+export async function createEmployeeRequestLog(data: Omit<InsertEmployeeRequestLog, "id" | "createdAt">) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.insert(employeeRequestLogs).values(data);
+}
+
+// الحصول على سجلات طلب معين
+export async function getEmployeeRequestLogs(requestId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(employeeRequestLogs)
+    .where(eq(employeeRequestLogs.requestId, requestId))
+    .orderBy(desc(employeeRequestLogs.createdAt));
+}
+
+// إحصائيات الطلبات
+export async function getEmployeeRequestsStats() {
+  const db = await getDb();
+  if (!db) return { total: 0, pending: 0, approved: 0, rejected: 0 };
+  
+  const all = await db.select().from(employeeRequests);
+  
+  return {
+    total: all.length,
+    pending: all.filter(r => r.status === "pending").length,
+    approved: all.filter(r => r.status === "approved").length,
+    rejected: all.filter(r => r.status === "rejected").length,
+  };
+}
+
+// الحصول على طلبات حسب النوع
+export async function getEmployeeRequestsByType(requestType: string) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(employeeRequests)
+    .where(eq(employeeRequests.requestType, requestType as "advance" | "vacation" | "arrears" | "permission" | "objection" | "resignation"))
+    .orderBy(desc(employeeRequests.createdAt));
+}
