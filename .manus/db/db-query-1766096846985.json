@@ -1,0 +1,19 @@
+{
+  "query": "SELECT \n  (SELECT COUNT(*) FROM branches) as branches_count,\n  (SELECT COUNT(*) FROM employees) as employees_count,\n  (SELECT COUNT(*) FROM products) as products_count,\n  (SELECT COUNT(*) FROM customers) as customers_count,\n  (SELECT COUNT(*) FROM suppliers) as suppliers_count,\n  (SELECT COUNT(*) FROM invoices) as invoices_count,\n  (SELECT COUNT(*) FROM categories) as categories_count;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  (SELECT COUNT(*) FROM branches) as branches_count,\n  (SELECT COUNT(*) FROM employees) as employees_count,\n  (SELECT COUNT(*) FROM products) as products_count,\n  (SELECT COUNT(*) FROM customers) as customers_count,\n  (SELECT COUNT(*) FROM suppliers) as suppliers_count,\n  (SELECT COUNT(*) FROM invoices) as invoices_count,\n  (SELECT COUNT(*) FROM categories) as categories_count;",
+  "rows": [
+    {
+      "branches_count": "6",
+      "employees_count": "16",
+      "products_count": "20",
+      "customers_count": "10",
+      "suppliers_count": "5",
+      "invoices_count": "10",
+      "categories_count": "45"
+    }
+  ],
+  "messages": [],
+  "stdout": "branches_count\temployees_count\tproducts_count\tcustomers_count\tsuppliers_count\tinvoices_count\tcategories_count\n6\t16\t20\t10\t5\t10\t45\n",
+  "stderr": "",
+  "execution_time_ms": 1778
+}
