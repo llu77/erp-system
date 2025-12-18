@@ -1,5 +1,6 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { localLogin, createLocalUser, changePassword, resetPassword, ensureAdminExists } from "./auth/localAuth";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
@@ -7,7 +8,7 @@ import { z } from "zod";
 import * as db from "./db";
 import { notifyOwner } from "./_core/notification";
 
-// إجراء للمدير فقط
+// إجراء للمدير فقط (كامل الصلاحيات)
 const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== 'admin' && ctx.user.role !== 'manager') {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بهذا الإجراء' });
@@ -23,11 +24,78 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+// إجراء للمشرف - إدخال فقط بدون تعديل أو حذف
+const supervisorInputProcedure = protectedProcedure.use(({ ctx, next }) => {
+  // المشرف يمكنه الإدخال فقط
+  if (ctx.user.role !== 'admin' && ctx.user.role !== 'manager' && ctx.user.role !== 'employee') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بهذا الإجراء' });
+  }
+  return next({ ctx });
+});
+
+// إجراء للتعديل والحذف - للأدمن فقط
+const adminOnlyEditProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== 'admin') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'التعديل والحذف متاح للمسؤول فقط' });
+  }
+  return next({ ctx });
+});
+
 export const appRouter = router({
   system: systemRouter,
   
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    
+    // تسجيل الدخول المحلي
+    localLogin: publicProcedure
+      .input(z.object({
+        username: z.string().min(1, "اسم المستخدم مطلوب"),
+        password: z.string().min(1, "كلمة المرور مطلوبة"),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const result = await localLogin(input.username, input.password);
+        
+        if (!result.success) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: result.error });
+        }
+        
+        // إنشاء جلسة للمستخدم
+        const { SignJWT } = await import('jose');
+        const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret');
+        
+        const token = await new SignJWT({
+          userId: result.user!.id,
+          username: result.user!.username,
+          role: result.user!.role,
+        })
+          .setProtectedHeader({ alg: 'HS256' })
+          .setExpirationTime('7d')
+          .sign(secret);
+        
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, {
+          ...cookieOptions,
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 أيام
+        });
+        
+        return { success: true, user: result.user };
+      }),
+    
+    // تغيير كلمة المرور
+    changePassword: protectedProcedure
+      .input(z.object({
+        oldPassword: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
+        newPassword: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const result = await changePassword(ctx.user.id, input.oldPassword, input.newPassword);
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error });
+        }
+        return result;
+      }),
+    
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -40,6 +108,56 @@ export const appRouter = router({
     list: adminProcedure.query(async () => {
       return await db.getAllUsers();
     }),
+    
+    // إنشاء مستخدم محلي جديد
+    create: adminProcedure
+      .input(z.object({
+        username: z.string().min(3, "اسم المستخدم يجب أن يكون 3 أحرف على الأقل"),
+        password: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"),
+        name: z.string().min(1, "الاسم مطلوب"),
+        email: z.string().email().optional(),
+        phone: z.string().optional(),
+        role: z.enum(['admin', 'manager', 'employee']),
+        department: z.string().optional(),
+        position: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const result = await createLocalUser(input);
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error });
+        }
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'create',
+          entityType: 'user',
+          entityId: 0,
+          details: `تم إنشاء مستخدم جديد: ${input.username}`,
+        });
+        return result;
+      }),
+    
+    // إعادة تعيين كلمة المرور (للأدمن فقط)
+    resetPassword: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        newPassword: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const result = await resetPassword(input.userId, input.newPassword);
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error });
+        }
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'update',
+          entityType: 'user',
+          entityId: input.userId,
+          details: `تم إعادة تعيين كلمة المرور`,
+        });
+        return result;
+      }),
     
     getById: adminProcedure
       .input(z.object({ id: z.number() }))
@@ -1094,7 +1212,8 @@ export const appRouter = router({
 
   // ==================== إدارة الإيرادات ====================
   revenues: router({
-    createDaily: managerProcedure
+    // المشرف يمكنه إدخال الإيرادات فقط
+    createDaily: supervisorInputProcedure
       .input(z.object({
         branchId: z.number(),
         date: z.string(),
@@ -1776,8 +1895,8 @@ export const appRouter = router({
         return await db.getExpensesStats(input?.startDate, input?.endDate);
       }),
 
-    // إنشاء مصروف
-    create: managerProcedure
+    // إنشاء مصروف - المشرف يمكنه الإدخال فقط
+    create: supervisorInputProcedure
       .input(z.object({
         category: z.enum(['operational', 'administrative', 'marketing', 'maintenance', 'utilities', 'rent', 'salaries', 'supplies', 'transportation', 'other']),
         title: z.string().min(1),
@@ -1813,8 +1932,8 @@ export const appRouter = router({
         return { success: true, message: 'تم إضافة المصروف بنجاح' };
       }),
 
-    // تحديث مصروف
-    update: managerProcedure
+    // تحديث مصروف - الأدمن فقط
+    update: adminOnlyEditProcedure
       .input(z.object({
         id: z.number(),
         category: z.enum(['operational', 'administrative', 'marketing', 'maintenance', 'utilities', 'rent', 'salaries', 'supplies', 'transportation', 'other']).optional(),
@@ -1872,8 +1991,8 @@ export const appRouter = router({
         return { success: true, message: `تم تحديث الحالة إلى: ${statusNames[input.status]}` };
       }),
 
-    // حذف مصروف
-    delete: adminProcedure
+    // حذف مصروف - الأدمن فقط
+    delete: adminOnlyEditProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await db.deleteExpense(input.id);

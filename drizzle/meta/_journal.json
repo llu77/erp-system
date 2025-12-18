@@ -36,6 +36,13 @@
       "when": 1766092559366,
       "tag": "0004_icy_payback",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1766093425605,
+      "tag": "0005_chubby_apocalypse",
+      "breakpoints": true
     }
   ]
 }

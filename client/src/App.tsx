@@ -26,10 +26,14 @@ import SubmitRequest from "./pages/SubmitRequest";
 import ManageRequests from "./pages/ManageRequests";
 import Payrolls from "./pages/Payrolls";
 import Expenses from "./pages/Expenses";
+import Login from "./pages/Login";
 
 function Router() {
   return (
     <Switch>
+      {/* صفحة تسجيل الدخول */}
+      <Route path="/login" component={Login} />
+      
       {/* Dashboard Routes - All protected with DashboardLayout */}
       <Route path="/">
         <DashboardLayout>
