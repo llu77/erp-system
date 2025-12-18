@@ -832,6 +832,18 @@ export async function createBranch(data: InsertBranch) {
   await db.insert(branches).values(data);
 }
 
+export async function updateBranch(id: number, data: Partial<InsertBranch>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(branches).set(data).where(eq(branches.id, id));
+}
+
+export async function deleteBranch(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(branches).where(eq(branches.id, id));
+}
+
 // ==================== دوال الموظفين ====================
 export async function getAllEmployees() {
   const db = await getDb();
@@ -858,6 +870,18 @@ export async function createEmployee(data: InsertEmployee) {
   const db = await getDb();
   if (!db) return;
   await db.insert(employees).values(data);
+}
+
+export async function updateEmployee(id: number, data: Partial<InsertEmployee>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(employees).set(data).where(eq(employees.id, id));
+}
+
+export async function deleteEmployee(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(employees).where(eq(employees.id, id));
 }
 
 // ==================== دوال السجلات الشهرية ====================

@@ -20,6 +20,8 @@ import SendNotification from "./pages/SendNotification";
 import Bonuses from "./pages/Bonuses";
 import BonusRequests from "./pages/BonusRequests";
 import Revenues from "./pages/Revenues";
+import Branches from "./pages/Branches";
+import Employees from "./pages/Employees";
 
 function Router() {
   return (
@@ -73,6 +75,17 @@ function Router() {
       <Route path="/notifications/send">
         <DashboardLayout>
           <SendNotification />
+        </DashboardLayout>
+      </Route>
+      {/* Branches & Employees */}
+      <Route path="/branches">
+        <DashboardLayout>
+          <Branches />
+        </DashboardLayout>
+      </Route>
+      <Route path="/employees">
+        <DashboardLayout>
+          <Employees />
         </DashboardLayout>
       </Route>
       {/* Bonus System Routes */}

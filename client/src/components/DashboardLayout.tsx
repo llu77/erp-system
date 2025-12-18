@@ -49,9 +49,11 @@ import { NotificationBell } from "./NotificationBell";
 const menuItems = [
   { icon: LayoutDashboard, label: "لوحة التحكم", path: "/", roles: ["admin", "manager", "employee"] },
   { icon: Users, label: "المستخدمين", path: "/users", roles: ["admin"] },
+  { icon: Building2, label: "الفروع", path: "/branches", roles: ["admin", "manager"] },
+  { icon: UserCircle, label: "الموظفين", path: "/employees", roles: ["admin", "manager"] },
   { icon: Package, label: "المنتجات", path: "/products", roles: ["admin", "manager", "employee"] },
-  { icon: Building2, label: "الفئات", path: "/categories", roles: ["admin", "manager"] },
-  { icon: UserCircle, label: "العملاء", path: "/customers", roles: ["admin", "manager", "employee"] },
+  { icon: Settings, label: "الفئات", path: "/categories", roles: ["admin", "manager"] },
+  { icon: Users, label: "العملاء", path: "/customers", roles: ["admin", "manager", "employee"] },
   { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager"] },
   { icon: FileText, label: "الفواتير", path: "/invoices", roles: ["admin", "manager", "employee"] },
   { icon: ShoppingCart, label: "المشتريات", path: "/purchases", roles: ["admin", "manager"] },

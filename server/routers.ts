@@ -926,13 +926,20 @@ export const appRouter = router({
     create: adminProcedure
       .input(z.object({
         code: z.string().min(1),
-        name: z.string().min(1),
         nameAr: z.string().min(1),
+        nameEn: z.string().optional(),
         address: z.string().optional(),
         phone: z.string().optional(),
+        isActive: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        await db.createBranch(input);
+        await db.createBranch({
+          code: input.code,
+          name: input.nameEn || input.nameAr,
+          nameAr: input.nameAr,
+          address: input.address,
+          phone: input.phone,
+        });
         await db.createActivityLog({
           userId: ctx.user.id,
           userName: ctx.user.name || 'مستخدم',
@@ -941,6 +948,49 @@ export const appRouter = router({
           details: `تم إنشاء فرع: ${input.nameAr}`,
         });
         return { success: true, message: 'تم إنشاء الفرع بنجاح' };
+      }),
+
+    update: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        code: z.string().min(1),
+        nameAr: z.string().min(1),
+        nameEn: z.string().optional(),
+        address: z.string().optional(),
+        phone: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.updateBranch(input.id, {
+          code: input.code,
+          name: input.nameEn || input.nameAr,
+          nameAr: input.nameAr,
+          address: input.address || null,
+          phone: input.phone || null,
+          isActive: input.isActive ?? true,
+        });
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'update',
+          entityType: 'branch',
+          details: `تم تحديث فرع: ${input.nameAr}`,
+        });
+        return { success: true, message: 'تم تحديث الفرع بنجاح' };
+      }),
+
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await db.deleteBranch(input.id);
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'delete',
+          entityType: 'branch',
+          details: `تم حذف فرع رقم: ${input.id}`,
+        });
+        return { success: true, message: 'تم حذف الفرع بنجاح' };
       }),
   }),
 
@@ -965,12 +1015,19 @@ export const appRouter = router({
       .input(z.object({
         code: z.string().min(1),
         name: z.string().min(1),
-        branchId: z.number(),
+        branchId: z.number().optional(),
         phone: z.string().optional(),
         position: z.string().optional(),
+        isActive: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        await db.createEmployee(input);
+        await db.createEmployee({
+          code: input.code,
+          name: input.name,
+          branchId: input.branchId || 0,
+          phone: input.phone,
+          position: input.position,
+        });
         await db.createActivityLog({
           userId: ctx.user.id,
           userName: ctx.user.name || 'مستخدم',
@@ -979,6 +1036,49 @@ export const appRouter = router({
           details: `تم إنشاء موظف: ${input.name}`,
         });
         return { success: true, message: 'تم إنشاء الموظف بنجاح' };
+      }),
+
+    update: managerProcedure
+      .input(z.object({
+        id: z.number(),
+        code: z.string().min(1),
+        name: z.string().min(1),
+        branchId: z.number().optional(),
+        phone: z.string().optional(),
+        position: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.updateEmployee(input.id, {
+          code: input.code,
+          name: input.name,
+          branchId: input.branchId || 0,
+          phone: input.phone || null,
+          position: input.position || null,
+          isActive: input.isActive ?? true,
+        });
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'update',
+          entityType: 'employee',
+          details: `تم تحديث موظف: ${input.name}`,
+        });
+        return { success: true, message: 'تم تحديث الموظف بنجاح' };
+      }),
+
+    delete: managerProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await db.deleteEmployee(input.id);
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'delete',
+          entityType: 'employee',
+          details: `تم حذف موظف رقم: ${input.id}`,
+        });
+        return { success: true, message: 'تم حذف الموظف بنجاح' };
       }),
   }),
 
