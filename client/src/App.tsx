@@ -33,6 +33,8 @@ import ExecutiveDashboard from "./pages/ExecutiveDashboard";
 import SecurityAlerts from "./pages/SecurityAlerts";
 import PermissionsManagement from "./pages/PermissionsManagement";
 import AdvancedInventory from "./pages/AdvancedInventory";
+import SalesDashboard from "./pages/SalesDashboard";
+import ReportSettings from "./pages/ReportSettings";
 
 function Router() {
   return (
@@ -174,6 +176,16 @@ function Router() {
       <Route path="/advanced-inventory">
         <DashboardLayout>
           <AdvancedInventory />
+        </DashboardLayout>
+      </Route>
+      <Route path="/sales-dashboard">
+        <DashboardLayout>
+          <SalesDashboard />
+        </DashboardLayout>
+      </Route>
+      <Route path="/report-settings">
+        <DashboardLayout>
+          <ReportSettings />
         </DashboardLayout>
       </Route>
       <Route path="/404" component={NotFound} />

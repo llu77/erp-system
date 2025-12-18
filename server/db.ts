@@ -2565,3 +2565,124 @@ export async function getMonthlyTrends(months: number = 12) {
   
   return trends.reverse();
 }
+
+
+// ==================== دوال التقارير الدورية ====================
+
+// الحصول على أفضل المنتجات مبيعاً
+export async function getTopSellingProducts(limit: number = 5, startDate?: Date, endDate?: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [eq(invoices.status, 'paid')];
+  if (startDate) conditions.push(gte(invoices.createdAt, startDate));
+  if (endDate) conditions.push(lte(invoices.createdAt, endDate));
+  
+  const result = await db.select({
+    productId: invoiceItems.productId,
+    name: invoiceItems.productName,
+    totalQuantity: sql<number>`SUM(${invoiceItems.quantity})`.as('totalQuantity'),
+    totalRevenue: sql<number>`SUM(${invoiceItems.total})`.as('totalRevenue'),
+  })
+    .from(invoiceItems)
+    .innerJoin(invoices, eq(invoiceItems.invoiceId, invoices.id))
+    .where(and(...conditions))
+    .groupBy(invoiceItems.productId, invoiceItems.productName)
+    .orderBy(desc(sql`SUM(${invoiceItems.total})`))
+    .limit(limit);
+  
+  return result;
+}
+
+// الحصول على أفضل العملاء
+export async function getTopCustomers(limit: number = 5, startDate?: Date, endDate?: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [eq(invoices.status, 'paid')];
+  if (startDate) conditions.push(gte(invoices.createdAt, startDate));
+  if (endDate) conditions.push(lte(invoices.createdAt, endDate));
+  
+  const result = await db.select({
+    customerId: invoices.customerId,
+    name: sql<string>`COALESCE(${customers.name}, ${invoices.customerName}, 'عميل نقدي')`.as('name'),
+    invoiceCount: sql<number>`COUNT(${invoices.id})`.as('invoiceCount'),
+    totalPurchases: sql<number>`SUM(${invoices.total})`.as('totalPurchases'),
+  })
+    .from(invoices)
+    .leftJoin(customers, eq(invoices.customerId, customers.id))
+    .where(and(...conditions))
+    .groupBy(invoices.customerId, customers.name, invoices.customerName)
+    .orderBy(desc(sql`SUM(${invoices.total})`))
+    .limit(limit);
+  
+  return result;
+}
+
+// الحصول على الدفعات قريبة الانتهاء
+export async function getExpiringProductBatches(daysAhead: number = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const futureDate = new Date();
+  futureDate.setDate(futureDate.getDate() + daysAhead);
+  
+  return await db.select().from(productBatches)
+    .where(and(
+      eq(productBatches.status, 'active'),
+      lte(productBatches.expiryDate, futureDate),
+      gte(productBatches.expiryDate, new Date())
+    ))
+    .orderBy(productBatches.expiryDate);
+}
+
+
+// الحصول على بيانات المبيعات اليومية
+export async function getDailySalesData(startDate: Date, endDate: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db.select({
+    date: sql<string>`DATE(${invoices.createdAt})`.as('date'),
+    totalSales: sql<number>`SUM(${invoices.total})`.as('totalSales'),
+    invoiceCount: sql<number>`COUNT(${invoices.id})`.as('invoiceCount'),
+    avgOrderValue: sql<number>`AVG(${invoices.total})`.as('avgOrderValue'),
+  })
+    .from(invoices)
+    .where(and(
+      eq(invoices.status, 'paid'),
+      gte(invoices.createdAt, startDate),
+      lte(invoices.createdAt, endDate)
+    ))
+    .groupBy(sql`DATE(${invoices.createdAt})`)
+    .orderBy(sql`DATE(${invoices.createdAt})`);
+  
+  return result;
+}
+
+// الحصول على المبيعات حسب الفئة
+export async function getSalesByCategory(startDate?: Date, endDate?: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [eq(invoices.status, 'paid')];
+  if (startDate) conditions.push(gte(invoices.createdAt, startDate));
+  if (endDate) conditions.push(lte(invoices.createdAt, endDate));
+  
+  const result = await db.select({
+    categoryId: products.categoryId,
+    categoryName: categories.name,
+    totalSales: sql<number>`SUM(${invoiceItems.total})`.as('totalSales'),
+    totalQuantity: sql<number>`SUM(${invoiceItems.quantity})`.as('totalQuantity'),
+    productCount: sql<number>`COUNT(DISTINCT ${invoiceItems.productId})`.as('productCount'),
+  })
+    .from(invoiceItems)
+    .innerJoin(invoices, eq(invoiceItems.invoiceId, invoices.id))
+    .leftJoin(products, eq(invoiceItems.productId, products.id))
+    .leftJoin(categories, eq(products.categoryId, categories.id))
+    .where(and(...conditions))
+    .groupBy(products.categoryId, categories.name)
+    .orderBy(desc(sql`SUM(${invoiceItems.total})`));
+  
+  return result;
+}

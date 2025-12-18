@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
 import { notifyOwner } from "./_core/notification";
+import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from "./email/scheduledReports";
 
 // إجراء للمدير فقط (كامل الصلاحيات)
 const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -2466,6 +2467,84 @@ export const appRouter = router({
           return { success: true, message: 'تم تحديث حالة الاقتراح' };
         }),
     }),
+  }),
+
+  // ==================== التقارير الدورية ====================
+  scheduledReports: router({
+    // إرسال التقرير الأسبوعي
+    sendWeekly: adminProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input }) => {
+        const result = await sendWeeklyReport(input.email);
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: result.error || 'فشل إرسال التقرير' });
+        }
+        return { success: true, message: 'تم إرسال التقرير الأسبوعي بنجاح' };
+      }),
+
+    // إرسال تنبيه المخزون
+    sendLowStock: adminProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input }) => {
+        const result = await sendLowStockAlert(input.email);
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: result.error || 'فشل إرسال التنبيه' });
+        }
+        return { success: true, message: 'تم إرسال تنبيه المخزون بنجاح' };
+      }),
+
+    // إرسال تقرير الأرباح الشهري
+    sendMonthlyProfit: adminProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input }) => {
+        const result = await sendMonthlyProfitReport(input.email);
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: result.error || 'فشل إرسال التقرير' });
+        }
+        return { success: true, message: 'تم إرسال تقرير الأرباح بنجاح' };
+      }),
+
+    // الحصول على أفضل المنتجات
+    topProducts: managerProcedure
+      .input(z.object({
+        limit: z.number().optional().default(10),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getTopSellingProducts(input.limit, input.startDate, input.endDate);
+      }),
+
+    // الحصول على أفضل العملاء
+    topCustomers: managerProcedure
+      .input(z.object({
+        limit: z.number().optional().default(10),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getTopCustomers(input.limit, input.startDate, input.endDate);
+      }),
+
+    // الحصول على بيانات المبيعات اليومية
+    dailySales: managerProcedure
+      .input(z.object({
+        startDate: z.date(),
+        endDate: z.date(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getDailySalesData(input.startDate, input.endDate);
+      }),
+
+    // الحصول على المبيعات حسب الفئة
+    salesByCategory: managerProcedure
+      .input(z.object({
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getSalesByCategory(input.startDate, input.endDate);
+      }),
   }),
 });
 

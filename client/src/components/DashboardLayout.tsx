@@ -47,6 +47,7 @@ import {
   Lock,
   Boxes,
   TrendingUp,
+  Mail,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -80,6 +81,8 @@ const menuItems = [
   { icon: Shield, label: "تنبيهات الأمان", path: "/security-alerts", roles: ["admin"] },
   { icon: Lock, label: "إدارة الصلاحيات", path: "/permissions", roles: ["admin"] },
   { icon: Boxes, label: "المخزون المتقدم", path: "/advanced-inventory", roles: ["admin", "manager"] },
+  { icon: BarChart3, label: "لوحة المبيعات", path: "/sales-dashboard", roles: ["admin", "manager"] },
+  { icon: Mail, label: "إعدادات التقارير", path: "/report-settings", roles: ["admin"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
