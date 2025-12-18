@@ -2007,7 +2007,70 @@ export const appRouter = router({
       }),
   }),
 
-
+  // ==================== إجراءات الإعدادات ====================
+  settings: router({
+    list: protectedProcedure.query(async () => {
+      return await db.getAllSettings();
+    }),
+    
+    getByCategory: protectedProcedure
+      .input(z.object({ category: z.string() }))
+      .query(async ({ input }) => {
+        return await db.getSettingsByCategory(input.category);
+      }),
+    
+    get: protectedProcedure
+      .input(z.object({ key: z.string() }))
+      .query(async ({ input }) => {
+        return await db.getSetting(input.key);
+      }),
+    
+    update: adminProcedure
+      .input(z.object({
+        key: z.string(),
+        value: z.string().nullable(),
+        type: z.enum(["text", "number", "boolean", "json", "image"]).optional(),
+        category: z.string().optional(),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await db.upsertSetting({
+          key: input.key,
+          value: input.value,
+          type: input.type,
+          category: input.category,
+          description: input.description,
+          updatedBy: ctx.user.id,
+        });
+      }),
+    
+    bulkUpdate: adminProcedure
+      .input(z.array(z.object({
+        key: z.string(),
+        value: z.string().nullable(),
+      })))
+      .mutation(async ({ input, ctx }) => {
+        for (const setting of input) {
+          await db.upsertSetting({
+            key: setting.key,
+            value: setting.value,
+            updatedBy: ctx.user.id,
+          });
+        }
+        return { success: true };
+      }),
+    
+    delete: adminProcedure
+      .input(z.object({ key: z.string() }))
+      .mutation(async ({ input }) => {
+        return await db.deleteSetting(input.key);
+      }),
+    
+    initialize: adminProcedure.mutation(async () => {
+      await db.initializeDefaultSettings();
+      return { success: true };
+    }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

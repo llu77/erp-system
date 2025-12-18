@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -31,7 +31,6 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
   Plus,
-  Pencil,
   Trash2,
   FileText,
   Search,
@@ -41,6 +40,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import InvoicePrint from "@/components/InvoicePrint";
 
 const formatCurrency = (value: string | number) => {
   const num = typeof value === "string" ? parseFloat(value) : value;
@@ -66,11 +66,22 @@ type InvoiceItem = {
   total: string;
 };
 
+// إعدادات الشركة الافتراضية
+const defaultCompanySettings = {
+  name: "شركة ERP للتجارة",
+  address: "الرياض، المملكة العربية السعودية",
+  phone: "+966 11 123 4567",
+  email: "info@erp-company.com",
+  taxNumber: "300000000000003",
+};
+
 export default function InvoicesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingInvoice, setViewingInvoice] = useState<any>(null);
+  const [printingInvoice, setPrintingInvoice] = useState<any>(null);
   const [deleteInvoiceId, setDeleteInvoiceId] = useState<number | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
   // Create invoice state
   const [selectedCustomer, setSelectedCustomer] = useState<string>("");
@@ -177,6 +188,60 @@ export default function InvoicesPage() {
     });
   };
 
+  const handlePrint = (invoice: any) => {
+    // تحضير بيانات الفاتورة للطباعة
+    const customer = customers.find(c => c.id === invoice.customerId);
+    const printData = {
+      ...invoice,
+      customerPhone: customer?.phone,
+      customerAddress: customer?.address,
+      items: invoice.items || [
+        {
+          id: 1,
+          productName: "منتج",
+          quantity: 1,
+          unitPrice: invoice.subtotal,
+          total: invoice.subtotal,
+        }
+      ],
+    };
+    setPrintingInvoice(printData);
+  };
+
+  const executePrint = () => {
+    if (printRef.current) {
+      const printContent = printRef.current.innerHTML;
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html dir="rtl" lang="ar">
+          <head>
+            <meta charset="UTF-8">
+            <title>فاتورة ${printingInvoice?.invoiceNumber}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: 'Cairo', sans-serif; }
+              @media print {
+                body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+              }
+            </style>
+          </head>
+          <body>${printContent}</body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500);
+      }
+    }
+    setPrintingInvoice(null);
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -253,13 +318,15 @@ export default function InvoicesPage() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => setViewingInvoice(invoice)}
+                                title="عرض التفاصيل"
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => window.print()}
+                                onClick={() => handlePrint(invoice)}
+                                title="طباعة الفاتورة"
                               >
                                 <Printer className="h-4 w-4" />
                               </Button>
@@ -268,6 +335,7 @@ export default function InvoicesPage() {
                                 size="icon"
                                 className="text-destructive hover:text-destructive"
                                 onClick={() => setDeleteInvoiceId(invoice.id)}
+                                title="حذف"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -432,10 +500,12 @@ export default function InvoicesPage() {
                   <span className="text-lg">الإجمالي الفرعي:</span>
                   <span>{formatCurrency(viewingInvoice.subtotal)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-lg">الضريبة:</span>
-                  <span>{formatCurrency(viewingInvoice.tax)}</span>
-                </div>
+                {viewingInvoice.taxAmount && parseFloat(viewingInvoice.taxAmount) > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg">الضريبة:</span>
+                    <span>{formatCurrency(viewingInvoice.taxAmount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center text-xl font-bold border-t pt-2 mt-2">
                   <span>الإجمالي:</span>
                   <span className="text-green-600">{formatCurrency(viewingInvoice.total)}</span>
@@ -447,7 +517,38 @@ export default function InvoicesPage() {
             <Button variant="outline" onClick={() => setViewingInvoice(null)}>
               إغلاق
             </Button>
-            <Button onClick={() => window.print()}>
+            <Button onClick={() => {
+              handlePrint(viewingInvoice);
+              setViewingInvoice(null);
+            }}>
+              <Printer className="h-4 w-4 ml-2" />
+              طباعة
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Preview Dialog */}
+      <Dialog open={!!printingInvoice} onOpenChange={() => setPrintingInvoice(null)}>
+        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>معاينة الطباعة</DialogTitle>
+          </DialogHeader>
+          {printingInvoice && (
+            <div className="border rounded-lg overflow-hidden">
+              <div ref={printRef}>
+                <InvoicePrint
+                  invoice={printingInvoice}
+                  company={defaultCompanySettings}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrintingInvoice(null)}>
+              إلغاء
+            </Button>
+            <Button onClick={executePrint}>
               <Printer className="h-4 w-4 ml-2" />
               طباعة
             </Button>

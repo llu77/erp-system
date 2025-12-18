@@ -43,6 +43,13 @@
       "when": 1766093425605,
       "tag": "0005_chubby_apocalypse",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1766094854747,
+      "tag": "0006_sad_shiver_man",
+      "breakpoints": true
     }
   ]
 }

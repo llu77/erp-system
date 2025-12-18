@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -21,17 +21,18 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { toast } from "sonner";
 import {
   BarChart3,
-  Download,
-  FileSpreadsheet,
   TrendingUp,
   TrendingDown,
   Package,
   DollarSign,
   ShoppingCart,
   AlertTriangle,
+  Calculator,
+  Minus,
+  Plus,
+  Equal,
 } from "lucide-react";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -49,6 +50,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { ExportReports } from "@/components/ExportReports";
 
 const formatCurrency = (value: string | number) => {
   const num = typeof value === "string" ? parseFloat(value) : value;
@@ -58,6 +60,11 @@ const formatCurrency = (value: string | number) => {
   }).format(num);
 };
 
+const formatNumber = (value: string | number) => {
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  return new Intl.NumberFormat("ar-SA").format(num);
+};
+
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
 export default function ReportsPage() {
@@ -65,7 +72,7 @@ export default function ReportsPage() {
     startDate: format(startOfMonth(new Date()), "yyyy-MM-dd"),
     endDate: format(endOfMonth(new Date()), "yyyy-MM-dd"),
   });
-  const [reportType, setReportType] = useState("sales");
+  const [activeTab, setActiveTab] = useState("sales");
 
   const { data: salesReport, isLoading: salesLoading } = trpc.reports.sales.useQuery({
     startDate: new Date(dateRange.startDate),
@@ -78,12 +85,135 @@ export default function ReportsPage() {
   });
 
   const { data: inventoryReport, isLoading: inventoryLoading } = trpc.reports.inventory.useQuery();
+  
+  const { data: expenses = [] } = trpc.expenses.list.useQuery();
+  const { data: payrolls = [] } = trpc.payrolls.list.useQuery();
 
-  const { data: dashboardStats } = trpc.dashboard.stats.useQuery();
+  // حساب تقرير الأرباح والخسائر
+  const profitLossReport = useMemo(() => {
+    const totalSales = salesReport?.summary?.total || 0;
+    const totalPurchases = purchasesReport?.summary?.total || 0;
+    
+    // تصفية المصاريف حسب التاريخ
+    const filteredExpenses = expenses.filter((e: any) => {
+      const expenseDate = new Date(e.expenseDate);
+      return expenseDate >= new Date(dateRange.startDate) && expenseDate <= new Date(dateRange.endDate);
+    });
+    
+    // تصفية الرواتب حسب التاريخ
+    const filteredPayrolls = payrolls.filter((p: any) => {
+      const payrollDate = new Date(p.periodEnd);
+      return payrollDate >= new Date(dateRange.startDate) && payrollDate <= new Date(dateRange.endDate);
+    });
+    
+    // تجميع المصاريف حسب الفئة
+    const expensesByCategory: Record<string, number> = {};
+    filteredExpenses.forEach((e: any) => {
+      const category = e.category || "أخرى";
+      expensesByCategory[category] = (expensesByCategory[category] || 0) + parseFloat(e.amount || 0);
+    });
+    
+    const totalExpenses = Object.values(expensesByCategory).reduce((a, b) => a + b, 0);
+    const totalPayroll = filteredPayrolls.reduce((sum: number, p: any) => sum + parseFloat(p.totalNet || 0), 0);
+    
+    const grossProfit = totalSales - totalPurchases;
+    const operatingExpenses = totalExpenses + totalPayroll;
+    const netProfit = grossProfit - operatingExpenses;
+    const profitMargin = totalSales > 0 ? (netProfit / totalSales) * 100 : 0;
+    
+    return {
+      revenue: {
+        sales: totalSales,
+        total: totalSales,
+      },
+      costOfGoods: {
+        purchases: totalPurchases,
+        total: totalPurchases,
+      },
+      grossProfit,
+      operatingExpenses: {
+        byCategory: expensesByCategory,
+        payroll: totalPayroll,
+        total: operatingExpenses,
+      },
+      netProfit,
+      profitMargin,
+    };
+  }, [salesReport, purchasesReport, expenses, payrolls, dateRange]);
 
-  const handleExport = (type: string) => {
-    toast.success(`جاري تصدير التقرير كـ ${type === "pdf" ? "PDF" : "Excel"}...`);
-    // TODO: Implement actual export functionality
+  // بيانات التصدير حسب التبويب النشط
+  const getExportData = () => {
+    switch (activeTab) {
+      case "sales":
+        return {
+          title: `تقرير المبيعات - من ${dateRange.startDate} إلى ${dateRange.endDate}`,
+          headers: ["التاريخ", "عدد الفواتير", "الإجمالي"],
+          rows: (salesReport?.dailyData || []).map((d: any) => [
+            d.date,
+            d.count || 1,
+            formatCurrency(d.total),
+          ]),
+          summary: [
+            { label: "إجمالي المبيعات", value: formatCurrency(salesReport?.summary?.total || 0) },
+            { label: "عدد الفواتير", value: salesReport?.summary?.count || 0 },
+          ],
+        };
+      case "purchases":
+        return {
+          title: `تقرير المشتريات - من ${dateRange.startDate} إلى ${dateRange.endDate}`,
+          headers: ["التاريخ", "عدد الطلبات", "الإجمالي"],
+          rows: (purchasesReport?.dailyData || []).map((d: any) => [
+            d.date,
+            d.count || 1,
+            formatCurrency(d.total),
+          ]),
+          summary: [
+            { label: "إجمالي المشتريات", value: formatCurrency(purchasesReport?.summary?.total || 0) },
+            { label: "عدد الطلبات", value: purchasesReport?.summary?.count || 0 },
+          ],
+        };
+      case "inventory":
+        return {
+          title: "تقرير المخزون",
+          headers: ["المنتج", "الكمية الحالية", "الحد الأدنى", "القيمة"],
+          rows: ((inventoryReport as any)?.products || []).map((p: any) => [
+            p.name,
+            p.quantity,
+            p.minQuantity,
+            formatCurrency(p.value || 0),
+          ]),
+          summary: [
+            { label: "إجمالي قيمة المخزون", value: formatCurrency((inventoryReport as any)?.totalValue || 0) },
+            { label: "عدد المنتجات", value: (inventoryReport as any)?.totalProducts || 0 },
+          ],
+        };
+      case "profit":
+        return {
+          title: `تقرير الأرباح والخسائر - من ${dateRange.startDate} إلى ${dateRange.endDate}`,
+          headers: ["البند", "المبلغ"],
+          rows: [
+            ["إجمالي المبيعات", formatCurrency(profitLossReport.revenue.sales)],
+            ["تكلفة البضاعة المباعة", formatCurrency(profitLossReport.costOfGoods.total)],
+            ["إجمالي الربح", formatCurrency(profitLossReport.grossProfit)],
+            ["مصاريف التشغيل", formatCurrency(profitLossReport.operatingExpenses.total)],
+            ["الرواتب والأجور", formatCurrency(profitLossReport.operatingExpenses.payroll)],
+            ...Object.entries(profitLossReport.operatingExpenses.byCategory).map(([cat, val]) => [
+              cat,
+              formatCurrency(val),
+            ]),
+            ["صافي الربح", formatCurrency(profitLossReport.netProfit)],
+          ],
+          summary: [
+            { label: "هامش الربح", value: `${profitLossReport.profitMargin.toFixed(2)}%` },
+          ],
+        };
+      default:
+        return {
+          title: "تقرير",
+          headers: [],
+          rows: [],
+        };
+    }
   };
 
   const setQuickDateRange = (range: string) => {
@@ -125,16 +255,10 @@ export default function ReportsPage() {
               <BarChart3 className="h-5 w-5 text-primary" />
               <CardTitle>التقارير والإحصائيات</CardTitle>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => handleExport("excel")}>
-                <FileSpreadsheet className="h-4 w-4 ml-2" />
-                Excel
-              </Button>
-              <Button variant="outline" onClick={() => handleExport("pdf")}>
-                <Download className="h-4 w-4 ml-2" />
-                PDF
-              </Button>
-            </div>
+            <ExportReports
+              data={getExportData()}
+              filename={`report-${activeTab}-${dateRange.startDate}`}
+            />
           </div>
         </CardHeader>
         <CardContent>
@@ -215,12 +339,12 @@ export default function ReportsPage() {
             <TrendingUp className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {formatCurrency(
-                (salesReport?.summary?.total || 0) - (purchasesReport?.summary?.total || 0)
-              )}
+            <div className={`text-2xl font-bold ${profitLossReport.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+              {formatCurrency(profitLossReport.netProfit)}
             </div>
-            <p className="text-xs text-muted-foreground">للفترة المحددة</p>
+            <p className="text-xs text-muted-foreground">
+              هامش الربح: {profitLossReport.profitMargin.toFixed(1)}%
+            </p>
           </CardContent>
         </Card>
 
@@ -241,12 +365,12 @@ export default function ReportsPage() {
       </div>
 
       {/* Tabs for different reports */}
-      <Tabs defaultValue="sales" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="sales">المبيعات</TabsTrigger>
           <TabsTrigger value="purchases">المشتريات</TabsTrigger>
           <TabsTrigger value="inventory">المخزون</TabsTrigger>
-          <TabsTrigger value="profit">الأرباح</TabsTrigger>
+          <TabsTrigger value="profit">الأرباح والخسائر</TabsTrigger>
         </TabsList>
 
         {/* Sales Report */}
@@ -447,50 +571,117 @@ export default function ReportsPage() {
           </div>
         </TabsContent>
 
-        {/* Profit Report */}
+        {/* Profit & Loss Report */}
         <TabsContent value="profit" className="space-y-4">
+          {/* تقرير الأرباح والخسائر التفصيلي */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">تحليل الأرباح</CardTitle>
+              <div className="flex items-center gap-2">
+                <Calculator className="h-5 w-5 text-primary" />
+                <CardTitle>قائمة الدخل (الأرباح والخسائر)</CardTitle>
+              </div>
               <CardDescription>
-                مقارنة بين المبيعات والمشتريات وصافي الربح
+                للفترة من {format(new Date(dateRange.startDate), "dd MMMM yyyy", { locale: ar })} إلى {format(new Date(dateRange.endDate), "dd MMMM yyyy", { locale: ar })}
               </CardDescription>
             </CardHeader>
-            <CardContent className="h-[400px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={[
-                    {
-                      name: "المبيعات",
-                      value: salesReport?.summary?.total || 0,
-                    },
-                    {
-                      name: "المشتريات",
-                      value: purchasesReport?.summary?.total || 0,
-                    },
-                    {
-                      name: "الربح",
-                      value:
-                        (salesReport?.summary?.total || 0) -
-                        (purchasesReport?.summary?.total || 0),
-                    },
-                  ]}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#8884d8"
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+            <CardContent>
+              <div className="space-y-6">
+                {/* الإيرادات */}
+                <div className="space-y-2">
+                  <h3 className="font-bold text-lg flex items-center gap-2 text-green-600">
+                    <Plus className="h-5 w-5" />
+                    الإيرادات
+                  </h3>
+                  <div className="bg-green-50 dark:bg-green-950/20 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span>إيرادات المبيعات</span>
+                      <span className="font-semibold">{formatCurrency(profitLossReport.revenue.sales)}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-green-200 dark:border-green-800 font-bold">
+                      <span>إجمالي الإيرادات</span>
+                      <span className="text-green-600">{formatCurrency(profitLossReport.revenue.total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* تكلفة البضاعة المباعة */}
+                <div className="space-y-2">
+                  <h3 className="font-bold text-lg flex items-center gap-2 text-orange-600">
+                    <Minus className="h-5 w-5" />
+                    تكلفة البضاعة المباعة
+                  </h3>
+                  <div className="bg-orange-50 dark:bg-orange-950/20 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span>المشتريات</span>
+                      <span className="font-semibold">{formatCurrency(profitLossReport.costOfGoods.purchases)}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-orange-200 dark:border-orange-800 font-bold">
+                      <span>إجمالي تكلفة البضاعة</span>
+                      <span className="text-orange-600">{formatCurrency(profitLossReport.costOfGoods.total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* إجمالي الربح */}
+                <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg p-4">
+                  <div className="flex justify-between items-center font-bold text-lg">
+                    <span className="flex items-center gap-2">
+                      <Equal className="h-5 w-5" />
+                      إجمالي الربح (الهامش)
+                    </span>
+                    <span className={profitLossReport.grossProfit >= 0 ? 'text-blue-600' : 'text-red-600'}>
+                      {formatCurrency(profitLossReport.grossProfit)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* مصاريف التشغيل */}
+                <div className="space-y-2">
+                  <h3 className="font-bold text-lg flex items-center gap-2 text-red-600">
+                    <Minus className="h-5 w-5" />
+                    مصاريف التشغيل
+                  </h3>
+                  <div className="bg-red-50 dark:bg-red-950/20 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span>الرواتب والأجور</span>
+                      <span className="font-semibold">{formatCurrency(profitLossReport.operatingExpenses.payroll)}</span>
+                    </div>
+                    {Object.entries(profitLossReport.operatingExpenses.byCategory).map(([category, amount]) => (
+                      <div key={category} className="flex justify-between items-center">
+                        <span>{category}</span>
+                        <span className="font-semibold">{formatCurrency(amount)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center pt-2 border-t border-red-200 dark:border-red-800 font-bold">
+                      <span>إجمالي مصاريف التشغيل</span>
+                      <span className="text-red-600">{formatCurrency(profitLossReport.operatingExpenses.total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* صافي الربح */}
+                <div className={`rounded-lg p-6 ${profitLossReport.netProfit >= 0 ? 'bg-green-100 dark:bg-green-950/30' : 'bg-red-100 dark:bg-red-950/30'}`}>
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-xl flex items-center gap-2">
+                      <Equal className="h-6 w-6" />
+                      صافي الربح (الخسارة)
+                    </span>
+                    <span className={`font-bold text-2xl ${profitLossReport.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(profitLossReport.netProfit)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mt-2 text-sm text-muted-foreground">
+                    <span>هامش الربح الصافي</span>
+                    <span className={profitLossReport.profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {profitLossReport.profitMargin.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
+          {/* ملخص بطاقات */}
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="bg-green-50 dark:bg-green-950/20">
               <CardContent className="pt-6">
@@ -498,7 +689,7 @@ export default function ReportsPage() {
                   <TrendingUp className="h-8 w-8 text-green-600 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">إجمالي المبيعات</p>
                   <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(salesReport?.summary?.total || 0)}
+                    {formatCurrency(profitLossReport.revenue.total)}
                   </p>
                 </div>
               </CardContent>
@@ -508,24 +699,21 @@ export default function ReportsPage() {
               <CardContent className="pt-6">
                 <div className="text-center">
                   <TrendingDown className="h-8 w-8 text-orange-600 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">إجمالي المشتريات</p>
+                  <p className="text-sm text-muted-foreground">إجمالي التكاليف</p>
                   <p className="text-2xl font-bold text-orange-600">
-                    {formatCurrency(purchasesReport?.summary?.total || 0)}
+                    {formatCurrency(profitLossReport.costOfGoods.total + profitLossReport.operatingExpenses.total)}
                   </p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-blue-50 dark:bg-blue-950/20">
+            <Card className={profitLossReport.netProfit >= 0 ? "bg-blue-50 dark:bg-blue-950/20" : "bg-red-50 dark:bg-red-950/20"}>
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <DollarSign className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                  <DollarSign className={`h-8 w-8 mx-auto mb-2 ${profitLossReport.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`} />
                   <p className="text-sm text-muted-foreground">صافي الربح</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {formatCurrency(
-                      (salesReport?.summary?.total || 0) -
-                        (purchasesReport?.summary?.total || 0)
-                    )}
+                  <p className={`text-2xl font-bold ${profitLossReport.netProfit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                    {formatCurrency(profitLossReport.netProfit)}
                   </p>
                 </div>
               </CardContent>

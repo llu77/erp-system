@@ -753,3 +753,18 @@ export const expenseLogs = mysqlTable("expenseLogs", {
 
 export type ExpenseLog = typeof expenseLogs.$inferSelect;
 export type InsertExpenseLog = typeof expenseLogs.$inferInsert;
+
+// ==================== جدول إعدادات الشركة ====================
+export const companySettings = mysqlTable("company_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  value: text("value"),
+  type: mysqlEnum("type", ["text", "number", "boolean", "json", "image"]).default("text").notNull(),
+  category: varchar("category", { length: 50 }).default("general").notNull(),
+  description: text("description"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedBy: int("updatedBy"),
+});
+
+export type CompanySetting = typeof companySettings.$inferSelect;
+export type InsertCompanySetting = typeof companySettings.$inferInsert;

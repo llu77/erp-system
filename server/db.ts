@@ -1717,3 +1717,100 @@ export async function getApprovedEmployeeRequests(startDate?: string, endDate?: 
     .where(and(...conditions))
     .orderBy(desc(employeeRequests.reviewedAt));
 }
+
+// ==================== دوال إعدادات الشركة ====================
+import { companySettings, InsertCompanySetting } from "../drizzle/schema";
+
+export async function getSetting(key: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select().from(companySettings).where(eq(companySettings.key, key)).limit(1);
+  return result[0] || null;
+}
+
+export async function getAllSettings() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(companySettings).orderBy(companySettings.category, companySettings.key);
+}
+
+export async function getSettingsByCategory(category: string) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(companySettings).where(eq(companySettings.category, category));
+}
+
+export async function upsertSetting(setting: InsertCompanySetting) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  await db.insert(companySettings).values(setting).onDuplicateKeyUpdate({
+    set: {
+      value: setting.value,
+      type: setting.type,
+      category: setting.category,
+      description: setting.description,
+      updatedBy: setting.updatedBy,
+    },
+  });
+  
+  return await getSetting(setting.key);
+}
+
+export async function deleteSetting(key: string) {
+  const db = await getDb();
+  if (!db) return false;
+  
+  await db.delete(companySettings).where(eq(companySettings.key, key));
+  return true;
+}
+
+// إنشاء الإعدادات الافتراضية
+export async function initializeDefaultSettings() {
+  const defaultSettings: InsertCompanySetting[] = [
+    // معلومات الشركة
+    { key: "company_name", value: "شركة ERP", type: "text", category: "company", description: "اسم الشركة" },
+    { key: "company_name_en", value: "ERP Company", type: "text", category: "company", description: "اسم الشركة بالإنجليزية" },
+    { key: "company_logo", value: "", type: "image", category: "company", description: "شعار الشركة" },
+    { key: "company_address", value: "", type: "text", category: "company", description: "عنوان الشركة" },
+    { key: "company_phone", value: "", type: "text", category: "company", description: "هاتف الشركة" },
+    { key: "company_email", value: "", type: "text", category: "company", description: "بريد الشركة الإلكتروني" },
+    { key: "company_website", value: "", type: "text", category: "company", description: "موقع الشركة" },
+    { key: "company_tax_number", value: "", type: "text", category: "company", description: "الرقم الضريبي" },
+    { key: "company_cr_number", value: "", type: "text", category: "company", description: "رقم السجل التجاري" },
+    
+    // إعدادات النظام
+    { key: "currency", value: "SAR", type: "text", category: "system", description: "العملة الافتراضية" },
+    { key: "currency_symbol", value: "ر.س", type: "text", category: "system", description: "رمز العملة" },
+    { key: "date_format", value: "yyyy-MM-dd", type: "text", category: "system", description: "تنسيق التاريخ" },
+    { key: "timezone", value: "Asia/Riyadh", type: "text", category: "system", description: "المنطقة الزمنية" },
+    { key: "language", value: "ar", type: "text", category: "system", description: "اللغة الافتراضية" },
+    
+    // إعدادات الفواتير
+    { key: "invoice_prefix", value: "INV-", type: "text", category: "invoice", description: "بادئة رقم الفاتورة" },
+    { key: "invoice_start_number", value: "1000", type: "number", category: "invoice", description: "رقم بداية الفواتير" },
+    { key: "invoice_tax_rate", value: "15", type: "number", category: "invoice", description: "نسبة الضريبة %" },
+    { key: "invoice_notes", value: "", type: "text", category: "invoice", description: "ملاحظات الفاتورة الافتراضية" },
+    { key: "invoice_terms", value: "", type: "text", category: "invoice", description: "شروط وأحكام الفاتورة" },
+    
+    // إعدادات الرواتب
+    { key: "payroll_base_salary", value: "2000", type: "number", category: "payroll", description: "الراتب الأساسي الافتراضي" },
+    { key: "payroll_overtime_rate", value: "1000", type: "number", category: "payroll", description: "بدل الساعات الإضافية" },
+    { key: "payroll_supervisor_bonus", value: "400", type: "number", category: "payroll", description: "حوافز المشرف" },
+    { key: "payroll_day", value: "28", type: "number", category: "payroll", description: "يوم صرف الرواتب" },
+    
+    // إعدادات المخزون
+    { key: "inventory_low_stock_alert", value: "10", type: "number", category: "inventory", description: "حد التنبيه لنفاد المخزون" },
+    { key: "inventory_auto_reorder", value: "false", type: "boolean", category: "inventory", description: "إعادة الطلب التلقائي" },
+  ];
+  
+  for (const setting of defaultSettings) {
+    const existing = await getSetting(setting.key);
+    if (!existing) {
+      await upsertSetting(setting);
+    }
+  }
+}

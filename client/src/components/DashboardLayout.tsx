@@ -70,6 +70,8 @@ const menuItems = [
   { icon: ClipboardList, label: "إدارة الطلبات", path: "/manage-requests", roles: ["admin", "manager"] },
   { icon: Wallet, label: "مسيرات الرواتب", path: "/payrolls", roles: ["admin", "manager"] },
   { icon: Receipt, label: "المصاريف", path: "/expenses", roles: ["admin", "manager"] },
+  { icon: Settings, label: "الإعدادات", path: "/settings", roles: ["admin"] },
+  { icon: BarChart3, label: "الأرباح والخسائر", path: "/profit-loss", roles: ["admin", "manager"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

@@ -27,6 +27,8 @@ import ManageRequests from "./pages/ManageRequests";
 import Payrolls from "./pages/Payrolls";
 import Expenses from "./pages/Expenses";
 import Login from "./pages/Login";
+import Settings from "./pages/Settings";
+import ProfitLoss from "./pages/ProfitLoss";
 
 function Router() {
   return (
@@ -132,6 +134,18 @@ function Router() {
       <Route path="/expenses">
         <DashboardLayout>
           <Expenses />
+        </DashboardLayout>
+      </Route>
+      {/* Settings */}
+      <Route path="/settings">
+        <DashboardLayout>
+          <Settings />
+        </DashboardLayout>
+      </Route>
+      {/* Profit & Loss */}
+      <Route path="/profit-loss">
+        <DashboardLayout>
+          <ProfitLoss />
         </DashboardLayout>
       </Route>
       <Route path="/404" component={NotFound} />
