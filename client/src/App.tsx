@@ -35,6 +35,7 @@ import PermissionsManagement from "./pages/PermissionsManagement";
 import AdvancedInventory from "./pages/AdvancedInventory";
 import SalesDashboard from "./pages/SalesDashboard";
 import ReportSettings from "./pages/ReportSettings";
+import HROnboarding from "./pages/HROnboarding";
 
 function Router() {
   return (
@@ -188,6 +189,8 @@ function Router() {
           <ReportSettings />
         </DashboardLayout>
       </Route>
+      {/* HR Onboarding Portal - Public Page */}
+      <Route path="/hr-onboarding" component={HROnboarding} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

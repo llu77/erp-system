@@ -83,6 +83,7 @@ const menuItems = [
   { icon: Boxes, label: "المخزون المتقدم", path: "/advanced-inventory", roles: ["admin", "manager"] },
   { icon: BarChart3, label: "لوحة المبيعات", path: "/sales-dashboard", roles: ["admin", "manager"] },
   { icon: Mail, label: "إعدادات التقارير", path: "/report-settings", roles: ["admin"] },
+  { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
