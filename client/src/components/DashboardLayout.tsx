@@ -48,6 +48,7 @@ import {
   Boxes,
   TrendingUp,
   Mail,
+  Calendar,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -84,6 +85,7 @@ const menuItems = [
   { icon: BarChart3, label: "لوحة المبيعات", path: "/sales-dashboard", roles: ["admin", "manager"] },
   { icon: Mail, label: "إعدادات التقارير", path: "/report-settings", roles: ["admin"] },
   { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee"] },
+  { icon: Calendar, label: "مراقب النظام", path: "/scheduler", roles: ["admin"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

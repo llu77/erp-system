@@ -13,6 +13,10 @@ import {
   InsertNotification, notifications,
   InsertActivityLog, activityLogs,
   InsertInventoryMovement, inventoryMovements,
+  scheduledTasks,
+  taskExecutionLogs,
+  systemAlerts,
+  monitorSettings,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2685,4 +2689,298 @@ export async function getSalesByCategory(startDate?: Date, endDate?: Date) {
     .orderBy(desc(sql`SUM(${invoiceItems.total})`));
   
   return result;
+}
+
+
+// ==================== دوال الجدولة ومراقب النظام ====================
+
+// إنشاء مهمة مجدولة
+export async function createScheduledTask(data: {
+  name: string;
+  description?: string;
+  taskType: string;
+  isEnabled?: boolean;
+  frequency?: string;
+  dayOfWeek?: number;
+  dayOfMonth?: number;
+  hour?: number;
+  minute?: number;
+  recipientEmails?: string;
+  thresholdValue?: string;
+  thresholdType?: string;
+  createdBy?: number;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.insert(scheduledTasks).values({
+    name: data.name,
+    description: data.description || null,
+    taskType: data.taskType as any,
+    isEnabled: data.isEnabled ?? true,
+    frequency: (data.frequency || 'weekly') as any,
+    dayOfWeek: data.dayOfWeek || 0,
+    dayOfMonth: data.dayOfMonth || 1,
+    hour: data.hour ?? 9,
+    minute: data.minute ?? 0,
+    recipientEmails: data.recipientEmails || null,
+    thresholdValue: data.thresholdValue || null,
+    thresholdType: data.thresholdType as any || null,
+    createdBy: data.createdBy || null,
+  });
+  
+  return result;
+}
+
+// الحصول على جميع المهام المجدولة
+export async function getAllScheduledTasks() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(scheduledTasks).orderBy(desc(scheduledTasks.createdAt));
+}
+
+// الحصول على المهام النشطة
+export async function getActiveScheduledTasks() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(scheduledTasks).where(eq(scheduledTasks.isEnabled, true));
+}
+
+// تحديث مهمة مجدولة
+export async function updateScheduledTask(id: number, data: Partial<{
+  name: string;
+  description: string;
+  isEnabled: boolean;
+  frequency: string;
+  dayOfWeek: number;
+  dayOfMonth: number;
+  hour: number;
+  minute: number;
+  recipientEmails: string;
+  thresholdValue: string;
+}>) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.update(scheduledTasks)
+    .set(data as any)
+    .where(eq(scheduledTasks.id, id));
+}
+
+// تحديث آخر تشغيل للمهمة
+export async function updateScheduledTaskLastRun(id: number, status: 'success' | 'failed' | 'skipped', message: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const updateData: any = {
+    lastRunAt: new Date(),
+    lastRunStatus: status,
+    lastRunMessage: message,
+  };
+  
+  if (status === 'success') {
+    updateData.runCount = sql`${scheduledTasks.runCount} + 1`;
+  } else if (status === 'failed') {
+    updateData.failCount = sql`${scheduledTasks.failCount} + 1`;
+  }
+  
+  return await db.update(scheduledTasks)
+    .set(updateData)
+    .where(eq(scheduledTasks.id, id));
+}
+
+// حذف مهمة مجدولة
+export async function deleteScheduledTask(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.delete(scheduledTasks).where(eq(scheduledTasks.id, id));
+}
+
+// إنشاء سجل تنفيذ مهمة
+export async function createTaskExecutionLog(data: {
+  taskId: number;
+  taskName: string;
+  taskType: string;
+  status: 'running' | 'success' | 'failed' | 'cancelled';
+  message?: string;
+  errorDetails?: string;
+  emailsSent?: number;
+  recipientList?: string;
+  duration?: number;
+  metadata?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.insert(taskExecutionLogs).values({
+    taskId: data.taskId,
+    taskName: data.taskName,
+    taskType: data.taskType,
+    status: data.status,
+    message: data.message || null,
+    errorDetails: data.errorDetails || null,
+    emailsSent: data.emailsSent || 0,
+    recipientList: data.recipientList || null,
+    duration: data.duration || null,
+    metadata: data.metadata || null,
+  });
+}
+
+// الحصول على سجلات التنفيذ
+export async function getTaskExecutionLogs(taskId?: number, limit: number = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = taskId ? [eq(taskExecutionLogs.taskId, taskId)] : [];
+  
+  return await db.select()
+    .from(taskExecutionLogs)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(taskExecutionLogs.createdAt))
+    .limit(limit);
+}
+
+// إنشاء تنبيه نظام
+export async function createSystemAlert(data: {
+  alertType: string;
+  severity?: string;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: number;
+  entityName?: string;
+  currentValue?: string;
+  thresholdValue?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.insert(systemAlerts).values({
+    alertType: data.alertType as any,
+    severity: (data.severity || 'info') as any,
+    title: data.title,
+    message: data.message,
+    entityType: data.entityType || null,
+    entityId: data.entityId || null,
+    entityName: data.entityName || null,
+    currentValue: data.currentValue || null,
+    thresholdValue: data.thresholdValue || null,
+  });
+}
+
+// الحصول على تنبيهات النظام
+export async function getSystemAlerts(filters?: {
+  alertType?: string;
+  severity?: string;
+  isRead?: boolean;
+  isResolved?: boolean;
+  limit?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [];
+  if (filters?.alertType) conditions.push(eq(systemAlerts.alertType, filters.alertType as any));
+  if (filters?.severity) conditions.push(eq(systemAlerts.severity, filters.severity as any));
+  if (filters?.isRead !== undefined) conditions.push(eq(systemAlerts.isRead, filters.isRead));
+  if (filters?.isResolved !== undefined) conditions.push(eq(systemAlerts.isResolved, filters.isResolved));
+  
+  return await db.select()
+    .from(systemAlerts)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(systemAlerts.createdAt))
+    .limit(filters?.limit || 100);
+}
+
+// تحديث حالة التنبيه
+export async function updateSystemAlert(id: number, data: {
+  isRead?: boolean;
+  isResolved?: boolean;
+  resolvedBy?: number;
+  resolvedNote?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const updateData: any = { ...data };
+  if (data.isResolved) {
+    updateData.resolvedAt = new Date();
+  }
+  
+  return await db.update(systemAlerts)
+    .set(updateData)
+    .where(eq(systemAlerts.id, id));
+}
+
+// الحصول على إحصائيات التنبيهات
+export async function getAlertStats() {
+  const db = await getDb();
+  if (!db) return { total: 0, unread: 0, critical: 0, warning: 0, info: 0 };
+  
+  const total = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(systemAlerts);
+  
+  const unread = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(systemAlerts)
+    .where(eq(systemAlerts.isRead, false));
+  
+  const critical = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(systemAlerts)
+    .where(eq(systemAlerts.severity, 'critical'));
+  
+  const warning = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(systemAlerts)
+    .where(eq(systemAlerts.severity, 'warning'));
+  
+  return {
+    total: total[0]?.count || 0,
+    unread: unread[0]?.count || 0,
+    critical: critical[0]?.count || 0,
+    warning: warning[0]?.count || 0,
+    info: (total[0]?.count || 0) - (critical[0]?.count || 0) - (warning[0]?.count || 0),
+  };
+}
+
+// إعدادات المراقبة
+export async function getMonitorSetting(key: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select()
+    .from(monitorSettings)
+    .where(eq(monitorSettings.settingKey, key))
+    .limit(1);
+  
+  return result[0] || null;
+}
+
+export async function setMonitorSetting(key: string, value: string, type: string = 'string', description?: string, category?: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const existing = await getMonitorSetting(key);
+  
+  if (existing) {
+    return await db.update(monitorSettings)
+      .set({ settingValue: value })
+      .where(eq(monitorSettings.settingKey, key));
+  } else {
+    return await db.insert(monitorSettings).values({
+      settingKey: key,
+      settingValue: value,
+      settingType: type as any,
+      description: description || null,
+      category: category || null,
+    });
+  }
+}
+
+export async function getAllMonitorSettings() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(monitorSettings);
 }

@@ -64,6 +64,13 @@
       "when": 1766248760833,
       "tag": "0008_daffy_smiling_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1766251996618,
+      "tag": "0009_talented_anthem",
+      "breakpoints": true
     }
   ]
 }

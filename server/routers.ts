@@ -2546,6 +2546,129 @@ export const appRouter = router({
         return await db.getSalesByCategory(input.startDate, input.endDate);
       }),
   }),
+
+  // ==================== الجدولة ومراقب النظام ====================
+  scheduler: router({
+    // الحصول على جميع المهام المجدولة
+    list: adminProcedure.query(async () => {
+      return await db.getAllScheduledTasks();
+    }),
+
+    // إنشاء مهمة جديدة
+    create: adminProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        taskType: z.string(),
+        frequency: z.string().optional(),
+        dayOfWeek: z.number().optional(),
+        dayOfMonth: z.number().optional(),
+        hour: z.number().optional(),
+        minute: z.number().optional(),
+        recipientEmails: z.string().optional(),
+        thresholdValue: z.string().optional(),
+        isEnabled: z.boolean().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.createScheduledTask({
+          ...input,
+          createdBy: ctx.user.id,
+        });
+        return { success: true, message: 'تم إنشاء المهمة بنجاح' };
+      }),
+
+    // تحديث مهمة
+    update: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        isEnabled: z.boolean().optional(),
+        frequency: z.string().optional(),
+        dayOfWeek: z.number().optional(),
+        dayOfMonth: z.number().optional(),
+        hour: z.number().optional(),
+        minute: z.number().optional(),
+        recipientEmails: z.string().optional(),
+        thresholdValue: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateScheduledTask(id, data);
+        return { success: true, message: 'تم تحديث المهمة بنجاح' };
+      }),
+
+    // حذف مهمة
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteScheduledTask(input.id);
+        return { success: true, message: 'تم حذف المهمة بنجاح' };
+      }),
+
+    // تنفيذ مهمة يدوياً
+    execute: adminProcedure
+      .input(z.object({ taskId: z.number() }))
+      .mutation(async ({ input }) => {
+        const tasks = await db.getAllScheduledTasks();
+        const task = tasks.find((t: any) => t.id === input.taskId);
+        if (!task) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'المهمة غير موجودة' });
+        }
+        
+        const { executeScheduledTask } = await import('./monitor/systemMonitor');
+        const result = await executeScheduledTask(task);
+        return result;
+      }),
+
+    // الحصول على سجلات التنفيذ
+    getLogs: adminProcedure
+      .input(z.object({
+        taskId: z.number().optional(),
+        limit: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getTaskExecutionLogs(input.taskId, input.limit || 50);
+      }),
+
+    // تشغيل مراقب النظام
+    runMonitor: adminProcedure.mutation(async () => {
+      const { runSystemMonitor } = await import('./monitor/systemMonitor');
+      return await runSystemMonitor();
+    }),
+
+    // الحصول على إحصائيات التنبيهات
+    getAlertStats: adminProcedure.query(async () => {
+      return await db.getAlertStats();
+    }),
+
+    // الحصول على تنبيهات النظام
+    getAlerts: adminProcedure
+      .input(z.object({
+        alertType: z.string().optional(),
+        severity: z.string().optional(),
+        isRead: z.boolean().optional(),
+        limit: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getSystemAlerts(input);
+      }),
+
+    // تحديث حالة التنبيه
+    updateAlert: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        isRead: z.boolean().optional(),
+        isResolved: z.boolean().optional(),
+        resolvedNote: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, ...data } = input;
+        await db.updateSystemAlert(id, {
+          ...data,
+          resolvedBy: data.isResolved ? ctx.user.id : undefined,
+        });
+        return { success: true, message: 'تم تحديث التنبيه' };
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

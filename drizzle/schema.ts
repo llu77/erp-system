@@ -1004,3 +1004,141 @@ export const suggestedPurchaseOrders = mysqlTable("suggestedPurchaseOrders", {
 
 export type SuggestedPurchaseOrder = typeof suggestedPurchaseOrders.$inferSelect;
 export type InsertSuggestedPurchaseOrder = typeof suggestedPurchaseOrders.$inferInsert;
+
+
+// ==================== جدول إعدادات الجدولة ====================
+export const scheduledTasks = mysqlTable("scheduledTasks", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  taskType: mysqlEnum("taskType", [
+    "weekly_report",
+    "daily_stock_alert",
+    "monthly_profit_report",
+    "expiry_alert",
+    "large_transaction_alert",
+    "backup",
+    "custom"
+  ]).notNull(),
+  
+  // إعدادات الجدولة
+  isEnabled: boolean("isEnabled").default(true).notNull(),
+  cronExpression: varchar("cronExpression", { length: 50 }), // مثل: "0 9 * * 0" للأحد 9 صباحاً
+  frequency: mysqlEnum("frequency", ["hourly", "daily", "weekly", "monthly", "custom"]).default("weekly").notNull(),
+  dayOfWeek: int("dayOfWeek"), // 0-6 (الأحد-السبت)
+  dayOfMonth: int("dayOfMonth"), // 1-31
+  hour: int("hour").default(9).notNull(), // 0-23
+  minute: int("minute").default(0).notNull(), // 0-59
+  
+  // إعدادات البريد
+  recipientEmails: text("recipientEmails"), // قائمة بريد مفصولة بفاصلة
+  emailSubjectPrefix: varchar("emailSubjectPrefix", { length: 100 }),
+  
+  // إعدادات المراقبة
+  thresholdValue: decimal("thresholdValue", { precision: 15, scale: 2 }), // للتنبيهات
+  thresholdType: mysqlEnum("thresholdType", ["percentage", "amount", "count"]),
+  
+  // معلومات التنفيذ
+  lastRunAt: timestamp("lastRunAt"),
+  nextRunAt: timestamp("nextRunAt"),
+  lastRunStatus: mysqlEnum("lastRunStatus", ["success", "failed", "skipped"]),
+  lastRunMessage: text("lastRunMessage"),
+  runCount: int("runCount").default(0).notNull(),
+  failCount: int("failCount").default(0).notNull(),
+  
+  createdBy: int("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ScheduledTask = typeof scheduledTasks.$inferSelect;
+export type InsertScheduledTask = typeof scheduledTasks.$inferInsert;
+
+// ==================== جدول سجل تنفيذ المهام ====================
+export const taskExecutionLogs = mysqlTable("taskExecutionLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  taskId: int("taskId").notNull(),
+  taskName: varchar("taskName", { length: 100 }).notNull(),
+  taskType: varchar("taskType", { length: 50 }).notNull(),
+  
+  status: mysqlEnum("status", ["running", "success", "failed", "cancelled"]).notNull(),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+  duration: int("duration"), // بالثواني
+  
+  // تفاصيل التنفيذ
+  message: text("message"),
+  errorDetails: text("errorDetails"),
+  emailsSent: int("emailsSent").default(0),
+  recipientList: text("recipientList"),
+  
+  // بيانات إضافية
+  metadata: text("metadata"), // JSON للبيانات الإضافية
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TaskExecutionLog = typeof taskExecutionLogs.$inferSelect;
+export type InsertTaskExecutionLog = typeof taskExecutionLogs.$inferInsert;
+
+// ==================== جدول تنبيهات مراقب النظام ====================
+export const systemAlerts = mysqlTable("systemAlerts", {
+  id: int("id").autoincrement().primaryKey(),
+  alertType: mysqlEnum("alertType", [
+    "low_stock",
+    "expiring_product",
+    "large_transaction",
+    "failed_login",
+    "price_change",
+    "system_error",
+    "backup_reminder",
+    "custom"
+  ]).notNull(),
+  
+  severity: mysqlEnum("severity", ["info", "warning", "critical"]).default("info").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  message: text("message").notNull(),
+  
+  // معلومات الكيان المرتبط
+  entityType: varchar("entityType", { length: 50 }), // product, invoice, user, etc.
+  entityId: int("entityId"),
+  entityName: varchar("entityName", { length: 200 }),
+  
+  // قيم المراقبة
+  currentValue: decimal("currentValue", { precision: 15, scale: 2 }),
+  thresholdValue: decimal("thresholdValue", { precision: 15, scale: 2 }),
+  
+  // حالة التنبيه
+  isRead: boolean("isRead").default(false).notNull(),
+  isResolved: boolean("isResolved").default(false).notNull(),
+  resolvedBy: int("resolvedBy"),
+  resolvedAt: timestamp("resolvedAt"),
+  resolvedNote: text("resolvedNote"),
+  
+  // إرسال الإشعارات
+  emailSent: boolean("emailSent").default(false).notNull(),
+  emailSentAt: timestamp("emailSentAt"),
+  notificationSent: boolean("notificationSent").default(false).notNull(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SystemAlert = typeof systemAlerts.$inferSelect;
+export type InsertSystemAlert = typeof systemAlerts.$inferInsert;
+
+// ==================== جدول إعدادات مراقب النظام ====================
+export const monitorSettings = mysqlTable("monitorSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  settingKey: varchar("settingKey", { length: 100 }).notNull().unique(),
+  settingValue: text("settingValue").notNull(),
+  settingType: mysqlEnum("settingType", ["string", "number", "boolean", "json"]).default("string").notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 50 }), // stock, financial, security, etc.
+  isEnabled: boolean("isEnabled").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type MonitorSetting = typeof monitorSettings.$inferSelect;
+export type InsertMonitorSetting = typeof monitorSettings.$inferInsert;

@@ -1,0 +1,83 @@
+CREATE TABLE `monitorSettings` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`settingKey` varchar(100) NOT NULL,
+	`settingValue` text NOT NULL,
+	`settingType` enum('string','number','boolean','json') NOT NULL DEFAULT 'string',
+	`description` text,
+	`category` varchar(50),
+	`isEnabled` boolean NOT NULL DEFAULT true,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `monitorSettings_id` PRIMARY KEY(`id`),
+	CONSTRAINT `monitorSettings_settingKey_unique` UNIQUE(`settingKey`)
+);
+--> statement-breakpoint
+CREATE TABLE `scheduledTasks` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`name` varchar(100) NOT NULL,
+	`description` text,
+	`taskType` enum('weekly_report','daily_stock_alert','monthly_profit_report','expiry_alert','large_transaction_alert','backup','custom') NOT NULL,
+	`isEnabled` boolean NOT NULL DEFAULT true,
+	`cronExpression` varchar(50),
+	`frequency` enum('hourly','daily','weekly','monthly','custom') NOT NULL DEFAULT 'weekly',
+	`dayOfWeek` int,
+	`dayOfMonth` int,
+	`hour` int NOT NULL DEFAULT 9,
+	`minute` int NOT NULL DEFAULT 0,
+	`recipientEmails` text,
+	`emailSubjectPrefix` varchar(100),
+	`thresholdValue` decimal(15,2),
+	`thresholdType` enum('percentage','amount','count'),
+	`lastRunAt` timestamp,
+	`nextRunAt` timestamp,
+	`lastRunStatus` enum('success','failed','skipped'),
+	`lastRunMessage` text,
+	`runCount` int NOT NULL DEFAULT 0,
+	`failCount` int NOT NULL DEFAULT 0,
+	`createdBy` int,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `scheduledTasks_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `systemAlerts` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`alertType` enum('low_stock','expiring_product','large_transaction','failed_login','price_change','system_error','backup_reminder','custom') NOT NULL,
+	`severity` enum('info','warning','critical') NOT NULL DEFAULT 'info',
+	`title` varchar(200) NOT NULL,
+	`message` text NOT NULL,
+	`entityType` varchar(50),
+	`entityId` int,
+	`entityName` varchar(200),
+	`currentValue` decimal(15,2),
+	`thresholdValue` decimal(15,2),
+	`isRead` boolean NOT NULL DEFAULT false,
+	`isResolved` boolean NOT NULL DEFAULT false,
+	`resolvedBy` int,
+	`resolvedAt` timestamp,
+	`resolvedNote` text,
+	`emailSent` boolean NOT NULL DEFAULT false,
+	`emailSentAt` timestamp,
+	`notificationSent` boolean NOT NULL DEFAULT false,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `systemAlerts_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `taskExecutionLogs` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`taskId` int NOT NULL,
+	`taskName` varchar(100) NOT NULL,
+	`taskType` varchar(50) NOT NULL,
+	`status` enum('running','success','failed','cancelled') NOT NULL,
+	`startedAt` timestamp NOT NULL DEFAULT (now()),
+	`completedAt` timestamp,
+	`duration` int,
+	`message` text,
+	`errorDetails` text,
+	`emailsSent` int DEFAULT 0,
+	`recipientList` text,
+	`metadata` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `taskExecutionLogs_id` PRIMARY KEY(`id`)
+);

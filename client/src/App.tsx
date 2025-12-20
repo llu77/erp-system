@@ -36,6 +36,7 @@ import AdvancedInventory from "./pages/AdvancedInventory";
 import SalesDashboard from "./pages/SalesDashboard";
 import ReportSettings from "./pages/ReportSettings";
 import HROnboarding from "./pages/HROnboarding";
+import SchedulerSettings from "./pages/SchedulerSettings";
 
 function Router() {
   return (
@@ -187,6 +188,12 @@ function Router() {
       <Route path="/report-settings">
         <DashboardLayout>
           <ReportSettings />
+        </DashboardLayout>
+      </Route>
+      {/* Scheduler & System Monitor */}
+      <Route path="/scheduler">
+        <DashboardLayout>
+          <SchedulerSettings />
         </DashboardLayout>
       </Route>
       {/* HR Onboarding Portal - Public Page */}
