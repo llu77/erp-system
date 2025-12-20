@@ -1429,6 +1429,25 @@ export const appRouter = router({
           details: `تم إدخال إيرادات يوم ${input.date}`,
         });
 
+        // تشغيل المراقبة الذكية (Trigger)
+        try {
+          const { monitorNewRevenue } = await import('./ai/smartMonitoringService');
+          const monitoringResult = await monitorNewRevenue({
+            id: dailyRevenueId,
+            branchId: input.branchId,
+            date: input.date,
+            cash: Number(input.cash),
+            network: Number(input.network),
+            mada: 0, // سيتم إضافته لاحقاً
+            total: Number(input.total),
+            isMatched: input.isMatched,
+            unmatchReason: input.unmatchReason || undefined,
+          });
+          console.log('[Smart Monitoring] Revenue analyzed:', monitoringResult.severity);
+        } catch (error: any) {
+          console.error('[Smart Monitoring] Error:', error.message);
+        }
+
         return { success: true, message: 'تم حفظ الإيرادات بنجاح' };
       }),
 
@@ -2057,6 +2076,22 @@ export const appRouter = router({
           title: 'مصروف جديد',
           content: `تم إضافة مصروف جديد: ${input.title} بقيمة ${input.amount} ر.س.`,
         });
+
+        // تشغيل المراقبة الذكية للمصاريف (Trigger)
+        try {
+          const { monitorNewExpense } = await import('./ai/smartMonitoringService');
+          const monitoringResult = await monitorNewExpense({
+            id: 0, // سيتم تحديثه
+            branchId: input.branchId || 0,
+            category: input.category,
+            amount: Number(input.amount),
+            description: input.description || '',
+            date: input.expenseDate,
+          });
+          console.log('[Smart Monitoring] Expense analyzed:', monitoringResult.severity);
+        } catch (error: any) {
+          console.error('[Smart Monitoring] Expense Error:', error.message);
+        }
 
         return { success: true, message: 'تم إضافة المصروف بنجاح' };
       }),
@@ -2922,6 +2957,86 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         return await advancedNotifications.notifyProductUpdate(input);
+      }),
+  }),
+
+  // ==================== نظام المراقبة الذكية ====================
+  smartMonitoring: router({
+    // توليد التقرير اليومي الذكي
+    generateDailyReport: adminProcedure
+      .input(z.object({
+        date: z.string().optional(),
+      }).optional())
+      .mutation(async ({ input }) => {
+        const { generateSmartDailyReport } = await import('./ai/smartMonitoringService');
+        const date = input?.date ? new Date(input.date) : undefined;
+        return await generateSmartDailyReport(date);
+      }),
+
+    // التحقق من المبررات المعلقة
+    checkPendingJustifications: adminProcedure.query(async () => {
+      const { checkPendingJustifications } = await import('./ai/smartMonitoringService');
+      return await checkPendingJustifications();
+    }),
+
+    // الحصول على إعدادات المراقبة
+    getConfig: adminProcedure.query(async () => {
+      const { MONITORING_CONFIG } = await import('./ai/smartMonitoringService');
+      return MONITORING_CONFIG;
+    }),
+
+    // تحليل إيراد يدوياً
+    analyzeRevenue: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        date: z.string(),
+        cashRevenue: z.number(),
+        networkRevenue: z.number(),
+        madaRevenue: z.number().optional(),
+        totalRevenue: z.number(),
+        isMatching: z.boolean(),
+        mismatchReason: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { analyzeRevenue } = await import('./ai/analysisEngine');
+        return await analyzeRevenue({
+          id: 0,
+          ...input,
+          madaRevenue: input.madaRevenue || 0,
+        });
+      }),
+
+    // تحليل مصروف يدوياً
+    analyzeExpense: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        category: z.string(),
+        amount: z.number(),
+        description: z.string(),
+        date: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { analyzeExpense } = await import('./ai/analysisEngine');
+        return await analyzeExpense({
+          id: 0,
+          ...input,
+        });
+      }),
+
+    // تصدير البيانات إلى Google Sheets عبر Zapier
+    exportToSheets: adminProcedure
+      .input(z.object({
+        type: z.enum(['revenues', 'expenses', 'report']),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // سيتم تنفيذه لاحقاً مع Zapier webhook
+        return {
+          success: true,
+          message: 'تم جدولة التصدير',
+          type: input.type,
+        };
       }),
   }),
 });

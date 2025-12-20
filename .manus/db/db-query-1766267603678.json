@@ -1,0 +1,30 @@
+{
+  "query": "SELECT \n  DATE_FORMAT(dr.date, '%Y-%m-%d') as date,\n  b.nameAr as branch,\n  dr.cash,\n  dr.network,\n  dr.balance,\n  dr.total,\n  dr.isMatched,\n  dr.unmatchReason\nFROM dailyRevenues dr\nJOIN branches b ON dr.branchId = b.id\nORDER BY dr.date DESC\nLIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  DATE_FORMAT(dr.date, '%Y-%m-%d') as date,\n  b.nameAr as branch,\n  dr.cash,\n  dr.network,\n  dr.balance,\n  dr.total,\n  dr.isMatched,\n  dr.unmatchReason\nFROM dailyRevenues dr\nJOIN branches b ON dr.branchId = b.id\nORDER BY dr.date DESC\nLIMIT 20;",
+  "rows": [
+    {
+      "date": "2025-12-20",
+      "branch": "الرئيسي ",
+      "cash": "100.00",
+      "network": "10.00",
+      "balance": "20.00",
+      "total": "130.00",
+      "isMatched": "1",
+      "unmatchReason": "NULL"
+    },
+    {
+      "date": "2025-12-18",
+      "branch": "الرئيسي ",
+      "cash": "1.00",
+      "network": "1.00",
+      "balance": "0.00",
+      "total": "2.00",
+      "isMatched": "1",
+      "unmatchReason": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "date\tbranch\tcash\tnetwork\tbalance\ttotal\tisMatched\tunmatchReason\n2025-12-20\tالرئيسي \t100.00\t10.00\t20.00\t130.00\t1\tNULL\n2025-12-18\tالرئيسي \t1.00\t1.00\t0.00\t2.00\t1\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1607
+}

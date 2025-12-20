@@ -1,0 +1,61 @@
+{
+  "query": "SELECT * FROM dailyRevenues LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT * FROM dailyRevenues LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "monthlyRecordId": "1",
+      "branchId": "1",
+      "date": "2025-12-18 00:00:00",
+      "cash": "1.00",
+      "network": "1.00",
+      "balance": "0.00",
+      "total": "2.00",
+      "isMatched": "1",
+      "unmatchReason": "NULL",
+      "createdBy": "1",
+      "createdAt": "2025-12-18 20:55:56",
+      "updatedAt": "2025-12-18 20:55:56",
+      "balanceImageUrl": "NULL",
+      "balanceImageKey": "NULL"
+    },
+    {
+      "id": "30001",
+      "monthlyRecordId": "30001",
+      "branchId": "30003",
+      "date": "2025-12-19 00:00:00",
+      "cash": "100.00",
+      "network": "10.00",
+      "balance": "0.00",
+      "total": "110.00",
+      "isMatched": "1",
+      "unmatchReason": "NULL",
+      "createdBy": "240001",
+      "createdAt": "2025-12-19 00:23:28",
+      "updatedAt": "2025-12-19 00:23:28",
+      "balanceImageUrl": "NULL",
+      "balanceImageKey": "NULL"
+    },
+    {
+      "id": "60001",
+      "monthlyRecordId": "1",
+      "branchId": "1",
+      "date": "2025-12-20 00:00:00",
+      "cash": "100.00",
+      "network": "10.00",
+      "balance": "20.00",
+      "total": "130.00",
+      "isMatched": "1",
+      "unmatchReason": "NULL",
+      "createdBy": "240001",
+      "createdAt": "2025-12-20 19:20:22",
+      "updatedAt": "2025-12-20 19:20:22",
+      "balanceImageUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/balance-images/240001/1766258412189-k70ugc-Untitled design.png",
+      "balanceImageKey": "balance-images/240001/1766258412189-k70ugc-Untitled design.png"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tmonthlyRecordId\tbranchId\tdate\tcash\tnetwork\tbalance\ttotal\tisMatched\tunmatchReason\tcreatedBy\tcreatedAt\tupdatedAt\tbalanceImageUrl\tbalanceImageKey\n1\t1\t1\t2025-12-18 00:00:00\t1.00\t1.00\t0.00\t2.00\t1\tNULL\t1\t2025-12-18 20:55:56\t2025-12-18 20:55:56\tNULL\tNULL\n30001\t30001\t30003\t2025-12-19 00:00:00\t100.00\t10.00\t0.00\t110.00\t1\tNULL\t240001\t2025-12-19 00:23:28\t2025-12-19 00:23:28\tNULL\tNULL\n60001\t1\t1\t2025-12-20 00:00:00\t100.00\t10.00\t20.00\t130.00\t1\tNULL\t240001\t2025-12-20 19:20:22\t2025-12-20 19:20:22\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/balance-images/240001/1766258412189-k70ugc-Untitled design.png\tbalance-images/240001/1766258412189-k70ugc-Untitled design.png\n",
+  "stderr": "",
+  "execution_time_ms": 1488
+}
