@@ -1086,9 +1086,16 @@ export const appRouter = router({
 
   // ==================== لوحة التحكم والتقارير ====================
   dashboard: router({
-    stats: protectedProcedure.query(async () => {
-      return await db.getDashboardStats();
-    }),
+    stats: protectedProcedure
+      .input(z.object({ branchId: z.number().optional() }).optional())
+      .query(async ({ input, ctx }) => {
+        // المشرفون يرون بيانات فرعهم فقط
+        let branchId = input?.branchId;
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
+          branchId = ctx.user.branchId;
+        }
+        return await db.getDashboardStats(branchId);
+      }),
 
     activityLogs: protectedProcedure
       .input(z.object({ limit: z.number().default(50) }).optional())

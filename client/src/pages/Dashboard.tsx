@@ -1,5 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Building2 } from "lucide-react";
 import {
   Package,
   Users,
@@ -45,8 +48,15 @@ const formatDate = (date: Date) => {
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
   const { data: lowStockProducts } = trpc.products.getLowStock.useQuery();
+  const { data: branches } = trpc.branches.list.useQuery();
+
+  // الحصول على اسم الفرع للمشرفين
+  const branchName = user?.branchId && branches 
+    ? branches.find(b => b.id === user.branchId)?.nameAr || branches.find(b => b.id === user.branchId)?.name
+    : null;
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -101,6 +111,28 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* تنبيه الفرع للمشرفين */}
+      {user?.role === 'supervisor' && branchName && (
+        <Alert className="bg-blue-50 border-blue-200">
+          <Building2 className="h-4 w-4 text-blue-600" />
+          <AlertTitle className="text-blue-800">فرع {branchName}</AlertTitle>
+          <AlertDescription className="text-blue-700">
+            أنت تشاهد بيانات فرع {branchName} فقط
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* تنبيه للمشاهدين */}
+      {user?.role === 'viewer' && (
+        <Alert className="bg-amber-50 border-amber-200">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-800">وضع المشاهدة</AlertTitle>
+          <AlertDescription className="text-amber-700">
+            أنت تشاهد البيانات فقط بدون صلاحية التعديل
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {statsCards.map((stat, index) => (

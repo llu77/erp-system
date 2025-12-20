@@ -523,7 +523,7 @@ export async function getProductInventoryMovements(productId: number) {
 }
 
 // ==================== دوال الإحصائيات ====================
-export async function getDashboardStats() {
+export async function getDashboardStats(branchId?: number) {
   const db = await getDb();
   if (!db) return null;
 
@@ -544,41 +544,88 @@ export async function getDashboardStats() {
   // إجمالي الموردين
   const totalSuppliers = await db.select({ count: sql<number>`COUNT(*)` }).from(suppliers);
 
+  // شروط التصفية حسب الفرع
+  const branchCondition = branchId ? eq(invoices.branchId, branchId) : undefined;
+  const purchaseBranchCondition = branchId ? eq(purchaseOrders.branchId, branchId) : undefined;
+
   // مبيعات الشهر
+  const monthlySalesConditions = [
+    gte(invoices.invoiceDate, startOfMonth),
+    eq(invoices.status, 'paid')
+  ];
+  if (branchCondition) monthlySalesConditions.push(branchCondition);
+  
   const monthlySales = await db.select({ 
     total: sql<string>`COALESCE(SUM(total), 0)`,
     count: sql<number>`COUNT(*)`
   }).from(invoices)
-    .where(and(
-      gte(invoices.invoiceDate, startOfMonth),
-      eq(invoices.status, 'paid')
-    ));
+    .where(and(...monthlySalesConditions));
 
   // مبيعات السنة
+  const yearlySalesConditions = [
+    gte(invoices.invoiceDate, startOfYear),
+    eq(invoices.status, 'paid')
+  ];
+  if (branchCondition) yearlySalesConditions.push(branchCondition);
+  
   const yearlySales = await db.select({ 
     total: sql<string>`COALESCE(SUM(total), 0)` 
   }).from(invoices)
-    .where(and(
-      gte(invoices.invoiceDate, startOfYear),
-      eq(invoices.status, 'paid')
-    ));
+    .where(and(...yearlySalesConditions));
 
   // مشتريات الشهر
+  const monthlyPurchasesConditions = [
+    gte(purchaseOrders.orderDate, startOfMonth),
+    eq(purchaseOrders.status, 'received')
+  ];
+  if (purchaseBranchCondition) monthlyPurchasesConditions.push(purchaseBranchCondition);
+  
   const monthlyPurchases = await db.select({ 
     total: sql<string>`COALESCE(SUM(total), 0)`,
     count: sql<number>`COUNT(*)`
   }).from(purchaseOrders)
-    .where(and(
-      gte(purchaseOrders.orderDate, startOfMonth),
-      eq(purchaseOrders.status, 'received')
-    ));
+    .where(and(...monthlyPurchasesConditions));
 
   // آخر الفواتير
-  const recentInvoices = await db.select().from(invoices)
+  const recentInvoicesQuery = db.select().from(invoices);
+  if (branchId) {
+    const recentInvoices = await recentInvoicesQuery
+      .where(eq(invoices.branchId, branchId))
+      .orderBy(desc(invoices.createdAt))
+      .limit(5);
+    
+    // آخر أوامر الشراء
+    const recentPurchases = await db.select().from(purchaseOrders)
+      .where(eq(purchaseOrders.branchId, branchId))
+      .orderBy(desc(purchaseOrders.createdAt))
+      .limit(5);
+
+    return {
+      totalProducts: totalProducts[0]?.count || 0,
+      lowStockCount: lowStockCount[0]?.count || 0,
+      totalCustomers: totalCustomers[0]?.count || 0,
+      totalSuppliers: totalSuppliers[0]?.count || 0,
+      monthlySales: {
+        total: parseFloat(monthlySales[0]?.total || '0'),
+        count: monthlySales[0]?.count || 0
+      },
+      yearlySales: parseFloat(yearlySales[0]?.total || '0'),
+      monthlyPurchases: {
+        total: parseFloat(monthlyPurchases[0]?.total || '0'),
+        count: monthlyPurchases[0]?.count || 0
+      },
+      recentInvoices,
+      recentPurchases,
+      branchId
+    };
+  }
+
+  // آخر الفواتير (بدون تصفية)
+  const recentInvoices = await recentInvoicesQuery
     .orderBy(desc(invoices.createdAt))
     .limit(5);
 
-  // آخر أوامر الشراء
+  // آخر أوامر الشراء (بدون تصفية)
   const recentPurchases = await db.select().from(purchaseOrders)
     .orderBy(desc(purchaseOrders.createdAt))
     .limit(5);
