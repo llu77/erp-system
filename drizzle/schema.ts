@@ -10,7 +10,9 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 20 }),
   loginMethod: varchar("loginMethod", { length: 64 }).default("local"),
-  role: mysqlEnum("role", ["admin", "manager", "employee"]).default("employee").notNull(),
+  role: mysqlEnum("role", ["admin", "manager", "employee", "supervisor", "viewer"]).default("employee").notNull(),
+  branchId: int("branchId"), // الفرع المرتبط بالمستخدم (null = كل الفروع)
+  permissions: text("permissions"), // صلاحيات مخصصة (JSON)
   department: varchar("department", { length: 100 }),
   position: varchar("position", { length: 100 }),
   isActive: boolean("isActive").default(true).notNull(),

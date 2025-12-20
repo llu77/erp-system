@@ -83,6 +83,8 @@ export async function localLogin(username: string, password: string) {
         name: user.name,
         email: user.email,
         role: user.role,
+        branchId: user.branchId,
+        permissions: user.permissions,
         department: user.department,
         position: user.position,
       },
@@ -100,7 +102,9 @@ export async function createLocalUser(data: {
   name: string;
   email?: string;
   phone?: string;
-  role: "admin" | "manager" | "employee";
+  role: "admin" | "manager" | "employee" | "supervisor" | "viewer";
+  branchId?: number;
+  permissions?: string;
   department?: string;
   position?: string;
 }) {
@@ -132,6 +136,8 @@ export async function createLocalUser(data: {
       email: data.email || null,
       phone: data.phone || null,
       role: data.role,
+      branchId: data.branchId || null,
+      permissions: data.permissions || null,
       department: data.department || null,
       position: data.position || null,
       loginMethod: "local",

@@ -1,0 +1,37 @@
+{
+  "query": "SELECT id, username, name, email, role, branchId, position FROM users WHERE role IN ('supervisor', 'viewer');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, username, name, email, role, branchId, position FROM users WHERE role IN ('supervisor', 'viewer');",
+  "rows": [
+    {
+      "id": "630007",
+      "username": "Laban",
+      "name": "عبدالحي",
+      "email": "Galalbdo766@gmail.com",
+      "role": "supervisor",
+      "branchId": "1",
+      "position": "مشرف فرع لبن"
+    },
+    {
+      "id": "630008",
+      "username": "Twiq",
+      "name": "محمد",
+      "email": "mohamedismaelebrhem@gmail.com",
+      "role": "supervisor",
+      "branchId": "30001",
+      "position": "مشرف فرع طويق"
+    },
+    {
+      "id": "630009",
+      "username": "GeneralSupervisor",
+      "name": "سالم الوادعي",
+      "email": "Salemalwadai1997@gmail.com",
+      "role": "viewer",
+      "branchId": "NULL",
+      "position": "المشرف العام"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\tname\temail\trole\tbranchId\tposition\n630007\tLaban\tعبدالحي\tGalalbdo766@gmail.com\tsupervisor\t1\tمشرف فرع لبن\n630008\tTwiq\tمحمد\tmohamedismaelebrhem@gmail.com\tsupervisor\t30001\tمشرف فرع طويق\n630009\tGeneralSupervisor\tسالم الوادعي\tSalemalwadai1997@gmail.com\tviewer\tNULL\tالمشرف العام\n",
+  "stderr": "",
+  "execution_time_ms": 1631
+}

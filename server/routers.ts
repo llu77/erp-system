@@ -28,8 +28,9 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 
 // إجراء للمشرف - إدخال فقط بدون تعديل أو حذف
 const supervisorInputProcedure = protectedProcedure.use(({ ctx, next }) => {
-  // المشرف يمكنه الإدخال فقط
-  if (ctx.user.role !== 'admin' && ctx.user.role !== 'manager' && ctx.user.role !== 'employee') {
+  // المشرف والموظف يمكنهم الإدخال فقط
+  const allowedRoles = ['admin', 'manager', 'employee', 'supervisor'];
+  if (!allowedRoles.includes(ctx.user.role)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بهذا الإجراء' });
   }
   return next({ ctx });
@@ -42,6 +43,20 @@ const adminOnlyEditProcedure = protectedProcedure.use(({ ctx, next }) => {
   }
   return next({ ctx });
 });
+
+// إجراء للمشاهدة فقط (كل المستخدمين بما فيهم viewer)
+const viewerProcedure = protectedProcedure.use(({ ctx, next }) => {
+  // جميع المستخدمين يمكنهم المشاهدة
+  return next({ ctx });
+});
+
+// دالة للتحقق من صلاحية الوصول للفرع
+function checkBranchAccess(userBranchId: number | null, targetBranchId: number): boolean {
+  // إذا كان المستخدم غير مرتبط بفرع محدد (كل الفروع)
+  if (userBranchId === null) return true;
+  // التحقق من تطابق الفرع
+  return userBranchId === targetBranchId;
+}
 
 export const appRouter = router({
   system: systemRouter,
