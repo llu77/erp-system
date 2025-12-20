@@ -25,8 +25,14 @@ import {
   CheckCircle,
   XCircle,
   Download,
-  Loader2
+  Loader2,
+  Upload,
+  Image,
+  X,
+  Eye,
+  ImageIcon
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -51,6 +57,61 @@ export default function Revenues() {
     balance: "",
   });
   const [employeeRevenues, setEmployeeRevenues] = useState<EmployeeRevenueInput[]>([]);
+  const [balanceImage, setBalanceImage] = useState<{ url: string; key: string; preview: string } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // رفع صورة الموازنة
+  const uploadImageMutation = trpc.revenues.uploadBalanceImage.useMutation({
+    onSuccess: (data) => {
+      setBalanceImage({ url: data.url, key: data.key, preview: balanceImage?.preview || '' });
+      toast.success("تم رفع صورة الموازنة بنجاح");
+      setIsUploading(false);
+    },
+    onError: (error) => {
+      toast.error(error.message || "فشل رفع الصورة");
+      setIsUploading(false);
+    },
+  });
+
+  // معالجة اختيار الصورة
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // التحقق من نوع الملف
+    if (!file.type.startsWith('image/')) {
+      toast.error("يرجى اختيار ملف صورة");
+      return;
+    }
+
+    // التحقق من حجم الملف (5MB كحد أقصى)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("حجم الصورة يجب أن يكون أقل من 5 ميجابايت");
+      return;
+    }
+
+    setIsUploading(true);
+
+    // إنشاء معاينة محلية
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64Data = event.target?.result as string;
+      setBalanceImage({ url: '', key: '', preview: base64Data });
+      
+      // رفع الصورة
+      uploadImageMutation.mutate({
+        base64Data,
+        fileName: file.name,
+        contentType: file.type,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // حذف الصورة
+  const removeImage = () => {
+    setBalanceImage(null);
+  };
 
   // جلب الفروع
   const { data: branches, isLoading: branchesLoading } = trpc.branches.list.useQuery();
@@ -73,6 +134,7 @@ export default function Revenues() {
       setEmployeeRevenues([]);
       setIsMatched(true);
       setUnmatchReason("");
+      setBalanceImage(null);
     },
     onError: (error) => {
       toast.error(error.message || "فشل حفظ الإيرادات");
@@ -156,6 +218,8 @@ export default function Revenues() {
       total: calculateBranchTotal(),
       isMatched,
       unmatchReason: isMatched ? undefined : unmatchReason,
+      balanceImageUrl: balanceImage?.url || undefined,
+      balanceImageKey: balanceImage?.key || undefined,
       employeeRevenues: employeeRevenues.map(er => ({
         employeeId: er.employeeId,
         cash: er.cash || "0",
@@ -299,6 +363,89 @@ export default function Revenues() {
                     onChange={(e) => setUnmatchReason(e.target.value)}
                     placeholder="سبب عدم التطابق..."
                   />
+                </div>
+              )}
+            </div>
+
+            {/* رفع صورة الموازنة */}
+            <div className="mt-6 pt-4 border-t">
+              <Label className="flex items-center gap-2 mb-3">
+                <ImageIcon className="h-4 w-4" />
+                صورة الموازنة (اختياري)
+              </Label>
+              
+              {!balanceImage ? (
+                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                    id="balance-image-input"
+                    disabled={isUploading}
+                  />
+                  <label htmlFor="balance-image-input" className="cursor-pointer">
+                    {isUploading ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">جاري رفع الصورة...</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="h-8 w-8 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">اضغط لرفع صورة الموازنة</span>
+                        <span className="text-xs text-muted-foreground/70">الحد الأقصى 5 ميجابايت</span>
+                      </div>
+                    )}
+                  </label>
+                </div>
+              ) : (
+                <div className="relative border rounded-lg overflow-hidden">
+                  <img
+                    src={balanceImage.preview || balanceImage.url}
+                    alt="صورة الموازنة"
+                    className="w-full h-48 object-contain bg-muted"
+                  />
+                  <div className="absolute top-2 left-2 flex gap-2">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button size="icon" variant="secondary" className="h-8 w-8">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-4xl">
+                        <DialogHeader>
+                          <DialogTitle>صورة الموازنة</DialogTitle>
+                        </DialogHeader>
+                        <img
+                          src={balanceImage.preview || balanceImage.url}
+                          alt="صورة الموازنة"
+                          className="w-full h-auto max-h-[70vh] object-contain"
+                        />
+                      </DialogContent>
+                    </Dialog>
+                    <Button
+                      size="icon"
+                      variant="destructive"
+                      className="h-8 w-8"
+                      onClick={removeImage}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {isUploading && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-white" />
+                    </div>
+                  )}
+                  {balanceImage.url && (
+                    <div className="absolute bottom-2 right-2">
+                      <Badge variant="secondary" className="bg-green-500/20 text-green-400">
+                        <CheckCircle className="h-3 w-3 ml-1" />
+                        تم الرفع
+                      </Badge>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -712,6 +859,7 @@ function MonthlyRevenueLog({ branchId, selectedDate }: { branchId: number | null
                     <TableHead className="text-right">شبكة</TableHead>
                     <TableHead className="text-right">رصيد</TableHead>
                     <TableHead className="text-right">الإجمالي</TableHead>
+                    <TableHead className="text-right">الموازنة</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -737,6 +885,30 @@ function MonthlyRevenueLog({ branchId, selectedDate }: { branchId: number | null
                         </TableCell>
                         <TableCell className="font-bold">
                           {parseFloat(revenue.total || "0").toLocaleString()} ر.س
+                        </TableCell>
+                        <TableCell>
+                          {revenue.balanceImageUrl ? (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="gap-1 h-8 px-2">
+                                  <ImageIcon className="h-4 w-4 text-primary" />
+                                  <span className="text-xs">عرض</span>
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-4xl">
+                                <DialogHeader>
+                                  <DialogTitle>صورة الموازنة - {format(new Date(revenue.date), "d MMMM yyyy", { locale: ar })}</DialogTitle>
+                                </DialogHeader>
+                                <img
+                                  src={revenue.balanceImageUrl}
+                                  alt="صورة الموازنة"
+                                  className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
+                                />
+                              </DialogContent>
+                            </Dialog>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {revenue.isMatched ? (

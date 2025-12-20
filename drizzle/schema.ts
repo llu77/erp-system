@@ -305,6 +305,8 @@ export const dailyRevenues = mysqlTable("dailyRevenues", {
   total: decimal("total", { precision: 15, scale: 2 }).default("0.00").notNull(),
   isMatched: boolean("isMatched").default(true).notNull(),
   unmatchReason: text("unmatchReason"),
+  balanceImageUrl: text("balanceImageUrl"), // رابط صورة الموازنة
+  balanceImageKey: text("balanceImageKey"), // مفتاح الصورة في S3
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

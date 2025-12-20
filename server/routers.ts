@@ -1283,6 +1283,30 @@ export const appRouter = router({
 
   // ==================== إدارة الإيرادات ====================
   revenues: router({
+    // رفع صورة الموازنة إلى S3
+    uploadBalanceImage: supervisorInputProcedure
+      .input(z.object({
+        base64Data: z.string(),
+        fileName: z.string(),
+        contentType: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { storagePut } = await import('./storage');
+        
+        // تحويل base64 إلى Buffer
+        const base64Content = input.base64Data.replace(/^data:[^;]+;base64,/, '');
+        const buffer = Buffer.from(base64Content, 'base64');
+        
+        // إنشاء مفتاح فريد للصورة
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const fileKey = `balance-images/${ctx.user.id}/${timestamp}-${randomSuffix}-${input.fileName}`;
+        
+        const { url, key } = await storagePut(fileKey, buffer, input.contentType);
+        
+        return { success: true, url, key };
+      }),
+
     // المشرف يمكنه إدخال الإيرادات فقط
     createDaily: supervisorInputProcedure
       .input(z.object({
@@ -1294,6 +1318,8 @@ export const appRouter = router({
         total: z.string(),
         isMatched: z.boolean(),
         unmatchReason: z.string().optional(),
+        balanceImageUrl: z.string().optional(),
+        balanceImageKey: z.string().optional(),
         employeeRevenues: z.array(z.object({
           employeeId: z.number(),
           cash: z.string(),
@@ -1337,6 +1363,8 @@ export const appRouter = router({
           total: input.total,
           isMatched: input.isMatched,
           unmatchReason: input.unmatchReason,
+          balanceImageUrl: input.balanceImageUrl,
+          balanceImageKey: input.balanceImageKey,
           createdBy: ctx.user.id,
         });
 
