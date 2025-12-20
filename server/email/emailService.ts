@@ -13,7 +13,7 @@ export interface EmailOptions {
 export async function sendEmail(options: EmailOptions): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     const { data, error } = await resend.emails.send({
-      from: `نظام ERP <${fromEmail}>`,
+      from: `Symbol AI <${fromEmail}>`,
       to: Array.isArray(options.to) ? options.to : [options.to],
       subject: options.subject,
       html: options.html,
@@ -149,14 +149,14 @@ export function getEmailTemplate(content: string, title: string): string {
 <body>
   <div class="container">
     <div class="header">
-      <h1>نظام ERP</h1>
+      <h1>Symbol AI</h1>
       <p style="margin: 5px 0 0 0; opacity: 0.9;">${title}</p>
     </div>
     <div class="content">
       ${content}
     </div>
     <div class="footer">
-      <p>هذا التقرير تم إنشاؤه تلقائياً من نظام ERP</p>
+      <p>هذا التقرير تم إنشاؤه تلقائياً من Symbol AI</p>
       <p>© ${new Date().getFullYear()} جميع الحقوق محفوظة</p>
     </div>
   </div>

@@ -1,0 +1,130 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "activityLogs"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "bonusAuditLog"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "bonusDetails"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "branches"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "categories"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "company_settings"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "customers"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "dailyRevenues"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "employeeRequestLogs"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "employeeRequests"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "employeeRevenues"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "employeeSalarySettings"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "employees"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "expenseLogs"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "expenses"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "financialKpis"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "inventoryCountItems"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "inventoryCounts"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "inventoryMovements"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "invoiceItems"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "invoices"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "loginAttempts"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "monthlyRecords"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "notifications"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "payrollDetails"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "payrolls"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "permissions"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "priceChangeLogs"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "productBatches"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "products"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "purchaseOrderItems"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "purchaseOrders"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "securityAlerts"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "suggestedPurchaseOrders"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "suppliers"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "systemLogs"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "userPermissions"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "users"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8": "weeklyBonuses"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_dsLtTk22LX4iB7jABiF6k8\n__drizzle_migrations\nactivityLogs\nbonusAuditLog\nbonusDetails\nbranches\ncategories\ncompany_settings\ncustomers\ndailyRevenues\nemployeeRequestLogs\nemployeeRequests\nemployeeRevenues\nemployeeSalarySettings\nemployees\nexpenseLogs\nexpenses\nfinancialKpis\ninventoryCountItems\ninventoryCounts\ninventoryMovements\ninvoiceItems\ninvoices\nloginAttempts\nmonthlyRecords\nnotifications\npayrollDetails\npayrolls\npermissions\npriceChangeLogs\nproductBatches\nproducts\npurchaseOrderItems\npurchaseOrders\nsecurityAlerts\nsuggestedPurchaseOrders\nsuppliers\nsystemLogs\nuserPermissions\nusers\nweeklyBonuses\n",
+  "stderr": "",
+  "execution_time_ms": 1597
+}

@@ -264,7 +264,7 @@ export async function sendWeeklyReport(recipientEmail: string): Promise<{ succes
 
     const result = await sendEmail({
       to: recipientEmail,
-      subject: `📊 التقرير الأسبوعي - نظام ERP - ${new Date().toLocaleDateString('ar-SA')}`,
+      subject: `📊 التقرير الأسبوعي - Symbol AI - ${new Date().toLocaleDateString('ar-SA')}`,
       html,
     });
 
@@ -284,7 +284,7 @@ export async function sendLowStockAlert(recipientEmail: string): Promise<{ succe
 
     const result = await sendEmail({
       to: recipientEmail,
-      subject: `⚠️ تنبيه المخزون - نظام ERP - ${new Date().toLocaleDateString('ar-SA')}`,
+      subject: `⚠️ تنبيه المخزون - Symbol AI - ${new Date().toLocaleDateString('ar-SA')}`,
       html,
     });
 
@@ -304,7 +304,7 @@ export async function sendMonthlyProfitReport(recipientEmail: string): Promise<{
 
     const result = await sendEmail({
       to: recipientEmail,
-      subject: `💰 تقرير الأرباح والخسائر - نظام ERP - ${new Date().toLocaleDateString('ar-SA')}`,
+      subject: `💰 تقرير الأرباح والخسائر - Symbol AI - ${new Date().toLocaleDateString('ar-SA')}`,
       html,
     });
 
