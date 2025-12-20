@@ -56,35 +56,42 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { NotificationBell } from "./NotificationBell";
 
+// تعريف الصلاحيات:
+// admin: كل الصلاحيات
+// manager: إدارة كاملة
+// employee: موظف عادي
+// supervisor: مشرف فرع - إدخال فقط بدون تعديل أو حذف
+// viewer: مشاهد - مشاهدة وطباعة فقط
+
 const menuItems = [
-  { icon: LayoutDashboard, label: "لوحة التحكم", path: "/", roles: ["admin", "manager", "employee"] },
+  { icon: LayoutDashboard, label: "لوحة التحكم", path: "/", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
   { icon: Users, label: "المستخدمين", path: "/users", roles: ["admin"] },
-  { icon: Building2, label: "الفروع", path: "/branches", roles: ["admin", "manager"] },
-  { icon: UserCircle, label: "الموظفين", path: "/employees", roles: ["admin", "manager"] },
-  { icon: Package, label: "المنتجات", path: "/products", roles: ["admin", "manager", "employee"] },
-  { icon: Settings, label: "الفئات", path: "/categories", roles: ["admin", "manager"] },
-  { icon: Users, label: "العملاء", path: "/customers", roles: ["admin", "manager", "employee"] },
-  { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager"] },
-  { icon: FileText, label: "الفواتير", path: "/invoices", roles: ["admin", "manager", "employee"] },
-  { icon: ShoppingCart, label: "المشتريات", path: "/purchases", roles: ["admin", "manager"] },
-  { icon: DollarSign, label: "الإيرادات", path: "/revenues", roles: ["admin", "manager"] },
-  { icon: Gift, label: "البونص", path: "/bonuses", roles: ["admin", "manager"] },
+  { icon: Building2, label: "الفروع", path: "/branches", roles: ["admin", "manager", "viewer"] },
+  { icon: UserCircle, label: "الموظفين", path: "/employees", roles: ["admin", "manager", "viewer"] },
+  { icon: Package, label: "المنتجات", path: "/products", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
+  { icon: Settings, label: "الفئات", path: "/categories", roles: ["admin", "manager", "viewer"] },
+  { icon: Users, label: "العملاء", path: "/customers", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
+  { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager", "viewer"] },
+  { icon: FileText, label: "الفواتير", path: "/invoices", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
+  { icon: ShoppingCart, label: "المشتريات", path: "/purchases", roles: ["admin", "manager", "viewer"] },
+  { icon: DollarSign, label: "الإيرادات", path: "/revenues", roles: ["admin", "manager", "supervisor", "viewer"] },
+  { icon: Gift, label: "البونص", path: "/bonuses", roles: ["admin", "manager", "viewer"] },
   { icon: Send, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin"] },
-  { icon: BarChart3, label: "التقارير", path: "/reports", roles: ["admin", "manager"] },
+  { icon: BarChart3, label: "التقارير", path: "/reports", roles: ["admin", "manager", "supervisor", "viewer"] },
   { icon: Bell, label: "إرسال إشعار", path: "/notifications/send", roles: ["admin", "manager"] },
-  { icon: FilePlus, label: "تقديم طلب", path: "/submit-request", roles: ["admin", "manager", "employee"] },
-  { icon: ClipboardList, label: "إدارة الطلبات", path: "/manage-requests", roles: ["admin", "manager"] },
-  { icon: Wallet, label: "مسيرات الرواتب", path: "/payrolls", roles: ["admin", "manager"] },
-  { icon: Receipt, label: "المصاريف", path: "/expenses", roles: ["admin", "manager"] },
+  { icon: FilePlus, label: "تقديم طلب", path: "/submit-request", roles: ["admin", "manager", "employee", "supervisor"] },
+  { icon: ClipboardList, label: "إدارة الطلبات", path: "/manage-requests", roles: ["admin", "manager", "viewer"] },
+  { icon: Wallet, label: "مسيرات الرواتب", path: "/payrolls", roles: ["admin", "manager", "viewer"] },
+  { icon: Receipt, label: "المصاريف", path: "/expenses", roles: ["admin", "manager", "supervisor", "viewer"] },
   { icon: Settings, label: "الإعدادات", path: "/settings", roles: ["admin"] },
-  { icon: BarChart3, label: "الأرباح والخسائر", path: "/profit-loss", roles: ["admin", "manager"] },
-  { icon: TrendingUp, label: "لوحة التحكم التنفيذية", path: "/executive-dashboard", roles: ["admin", "manager"] },
+  { icon: BarChart3, label: "الأرباح والخسائر", path: "/profit-loss", roles: ["admin", "manager", "viewer"] },
+  { icon: TrendingUp, label: "لوحة التحكم التنفيذية", path: "/executive-dashboard", roles: ["admin", "manager", "viewer"] },
   { icon: Shield, label: "تنبيهات الأمان", path: "/security-alerts", roles: ["admin"] },
   { icon: Lock, label: "إدارة الصلاحيات", path: "/permissions", roles: ["admin"] },
-  { icon: Boxes, label: "المخزون المتقدم", path: "/advanced-inventory", roles: ["admin", "manager"] },
-  { icon: BarChart3, label: "لوحة المبيعات", path: "/sales-dashboard", roles: ["admin", "manager"] },
+  { icon: Boxes, label: "المخزون المتقدم", path: "/advanced-inventory", roles: ["admin", "manager", "viewer"] },
+  { icon: BarChart3, label: "لوحة المبيعات", path: "/sales-dashboard", roles: ["admin", "manager", "viewer"] },
   { icon: Mail, label: "إعدادات التقارير", path: "/report-settings", roles: ["admin"] },
-  { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee"] },
+  { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee", "supervisor"] },
   { icon: Calendar, label: "مراقب النظام", path: "/scheduler", roles: ["admin"] },
   { icon: Mail, label: "مستلمي الإشعارات", path: "/notification-recipients", roles: ["admin"] },
 ];
@@ -160,6 +167,10 @@ function DashboardLayoutContent({
         return "مدير";
       case "employee":
         return "موظف";
+      case "supervisor":
+        return "مشرف فرع";
+      case "viewer":
+        return "مشاهد";
       default:
         return "مستخدم";
     }

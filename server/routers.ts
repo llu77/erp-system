@@ -1343,6 +1343,10 @@ export const appRouter = router({
         })),
       }))
       .mutation(async ({ input, ctx }) => {
+        // التحقق من صلاحية الوصول للفرع للمشرفين
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null && ctx.user.branchId !== input.branchId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك إدخال إيرادات لفرع آخر' });
+        }
         const date = new Date(input.date);
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
@@ -1671,8 +1675,8 @@ export const appRouter = router({
       return await db.getEmployeeRequestsStats();
     }),
 
-    // إنشاء طلب جديد
-    create: protectedProcedure
+    // إنشاء طلب جديد - المشرف يمكنه الإدخال فقط
+    create: supervisorInputProcedure
       .input(z.object({
         employeeId: z.number(),
         employeeName: z.string(),
@@ -2026,6 +2030,10 @@ export const appRouter = router({
         receiptNumber: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        // التحقق من صلاحية الوصول للفرع للمشرفين
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null && input.branchId && ctx.user.branchId !== input.branchId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك إدخال مصاريف لفرع آخر' });
+        }
         const expenseNumber = await db.generateExpenseNumber();
         
         await db.createExpense({

@@ -570,18 +570,20 @@ export default function Revenues() {
           </CardContent>
         </Card>
 
-        {/* زر الحفظ */}
-        <div className="flex justify-end">
-          <Button
-            size="lg"
-            onClick={handleSave}
-            disabled={saveMutation.isPending || employeeRevenues.length === 0}
-            className="gap-2"
-          >
-            <Save className="h-5 w-5" />
-            {saveMutation.isPending ? "جاري الحفظ..." : "حفظ الإيرادات"}
-          </Button>
-        </div>
+        {/* زر الحفظ - مخفي للمشاهدين */}
+        {user?.role !== 'viewer' && (
+          <div className="flex justify-end">
+            <Button
+              size="lg"
+              onClick={handleSave}
+              disabled={saveMutation.isPending || employeeRevenues.length === 0}
+              className="gap-2"
+            >
+              <Save className="h-5 w-5" />
+              {saveMutation.isPending ? "جاري الحفظ..." : "حفظ الإيرادات"}
+            </Button>
+          </div>
+        )}
 
         {/* سجل الإيرادات الشهري */}
         <MonthlyRevenueLog branchId={effectiveBranchId} selectedDate={selectedDate} />

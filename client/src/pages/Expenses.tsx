@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,11 +138,18 @@ interface ExpenseFormData {
 }
 
 export default function Expenses() {
+  const { user } = useAuth();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<number | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+
+  // التحقق من الصلاحيات
+  const canAdd = user?.role !== 'viewer';
+  const canEdit = user?.role === 'admin';
+  const canDelete = user?.role === 'admin';
+  const canApprove = user?.role === 'admin';
 
   const { register, handleSubmit, reset, setValue, watch } = useForm<ExpenseFormData>({
     defaultValues: {
@@ -264,13 +272,14 @@ export default function Expenses() {
             <h1 className="text-2xl font-bold">المصاريف</h1>
             <p className="text-muted-foreground">إدارة وتتبع مصاريف الشركة</p>
           </div>
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="ml-2 h-4 w-4" />
-                إضافة مصروف
-              </Button>
-            </DialogTrigger>
+          {canAdd && (
+            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="ml-2 h-4 w-4" />
+                  إضافة مصروف
+                </Button>
+              </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>إضافة مصروف جديد</DialogTitle>
@@ -391,6 +400,7 @@ export default function Expenses() {
               </form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
 
         {/* الإحصائيات */}
@@ -570,50 +580,58 @@ export default function Expenses() {
                           <div className="flex items-center gap-1">
                             {expense.status === 'pending' && (
                               <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => openEditDialog(expense)}
-                                  title="تعديل"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}
-                                  title="اعتماد"
-                                >
-                                  <CheckCircle className="h-4 w-4 text-green-600" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    const reason = prompt('سبب الرفض:');
-                                    if (reason) {
-                                      updateStatusMutation.mutate({ id: expense.id, status: 'rejected', rejectionReason: reason });
-                                    }
-                                  }}
-                                  title="رفض"
-                                >
-                                  <XCircle className="h-4 w-4 text-red-600" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
-                                      deleteMutation.mutate({ id: expense.id });
-                                    }
-                                  }}
-                                  title="حذف"
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-600" />
-                                </Button>
+                                {canEdit && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openEditDialog(expense)}
+                                    title="تعديل"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {canApprove && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}
+                                      title="اعتماد"
+                                    >
+                                      <CheckCircle className="h-4 w-4 text-green-600" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        const reason = prompt('سبب الرفض:');
+                                        if (reason) {
+                                          updateStatusMutation.mutate({ id: expense.id, status: 'rejected', rejectionReason: reason });
+                                        }
+                                      }}
+                                      title="رفض"
+                                    >
+                                      <XCircle className="h-4 w-4 text-red-600" />
+                                    </Button>
+                                  </>
+                                )}
+                                {canDelete && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
+                                        deleteMutation.mutate({ id: expense.id });
+                                      }
+                                    }}
+                                    title="حذف"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                )}
                               </>
                             )}
-                            {expense.status === 'approved' && (
+                            {expense.status === 'approved' && canApprove && (
                               <Button
                                 variant="ghost"
                                 size="icon"
