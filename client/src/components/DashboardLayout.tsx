@@ -86,6 +86,7 @@ const menuItems = [
   { icon: Mail, label: "إعدادات التقارير", path: "/report-settings", roles: ["admin"] },
   { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee"] },
   { icon: Calendar, label: "مراقب النظام", path: "/scheduler", roles: ["admin"] },
+  { icon: Mail, label: "مستلمي الإشعارات", path: "/notification-recipients", roles: ["admin"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

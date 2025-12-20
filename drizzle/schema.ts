@@ -1142,3 +1142,73 @@ export const monitorSettings = mysqlTable("monitorSettings", {
 
 export type MonitorSetting = typeof monitorSettings.$inferSelect;
 export type InsertMonitorSetting = typeof monitorSettings.$inferInsert;
+
+// ==================== جدول مستلمي الإشعارات ====================
+export const notificationRecipients = mysqlTable("notificationRecipients", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  role: mysqlEnum("role", ["admin", "general_supervisor", "branch_supervisor"]).notNull(),
+  branchId: int("branchId"), // null للأدمن والمشرف العام (يستقبلون كل الإشعارات)
+  branchName: varchar("branchName", { length: 100 }),
+  
+  // أنواع الإشعارات المفعلة
+  receiveRevenueAlerts: boolean("receiveRevenueAlerts").default(true).notNull(),
+  receiveExpenseAlerts: boolean("receiveExpenseAlerts").default(true).notNull(),
+  receiveMismatchAlerts: boolean("receiveMismatchAlerts").default(true).notNull(),
+  receiveInventoryAlerts: boolean("receiveInventoryAlerts").default(true).notNull(),
+  receiveMonthlyReminders: boolean("receiveMonthlyReminders").default(true).notNull(),
+  receiveRequestNotifications: boolean("receiveRequestNotifications").default(true).notNull(),
+  receiveReportNotifications: boolean("receiveReportNotifications").default(true).notNull(),
+  receiveBonusNotifications: boolean("receiveBonusNotifications").default(true).notNull(),
+  
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type NotificationRecipient = typeof notificationRecipients.$inferSelect;
+export type InsertNotificationRecipient = typeof notificationRecipients.$inferInsert;
+
+// ==================== جدول سجل الإشعارات المرسلة ====================
+export const sentNotifications = mysqlTable("sentNotifications", {
+  id: int("id").autoincrement().primaryKey(),
+  recipientId: int("recipientId").notNull(),
+  recipientEmail: varchar("recipientEmail", { length: 320 }).notNull(),
+  recipientName: varchar("recipientName", { length: 100 }),
+  
+  notificationType: mysqlEnum("notificationType", [
+    "low_revenue",
+    "high_expense", 
+    "revenue_mismatch",
+    "inventory_low",
+    "monthly_reminder",
+    "employee_request",
+    "product_update",
+    "payroll_created",
+    "weekly_report",
+    "monthly_report",
+    "bonus_request",
+    "general"
+  ]).notNull(),
+  
+  subject: varchar("subject", { length: 500 }).notNull(),
+  bodyArabic: text("bodyArabic").notNull(),
+  bodyEnglish: text("bodyEnglish"),
+  
+  // معلومات الكيان المرتبط
+  entityType: varchar("entityType", { length: 50 }),
+  entityId: int("entityId"),
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 100 }),
+  
+  // حالة الإرسال
+  status: mysqlEnum("status", ["pending", "sent", "failed"]).default("pending").notNull(),
+  sentAt: timestamp("sentAt"),
+  errorMessage: text("errorMessage"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SentNotification = typeof sentNotifications.$inferSelect;
+export type InsertSentNotification = typeof sentNotifications.$inferInsert;

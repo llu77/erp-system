@@ -17,6 +17,8 @@ import {
   taskExecutionLogs,
   systemAlerts,
   monitorSettings,
+  notificationRecipients,
+  sentNotifications,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2983,4 +2985,127 @@ export async function getAllMonitorSettings() {
   if (!db) return [];
   
   return await db.select().from(monitorSettings);
+}
+
+// ==================== دوال مستلمي الإشعارات ====================
+
+export async function getNotificationRecipients(branchId?: number | null) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  if (branchId === undefined || branchId === null) {
+    // جلب جميع المستلمين النشطين
+    return await db.select().from(notificationRecipients).where(eq(notificationRecipients.isActive, true));
+  }
+  
+  // جلب الأدمن والمشرف العام + مشرف الفرع المحدد
+  return await db.select().from(notificationRecipients).where(
+    and(
+      eq(notificationRecipients.isActive, true),
+      or(
+        eq(notificationRecipients.role, 'admin'),
+        eq(notificationRecipients.role, 'general_supervisor'),
+        eq(notificationRecipients.branchId, branchId)
+      )
+    )
+  );
+}
+
+export async function addNotificationRecipient(data: {
+  name: string;
+  email: string;
+  role: 'admin' | 'general_supervisor' | 'branch_supervisor';
+  branchId?: number | null;
+  branchName?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.insert(notificationRecipients).values({
+    name: data.name,
+    email: data.email,
+    role: data.role,
+    branchId: data.branchId || null,
+    branchName: data.branchName || null,
+  });
+  
+  return result;
+}
+
+export async function updateNotificationRecipient(id: number, data: Partial<{
+  name: string;
+  email: string;
+  role: 'admin' | 'general_supervisor' | 'branch_supervisor';
+  branchId: number | null;
+  branchName: string | null;
+  receiveRevenueAlerts: boolean;
+  receiveExpenseAlerts: boolean;
+  receiveMismatchAlerts: boolean;
+  receiveInventoryAlerts: boolean;
+  receiveMonthlyReminders: boolean;
+  receiveRequestNotifications: boolean;
+  receiveReportNotifications: boolean;
+  receiveBonusNotifications: boolean;
+  isActive: boolean;
+}>) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.update(notificationRecipients)
+    .set(data)
+    .where(eq(notificationRecipients.id, id));
+}
+
+export async function deleteNotificationRecipient(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.delete(notificationRecipients).where(eq(notificationRecipients.id, id));
+}
+
+export async function logSentNotification(data: {
+  recipientId: number;
+  recipientEmail: string;
+  recipientName?: string;
+  notificationType: string;
+  subject: string;
+  bodyArabic: string;
+  bodyEnglish?: string;
+  entityType?: string;
+  entityId?: number;
+  branchId?: number;
+  branchName?: string;
+  status: 'pending' | 'sent' | 'failed';
+  sentAt?: Date;
+  errorMessage?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.insert(sentNotifications).values({
+    recipientId: data.recipientId,
+    recipientEmail: data.recipientEmail,
+    recipientName: data.recipientName || null,
+    notificationType: data.notificationType as any,
+    subject: data.subject,
+    bodyArabic: data.bodyArabic,
+    bodyEnglish: data.bodyEnglish || null,
+    entityType: data.entityType || null,
+    entityId: data.entityId || null,
+    branchId: data.branchId || null,
+    branchName: data.branchName || null,
+    status: data.status,
+    sentAt: data.sentAt || null,
+    errorMessage: data.errorMessage || null,
+  });
+}
+
+export async function getSentNotifications(limit: number = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(sentNotifications)
+    .orderBy(desc(sentNotifications.createdAt))
+    .limit(limit);
 }

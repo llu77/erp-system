@@ -71,6 +71,13 @@
       "when": 1766251996618,
       "tag": "0009_talented_anthem",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1766256947850,
+      "tag": "0010_smooth_nomad",
+      "breakpoints": true
     }
   ]
 }

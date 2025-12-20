@@ -8,6 +8,7 @@ import { z } from "zod";
 import * as db from "./db";
 import { notifyOwner } from "./_core/notification";
 import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from "./email/scheduledReports";
+import * as advancedNotifications from "./notifications/advancedNotificationService";
 
 // إجراء للمدير فقط (كامل الصلاحيات)
 const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -2667,6 +2668,202 @@ export const appRouter = router({
           resolvedBy: data.isResolved ? ctx.user.id : undefined,
         });
         return { success: true, message: 'تم تحديث التنبيه' };
+      }),
+  }),
+
+  // ==================== إدارة مستلمي الإشعارات ====================
+  emailRecipients: router({
+    // قائمة المستلمين
+    list: adminProcedure.query(async () => {
+      return await db.getNotificationRecipients();
+    }),
+
+    // إضافة مستلم جديد
+    add: adminProcedure
+      .input(z.object({
+        name: z.string().min(1, 'الاسم مطلوب'),
+        email: z.string().email('البريد الإلكتروني غير صحيح'),
+        role: z.enum(['admin', 'general_supervisor', 'branch_supervisor']),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.addNotificationRecipient(input);
+        
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'create',
+          entityType: 'notification_recipient',
+          details: `تم إضافة مستلم إشعارات: ${input.name} (${input.email})`,
+        });
+        
+        return { success: true, message: 'تم إضافة المستلم بنجاح' };
+      }),
+
+    // تحديث مستلم
+    update: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        email: z.string().email().optional(),
+        role: z.enum(['admin', 'general_supervisor', 'branch_supervisor']).optional(),
+        branchId: z.number().nullable().optional(),
+        branchName: z.string().nullable().optional(),
+        receiveRevenueAlerts: z.boolean().optional(),
+        receiveExpenseAlerts: z.boolean().optional(),
+        receiveMismatchAlerts: z.boolean().optional(),
+        receiveInventoryAlerts: z.boolean().optional(),
+        receiveMonthlyReminders: z.boolean().optional(),
+        receiveRequestNotifications: z.boolean().optional(),
+        receiveReportNotifications: z.boolean().optional(),
+        receiveBonusNotifications: z.boolean().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, ...data } = input;
+        await db.updateNotificationRecipient(id, data);
+        
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'update',
+          entityType: 'notification_recipient',
+          entityId: id,
+          details: `تم تحديث مستلم إشعارات`,
+        });
+        
+        return { success: true, message: 'تم تحديث المستلم بنجاح' };
+      }),
+
+    // حذف مستلم
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await db.deleteNotificationRecipient(input.id);
+        
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'delete',
+          entityType: 'notification_recipient',
+          entityId: input.id,
+          details: `تم حذف مستلم إشعارات`,
+        });
+        
+        return { success: true, message: 'تم حذف المستلم بنجاح' };
+      }),
+
+    // إرسال بريد اختباري
+    sendTest: adminProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input }) => {
+        const result = await advancedNotifications.sendTestNotification(input.email);
+        return result;
+      }),
+
+    // الحصول على سجل الإشعارات المرسلة
+    getSentLogs: adminProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ input }) => {
+        return await db.getSentNotifications(input.limit || 100);
+      }),
+  }),
+
+  // ==================== التنبيهات المتقدمة ====================
+  advancedAlerts: router({
+    // إرسال تنبيه إيراد منخفض
+    sendLowRevenueAlert: adminProcedure
+      .input(z.object({
+        amount: z.number(),
+        branchId: z.number(),
+        branchName: z.string(),
+        date: z.string(),
+        reason: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await advancedNotifications.checkAndNotifyLowRevenue(input);
+      }),
+
+    // إرسال تنبيه مصروف مرتفع
+    sendHighExpenseAlert: adminProcedure
+      .input(z.object({
+        amount: z.number(),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+        date: z.string(),
+        category: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await advancedNotifications.checkAndNotifyHighExpense(input);
+      }),
+
+    // إرسال تنبيه إيراد غير متطابق
+    sendMismatchAlert: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        branchName: z.string(),
+        date: z.string(),
+        reason: z.string(),
+        difference: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await advancedNotifications.notifyRevenueMismatch(input);
+      }),
+
+    // إرسال تذكير الجرد الشهري
+    sendMonthlyReminder: adminProcedure.mutation(async () => {
+      return await advancedNotifications.sendMonthlyInventoryReminder();
+    }),
+
+    // إرسال إشعار طلب موظف
+    sendEmployeeRequestNotification: adminProcedure
+      .input(z.object({
+        employeeName: z.string(),
+        requestType: z.string(),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+        isUpdate: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await advancedNotifications.notifyEmployeeRequest(input);
+      }),
+
+    // إرسال إشعار طلب بونص
+    sendBonusRequestNotification: adminProcedure
+      .input(z.object({
+        employeeName: z.string(),
+        amount: z.number(),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await advancedNotifications.notifyBonusRequest(input);
+      }),
+
+    // إرسال إشعار إنشاء مسيرة رواتب
+    sendPayrollNotification: adminProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+        month: z.string(),
+        totalAmount: z.number(),
+        employeeCount: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        return await advancedNotifications.notifyPayrollCreated(input);
+      }),
+
+    // إرسال إشعار تحديث منتج
+    sendProductUpdateNotification: adminProcedure
+      .input(z.object({
+        productName: z.string(),
+        updateType: z.enum(['created', 'updated', 'deleted', 'low_stock']),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await advancedNotifications.notifyProductUpdate(input);
       }),
   }),
 });

@@ -1,6 +1,7 @@
 import * as db from '../db';
 import { sendEmail, getEmailTemplate, formatCurrency, formatNumber } from '../email/emailService';
 import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from '../email/scheduledReports';
+import * as advancedNotifications from '../notifications/advancedNotificationService';
 
 // أنواع المهام
 export type TaskType = 
@@ -9,6 +10,7 @@ export type TaskType =
   | 'monthly_profit_report'
   | 'expiry_alert'
   | 'large_transaction_alert'
+  | 'monthly_inventory_reminder'
   | 'backup'
   | 'custom';
 
@@ -198,6 +200,13 @@ export async function executeScheduledTask(task: any): Promise<{ success: boolea
           }
         }
         message = `تم فحص ${transactionCheck.count} عملية مالية كبيرة وإرسال ${emailsSent} إشعار`;
+        break;
+        
+      case 'monthly_inventory_reminder':
+        // تذكير الجرد الشهري (يوم 27)
+        const reminderResult = await advancedNotifications.sendMonthlyInventoryReminder();
+        emailsSent = reminderResult.result?.sentCount || 0;
+        message = `تم إرسال تذكير الجرد الشهري إلى ${emailsSent} مستلم`;
         break;
         
       default:

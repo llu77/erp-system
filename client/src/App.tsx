@@ -37,6 +37,7 @@ import SalesDashboard from "./pages/SalesDashboard";
 import ReportSettings from "./pages/ReportSettings";
 import HROnboarding from "./pages/HROnboarding";
 import SchedulerSettings from "./pages/SchedulerSettings";
+import NotificationRecipients from "./pages/NotificationRecipients";
 
 function Router() {
   return (
@@ -194,6 +195,12 @@ function Router() {
       <Route path="/scheduler">
         <DashboardLayout>
           <SchedulerSettings />
+        </DashboardLayout>
+      </Route>
+      {/* Notification Recipients */}
+      <Route path="/notification-recipients">
+        <DashboardLayout>
+          <NotificationRecipients />
         </DashboardLayout>
       </Route>
       {/* HR Onboarding Portal - Public Page */}

@@ -1,0 +1,40 @@
+CREATE TABLE `notificationRecipients` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`name` varchar(100) NOT NULL,
+	`email` varchar(320) NOT NULL,
+	`role` enum('admin','general_supervisor','branch_supervisor') NOT NULL,
+	`branchId` int,
+	`branchName` varchar(100),
+	`receiveRevenueAlerts` boolean NOT NULL DEFAULT true,
+	`receiveExpenseAlerts` boolean NOT NULL DEFAULT true,
+	`receiveMismatchAlerts` boolean NOT NULL DEFAULT true,
+	`receiveInventoryAlerts` boolean NOT NULL DEFAULT true,
+	`receiveMonthlyReminders` boolean NOT NULL DEFAULT true,
+	`receiveRequestNotifications` boolean NOT NULL DEFAULT true,
+	`receiveReportNotifications` boolean NOT NULL DEFAULT true,
+	`receiveBonusNotifications` boolean NOT NULL DEFAULT true,
+	`isActive` boolean NOT NULL DEFAULT true,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `notificationRecipients_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `sentNotifications` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`recipientId` int NOT NULL,
+	`recipientEmail` varchar(320) NOT NULL,
+	`recipientName` varchar(100),
+	`notificationType` enum('low_revenue','high_expense','revenue_mismatch','inventory_low','monthly_reminder','employee_request','product_update','payroll_created','weekly_report','monthly_report','bonus_request','general') NOT NULL,
+	`subject` varchar(500) NOT NULL,
+	`bodyArabic` text NOT NULL,
+	`bodyEnglish` text,
+	`entityType` varchar(50),
+	`entityId` int,
+	`branchId` int,
+	`branchName` varchar(100),
+	`status` enum('pending','sent','failed') NOT NULL DEFAULT 'pending',
+	`sentAt` timestamp,
+	`errorMessage` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `sentNotifications_id` PRIMARY KEY(`id`)
+);
