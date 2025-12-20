@@ -54,9 +54,9 @@ export default function Login() {
             <Building2 className="w-8 h-8 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold text-white">نظام ERP</CardTitle>
+            <CardTitle className="text-2xl font-bold text-white">Symbol AI</CardTitle>
             <CardDescription className="text-slate-400 mt-2">
-              نظام إدارة الموارد المؤسسية
+              نظام إدارة الأعمال الذكي
             </CardDescription>
           </div>
         </CardHeader>
@@ -113,7 +113,7 @@ export default function Login() {
 
           <div className="mt-6 pt-6 border-t border-slate-700">
             <p className="text-center text-sm text-slate-500">
-              نظام إدارة موارد المؤسسة - جميع الحقوق محفوظة
+              Symbol AI - جميع الحقوق محفوظة
             </p>
           </div>
         </CardContent>

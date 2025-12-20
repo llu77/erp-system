@@ -227,7 +227,7 @@ function DashboardLayoutContent({
                 <div className="flex items-center gap-2 min-w-0">
                   <Building2 className="h-6 w-6 text-primary shrink-0" />
                   <span className="font-bold tracking-tight truncate text-primary">
-                    نظام ERP
+                    Symbol AI
                   </span>
                 </div>
               ) : null}

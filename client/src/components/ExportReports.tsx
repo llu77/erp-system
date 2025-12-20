@@ -270,7 +270,7 @@ export function ExportReports({ data, filename }: ExportReportsProps) {
           ` : ""}
           
           <div class="footer">
-            تم إنشاء هذا التقرير بواسطة نظام ERP
+            تم إنشاء هذا التقرير بواسطة Symbol AI
           </div>
         </body>
         </html>

@@ -1,0 +1,1 @@
+ALTER TABLE `expenses` MODIFY COLUMN `category` enum('shop_supplies','printing','carpet_cleaning','small_needs','residency','medical_exam','transportation','electricity','internet','license_renewal','visa','residency_renewal','health_cert_renewal','maintenance','health_cert','violation','emergency','shop_rent','housing_rent','improvements','bonus','other') NOT NULL;

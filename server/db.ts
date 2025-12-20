@@ -1424,7 +1424,7 @@ export async function getExpensesByCategory(category: string) {
   const db = await getDb();
   if (!db) return [];
   return await db.select().from(expenses)
-    .where(eq(expenses.category, category as "operational" | "administrative" | "marketing" | "maintenance" | "utilities" | "rent" | "salaries" | "supplies" | "transportation" | "other"))
+    .where(eq(expenses.category, category as "shop_supplies" | "printing" | "carpet_cleaning" | "small_needs" | "residency" | "medical_exam" | "transportation" | "electricity" | "internet" | "license_renewal" | "visa" | "residency_renewal" | "health_cert_renewal" | "maintenance" | "health_cert" | "violation" | "emergency" | "shop_rent" | "housing_rent" | "improvements" | "bonus" | "other"))
     .orderBy(desc(expenses.expenseDate));
 }
 

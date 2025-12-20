@@ -348,7 +348,7 @@ const InvoicePrint = forwardRef<HTMLDivElement, InvoicePrintProps>(
           <p style={{ margin: "5px 0" }}>شكراً لتعاملكم معنا</p>
           <p style={{ margin: "5px 0" }}>هذه الفاتورة صادرة إلكترونياً ولا تحتاج إلى توقيع أو ختم</p>
           <p style={{ margin: "10px 0 0 0", color: "#9ca3af" }}>
-            تم إنشاء هذه الفاتورة بواسطة نظام ERP
+            تم إنشاء هذه الفاتورة بواسطة Symbol AI
           </p>
         </div>
       </div>

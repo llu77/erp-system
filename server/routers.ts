@@ -1968,7 +1968,7 @@ export const appRouter = router({
     // إنشاء مصروف - المشرف يمكنه الإدخال فقط
     create: supervisorInputProcedure
       .input(z.object({
-        category: z.enum(['operational', 'administrative', 'marketing', 'maintenance', 'utilities', 'rent', 'salaries', 'supplies', 'transportation', 'other']),
+        category: z.enum(['shop_supplies', 'printing', 'carpet_cleaning', 'small_needs', 'residency', 'medical_exam', 'transportation', 'electricity', 'internet', 'license_renewal', 'visa', 'residency_renewal', 'health_cert_renewal', 'maintenance', 'health_cert', 'violation', 'emergency', 'shop_rent', 'housing_rent', 'improvements', 'bonus', 'other']),
         title: z.string().min(1),
         description: z.string().optional(),
         amount: z.string(),
@@ -2006,7 +2006,7 @@ export const appRouter = router({
     update: adminOnlyEditProcedure
       .input(z.object({
         id: z.number(),
-        category: z.enum(['operational', 'administrative', 'marketing', 'maintenance', 'utilities', 'rent', 'salaries', 'supplies', 'transportation', 'other']).optional(),
+        category: z.enum(['shop_supplies', 'printing', 'carpet_cleaning', 'small_needs', 'residency', 'medical_exam', 'transportation', 'electricity', 'internet', 'license_renewal', 'visa', 'residency_renewal', 'health_cert_renewal', 'maintenance', 'health_cert', 'violation', 'emergency', 'shop_rent', 'housing_rent', 'improvements', 'bonus', 'other']).optional(),
         title: z.string().optional(),
         description: z.string().optional(),
         amount: z.string().optional(),

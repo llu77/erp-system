@@ -672,16 +672,28 @@ export const expenses = mysqlTable("expenses", {
   
   // التصنيف
   category: mysqlEnum("category", [
-    "operational",   // تشغيلية
-    "administrative", // إدارية
-    "marketing",     // تسويقية
-    "maintenance",   // صيانة
-    "utilities",     // مرافق (كهرباء، ماء، إنترنت)
-    "rent",          // إيجار
-    "salaries",      // رواتب
-    "supplies",      // مستلزمات
-    "transportation", // نقل ومواصلات
-    "other"          // أخرى
+    "shop_supplies",      // اغراض محل
+    "printing",           // طباعة ورق
+    "carpet_cleaning",    // غسيل سجاد
+    "small_needs",        // احتياجات بسيطة
+    "residency",          // اقامة
+    "medical_exam",       // فحص طبي
+    "transportation",     // مواصلات
+    "electricity",        // كهرباء
+    "internet",           // انترنت
+    "license_renewal",    // تجديد رخصة
+    "visa",               // تاشيره
+    "residency_renewal",  // تجديد اقامة
+    "health_cert_renewal", // تجديد شهادة صحيه
+    "maintenance",        // صيانة
+    "health_cert",        // شهادة صحية
+    "violation",          // مخالفة
+    "emergency",          // طوارىء
+    "shop_rent",          // ايجار محل
+    "housing_rent",       // ايجار سكن
+    "improvements",       // تحسينات
+    "bonus",              // مكافأة
+    "other"               // أخرى
   ]).notNull(),
   
   // التفاصيل

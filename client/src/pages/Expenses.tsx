@@ -49,15 +49,27 @@ import {
 
 // تصنيفات المصاريف
 const expenseCategories = [
-  { value: "operational", label: "تشغيلية" },
-  { value: "administrative", label: "إدارية" },
-  { value: "marketing", label: "تسويق" },
+  { value: "shop_supplies", label: "اغراض محل" },
+  { value: "printing", label: "طباعة ورق" },
+  { value: "carpet_cleaning", label: "غسيل سجاد" },
+  { value: "small_needs", label: "احتياجات بسيطة" },
+  { value: "residency", label: "اقامة" },
+  { value: "medical_exam", label: "فحص طبي" },
+  { value: "transportation", label: "مواصلات" },
+  { value: "electricity", label: "كهرباء" },
+  { value: "internet", label: "انترنت" },
+  { value: "license_renewal", label: "تجديد رخصة" },
+  { value: "visa", label: "تاشيره" },
+  { value: "residency_renewal", label: "تجديد اقامة" },
+  { value: "health_cert_renewal", label: "تجديد شهادة صحيه" },
   { value: "maintenance", label: "صيانة" },
-  { value: "utilities", label: "مرافق" },
-  { value: "rent", label: "إيجار" },
-  { value: "salaries", label: "رواتب" },
-  { value: "supplies", label: "مستلزمات" },
-  { value: "transportation", label: "نقل" },
+  { value: "health_cert", label: "شهادة صحية" },
+  { value: "violation", label: "مخالفة" },
+  { value: "emergency", label: "طوارىء" },
+  { value: "shop_rent", label: "ايجار محل" },
+  { value: "housing_rent", label: "ايجار سكن" },
+  { value: "improvements", label: "تحسينات" },
+  { value: "bonus", label: "مكافأة" },
   { value: "other", label: "أخرى" },
 ];
 
@@ -88,15 +100,27 @@ const statusColors: Record<string, string> = {
 
 // أسماء التصنيفات
 const categoryNames: Record<string, string> = {
-  operational: "تشغيلية",
-  administrative: "إدارية",
-  marketing: "تسويق",
+  shop_supplies: "اغراض محل",
+  printing: "طباعة ورق",
+  carpet_cleaning: "غسيل سجاد",
+  small_needs: "احتياجات بسيطة",
+  residency: "اقامة",
+  medical_exam: "فحص طبي",
+  transportation: "مواصلات",
+  electricity: "كهرباء",
+  internet: "انترنت",
+  license_renewal: "تجديد رخصة",
+  visa: "تاشيره",
+  residency_renewal: "تجديد اقامة",
+  health_cert_renewal: "تجديد شهادة صحيه",
   maintenance: "صيانة",
-  utilities: "مرافق",
-  rent: "إيجار",
-  salaries: "رواتب",
-  supplies: "مستلزمات",
-  transportation: "نقل",
+  health_cert: "شهادة صحية",
+  violation: "مخالفة",
+  emergency: "طوارىء",
+  shop_rent: "ايجار محل",
+  housing_rent: "ايجار سكن",
+  improvements: "تحسينات",
+  bonus: "مكافأة",
   other: "أخرى",
 };
 
@@ -181,7 +205,7 @@ export default function Expenses() {
     const branch = branches?.find(b => b.id === data.branchId);
     createMutation.mutate({
       ...data,
-      category: data.category as "operational" | "administrative" | "marketing" | "maintenance" | "utilities" | "rent" | "salaries" | "supplies" | "transportation" | "other",
+      category: data.category as "shop_supplies" | "printing" | "carpet_cleaning" | "small_needs" | "residency" | "medical_exam" | "transportation" | "electricity" | "internet" | "license_renewal" | "visa" | "residency_renewal" | "health_cert_renewal" | "maintenance" | "health_cert" | "violation" | "emergency" | "shop_rent" | "housing_rent" | "improvements" | "bonus" | "other",
       paymentMethod: data.paymentMethod as "cash" | "bank_transfer" | "check" | "credit_card" | "other",
       branchName: branch?.nameAr || branch?.name,
     });
@@ -193,7 +217,7 @@ export default function Expenses() {
     updateMutation.mutate({
       id: selectedExpense,
       ...data,
-      category: data.category as "operational" | "administrative" | "marketing" | "maintenance" | "utilities" | "rent" | "salaries" | "supplies" | "transportation" | "other",
+      category: data.category as "shop_supplies" | "printing" | "carpet_cleaning" | "small_needs" | "residency" | "medical_exam" | "transportation" | "electricity" | "internet" | "license_renewal" | "visa" | "residency_renewal" | "health_cert_renewal" | "maintenance" | "health_cert" | "violation" | "emergency" | "shop_rent" | "housing_rent" | "improvements" | "bonus" | "other",
       paymentMethod: data.paymentMethod as "cash" | "bank_transfer" | "check" | "credit_card" | "other",
     });
   };
