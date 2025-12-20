@@ -280,7 +280,7 @@ export default function Expenses() {
                   إضافة مصروف
                 </Button>
               </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
+              <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>إضافة مصروف جديد</DialogTitle>
               </DialogHeader>

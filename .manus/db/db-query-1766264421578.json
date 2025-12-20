@@ -1,0 +1,46 @@
+{
+  "query": "SELECT id, username, name, role FROM users ORDER BY id LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, username, name, role FROM users ORDER BY id LIMIT 10",
+  "rows": [
+    {
+      "id": "1",
+      "username": "NULL",
+      "name": "عمر المطيري",
+      "role": "admin"
+    },
+    {
+      "id": "180002",
+      "username": "NULL",
+      "name": "عمر المطيري",
+      "role": "employee"
+    },
+    {
+      "id": "240001",
+      "username": "Admin",
+      "name": "المدير العام",
+      "role": "admin"
+    },
+    {
+      "id": "630007",
+      "username": "Laban",
+      "name": "عبدالحي",
+      "role": "supervisor"
+    },
+    {
+      "id": "630008",
+      "username": "Twiq",
+      "name": "محمد",
+      "role": "supervisor"
+    },
+    {
+      "id": "630009",
+      "username": "GeneralSupervisor",
+      "name": "سالم الوادعي",
+      "role": "viewer"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\tname\trole\n1\tNULL\tعمر المطيري\tadmin\n180002\tNULL\tعمر المطيري\temployee\n240001\tAdmin\tالمدير العام\tadmin\n630007\tLaban\tعبدالحي\tsupervisor\n630008\tTwiq\tمحمد\tsupervisor\n630009\tGeneralSupervisor\tسالم الوادعي\tviewer\n",
+  "stderr": "",
+  "execution_time_ms": 1491
+}
