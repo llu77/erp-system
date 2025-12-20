@@ -225,12 +225,14 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <Building2 className="h-6 w-6 text-primary shrink-0" />
+                  <img src="/symbol-ai-logo.png" alt="Symbol AI" className="h-8 w-8 object-contain shrink-0" />
                   <span className="font-bold tracking-tight truncate text-primary">
                     Symbol AI
                   </span>
                 </div>
-              ) : null}
+              ) : (
+                <img src="/symbol-ai-logo.png" alt="Symbol AI" className="h-6 w-6 object-contain" />
+              )}
             </div>
           </SidebarHeader>
 

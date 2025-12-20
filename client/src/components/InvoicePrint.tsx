@@ -108,11 +108,13 @@ const InvoicePrint = forwardRef<HTMLDivElement, InvoicePrintProps>(
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "30px", borderBottom: "3px solid #3b82f6", paddingBottom: "20px" }}>
           {/* معلومات الشركة */}
           <div style={{ flex: 1 }}>
-            {company.logo && (
-              <img src={company.logo} alt="شعار الشركة" style={{ height: "60px", marginBottom: "10px" }} />
-            )}
+            <img 
+              src={company.logo || "/symbol-ai-logo.png"} 
+              alt="شعار الشركة" 
+              style={{ height: "70px", marginBottom: "10px", objectFit: "contain" }} 
+            />
             <h1 style={{ fontSize: "24px", fontWeight: "bold", color: "#1e40af", margin: "0 0 10px 0" }}>
-              {company.name}
+              {company.name || "Symbol AI"}
             </h1>
             <p style={{ margin: "5px 0", color: "#4b5563" }}>{company.address}</p>
             <p style={{ margin: "5px 0", color: "#4b5563" }}>هاتف: {company.phone}</p>

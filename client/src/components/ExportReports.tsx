@@ -240,6 +240,9 @@ export function ExportReports({ data, filename }: ExportReportsProps) {
           </style>
         </head>
         <body>
+          <div style="text-align: center; margin-bottom: 20px;">
+            <img src="/symbol-ai-logo.png" alt="Symbol AI" style="height: 80px; object-fit: contain;" />
+          </div>
           <div class="title">${data.title}</div>
           <div class="date">تاريخ التقرير: ${new Date().toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })}</div>
           

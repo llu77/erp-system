@@ -50,8 +50,12 @@ export default function Login() {
 
       <Card className="w-full max-w-md relative z-10 border-slate-700 bg-slate-800/50 backdrop-blur-xl">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center">
-            <Building2 className="w-8 h-8 text-primary" />
+          <div className="mx-auto w-32 h-32 flex items-center justify-center">
+            <img 
+              src="/symbol-ai-logo.png" 
+              alt="Symbol AI Logo" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
             <CardTitle className="text-2xl font-bold text-white">Symbol AI</CardTitle>
