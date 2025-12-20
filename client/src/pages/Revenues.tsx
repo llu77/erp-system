@@ -19,9 +19,15 @@ import {
   Save,
   Plus,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  FileText,
+  TrendingUp,
+  CheckCircle,
+  XCircle
 } from "lucide-react";
-import { format } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+import { format, startOfMonth, endOfMonth } from "date-fns";
+import { ar } from "date-fns/locale";
 
 interface EmployeeRevenueInput {
   employeeId: number;
@@ -427,7 +433,175 @@ export default function Revenues() {
             {saveMutation.isPending ? "جاري الحفظ..." : "حفظ الإيرادات"}
           </Button>
         </div>
+
+        {/* سجل الإيرادات الشهري */}
+        <MonthlyRevenueLog branchId={effectiveBranchId} selectedDate={selectedDate} />
       </div>
     </DashboardLayout>
+  );
+}
+
+// مكون سجل الإيرادات الشهري
+function MonthlyRevenueLog({ branchId, selectedDate }: { branchId: number | null; selectedDate: string }) {
+  // حساب أول وآخر يوم في الشهر
+  const currentDate = new Date(selectedDate);
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  
+  const startDateStr = format(monthStart, "yyyy-MM-dd");
+  const endDateStr = format(monthEnd, "yyyy-MM-dd");
+  const monthName = format(currentDate, "MMMM yyyy", { locale: ar });
+
+  // جلب إيرادات الشهر
+  const { data: monthlyRevenues, isLoading } = trpc.revenues.getByDateRange.useQuery(
+    { 
+      branchId: branchId!, 
+      startDate: startDateStr, 
+      endDate: endDateStr 
+    },
+    { enabled: !!branchId }
+  );
+
+  // حساب الإجماليات
+  const totals = monthlyRevenues?.reduce(
+    (acc, rev) => ({
+      cash: acc.cash + parseFloat(rev.cash || "0"),
+      network: acc.network + parseFloat(rev.network || "0"),
+      balance: acc.balance + parseFloat(rev.balance || "0"),
+      total: acc.total + parseFloat(rev.total || "0"),
+      matched: acc.matched + (rev.isMatched ? 1 : 0),
+      unmatched: acc.unmatched + (rev.isMatched ? 0 : 1),
+    }),
+    { cash: 0, network: 0, balance: 0, total: 0, matched: 0, unmatched: 0 }
+  ) || { cash: 0, network: 0, balance: 0, total: 0, matched: 0, unmatched: 0 };
+
+  if (!branchId) {
+    return null;
+  }
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              سجل إيرادات شهر {monthName}
+            </CardTitle>
+            <CardDescription>
+              من {format(monthStart, "d MMMM", { locale: ar })} إلى {format(monthEnd, "d MMMM yyyy", { locale: ar })}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-primary">{monthlyRevenues?.length || 0}</div>
+              <div className="text-xs text-muted-foreground">يوم مسجل</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{totals.total.toLocaleString()} ر.س</div>
+              <div className="text-xs text-muted-foreground">إجمالي الشهر</div>
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : monthlyRevenues && monthlyRevenues.length > 0 ? (
+          <>
+            {/* ملخص الشهر */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 p-4 bg-muted/30 rounded-lg">
+              <div className="text-center">
+                <div className="text-lg font-semibold text-green-600">{totals.cash.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">إجمالي النقدي</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-blue-600">{totals.network.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">إجمالي الشبكة</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-purple-600">{totals.balance.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">إجمالي الرصيد</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-green-500">{totals.matched}</div>
+                <div className="text-xs text-muted-foreground">متطابق</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-red-500">{totals.unmatched}</div>
+                <div className="text-xs text-muted-foreground">غير متطابق</div>
+              </div>
+            </div>
+
+            {/* جدول الإيرادات */}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">التاريخ</TableHead>
+                    <TableHead className="text-right">اليوم</TableHead>
+                    <TableHead className="text-right">نقدي</TableHead>
+                    <TableHead className="text-right">شبكة</TableHead>
+                    <TableHead className="text-right">رصيد</TableHead>
+                    <TableHead className="text-right">الإجمالي</TableHead>
+                    <TableHead className="text-right">الحالة</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {monthlyRevenues.map((revenue) => {
+                    const revDate = new Date(revenue.date);
+                    return (
+                      <TableRow key={revenue.id} className={!revenue.isMatched ? "bg-yellow-500/5" : ""}>
+                        <TableCell className="font-medium">
+                          {format(revDate, "d/M/yyyy")}
+                        </TableCell>
+                        <TableCell>
+                          {format(revDate, "EEEE", { locale: ar })}
+                        </TableCell>
+                        <TableCell className="text-green-600">
+                          {parseFloat(revenue.cash || "0").toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-blue-600">
+                          {parseFloat(revenue.network || "0").toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-purple-600">
+                          {parseFloat(revenue.balance || "0").toLocaleString()}
+                        </TableCell>
+                        <TableCell className="font-bold">
+                          {parseFloat(revenue.total || "0").toLocaleString()} ر.س
+                        </TableCell>
+                        <TableCell>
+                          {revenue.isMatched ? (
+                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+                              <CheckCircle className="h-3 w-3 ml-1" />
+                              متطابق
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20">
+                              <XCircle className="h-3 w-3 ml-1" />
+                              غير متطابق
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            <TrendingUp className="h-16 w-16 mx-auto mb-4 opacity-30" />
+            <p className="text-lg">لا توجد إيرادات مسجلة لهذا الشهر</p>
+            <p className="text-sm">ابدأ بإدخال إيرادات اليوم من النموذج أعلاه</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
