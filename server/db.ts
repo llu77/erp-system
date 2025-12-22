@@ -976,6 +976,25 @@ export async function getDailyRevenuesByDateRange(branchId: number, startDate: s
     .orderBy(desc(dailyRevenues.date));
 }
 
+export async function getDailyRevenueByDate(branchId: number, date: Date) {
+  const db = await getDb();
+  if (!db) return null;
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  const result = await db.select().from(dailyRevenues)
+    .where(and(
+      eq(dailyRevenues.branchId, branchId),
+      gte(dailyRevenues.date, startOfDay),
+      lte(dailyRevenues.date, endOfDay)
+    ))
+    .limit(1);
+  
+  return result.length > 0 ? result[0] : null;
+}
+
 // ==================== دوال إيرادات الموظفين ====================
 export async function createEmployeeRevenue(data: InsertEmployeeRevenue) {
   const db = await getDb();

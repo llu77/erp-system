@@ -49,27 +49,44 @@ export default function Revenues() {
   const { user } = useAuth();
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [isMatched, setIsMatched] = useState(true);
   const [unmatchReason, setUnmatchReason] = useState("");
   const [branchRevenue, setBranchRevenue] = useState({
     cash: "",
     network: "",
-    balance: "",
   });
   const [employeeRevenues, setEmployeeRevenues] = useState<EmployeeRevenueInput[]>([]);
-  const [balanceImage, setBalanceImage] = useState<{ url: string; key: string; preview: string } | null>(null);
+  const [balanceImages, setBalanceImages] = useState<Array<{ url: string; key: string; preview: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
 
+  // حساب المطابقة التلقائية
+  const calculateAutoMatch = () => {
+    const branchCash = parseFloat(branchRevenue.cash) || 0;
+    const branchNetwork = parseFloat(branchRevenue.network) || 0;
+    const expectedTotal = branchCash + branchNetwork;
+    
+    const employeesTotal = employeeRevenues.reduce((sum, er) => {
+      return sum + (parseFloat(er.cash) || 0) + (parseFloat(er.network) || 0);
+    }, 0);
+    
+    return Math.abs(expectedTotal - employeesTotal) < 0.01;
+  };
+
+  // تحديث المطابقة تلقائياً عند تغيير القيم
+  const autoMatchStatus = calculateAutoMatch();
+
   // رفع صورة الموازنة
+  const [currentUploadPreview, setCurrentUploadPreview] = useState<string>('');
   const uploadImageMutation = trpc.revenues.uploadBalanceImage.useMutation({
     onSuccess: (data) => {
-      setBalanceImage({ url: data.url, key: data.key, preview: balanceImage?.preview || '' });
+      setBalanceImages(prev => [...prev, { url: data.url, key: data.key, preview: currentUploadPreview }]);
       toast.success("تم رفع صورة الموازنة بنجاح");
       setIsUploading(false);
+      setCurrentUploadPreview('');
     },
     onError: (error) => {
       toast.error(error.message || "فشل رفع الصورة");
       setIsUploading(false);
+      setCurrentUploadPreview('');
     },
   });
 
@@ -96,7 +113,7 @@ export default function Revenues() {
     const reader = new FileReader();
     reader.onload = async (event) => {
       const base64Data = event.target?.result as string;
-      setBalanceImage({ url: '', key: '', preview: base64Data });
+      setCurrentUploadPreview(base64Data);
       
       // رفع الصورة
       uploadImageMutation.mutate({
@@ -108,9 +125,9 @@ export default function Revenues() {
     reader.readAsDataURL(file);
   };
 
-  // حذف الصورة
-  const removeImage = () => {
-    setBalanceImage(null);
+  // حذف صورة
+  const removeImage = (index: number) => {
+    setBalanceImages(prev => prev.filter((_, i) => i !== index));
   };
 
   // جلب الفروع
@@ -130,11 +147,10 @@ export default function Revenues() {
     onSuccess: () => {
       toast.success("تم حفظ الإيرادات بنجاح وتحديث البونص تلقائياً");
       // إعادة تعيين النموذج
-      setBranchRevenue({ cash: "", network: "", balance: "" });
+      setBranchRevenue({ cash: "", network: "" });
       setEmployeeRevenues([]);
-      setIsMatched(true);
       setUnmatchReason("");
-      setBalanceImage(null);
+      setBalanceImages([]);
     },
     onError: (error) => {
       toast.error(error.message || "فشل حفظ الإيرادات");
@@ -179,12 +195,12 @@ export default function Revenues() {
     setEmployeeRevenues(employeeRevenues.filter((_, i) => i !== index));
   };
 
-  // حساب إجمالي الفرع
+  // حساب إجمالي الفرع (الكاش + الشبكة فقط، الرصيد غير محسوب)
   const calculateBranchTotal = () => {
     const cash = parseFloat(branchRevenue.cash) || 0;
     const network = parseFloat(branchRevenue.network) || 0;
-    const balance = parseFloat(branchRevenue.balance) || 0;
-    return (cash + network + balance).toFixed(2);
+    // الرصيد غير محسوب في الإجمالي
+    return (cash + network).toFixed(2);
   };
 
   // حساب إجمالي الموظفين
@@ -204,8 +220,18 @@ export default function Revenues() {
       return;
     }
 
-    if (!isMatched && !unmatchReason.trim()) {
-      toast.error("يرجى تحديد سبب عدم التطابق");
+    // التحقق من صورة الموازنة (إجباري)
+    if (balanceImages.length === 0) {
+      toast.error("يرجى رفع صورة الموازنة (إجباري)");
+      return;
+    }
+
+    // التحقق من المطابقة التلقائية
+    const isAutoMatched = autoMatchStatus;
+    
+    // إذا لم تكن مطابقة، يجب كتابة سبب
+    if (!isAutoMatched && !unmatchReason.trim()) {
+      toast.error("الإيرادات غير متطابقة! يرجى كتابة سبب عدم التطابق");
       return;
     }
 
@@ -214,12 +240,16 @@ export default function Revenues() {
       date: selectedDate,
       cash: branchRevenue.cash || "0",
       network: branchRevenue.network || "0",
-      balance: branchRevenue.balance || "0",
+      balance: branchRevenue.network || "0", // الرصيد = الشبكة تلقائياً (سيتم حسابه في الخادم)
       total: calculateBranchTotal(),
-      isMatched,
-      unmatchReason: isMatched ? undefined : unmatchReason,
-      balanceImageUrl: balanceImage?.url || undefined,
-      balanceImageKey: balanceImage?.key || undefined,
+      isMatched: isAutoMatched,
+      unmatchReason: isAutoMatched ? undefined : unmatchReason,
+      balanceImages: balanceImages.map(img => ({
+        url: img.url,
+        key: img.key,
+        uploadedAt: new Date().toISOString(),
+      })),
+      imageVerificationNote: "", // سيتم إضافة التحقق من الصور لاحقاً
       employeeRevenues: employeeRevenues.map(er => ({
         employeeId: er.employeeId,
         cash: er.cash || "0",
@@ -305,7 +335,7 @@ export default function Revenues() {
             <CardDescription>إجمالي إيرادات الفرع لهذا اليوم</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label>نقدي</Label>
                 <Input
@@ -329,52 +359,52 @@ export default function Revenues() {
                 />
               </div>
               <div>
-                <Label>رصيد</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={branchRevenue.balance}
-                  onChange={(e) => setBranchRevenue({ ...branchRevenue, balance: e.target.value })}
-                  placeholder="0.00"
-                  className="mt-2"
-                />
-              </div>
-              <div>
-                <Label>الإجمالي</Label>
+                <Label>الإجمالي (نقدي فقط)</Label>
                 <div className="mt-2 p-2 bg-primary/10 rounded-md text-center font-bold text-lg text-primary">
                   {calculateBranchTotal()} ر.س
                 </div>
               </div>
             </div>
 
-            {/* التطابق */}
-            <div className="mt-4 flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={isMatched}
-                  onCheckedChange={setIsMatched}
-                />
-                <Label>الإيرادات متطابقة</Label>
+            {/* حالة المطابقة التلقائية */}
+            <div className="mt-4 p-3 rounded-lg border" style={{
+              borderColor: autoMatchStatus ? '#22c55e' : '#ef4444',
+              backgroundColor: autoMatchStatus ? '#f0fdf4' : '#fef2f2'
+            }}>
+              <div className="flex items-center gap-2 mb-2">
+                {autoMatchStatus ? (
+                  <>
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span className="font-semibold text-green-700">الإيرادات متطابقة تلقائياً ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-5 w-5 text-red-600" />
+                    <span className="font-semibold text-red-700">الإيرادات غير متطابقة ⚠</span>
+                  </>
+                )}
               </div>
-              {!isMatched && (
-                <div className="flex-1">
-                  <Input
+              {!autoMatchStatus && (
+                <div className="mt-3">
+                  <Label className="text-red-700 font-semibold">سبب عدم التطابق (إجباري)</Label>
+                  <Textarea
                     value={unmatchReason}
                     onChange={(e) => setUnmatchReason(e.target.value)}
-                    placeholder="سبب عدم التطابق..."
+                    placeholder="اشرح سبب عدم تطابق الإيرادات..."
+                    className="mt-2 border-red-300"
                   />
                 </div>
               )}
             </div>
 
-            {/* رفع صورة الموازنة */}
+            {/* رفع صور الموازنة */}
             <div className="mt-6 pt-4 border-t">
               <Label className="flex items-center gap-2 mb-3">
                 <ImageIcon className="h-4 w-4" />
-                صورة الموازنة (اختياري)
+                صور الموازنة (إجباري - يمكن رفع أكثر من صورة)
               </Label>
               
-              {!balanceImage ? (
+              {balanceImages.length === 0 ? (
                 <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
                   <input
                     type="file"
@@ -384,7 +414,7 @@ export default function Revenues() {
                     id="balance-image-input"
                     disabled={isUploading}
                   />
-                  <label htmlFor="balance-image-input" className="cursor-pointer">
+                  <label htmlFor="balance-image-input" className="cursor-pointer block">
                     {isUploading ? (
                       <div className="flex flex-col items-center gap-2">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -394,58 +424,81 @@ export default function Revenues() {
                       <div className="flex flex-col items-center gap-2">
                         <Upload className="h-8 w-8 text-muted-foreground" />
                         <span className="text-sm text-muted-foreground">اضغط لرفع صورة الموازنة</span>
-                        <span className="text-xs text-muted-foreground/70">الحد الأقصى 5 ميجابايت</span>
+                        <span className="text-xs text-muted-foreground/70">الحد الأقصى 5 ميجابايت لكل صورة</span>
                       </div>
                     )}
                   </label>
                 </div>
               ) : (
-                <div className="relative border rounded-lg overflow-hidden">
-                  <img
-                    src={balanceImage.preview || balanceImage.url}
-                    alt="صورة الموازنة"
-                    className="w-full h-48 object-contain bg-muted"
-                  />
-                  <div className="absolute top-2 left-2 flex gap-2">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="icon" variant="secondary" className="h-8 w-8">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-4xl">
-                        <DialogHeader>
-                          <DialogTitle>صورة الموازنة</DialogTitle>
-                        </DialogHeader>
+                <div className="space-y-4">
+                  {/* عرض الصور المرفوعة */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {balanceImages.map((img, idx) => (
+                      <div key={idx} className="relative border rounded-lg overflow-hidden group">
                         <img
-                          src={balanceImage.preview || balanceImage.url}
-                          alt="صورة الموازنة"
-                          className="w-full h-auto max-h-[70vh] object-contain"
+                          src={img.preview || img.url}
+                          alt={`صورة الموازنة ${idx + 1}`}
+                          className="w-full h-40 object-contain bg-muted"
                         />
-                      </DialogContent>
-                    </Dialog>
-                    <Button
-                      size="icon"
-                      variant="destructive"
-                      className="h-8 w-8"
-                      onClick={removeImage}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                        <div className="absolute top-2 left-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button size="icon" variant="secondary" className="h-8 w-8">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl">
+                              <DialogHeader>
+                                <DialogTitle>صورة الموازنة {idx + 1}</DialogTitle>
+                              </DialogHeader>
+                              <img
+                                src={img.preview || img.url}
+                                alt={`صورة الموازنة ${idx + 1}`}
+                                className="w-full h-auto max-h-[70vh] object-contain"
+                              />
+                            </DialogContent>
+                          </Dialog>
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            className="h-8 w-8"
+                            onClick={() => removeImage(idx)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="absolute bottom-2 right-2">
+                          <Badge variant="secondary" className="bg-green-500/20 text-green-400">
+                            <CheckCircle className="h-3 w-3 ml-1" />
+                            تم الرفع
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  {isUploading && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-white" />
-                    </div>
-                  )}
-                  {balanceImage.url && (
-                    <div className="absolute bottom-2 right-2">
-                      <Badge variant="secondary" className="bg-green-500/20 text-green-400">
-                        <CheckCircle className="h-3 w-3 ml-1" />
-                        تم الرفع
-                      </Badge>
-                    </div>
-                  )}
+                  <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                      id="balance-image-additional-input"
+                      disabled={isUploading}
+                    />
+                    <label htmlFor="balance-image-additional-input" className="cursor-pointer block">
+                      {isUploading ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                          <span className="text-sm text-muted-foreground">جاري رفع الصورة...</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <Plus className="h-6 w-6 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">رفع صورة إضافية</span>
+                        </div>
+                      )}
+                    </label>
+                  </div>
                 </div>
               )}
             </div>
@@ -889,23 +942,29 @@ function MonthlyRevenueLog({ branchId, selectedDate }: { branchId: number | null
                           {parseFloat(revenue.total || "0").toLocaleString()} ر.س
                         </TableCell>
                         <TableCell>
-                          {revenue.balanceImageUrl ? (
+                          {revenue.balanceImages && revenue.balanceImages.length > 0 ? (
                             <Dialog>
                               <DialogTrigger asChild>
                                 <Button variant="ghost" size="sm" className="gap-1 h-8 px-2">
                                   <ImageIcon className="h-4 w-4 text-primary" />
-                                  <span className="text-xs">عرض</span>
+                                  <span className="text-xs">عرض ({revenue.balanceImages.length})</span>
                                 </Button>
                               </DialogTrigger>
                               <DialogContent className="max-w-4xl">
                                 <DialogHeader>
-                                  <DialogTitle>صورة الموازنة - {format(new Date(revenue.date), "d MMMM yyyy", { locale: ar })}</DialogTitle>
+                                  <DialogTitle>صور الموازنة - {format(new Date(revenue.date), "d MMMM yyyy", { locale: ar })}</DialogTitle>
                                 </DialogHeader>
-                                <img
-                                  src={revenue.balanceImageUrl}
-                                  alt="صورة الموازنة"
-                                  className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
-                                />
+                                <div className="space-y-4">
+                                  {revenue.balanceImages.map((img, idx) => (
+                                    <div key={idx} className="border rounded-lg overflow-hidden">
+                                      <img
+                                        src={img.url}
+                                        alt={`صورة الموازنة ${idx + 1}`}
+                                        className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
                               </DialogContent>
                             </Dialog>
                           ) : (
@@ -919,10 +978,22 @@ function MonthlyRevenueLog({ branchId, selectedDate }: { branchId: number | null
                               متطابق
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20">
-                              <XCircle className="h-3 w-3 ml-1" />
-                              غير متطابق
-                            </Badge>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 cursor-pointer hover:bg-red-500/20">
+                                  <XCircle className="h-3 w-3 ml-1" />
+                                  غير متطابق
+                                </Badge>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle className="text-red-600">سبب عدم التطابق</DialogTitle>
+                                </DialogHeader>
+                                <div className="p-4 bg-red-500/10 rounded-lg border border-red-500/20">
+                                  <p className="text-sm text-red-700">{revenue.unmatchReason || "لم يتم تحديد السبب"}</p>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
                           )}
                         </TableCell>
                       </TableRow>

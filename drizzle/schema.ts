@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, json } from "drizzle-orm/mysql-core";
 
 // ==================== جدول المستخدمين ====================
 export const users = mysqlTable("users", {
@@ -309,8 +309,9 @@ export const dailyRevenues = mysqlTable("dailyRevenues", {
   total: decimal("total", { precision: 15, scale: 2 }).default("0.00").notNull(),
   isMatched: boolean("isMatched").default(true).notNull(),
   unmatchReason: text("unmatchReason"),
-  balanceImageUrl: text("balanceImageUrl"), // رابط صورة الموازنة
-  balanceImageKey: text("balanceImageKey"), // مفتاح الصورة في S3
+  balanceImages: json("balanceImages").$type<Array<{ url: string; key: string; uploadedAt: string }>>(), // صور الموازنة (متعددة)
+  imageVerificationStatus: mysqlEnum("imageVerificationStatus", ["pending", "verified", "needs_reupload", "unclear"]).default("pending"), // حالة التحقق من الصورة
+  imageVerificationNote: text("imageVerificationNote"), // ملاحظة التحقق
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

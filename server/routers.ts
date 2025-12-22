@@ -1340,8 +1340,12 @@ export const appRouter = router({
         total: z.string(),
         isMatched: z.boolean(),
         unmatchReason: z.string().optional(),
-        balanceImageUrl: z.string().optional(),
-        balanceImageKey: z.string().optional(),
+        balanceImages: z.array(z.object({
+          url: z.string(),
+          key: z.string(),
+          uploadedAt: z.string(),
+        })).optional(),
+        imageVerificationNote: z.string().optional(),
         employeeRevenues: z.array(z.object({
           employeeId: z.number(),
           cash: z.string(),
@@ -1357,6 +1361,43 @@ export const appRouter = router({
         const date = new Date(input.date);
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
+
+        // 1. التحقق من عدم وجود إيراد لنفس اليوم (منع التكرار)
+        const existingRevenue = await db.getDailyRevenueByDate(input.branchId, new Date(input.date));
+        if (existingRevenue) {
+          throw new TRPCError({ 
+            code: 'BAD_REQUEST', 
+            message: 'يوجد إيراد بالفعل لهذا اليوم. فقط المسؤول يمكنه التعديل أو الحذف.' 
+          });
+        }
+
+        // 2. حساب الرصيد تلقائياً = الشبكة (لا يتم عده في الإجمالي)
+        const networkAmount = parseFloat(input.network);
+        const cashAmount = parseFloat(input.cash);
+        const calculatedBalance = networkAmount;
+        const calculatedTotal = cashAmount;
+
+        // 3. المطابقة التلقائية: التحقق من أن مجموع إيرادات الموظفين = (النقدي + الشبكة)
+        let totalEmployeeCash = 0;
+        let totalEmployeeNetwork = 0;
+        for (const empRev of input.employeeRevenues) {
+          totalEmployeeCash += parseFloat(empRev.cash);
+          totalEmployeeNetwork += parseFloat(empRev.network);
+        }
+        const totalEmployeeAmount = totalEmployeeCash + totalEmployeeNetwork;
+        const expectedAmount = cashAmount + networkAmount;
+        const isMatched = Math.abs(totalEmployeeAmount - expectedAmount) < 0.01;
+
+        let unmatchReason = '';
+        if (!isMatched) {
+          if (!input.unmatchReason || input.unmatchReason.trim() === '') {
+            throw new TRPCError({ 
+              code: 'BAD_REQUEST', 
+              message: `عدم تطابق: إيرادات الموظفين (${totalEmployeeAmount.toFixed(2)}) != (النقدي + الشبكة = ${expectedAmount.toFixed(2)}). يجب تقديم سبب العدم التطابق.` 
+            });
+          }
+          unmatchReason = input.unmatchReason;
+        }
 
         // الحصول على أو إنشاء سجل شهري
         let monthlyRecord = await db.getMonthlyRecord(input.branchId, year, month);
@@ -1378,19 +1419,19 @@ export const appRouter = router({
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل إنشاء السجل الشهري' });
         }
 
-        // إنشاء الإيراد اليومي
+        // إنشاء الإيراد اليومي باستخدام القيم المحسوبة تلقائياً
         const result = await db.createDailyRevenue({
           monthlyRecordId: monthlyRecord.id,
           branchId: input.branchId,
           date: new Date(input.date),
           cash: input.cash,
           network: input.network,
-          balance: input.balance,
-          total: input.total,
-          isMatched: input.isMatched,
-          unmatchReason: input.unmatchReason,
-          balanceImageUrl: input.balanceImageUrl,
-          balanceImageKey: input.balanceImageKey,
+          balance: calculatedBalance.toString(), // الرصيد = الشبكة تلقائياً
+          total: calculatedTotal.toString(), // الإجمالي = النقدي فقط
+          isMatched, // المطابقة التلقائية
+          unmatchReason: unmatchReason || null,
+          balanceImages: input.balanceImages,
+          imageVerificationNote: input.imageVerificationNote,
           createdBy: ctx.user.id,
         });
 
