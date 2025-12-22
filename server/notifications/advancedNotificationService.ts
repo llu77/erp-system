@@ -17,6 +17,7 @@ export type NotificationType =
   | "weekly_report"
   | "monthly_report"
   | "bonus_request"
+  | "missing_revenue"
   | "general";
 
 // واجهة بيانات الإشعار

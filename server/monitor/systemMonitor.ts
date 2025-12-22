@@ -373,3 +373,256 @@ export function calculateNextRunTime(task: any): Date {
   
   return next;
 }
+
+
+// ==================== تذكير الإيرادات غير المسجلة ====================
+
+export async function checkAndSendMissingRevenueReminders(): Promise<{
+  checked: number;
+  missing: number;
+  sent: number;
+  errors: string[];
+}> {
+  const result = {
+    checked: 0,
+    missing: 0,
+    sent: 0,
+    errors: [] as string[],
+  };
+
+  try {
+    // الحصول على جميع الفروع
+    const branches = await db.getBranches();
+    result.checked = branches.length;
+
+    // تحديد تاريخ أمس
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    // الحصول على مستلمي الإشعارات
+    const recipients = await db.getNotificationRecipients(null);
+
+    const missingBranches: { branchId: number; branchName: string }[] = [];
+
+    // فحص كل فرع
+    for (const branch of branches) {
+      const revenue = await db.getDailyRevenueByDate(branch.id, new Date(yesterdayStr));
+      if (!revenue) {
+        missingBranches.push({ branchId: branch.id, branchName: branch.nameAr });
+      }
+    }
+
+    result.missing = missingBranches.length;
+
+    if (missingBranches.length === 0) {
+      console.log('✅ جميع الفروع سجلت إيراداتها');
+      return result;
+    }
+
+    // إرسال تذكيرات
+    for (const missing of missingBranches) {
+      // إيجاد المشرفين المسؤولين
+      const branchRecipients = recipients.filter(
+        (r: any) => r.branchId === missing.branchId || r.role === 'admin' || r.role === 'general_supervisor'
+      );
+
+      for (const recipient of branchRecipients) {
+        try {
+          await advancedNotifications.sendAdvancedNotification({
+            type: 'missing_revenue',
+            branchId: missing.branchId,
+            branchName: missing.branchName,
+            date: yesterdayStr,
+            amount: 0,
+          });
+          result.sent++;
+        } catch (error) {
+          result.errors.push(`${recipient.email}: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`);
+        }
+      }
+    }
+
+    return result;
+  } catch (error) {
+    result.errors.push(error instanceof Error ? error.message : 'خطأ غير معروف');
+    return result;
+  }
+}
+
+// ==================== التقرير الأسبوعي للمشرفين ====================
+
+export async function generateSupervisorWeeklyReport(branchId: number): Promise<string> {
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const weekAgoStr = weekAgo.toISOString().split('T')[0];
+  const nowStr = now.toISOString().split('T')[0];
+
+  // الحصول على بيانات الفرع
+  const branch = await db.getBranchById(branchId);
+  const branchName = branch?.nameAr || 'غير محدد';
+
+  // الحصول على الإيرادات اليومية
+  const revenues = await db.getDailyRevenuesByDateRange(branchId, weekAgoStr, nowStr);
+  
+  // حساب إجمالي الإيرادات
+  let totalCash = 0;
+  let totalNetwork = 0;
+  let totalBalance = 0;
+  let matchedDays = 0;
+  let unmatchedDays = 0;
+
+  for (const rev of revenues) {
+    totalCash += parseFloat(rev.cash || '0');
+    totalNetwork += parseFloat(rev.network || '0');
+    totalBalance += parseFloat(rev.balance || '0');
+    if (rev.isMatched) {
+      matchedDays++;
+    } else {
+      unmatchedDays++;
+    }
+  }
+
+  const totalRevenue = totalCash + totalNetwork;
+
+  // الحصول على المصاريف
+  const weekAgoStr2 = weekAgo.toISOString().split('T')[0];
+  const nowStr2 = now.toISOString().split('T')[0];
+  const allExpenses = await db.getExpensesByDateRange(weekAgoStr2, nowStr2);
+  const expenses = allExpenses.filter((e: any) => e.branchId === branchId);
+  let totalExpenses = 0;
+  const expensesByCategory: { [key: string]: number } = {};
+
+  for (const exp of expenses) {
+    const amount = parseFloat(exp.amount || '0');
+    totalExpenses += amount;
+    const category = exp.category || 'أخرى';
+    expensesByCategory[category] = (expensesByCategory[category] || 0) + amount;
+  }
+
+  // إنشاء التقرير
+  const content = `
+    <div style="direction: rtl; font-family: 'Segoe UI', Tahoma, sans-serif;">
+      <h2 style="color: #1a1a2e; border-bottom: 2px solid #00d4ff; padding-bottom: 10px;">
+        📊 التقرير الأسبوعي - ${branchName}
+      </h2>
+      <p style="color: #666;">الفترة: ${weekAgoStr} إلى ${nowStr}</p>
+
+      <div style="background: #f8f9fa; border-radius: 10px; padding: 20px; margin: 20px 0;">
+        <h3 style="color: #1a1a2e; margin-top: 0;">💰 ملخص الإيرادات</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>إجمالي النقدي</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #ddd; color: #27ae60;">${formatCurrency(totalCash)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>إجمالي الشبكة</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #ddd; color: #27ae60;">${formatCurrency(totalNetwork)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #ddd;"><strong>إجمالي الموازنة</strong></td>
+            <td style="padding: 10px; border-bottom: 1px solid #ddd;">${formatCurrency(totalBalance)}</td>
+          </tr>
+          <tr style="background: #e9ecef;">
+            <td style="padding: 10px;"><strong>الإجمالي الكلي</strong></td>
+            <td style="padding: 10px; color: #27ae60; font-size: 18px;"><strong>${formatCurrency(totalRevenue)}</strong></td>
+          </tr>
+        </table>
+        <p style="margin-top: 15px;">
+          <span style="color: #27ae60;">✅ ${matchedDays} يوم متطابق</span> | 
+          <span style="color: ${unmatchedDays > 0 ? '#e74c3c' : '#27ae60'};">${unmatchedDays > 0 ? '⚠️' : '✅'} ${unmatchedDays} يوم غير متطابق</span>
+        </p>
+      </div>
+
+      <div style="background: #fff3cd; border-radius: 10px; padding: 20px; margin: 20px 0;">
+        <h3 style="color: #856404; margin-top: 0;">📤 ملخص المصاريف</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+          ${Object.entries(expensesByCategory).map(([category, amount]) => `
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #ffc107;">${category}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #ffc107; color: #e74c3c;">${formatCurrency(amount)}</td>
+            </tr>
+          `).join('')}
+          <tr style="background: #ffeeba;">
+            <td style="padding: 10px;"><strong>إجمالي المصاريف</strong></td>
+            <td style="padding: 10px; color: #e74c3c; font-size: 18px;"><strong>${formatCurrency(totalExpenses)}</strong></td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="background: ${totalRevenue - totalExpenses >= 0 ? '#d4edda' : '#f8d7da'}; border-radius: 10px; padding: 20px; margin: 20px 0;">
+        <h3 style="color: ${totalRevenue - totalExpenses >= 0 ? '#155724' : '#721c24'}; margin-top: 0;">📈 صافي الأسبوع</h3>
+        <p style="font-size: 24px; text-align: center; color: ${totalRevenue - totalExpenses >= 0 ? '#27ae60' : '#e74c3c'};">
+          <strong>${formatCurrency(totalRevenue - totalExpenses)}</strong>
+        </p>
+      </div>
+
+      <p style="color: #666; font-size: 12px; text-align: center; margin-top: 30px;">
+        تم إنشاء هذا التقرير تلقائياً بواسطة Symbol AI
+      </p>
+    </div>
+  `;
+
+  return content;
+}
+
+export async function sendSupervisorWeeklyReports(): Promise<{
+  total: number;
+  sent: number;
+  errors: string[];
+}> {
+  const result = {
+    total: 0,
+    sent: 0,
+    errors: [] as string[],
+  };
+
+  try {
+    // الحصول على مستلمي الإشعارات
+    const recipients = await db.getNotificationRecipients(null);
+    result.total = recipients.length;
+
+    // الحصول على الفروع
+    const branches = await db.getBranches();
+    const branchMap = new Map(branches.map((b: any) => [b.id, b.nameAr]));
+
+    for (const recipient of recipients) {
+      try {
+        let reportContent = '';
+        let branchName = 'جميع الفروع';
+
+        if (recipient.branchId) {
+          // مشرف فرع محدد
+          reportContent = await generateSupervisorWeeklyReport(recipient.branchId);
+          branchName = branchMap.get(recipient.branchId) || 'غير محدد';
+        } else {
+          // المشرف العام أو الأدمن - تقرير لجميع الفروع
+          let allBranchesContent = '';
+          for (const branch of branches) {
+            allBranchesContent += await generateSupervisorWeeklyReport(branch.id);
+            allBranchesContent += '<hr style="margin: 30px 0; border: none; border-top: 2px dashed #ccc;">';
+          }
+          reportContent = allBranchesContent;
+        }
+
+        // إرسال البريد
+        await sendEmail({
+          to: recipient.email,
+          subject: `📊 التقرير الأسبوعي - ${branchName} - ${new Date().toLocaleDateString('ar-SA')}`,
+          html: getEmailTemplate(reportContent, 'التقرير الأسبوعي للمشرف'),
+        });
+
+        result.sent++;
+        console.log(`✓ تم إرسال التقرير الأسبوعي إلى: ${recipient.name} (${recipient.email})`);
+      } catch (error) {
+        result.errors.push(`${recipient.email}: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    result.errors.push(error instanceof Error ? error.message : 'خطأ غير معروف');
+    return result;
+  }
+}

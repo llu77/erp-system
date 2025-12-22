@@ -699,3 +699,25 @@
 **الرسائل المرسلة:**
 - 4 رسائل ترحيبية (الأدمن، المشرف العام، مشرف طويق، مشرف لبن)
 - 3 تذكيرات إيراد غير مسجل (فرع طويق - 2025-12-21)
+
+
+## جدولة التذكيرات والتقارير الأسبوعية (طلب جديد)
+- [x] إضافة جدولة التذكيرات اليومية (scripts/scheduledTasks.mjs daily-reminder)
+- [x] إنشاء تقرير أسبوعي للمشرفين (ملخص إيرادات ومصاريف الأسبوع)
+- [x] إرسال التقرير الأسبوعي لكل مشرف حسب فرعه (4 تقارير مرسلة)
+- [x] اختبار النظام (144 اختبار ناجح)
+
+**أوامر التشغيل:**
+```bash
+# تذكير يومي الساعة 10 صباحاً
+node scripts/scheduledTasks.mjs daily-reminder
+
+# تقرير أسبوعي كل يوم أحد
+node scripts/scheduledTasks.mjs weekly-report
+```
+
+**Cron Jobs المقترحة:**
+```
+0 10 * * * node /path/to/scripts/scheduledTasks.mjs daily-reminder
+0 8 * * 0 node /path/to/scripts/scheduledTasks.mjs weekly-report
+```
