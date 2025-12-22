@@ -359,7 +359,7 @@ export default function Revenues() {
                 />
               </div>
               <div>
-                <Label>الإجمالي (نقدي فقط)</Label>
+                <Label>الإجمالي (نقدي + شبكة)</Label>
                 <div className="mt-2 p-2 bg-primary/10 rounded-md text-center font-bold text-lg text-primary">
                   {calculateBranchTotal()} ر.س
                 </div>
