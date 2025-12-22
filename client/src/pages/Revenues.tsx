@@ -60,6 +60,11 @@ export default function Revenues() {
 
   // حساب المطابقة التلقائية
   const calculateAutoMatch = () => {
+    // إذا لم يكن هناك موظفين مسجلين، الإيرادات متطابقة تلقائياً
+    if (employeeRevenues.length === 0) {
+      return true;
+    }
+    
     const branchCash = parseFloat(branchRevenue.cash) || 0;
     const branchNetwork = parseFloat(branchRevenue.network) || 0;
     const expectedTotal = branchCash + branchNetwork;
@@ -359,7 +364,7 @@ export default function Revenues() {
                 />
               </div>
               <div>
-                <Label>الإجمالي (نقدي + شبكة)</Label>
+                <Label>الإجمالي</Label>
                 <div className="mt-2 p-2 bg-primary/10 rounded-md text-center font-bold text-lg text-primary">
                   {calculateBranchTotal()} ر.س
                 </div>

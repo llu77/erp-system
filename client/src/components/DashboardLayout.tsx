@@ -214,10 +214,20 @@ function DashboardLayoutContent({
     };
   }, [isResizing, setSidebarWidth]);
 
-  // Filter menu items based on user role
+  // Filter menu items based on user role and branch
   const filteredMenuItems = menuItems.filter((item) => {
     if (!item.roles) return true;
-    return item.roles.includes(user?.role || "employee");
+    
+    // التحقق من الدور أولاً
+    if (!item.roles.includes(user?.role || "employee")) return false;
+    
+    // إخفاء "إدارة الطلبات" من مشرفي الفروع (الذين لديهم branchId)
+    // المشرف العام (branchId = null) يرى الصفحة
+    if (item.path === "/manage-requests" && user?.role === "supervisor" && user?.branchId) {
+      return false;
+    }
+    
+    return true;
   });
 
   return (
