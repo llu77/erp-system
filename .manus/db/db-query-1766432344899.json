@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, username, name, role, branchId FROM users WHERE role = 'supervisor' OR username LIKE '%Supervisor%' OR username LIKE '%supervisor%' OR name LIKE '%مشرف%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, username, name, role, branchId FROM users WHERE role = 'supervisor' OR username LIKE '%Supervisor%' OR username LIKE '%supervisor%' OR name LIKE '%مشرف%';",
+  "rows": [
+    {
+      "id": "630007",
+      "username": "Laban",
+      "name": "عبدالحي",
+      "role": "supervisor",
+      "branchId": "1"
+    },
+    {
+      "id": "630008",
+      "username": "Twiq",
+      "name": "محمد",
+      "role": "supervisor",
+      "branchId": "30001"
+    },
+    {
+      "id": "630009",
+      "username": "GeneralSupervisor",
+      "name": "سالم الوادعي",
+      "role": "viewer",
+      "branchId": "NULL"
+    },
+    {
+      "id": "750009",
+      "username": "LabanSupervisor",
+      "name": "مشرف فرع لبن",
+      "role": "supervisor",
+      "branchId": "1"
+    },
+    {
+      "id": "750010",
+      "username": "TuwaiqSupervisor",
+      "name": "مشرف فرع طويق",
+      "role": "supervisor",
+      "branchId": "2"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\tname\trole\tbranchId\n630007\tLaban\tعبدالحي\tsupervisor\t1\n630008\tTwiq\tمحمد\tsupervisor\t30001\n630009\tGeneralSupervisor\tسالم الوادعي\tviewer\tNULL\n750009\tLabanSupervisor\tمشرف فرع لبن\tsupervisor\t1\n750010\tTuwaiqSupervisor\tمشرف فرع طويق\tsupervisor\t2\n",
+  "stderr": "",
+  "execution_time_ms": 1596
+}

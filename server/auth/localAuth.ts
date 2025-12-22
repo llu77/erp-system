@@ -289,69 +289,6 @@ export async function ensureDefaultUsersExist() {
       console.log("[LocalAuth] GeneralSupervisor password updated");
     }
 
-    // إنشاء مشرف فرع لبن
-    const labanSupervisorExists = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, "LabanSupervisor"))
-      .limit(1);
-
-    if (labanSupervisorExists.length === 0) {
-      console.log("[LocalAuth] Creating LabanSupervisor user...");
-      const { hash } = hashPassword("Laban123");
-      
-      await db.insert(users).values({
-        username: "LabanSupervisor",
-        password: hash,
-        name: "مشرف فرع لبن",
-        role: "supervisor",
-        branchId: 1, // فرع لبن
-        loginMethod: "local",
-        isActive: true,
-        lastSignedIn: new Date(),
-      });
-      
-      console.log("[LocalAuth] LabanSupervisor user created successfully");
-    } else {
-      const { hash } = hashPassword("Laban123");
-      await db
-        .update(users)
-        .set({ password: hash, branchId: 1 })
-        .where(eq(users.username, "LabanSupervisor"));
-      console.log("[LocalAuth] LabanSupervisor password updated");
-    }
-
-    // إنشاء مشرف فرع طويق
-    const tuwaiqSupervisorExists = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, "TuwaiqSupervisor"))
-      .limit(1);
-
-    if (tuwaiqSupervisorExists.length === 0) {
-      console.log("[LocalAuth] Creating TuwaiqSupervisor user...");
-      const { hash } = hashPassword("Tuwaiq123");
-      
-      await db.insert(users).values({
-        username: "TuwaiqSupervisor",
-        password: hash,
-        name: "مشرف فرع طويق",
-        role: "supervisor",
-        branchId: 2, // فرع طويق
-        loginMethod: "local",
-        isActive: true,
-        lastSignedIn: new Date(),
-      });
-      
-      console.log("[LocalAuth] TuwaiqSupervisor user created successfully");
-    } else {
-      const { hash } = hashPassword("Tuwaiq123");
-      await db
-        .update(users)
-        .set({ password: hash, branchId: 2 })
-        .where(eq(users.username, "TuwaiqSupervisor"));
-      console.log("[LocalAuth] TuwaiqSupervisor password updated");
-    }
   } catch (error) {
     console.error("[LocalAuth] Error ensuring default users exist:", error);
   }
