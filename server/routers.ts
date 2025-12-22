@@ -9,6 +9,7 @@ import * as db from "./db";
 import { notifyOwner } from "./_core/notification";
 import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from "./email/scheduledReports";
 import * as advancedNotifications from "./notifications/advancedNotificationService";
+import * as reminderService from "./notifications/reminderService";
 
 // إجراء للمدير فقط (كامل الصلاحيات)
 const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -1094,6 +1095,42 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await db.deleteNotification(input.id);
         return { success: true, message: 'تم حذف الإشعار بنجاح' };
+      }),
+
+    // فحص وإرسال تذكيرات الإيرادات غير المسجلة
+    checkMissingRevenues: adminProcedure.mutation(async () => {
+      const result = await reminderService.checkAndSendMissingRevenueReminders();
+      return {
+        success: result.errors.length === 0,
+        message: `تم فحص ${result.checked} فرع، ${result.missing} فرع لم يسجل إيراد، تم إرسال ${result.sent} تذكير`,
+        data: result,
+      };
+    }),
+
+    // إرسال رسائل ترحيبية لجميع المستلمين
+    sendWelcomeMessages: adminProcedure.mutation(async () => {
+      const result = await reminderService.sendWelcomeMessagesToAll();
+      return {
+        success: result.errors.length === 0,
+        message: `تم إرسال ${result.sent} رسالة ترحيبية من أصل ${result.total}`,
+        data: result,
+      };
+    }),
+
+    // إرسال رسالة ترحيبية لمستلم محدد
+    sendWelcomeToRecipient: adminProcedure
+      .input(z.object({
+        email: z.string().email(),
+        name: z.string(),
+        role: z.string(),
+        branchName: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await reminderService.sendWelcomeMessage(input);
+        return {
+          success: result.success,
+          message: result.success ? `تم إرسال رسالة ترحيبية إلى ${input.email}` : `فشل الإرسال: ${result.error}`,
+        };
       }),
   }),
 
