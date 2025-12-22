@@ -1711,16 +1711,28 @@ export const appRouter = router({
 
   // ==================== طلبات الموظفين ====================
   employeeRequests: router({
-    // قائمة جميع الطلبات (للمدير والمسؤول)
-    list: managerProcedure
+    // قائمة جميع الطلبات (للمدير والمسؤول والمشرف)
+    list: protectedProcedure
       .input(z.object({
         status: z.string().optional(),
         requestType: z.string().optional(),
         employeeId: z.number().optional(),
         branchId: z.number().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await db.getAllEmployeeRequests(input);
+      .query(async ({ input, ctx }) => {
+        // التحقق من الصلاحيات
+        const allowedRoles = ['admin', 'manager', 'supervisor'];
+        if (!allowedRoles.includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بعرض الطلبات' });
+        }
+        
+        const requests = await db.getAllEmployeeRequests(input);
+        
+        // المشرف يرى طلبات فرعه فقط (إذا كان مرتبط بفرع)
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null) {
+          return requests.filter(req => req.branchId === ctx.user.branchId);
+        }
+        return requests;
       }),
 
     // طلباتي (للموظف)
@@ -2050,8 +2062,13 @@ export const appRouter = router({
   // ==================== المصاريف ====================
   expenses: router({
     // الحصول على جميع المصاريف
-    list: managerProcedure.query(async () => {
-      return await db.getAllExpenses();
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const expenses = await db.getAllExpenses();
+      // المشرف يرى مصاريف فرعه فقط (إذا كان مرتبط بفرع)
+      if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null) {
+        return expenses.filter(exp => exp.branchId === ctx.user.branchId || exp.createdBy === ctx.user.id);
+      }
+      return expenses;
     }),
 
     // الحصول على مصروف بالمعرف
