@@ -73,7 +73,7 @@ const menuItems = [
   { icon: Users, label: "العملاء", path: "/customers", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
   { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager", "viewer"] },
   { icon: FileText, label: "الفواتير", path: "/invoices", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
-  { icon: ShoppingCart, label: "المشتريات", path: "/purchases", roles: ["admin", "manager", "viewer"] },
+  { icon: ShoppingCart, label: "المشتريات", path: "/purchases", roles: ["admin", "manager", "supervisor", "viewer"] },
   { icon: DollarSign, label: "الإيرادات", path: "/revenues", roles: ["admin", "manager", "supervisor", "viewer"] },
   { icon: Gift, label: "البونص", path: "/bonuses", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
   { icon: Send, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin"] },

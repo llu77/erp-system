@@ -854,8 +854,13 @@ export const appRouter = router({
 
   // ==================== إدارة أوامر الشراء ====================
   purchaseOrders: router({
-    list: protectedProcedure.query(async () => {
-      return await db.getAllPurchaseOrders();
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const orders = await db.getAllPurchaseOrders();
+      // المشرف يرى طلبات فرعه فقط
+      if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
+        return orders.filter(order => order.branchId === ctx.user.branchId || order.createdBy === ctx.user.id);
+      }
+      return orders;
     }),
 
     getById: protectedProcedure
@@ -867,7 +872,7 @@ export const appRouter = router({
         return { ...order, items };
       }),
 
-    create: managerProcedure
+    create: supervisorInputProcedure
       .input(z.object({
         supplierId: z.number().optional(),
         supplierName: z.string().optional(),
@@ -875,6 +880,7 @@ export const appRouter = router({
         taxRate: z.string().optional(),
         shippingCost: z.string().optional(),
         notes: z.string().optional(),
+        branchId: z.number().optional(),
         items: z.array(z.object({
           productId: z.number().optional(),
           productName: z.string(),
@@ -884,6 +890,12 @@ export const appRouter = router({
         })),
       }))
       .mutation(async ({ input, ctx }) => {
+        // المشرف يمكنه إنشاء طلبات لفرعه فقط
+        let branchId = input.branchId;
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
+          branchId = ctx.user.branchId;
+        }
+        
         const orderNumber = await db.generatePurchaseOrderNumber();
         
         // حساب المجاميع
@@ -903,6 +915,7 @@ export const appRouter = router({
           orderNumber,
           supplierId: input.supplierId,
           supplierName: input.supplierName,
+          branchId: branchId,
           expectedDate: input.expectedDate,
           subtotal: subtotal.toFixed(2),
           taxRate: input.taxRate,
