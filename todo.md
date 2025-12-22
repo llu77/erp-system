@@ -633,3 +633,12 @@
 - [ ] حفظ checkpoint
 - [ ] اختبار النظام بالكامل
 - [ ] التحقق من التوافق مع الأنظمة الأخرى
+
+
+## تحسينات الصلاحيات والتنقل (طلب جديد)
+- [x] التحقق من تسجيل دخول GeneralSupervisor (username: GeneralSupervisor, password: Supervisor123)
+- [x] إضافة صفحة طلبات الموظفين للمشرفين (موجودة في manage-requests)
+- [x] جعل صفحة البونص متاحة للجميع (admin, manager, employee, supervisor, viewer)
+- [x] تحديث التنقل حسب الدور
+- [x] إضافة supervisor إلى صفحة إدارة الطلبات
+- [x] اختبار الصلاحيات (144 اختبار ناجح)

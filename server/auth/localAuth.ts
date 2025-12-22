@@ -215,22 +215,24 @@ export async function resetPassword(userId: number, newPassword: string) {
   }
 }
 
-// التحقق من وجود حساب Admin وإنشائه إذا لم يكن موجوداً
-export async function ensureAdminExists() {
+
+// إنشاء المستخدمين الافتراضيين (Admin و GeneralSupervisor)
+export async function ensureDefaultUsersExist() {
   const db = await getDb();
   if (!db) {
-    console.warn("[LocalAuth] Cannot ensure admin: database not available");
+    console.warn("[LocalAuth] Cannot ensure default users: database not available");
     return;
   }
 
   try {
-    const existing = await db
+    // إنشاء Admin
+    const adminExists = await db
       .select()
       .from(users)
       .where(eq(users.username, "Admin"))
       .limit(1);
 
-    if (existing.length === 0) {
+    if (adminExists.length === 0) {
       console.log("[LocalAuth] Creating default Admin user...");
       const { hash } = hashPassword("Omar101010");
       
@@ -246,7 +248,7 @@ export async function ensureAdminExists() {
       
       console.log("[LocalAuth] Default Admin user created successfully");
     } else {
-      // تحديث كلمة مرور Admin إذا كانت موجودة
+      // تحديث كلمة مرور Admin
       const { hash } = hashPassword("Omar101010");
       await db
         .update(users)
@@ -254,9 +256,47 @@ export async function ensureAdminExists() {
         .where(eq(users.username, "Admin"));
       console.log("[LocalAuth] Admin password updated");
     }
+
+    // إنشاء GeneralSupervisor
+    const supervisorExists = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, "GeneralSupervisor"))
+      .limit(1);
+
+    if (supervisorExists.length === 0) {
+      console.log("[LocalAuth] Creating default GeneralSupervisor user...");
+      const { hash } = hashPassword("Supervisor123");
+      
+      await db.insert(users).values({
+        username: "GeneralSupervisor",
+        password: hash,
+        name: "المشرف العام",
+        role: "supervisor",
+        loginMethod: "local",
+        isActive: true,
+        lastSignedIn: new Date(),
+      });
+      
+      console.log("[LocalAuth] Default GeneralSupervisor user created successfully");
+    } else {
+      // تحديث كلمة مرور GeneralSupervisor
+      const { hash } = hashPassword("Supervisor123");
+      await db
+        .update(users)
+        .set({ password: hash })
+        .where(eq(users.username, "GeneralSupervisor"));
+      console.log("[LocalAuth] GeneralSupervisor password updated");
+    }
   } catch (error) {
-    console.error("[LocalAuth] Error ensuring admin exists:", error);
+    console.error("[LocalAuth] Error ensuring default users exist:", error);
   }
+}
+
+
+// دالة للتوافق العكسي
+export async function ensureAdminExists() {
+  return ensureDefaultUsersExist();
 }
 
 // الحصول على مستخدم بواسطة ID
