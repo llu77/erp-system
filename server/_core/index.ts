@@ -68,6 +68,15 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    
+    // تشغيل نظام الجدولة في بيئة الإنتاج
+    if (process.env.NODE_ENV === 'production') {
+      import('../scheduler/taskScheduler').then(({ startScheduler }) => {
+        startScheduler();
+      }).catch(err => {
+        console.error('Failed to start scheduler:', err);
+      });
+    }
   });
 }
 

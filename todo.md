@@ -721,3 +721,22 @@ node scripts/scheduledTasks.mjs weekly-report
 0 10 * * * node /path/to/scripts/scheduledTasks.mjs daily-reminder
 0 8 * * 0 node /path/to/scripts/scheduledTasks.mjs weekly-report
 ```
+
+
+## إعداد Cron Jobs على السيرفر (طلب جديد)
+- [x] إنشاء سكريبت تشغيل مع متغيرات البيئة (run-scheduled-task.sh)
+- [x] إنشاء نظام جدولة داخلي (taskScheduler.ts)
+- [x] تشغيل تلقائي في بيئة الإنتاج
+- [x] APIs للتحكم في الجدولة (system.startScheduler, system.stopScheduler, etc.)
+- [x] اختبار النظام (144 اختبار ناجح)
+
+**المواعيد المجدولة:**
+- التذكير اليومي: 10 صباحاً (توقيت السعودية)
+- التقرير الأسبوعي: الأحد 8 صباحاً (توقيت السعودية)
+
+**APIs الجدولة:**
+- `system.getSchedulerStatus` - الحصول على حالة الجدولة
+- `system.startScheduler` - تشغيل نظام الجدولة
+- `system.stopScheduler` - إيقاف نظام الجدولة
+- `system.runDailyReminder` - تشغيل التذكير يدوياً
+- `system.runWeeklyReport` - تشغيل التقرير يدوياً
