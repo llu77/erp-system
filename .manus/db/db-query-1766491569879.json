@@ -1,0 +1,91 @@
+{
+  "query": "SELECT er.id, er.employeeId, er.dailyRevenueId, er.cash, er.network, er.total, e.name as employeeName \nFROM employeeRevenues er \nLEFT JOIN employees e ON er.employeeId = e.id \nORDER BY er.id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT er.id, er.employeeId, er.dailyRevenueId, er.cash, er.network, er.total, e.name as employeeName \nFROM employeeRevenues er \nLEFT JOIN employees e ON er.employeeId = e.id \nORDER BY er.id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "240004",
+      "employeeId": "90001",
+      "dailyRevenueId": "240001",
+      "cash": "75.00",
+      "network": "0.00",
+      "total": "75.00",
+      "employeeName": "فارس محمد "
+    },
+    {
+      "id": "240003",
+      "employeeId": "90003",
+      "dailyRevenueId": "240001",
+      "cash": "20.00",
+      "network": "95.00",
+      "total": "115.00",
+      "employeeName": "محمد اسماعيل"
+    },
+    {
+      "id": "240002",
+      "employeeId": "90002",
+      "dailyRevenueId": "240001",
+      "cash": "20.00",
+      "network": "0.00",
+      "total": "20.00",
+      "employeeName": "عمرو"
+    },
+    {
+      "id": "240001",
+      "employeeId": "60001",
+      "dailyRevenueId": "240001",
+      "cash": "0.00",
+      "network": "165.00",
+      "total": "165.00",
+      "employeeName": "محمد ناصر"
+    },
+    {
+      "id": "210004",
+      "employeeId": "30012",
+      "dailyRevenueId": "210001",
+      "cash": "0.00",
+      "network": "305.00",
+      "total": "305.00",
+      "employeeName": "محمود عماره "
+    },
+    {
+      "id": "210003",
+      "employeeId": "30002",
+      "dailyRevenueId": "210001",
+      "cash": "0.00",
+      "network": "225.00",
+      "total": "225.00",
+      "employeeName": "علاء ناصر"
+    },
+    {
+      "id": "210002",
+      "employeeId": "30004",
+      "dailyRevenueId": "210001",
+      "cash": "0.00",
+      "network": "220.00",
+      "total": "220.00",
+      "employeeName": "عبدالحي جلال"
+    },
+    {
+      "id": "210001",
+      "employeeId": "30007",
+      "dailyRevenueId": "210001",
+      "cash": "25.00",
+      "network": "100.00",
+      "total": "125.00",
+      "employeeName": "السيد محمد"
+    },
+    {
+      "id": "30001",
+      "employeeId": "30009",
+      "dailyRevenueId": "30001",
+      "cash": "100.00",
+      "network": "10.00",
+      "total": "110.00",
+      "employeeName": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temployeeId\tdailyRevenueId\tcash\tnetwork\ttotal\temployeeName\n240004\t90001\t240001\t75.00\t0.00\t75.00\tفارس محمد \n240003\t90003\t240001\t20.00\t95.00\t115.00\tمحمد اسماعيل\n240002\t90002\t240001\t20.00\t0.00\t20.00\tعمرو\n240001\t60001\t240001\t0.00\t165.00\t165.00\tمحمد ناصر\n210004\t30012\t210001\t0.00\t305.00\t305.00\tمحمود عماره \n210003\t30002\t210001\t0.00\t225.00\t225.00\tعلاء ناصر\n210002\t30004\t210001\t0.00\t220.00\t220.00\tعبدالحي جلال\n210001\t30007\t210001\t25.00\t100.00\t125.00\tالسيد محمد\n30001\t30009\t30001\t100.00\t10.00\t110.00\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1520
+}

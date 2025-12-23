@@ -1,0 +1,100 @@
+{
+  "query": "SELECT bd.id, bd.weeklyBonusId, bd.employeeId, bd.weeklyRevenue, bd.bonusAmount, bd.bonusTier, e.name as employeeName \nFROM bonusDetails bd \nLEFT JOIN employees e ON bd.employeeId = e.id \nORDER BY bd.id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT bd.id, bd.weeklyBonusId, bd.employeeId, bd.weeklyRevenue, bd.bonusAmount, bd.bonusTier, e.name as employeeName \nFROM bonusDetails bd \nLEFT JOIN employees e ON bd.employeeId = e.id \nORDER BY bd.id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "180003",
+      "weeklyBonusId": "60001",
+      "employeeId": "90001",
+      "weeklyRevenue": "75.00",
+      "bonusAmount": "0.00",
+      "bonusTier": "none",
+      "employeeName": "فارس محمد "
+    },
+    {
+      "id": "180002",
+      "weeklyBonusId": "60001",
+      "employeeId": "90003",
+      "weeklyRevenue": "115.00",
+      "bonusAmount": "0.00",
+      "bonusTier": "none",
+      "employeeName": "محمد اسماعيل"
+    },
+    {
+      "id": "180001",
+      "weeklyBonusId": "60001",
+      "employeeId": "60001",
+      "weeklyRevenue": "165.00",
+      "bonusAmount": "0.00",
+      "bonusTier": "none",
+      "employeeName": "محمد ناصر"
+    },
+    {
+      "id": "150010",
+      "weeklyBonusId": "1",
+      "employeeId": "30012",
+      "weeklyRevenue": "305.00",
+      "bonusAmount": "0.00",
+      "bonusTier": "none",
+      "employeeName": "محمود عماره "
+    },
+    {
+      "id": "150009",
+      "weeklyBonusId": "1",
+      "employeeId": "30007",
+      "weeklyRevenue": "125.00",
+      "bonusAmount": "0.00",
+      "bonusTier": "none",
+      "employeeName": "السيد محمد"
+    },
+    {
+      "id": "150008",
+      "weeklyBonusId": "90002",
+      "employeeId": "90003",
+      "weeklyRevenue": "0.00",
+      "bonusAmount": "0.00",
+      "bonusTier": "none",
+      "employeeName": "محمد اسماعيل"
+    },
+    {
+      "id": "150007",
+      "weeklyBonusId": "90002",
+      "employeeId": "90002",
+      "weeklyRevenue": "0.00",
+      "bonusAmount": "0.00",
+      "bonusTier": "none",
+      "employeeName": "عمرو"
+    },
+    {
+      "id": "150006",
+      "weeklyBonusId": "90002",
+      "employeeId": "90001",
+      "weeklyRevenue": "0.00",
+      "bonusAmount": "0.00",
+      "bonusTier": "none",
+      "employeeName": "فارس محمد "
+    },
+    {
+      "id": "150005",
+      "weeklyBonusId": "90002",
+      "employeeId": "60001",
+      "weeklyRevenue": "0.00",
+      "bonusAmount": "0.00",
+      "bonusTier": "none",
+      "employeeName": "محمد ناصر"
+    },
+    {
+      "id": "150004",
+      "weeklyBonusId": "90001",
+      "employeeId": "30012",
+      "weeklyRevenue": "0.00",
+      "bonusAmount": "0.00",
+      "bonusTier": "none",
+      "employeeName": "محمود عماره "
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tweeklyBonusId\temployeeId\tweeklyRevenue\tbonusAmount\tbonusTier\temployeeName\n180003\t60001\t90001\t75.00\t0.00\tnone\tفارس محمد \n180002\t60001\t90003\t115.00\t0.00\tnone\tمحمد اسماعيل\n180001\t60001\t60001\t165.00\t0.00\tnone\tمحمد ناصر\n150010\t1\t30012\t305.00\t0.00\tnone\tمحمود عماره \n150009\t1\t30007\t125.00\t0.00\tnone\tالسيد محمد\n150008\t90002\t90003\t0.00\t0.00\tnone\tمحمد اسماعيل\n150007\t90002\t90002\t0.00\t0.00\tnone\tعمرو\n150006\t90002\t90001\t0.00\t0.00\tnone\tفارس محمد \n150005\t90002\t60001\t0.00\t0.00\tnone\tمحمد ناصر\n150004\t90001\t30012\t0.00\t0.00\tnone\tمحمود عماره \n",
+  "stderr": "",
+  "execution_time_ms": 1560
+}

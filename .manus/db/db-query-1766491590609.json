@@ -1,0 +1,58 @@
+{
+  "query": "SELECT er.employeeId, e.name, SUM(CAST(er.cash AS DECIMAL(10,2)) + CAST(er.network AS DECIMAL(10,2))) as totalRevenue, dr.date\nFROM employeeRevenues er \nLEFT JOIN employees e ON er.employeeId = e.id \nLEFT JOIN dailyRevenues dr ON er.dailyRevenueId = dr.id\nWHERE dr.date >= '2025-12-22' AND dr.date <= '2025-12-28'\nGROUP BY er.employeeId, e.name, dr.date;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT er.employeeId, e.name, SUM(CAST(er.cash AS DECIMAL(10,2)) + CAST(er.network AS DECIMAL(10,2))) as totalRevenue, dr.date\nFROM employeeRevenues er \nLEFT JOIN employees e ON er.employeeId = e.id \nLEFT JOIN dailyRevenues dr ON er.dailyRevenueId = dr.id\nWHERE dr.date >= '2025-12-22' AND dr.date <= '2025-12-28'\nGROUP BY er.employeeId, e.name, dr.date;",
+  "rows": [
+    {
+      "employeeId": "30012",
+      "name": "محمود عماره ",
+      "totalRevenue": "305.00",
+      "date": "2025-12-22 00:00:00"
+    },
+    {
+      "employeeId": "60001",
+      "name": "محمد ناصر",
+      "totalRevenue": "165.00",
+      "date": "2025-12-22 00:00:00"
+    },
+    {
+      "employeeId": "90003",
+      "name": "محمد اسماعيل",
+      "totalRevenue": "115.00",
+      "date": "2025-12-22 00:00:00"
+    },
+    {
+      "employeeId": "90001",
+      "name": "فارس محمد ",
+      "totalRevenue": "75.00",
+      "date": "2025-12-22 00:00:00"
+    },
+    {
+      "employeeId": "90002",
+      "name": "عمرو",
+      "totalRevenue": "20.00",
+      "date": "2025-12-22 00:00:00"
+    },
+    {
+      "employeeId": "30002",
+      "name": "علاء ناصر",
+      "totalRevenue": "225.00",
+      "date": "2025-12-22 00:00:00"
+    },
+    {
+      "employeeId": "30007",
+      "name": "السيد محمد",
+      "totalRevenue": "125.00",
+      "date": "2025-12-22 00:00:00"
+    },
+    {
+      "employeeId": "30004",
+      "name": "عبدالحي جلال",
+      "totalRevenue": "220.00",
+      "date": "2025-12-22 00:00:00"
+    }
+  ],
+  "messages": [],
+  "stdout": "employeeId\tname\ttotalRevenue\tdate\n30012\tمحمود عماره \t305.00\t2025-12-22 00:00:00\n60001\tمحمد ناصر\t165.00\t2025-12-22 00:00:00\n90003\tمحمد اسماعيل\t115.00\t2025-12-22 00:00:00\n90001\tفارس محمد \t75.00\t2025-12-22 00:00:00\n90002\tعمرو\t20.00\t2025-12-22 00:00:00\n30002\tعلاء ناصر\t225.00\t2025-12-22 00:00:00\n30007\tالسيد محمد\t125.00\t2025-12-22 00:00:00\n30004\tعبدالحي جلال\t220.00\t2025-12-22 00:00:00\n",
+  "stderr": "",
+  "execution_time_ms": 1497
+}

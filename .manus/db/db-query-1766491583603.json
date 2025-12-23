@@ -1,0 +1,91 @@
+{
+  "query": "SELECT bd.employeeId, bd.weeklyRevenue, bd.bonusAmount, e.name, wb.weekNumber, wb.month, wb.year \nFROM bonusDetails bd \nLEFT JOIN employees e ON bd.employeeId = e.id \nLEFT JOIN weeklyBonuses wb ON bd.weeklyBonusId = wb.id \nWHERE wb.branchId = 1 \nORDER BY wb.id DESC, bd.id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT bd.employeeId, bd.weeklyRevenue, bd.bonusAmount, e.name, wb.weekNumber, wb.month, wb.year \nFROM bonusDetails bd \nLEFT JOIN employees e ON bd.employeeId = e.id \nLEFT JOIN weeklyBonuses wb ON bd.weeklyBonusId = wb.id \nWHERE wb.branchId = 1 \nORDER BY wb.id DESC, bd.id;",
+  "rows": [
+    {
+      "employeeId": "30002",
+      "weeklyRevenue": "0.00",
+      "bonusAmount": "0.00",
+      "name": "علاء ناصر",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025"
+    },
+    {
+      "employeeId": "30004",
+      "weeklyRevenue": "0.00",
+      "bonusAmount": "0.00",
+      "name": "عبدالحي جلال",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025"
+    },
+    {
+      "employeeId": "30007",
+      "weeklyRevenue": "0.00",
+      "bonusAmount": "0.00",
+      "name": "السيد محمد",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025"
+    },
+    {
+      "employeeId": "30012",
+      "weeklyRevenue": "0.00",
+      "bonusAmount": "0.00",
+      "name": "محمود عماره ",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025"
+    },
+    {
+      "employeeId": "1",
+      "weeklyRevenue": "2.00",
+      "bonusAmount": "0.00",
+      "name": "NULL",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025"
+    },
+    {
+      "employeeId": "30004",
+      "weeklyRevenue": "220.00",
+      "bonusAmount": "0.00",
+      "name": "عبدالحي جلال",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025"
+    },
+    {
+      "employeeId": "30002",
+      "weeklyRevenue": "225.00",
+      "bonusAmount": "0.00",
+      "name": "علاء ناصر",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025"
+    },
+    {
+      "employeeId": "30007",
+      "weeklyRevenue": "125.00",
+      "bonusAmount": "0.00",
+      "name": "السيد محمد",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025"
+    },
+    {
+      "employeeId": "30012",
+      "weeklyRevenue": "305.00",
+      "bonusAmount": "0.00",
+      "name": "محمود عماره ",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025"
+    }
+  ],
+  "messages": [],
+  "stdout": "employeeId\tweeklyRevenue\tbonusAmount\tname\tweekNumber\tmonth\tyear\n30002\t0.00\t0.00\tعلاء ناصر\t4\t12\t2025\n30004\t0.00\t0.00\tعبدالحي جلال\t4\t12\t2025\n30007\t0.00\t0.00\tالسيد محمد\t4\t12\t2025\n30012\t0.00\t0.00\tمحمود عماره \t4\t12\t2025\n1\t2.00\t0.00\tNULL\t3\t12\t2025\n30004\t220.00\t0.00\tعبدالحي جلال\t3\t12\t2025\n30002\t225.00\t0.00\tعلاء ناصر\t3\t12\t2025\n30007\t125.00\t0.00\tالسيد محمد\t3\t12\t2025\n30012\t305.00\t0.00\tمحمود عماره \t3\t12\t2025\n",
+  "stderr": "",
+  "execution_time_ms": 1489
+}

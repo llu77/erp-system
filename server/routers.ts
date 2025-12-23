@@ -1579,7 +1579,7 @@ export const appRouter = router({
 
   // ==================== إدارة البونص الأسبوعي ====================
   bonuses: router({
-    // الحصول على بونص الأسبوع الحالي (متاح للجميع)
+    // الحصول على بونص الأسبوع الحالي أو آخر أسبوع يحتوي على إيرادات (متاح للجميع)
     current: protectedProcedure
       .input(z.object({ branchId: z.number() }))
       .query(async ({ input }) => {
@@ -1588,21 +1588,43 @@ export const appRouter = router({
         const month = now.getMonth() + 1;
         const year = now.getFullYear();
         
-        // حساب رقم الأسبوع
-        let weekNumber: number;
-        if (day <= 7) weekNumber = 1;
-        else if (day <= 15) weekNumber = 2;
-        else if (day <= 22) weekNumber = 3;
-        else if (day <= 29) weekNumber = 4;
-        else weekNumber = 5;
+        // حساب رقم الأسبوع الحالي
+        let currentWeekNumber: number;
+        if (day <= 7) currentWeekNumber = 1;
+        else if (day <= 15) currentWeekNumber = 2;
+        else if (day <= 22) currentWeekNumber = 3;
+        else if (day <= 29) currentWeekNumber = 4;
+        else currentWeekNumber = 5;
 
-        const weeklyBonus = await db.getCurrentWeekBonus(input.branchId, year, month, weekNumber);
+        // البحث عن أسبوع يحتوي على إيرادات (الأسبوع الحالي أولاً، ثم الأسبوع السابق)
+        let weeklyBonus = await db.getCurrentWeekBonus(input.branchId, year, month, currentWeekNumber);
+        let details = weeklyBonus ? await db.getBonusDetails(weeklyBonus.id) : [];
+        
+        // إذا كان الأسبوع الحالي فارغاً أو كل الإيرادات 0، ابحث عن الأسبوع السابق
+        const hasRevenues = details.some(d => Number(d.weeklyRevenue) > 0);
+        
+        if (!weeklyBonus || !hasRevenues) {
+          // جرب الأسبوع السابق
+          const prevWeekNumber = currentWeekNumber > 1 ? currentWeekNumber - 1 : 5;
+          const prevMonth = currentWeekNumber > 1 ? month : (month > 1 ? month - 1 : 12);
+          const prevYear = currentWeekNumber > 1 ? year : (month > 1 ? year : year - 1);
+          
+          const prevWeeklyBonus = await db.getCurrentWeekBonus(input.branchId, prevYear, prevMonth, prevWeekNumber);
+          if (prevWeeklyBonus) {
+            const prevDetails = await db.getBonusDetails(prevWeeklyBonus.id);
+            const prevHasRevenues = prevDetails.some(d => Number(d.weeklyRevenue) > 0);
+            
+            if (prevHasRevenues) {
+              weeklyBonus = prevWeeklyBonus;
+              details = prevDetails;
+            }
+          }
+        }
         
         if (!weeklyBonus) {
           return null;
         }
 
-        const details = await db.getBonusDetails(weeklyBonus.id);
         const branch = await db.getBranchById(input.branchId);
 
         return {
