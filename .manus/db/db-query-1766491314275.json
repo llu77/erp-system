@@ -1,0 +1,28 @@
+{
+  "query": "SELECT id, cash, network, total FROM dailyRevenues;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, cash, network, total FROM dailyRevenues;",
+  "rows": [
+    {
+      "id": "30001",
+      "cash": "100.00",
+      "network": "10.00",
+      "total": "110.00"
+    },
+    {
+      "id": "210001",
+      "cash": "25.00",
+      "network": "850.00",
+      "total": "875.00"
+    },
+    {
+      "id": "240001",
+      "cash": "115.00",
+      "network": "260.00",
+      "total": "375.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcash\tnetwork\ttotal\n30001\t100.00\t10.00\t110.00\n210001\t25.00\t850.00\t875.00\n240001\t115.00\t260.00\t375.00\n",
+  "stderr": "",
+  "execution_time_ms": 1580
+}

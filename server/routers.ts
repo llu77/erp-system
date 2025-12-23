@@ -1421,11 +1421,12 @@ export const appRouter = router({
           });
         }
 
-        // 2. حساب الرصيد تلقائياً = الشبكة (لا يتم عده في الإجمالي)
+        // 2. حساب الرصيد والإجمالي
         const networkAmount = parseFloat(input.network);
         const cashAmount = parseFloat(input.cash);
         const calculatedBalance = networkAmount;
-        const calculatedTotal = cashAmount;
+        // الإجمالي = الكاش + الشبكة
+        const calculatedTotal = cashAmount + networkAmount;
 
         // 3. المطابقة التلقائية: التحقق من أن مجموع إيرادات الموظفين = (النقدي + الشبكة)
         let totalEmployeeCash = 0;
