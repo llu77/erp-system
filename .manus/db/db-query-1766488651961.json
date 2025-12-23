@@ -1,0 +1,82 @@
+{
+  "query": "SELECT er.id, er.employeeId, er.dailyRevenueId, er.cash, er.network, er.total, e.name as employeeName FROM employeeRevenues er LEFT JOIN employees e ON er.employeeId = e.id LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT er.id, er.employeeId, er.dailyRevenueId, er.cash, er.network, er.total, e.name as employeeName FROM employeeRevenues er LEFT JOIN employees e ON er.employeeId = e.id LIMIT 10;",
+  "rows": [
+    {
+      "id": "180001",
+      "employeeId": "30002",
+      "dailyRevenueId": "180001",
+      "cash": "300.00",
+      "network": "0.00",
+      "total": "300.00",
+      "employeeName": "علاء ناصر"
+    },
+    {
+      "id": "90001",
+      "employeeId": "30002",
+      "dailyRevenueId": "90001",
+      "cash": "1000.00",
+      "network": "0.00",
+      "total": "1000.00",
+      "employeeName": "علاء ناصر"
+    },
+    {
+      "id": "120001",
+      "employeeId": "30004",
+      "dailyRevenueId": "120001",
+      "cash": "100.00",
+      "network": "10.00",
+      "total": "110.00",
+      "employeeName": "عبدالحي جلال"
+    },
+    {
+      "id": "90002",
+      "employeeId": "30004",
+      "dailyRevenueId": "90002",
+      "cash": "100.00",
+      "network": "0.00",
+      "total": "100.00",
+      "employeeName": "عبدالحي جلال"
+    },
+    {
+      "id": "60001",
+      "employeeId": "30004",
+      "dailyRevenueId": "60001",
+      "cash": "100.00",
+      "network": "0.00",
+      "total": "100.00",
+      "employeeName": "عبدالحي جلال"
+    },
+    {
+      "id": "150001",
+      "employeeId": "90002",
+      "dailyRevenueId": "150001",
+      "cash": "110.00",
+      "network": "0.00",
+      "total": "110.00",
+      "employeeName": "عمرو"
+    },
+    {
+      "id": "1",
+      "employeeId": "1",
+      "dailyRevenueId": "1",
+      "cash": "2.00",
+      "network": "0.00",
+      "total": "2.00",
+      "employeeName": "NULL"
+    },
+    {
+      "id": "30001",
+      "employeeId": "30009",
+      "dailyRevenueId": "30001",
+      "cash": "100.00",
+      "network": "10.00",
+      "total": "110.00",
+      "employeeName": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temployeeId\tdailyRevenueId\tcash\tnetwork\ttotal\temployeeName\n180001\t30002\t180001\t300.00\t0.00\t300.00\tعلاء ناصر\n90001\t30002\t90001\t1000.00\t0.00\t1000.00\tعلاء ناصر\n120001\t30004\t120001\t100.00\t10.00\t110.00\tعبدالحي جلال\n90002\t30004\t90002\t100.00\t0.00\t100.00\tعبدالحي جلال\n60001\t30004\t60001\t100.00\t0.00\t100.00\tعبدالحي جلال\n150001\t90002\t150001\t110.00\t0.00\t110.00\tعمرو\n1\t1\t1\t2.00\t0.00\t2.00\tNULL\n30001\t30009\t30001\t100.00\t10.00\t110.00\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1510
+}

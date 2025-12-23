@@ -3175,3 +3175,30 @@ export async function getSentNotifications(limit: number = 100) {
     .orderBy(desc(sentNotifications.createdAt))
     .limit(limit);
 }
+
+
+// ==================== دوال حذف الإيرادات والمصاريف ====================
+
+// حذف إيراد يومي
+export async function deleteDailyRevenue(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.delete(dailyRevenues).where(eq(dailyRevenues.id, id));
+}
+
+// حذف إيرادات الموظفين المرتبطة بإيراد يومي
+export async function deleteEmployeeRevenuesByDailyId(dailyRevenueId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.delete(employeeRevenues).where(eq(employeeRevenues.dailyRevenueId, dailyRevenueId));
+}
+
+// حذف مصروف
+export async function deleteExpenseById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.delete(expenses).where(eq(expenses.id, id));
+}

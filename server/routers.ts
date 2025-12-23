@@ -1551,12 +1551,35 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return await db.getDailyRevenuesByDateRange(input.branchId, input.startDate, input.endDate);
       }),
+
+    // حذف إيراد يومي (للأدمن فقط)
+    deleteDaily: adminProcedure
+      .input(z.object({
+        id: z.number(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // حذف إيرادات الموظفين المرتبطة أولاً
+        await db.deleteEmployeeRevenuesByDailyId(input.id);
+        
+        // حذف الإيراد اليومي
+        await db.deleteDailyRevenue(input.id);
+        
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'delete',
+          entityType: 'revenue',
+          details: `تم حذف إيراد يومي رقم ${input.id}`,
+        });
+        
+        return { success: true, message: 'تم حذف الإيراد بنجاح' };
+      }),
   }),
 
   // ==================== إدارة البونص الأسبوعي ====================
   bonuses: router({
-    // الحصول على بونص الأسبوع الحالي
-    current: managerProcedure
+    // الحصول على بونص الأسبوع الحالي (متاح للجميع)
+    current: protectedProcedure
       .input(z.object({ branchId: z.number() }))
       .query(async ({ input }) => {
         const now = new Date();
@@ -1590,8 +1613,8 @@ export const appRouter = router({
         };
       }),
 
-    // الحصول على بونص أسبوع محدد
-    getWeek: managerProcedure
+    // الحصول على بونص أسبوع محدد (متاح للجميع)
+    getWeek: protectedProcedure
       .input(z.object({
         branchId: z.number(),
         year: z.number(),
@@ -1622,8 +1645,8 @@ export const appRouter = router({
         };
       }),
 
-    // سجل البونص
-    history: managerProcedure
+    // سجل البونص (متاح للجميع)
+    history: protectedProcedure
       .input(z.object({
         branchId: z.number(),
         limit: z.number().default(10),
@@ -1632,8 +1655,8 @@ export const appRouter = router({
         return await db.getWeeklyBonusesByBranch(input.branchId, input.limit);
       }),
 
-    // طلب صرف البونص
-    request: managerProcedure
+    // طلب صرف البونص (متاح للجميع)
+    request: protectedProcedure
       .input(z.object({ weeklyBonusId: z.number() }))
       .mutation(async ({ input, ctx }) => {
         await db.updateWeeklyBonusStatus(input.weeklyBonusId, 'requested', ctx.user.id);
@@ -1715,8 +1738,8 @@ export const appRouter = router({
         return { success: true, message: 'تم رفض البونص' };
       }),
 
-    // تزامن البونص يدوياً
-    sync: managerProcedure
+    // تزامن البونص يدوياً (متاح للجميع)
+    sync: protectedProcedure
       .input(z.object({
         branchId: z.number(),
         year: z.number(),

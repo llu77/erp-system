@@ -644,14 +644,36 @@ export default function Revenues() {
         )}
 
         {/* سجل الإيرادات الشهري */}
-        <MonthlyRevenueLog branchId={effectiveBranchId} selectedDate={selectedDate} />
+        <MonthlyRevenueLog branchId={effectiveBranchId} selectedDate={selectedDate} userRole={user?.role} />
       </div>
     </DashboardLayout>
   );
 }
 
 // مكون سجل الإيرادات الشهري
-function MonthlyRevenueLog({ branchId, selectedDate }: { branchId: number | null; selectedDate: string }) {
+function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: number | null; selectedDate: string; userRole?: string }) {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [revenueToDelete, setRevenueToDelete] = useState<number | null>(null);
+  const utils = trpc.useUtils();
+  
+  // حذف الإيراد
+  const deleteMutation = trpc.revenues.deleteDaily.useMutation({
+    onSuccess: () => {
+      toast.success("تم حذف الإيراد بنجاح");
+      setDeleteDialogOpen(false);
+      setRevenueToDelete(null);
+      utils.revenues.getByDateRange.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message || "فشل حذف الإيراد");
+    },
+  });
+  
+  const handleDeleteRevenue = () => {
+    if (revenueToDelete) {
+      deleteMutation.mutate({ id: revenueToDelete });
+    }
+  };
   const [isExporting, setIsExporting] = useState(false);
   
   // حساب أول وآخر يوم في الشهر
@@ -921,6 +943,7 @@ function MonthlyRevenueLog({ branchId, selectedDate }: { branchId: number | null
                     <TableHead className="text-right">الإجمالي</TableHead>
                     <TableHead className="text-right">الموازنة</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
+                    {userRole === 'admin' && <TableHead className="text-right">إجراءات</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1001,6 +1024,21 @@ function MonthlyRevenueLog({ branchId, selectedDate }: { branchId: number | null
                             </Dialog>
                           )}
                         </TableCell>
+                        {userRole === 'admin' && (
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-500/10"
+                              onClick={() => {
+                                setRevenueToDelete(revenue.id);
+                                setDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}
@@ -1016,6 +1054,54 @@ function MonthlyRevenueLog({ branchId, selectedDate }: { branchId: number | null
           </div>
         )}
       </CardContent>
+      
+      {/* حوار تأكيد الحذف */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              تأكيد حذف الإيراد
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-muted-foreground">
+              هل أنت متأكد من حذف هذا الإيراد؟ سيتم حذف جميع إيرادات الموظفين المرتبطة به أيضاً.
+            </p>
+            <p className="text-sm text-red-500 mt-2">
+              هذا الإجراء لا يمكن التراجع عنه.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setRevenueToDelete(null);
+              }}
+            >
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteRevenue}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  جاري الحذف...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 ml-2" />
+                  حذف
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

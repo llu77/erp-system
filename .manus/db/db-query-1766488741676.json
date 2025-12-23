@@ -1,0 +1,55 @@
+{
+  "query": "SELECT id, branchId, weekNumber, month, year, totalAmount, status FROM weeklyBonuses ORDER BY id DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, branchId, weekNumber, month, year, totalAmount, status FROM weeklyBonuses ORDER BY id DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "90002",
+      "branchId": "30001",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "90001",
+      "branchId": "1",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "60001",
+      "branchId": "30001",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "30001",
+      "branchId": "30003",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "1",
+      "branchId": "1",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "35.00",
+      "status": "pending"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tbranchId\tweekNumber\tmonth\tyear\ttotalAmount\tstatus\n90002\t30001\t4\t12\t2025\t0.00\tpending\n90001\t1\t4\t12\t2025\t0.00\tpending\n60001\t30001\t3\t12\t2025\t0.00\tpending\n30001\t30003\t3\t12\t2025\t0.00\tpending\n1\t1\t3\t12\t2025\t35.00\tpending\n",
+  "stderr": "",
+  "execution_time_ms": 1624
+}
