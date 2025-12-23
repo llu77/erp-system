@@ -20,7 +20,9 @@ import {
   XCircle,
   RefreshCw,
   Send,
-  TrendingUp
+  TrendingUp,
+  Download,
+  Loader2
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -30,6 +32,7 @@ export default function Bonuses() {
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   const [showRequestDialog, setShowRequestDialog] = useState(false);
   const [selectedBonusId, setSelectedBonusId] = useState<number | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   // جلب الفروع
   const { data: branches, isLoading: branchesLoading } = trpc.branches.list.useQuery();
@@ -99,6 +102,168 @@ export default function Bonuses() {
       month: now.getMonth() + 1,
       weekNumber,
     });
+  };
+
+  // دالة تصدير PDF للبونص
+  const handleExportPDF = async () => {
+    if (!currentBonus || !currentBonus.details) return;
+    
+    setIsExporting(true);
+    try {
+      const tierNames: Record<string, string> = {
+        tier_5: "المستوى 5 (180 ر.س)",
+        tier_4: "المستوى 4 (135 ر.س)",
+        tier_3: "المستوى 3 (95 ر.س)",
+        tier_2: "المستوى 2 (60 ر.س)",
+        tier_1: "المستوى 1 (35 ر.س)",
+        none: "غير مؤهل",
+      };
+      
+      const tierColors: Record<string, string> = {
+        tier_5: "#a855f7",
+        tier_4: "#3b82f6",
+        tier_3: "#22c55e",
+        tier_2: "#eab308",
+        tier_1: "#f97316",
+        none: "#9ca3af",
+      };
+
+      const branchName = currentBonus.branchName || "غير محدد";
+      const weekStart = new Date(currentBonus.weekStart);
+      const weekEnd = new Date(currentBonus.weekEnd);
+      
+      const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير البونص الأسبوعي - ${branchName}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; padding: 40px; background: #fff; color: #1a1a2e; }
+    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #a855f7; padding-bottom: 20px; }
+    .header img { height: 60px; margin-bottom: 15px; }
+    .header h1 { color: #a855f7; font-size: 28px; margin-bottom: 10px; }
+    .header .subtitle { color: #64748b; font-size: 16px; }
+    .header .period { color: #1a1a2e; font-size: 14px; margin-top: 10px; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+    .summary-card { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #e2e8f0; }
+    .summary-card .value { font-size: 24px; font-weight: 700; margin-bottom: 5px; }
+    .summary-card .label { font-size: 12px; color: #64748b; }
+    .purple { color: #a855f7; }
+    .green { color: #22c55e; }
+    .blue { color: #3b82f6; }
+    .yellow { color: #eab308; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); color: white; padding: 14px; text-align: right; font-weight: 600; }
+    td { padding: 12px 14px; border-bottom: 1px solid #e2e8f0; text-align: right; }
+    tr:nth-child(even) { background: #f8fafc; }
+    tr:hover { background: #f1f5f9; }
+    .tier-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; color: white; }
+    .bonus-amount { font-weight: 700; color: #22c55e; font-size: 16px; }
+    .total-row { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%) !important; color: white; font-weight: 700; }
+    .total-row td { border: none; }
+    .footer { margin-top: 30px; text-align: center; color: #94a3b8; font-size: 12px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
+    .levels-info { margin-top: 30px; background: #f8fafc; border-radius: 12px; padding: 20px; }
+    .levels-info h3 { color: #a855f7; margin-bottom: 15px; font-size: 16px; }
+    .levels-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .level-item { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .level-dot { width: 12px; height: 12px; border-radius: 50%; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎁 تقرير البونص الأسبوعي</h1>
+    <div class="subtitle">فرع ${branchName} - الأسبوع ${currentBonus.weekNumber}</div>
+    <div class="period">من ${weekStart.toLocaleDateString('ar-SA')} إلى ${weekEnd.toLocaleDateString('ar-SA')}</div>
+  </div>
+  
+  <div class="summary">
+    <div class="summary-card">
+      <div class="value purple">${Number(currentBonus.totalAmount).toFixed(2)} ر.س</div>
+      <div class="label">إجمالي البونص</div>
+    </div>
+    <div class="summary-card">
+      <div class="value green">${currentBonus.eligibleCount}</div>
+      <div class="label">موظفين مؤهلين</div>
+    </div>
+    <div class="summary-card">
+      <div class="value blue">${currentBonus.totalEmployees}</div>
+      <div class="label">إجمالي الموظفين</div>
+    </div>
+    <div class="summary-card">
+      <div class="value yellow">${currentBonus.totalEmployees > 0 ? ((currentBonus.eligibleCount / currentBonus.totalEmployees) * 100).toFixed(0) : 0}%</div>
+      <div class="label">نسبة الأهلية</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>اسم الموظف</th>
+        <th>الكود</th>
+        <th>الإيراد الأسبوعي</th>
+        <th>المستوى</th>
+        <th>البونص</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${currentBonus.details.map((detail, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${detail.employeeName || 'غير محدد'}</td>
+          <td>${detail.employeeCode || '-'}</td>
+          <td>${Number(detail.weeklyRevenue).toFixed(2)} ر.س</td>
+          <td><span class="tier-badge" style="background-color: ${tierColors[detail.bonusTier] || '#9ca3af'}">${tierNames[detail.bonusTier] || detail.bonusTier}</span></td>
+          <td class="bonus-amount">${Number(detail.bonusAmount).toFixed(2)} ر.س</td>
+        </tr>
+      `).join('')}
+      <tr class="total-row">
+        <td colspan="5">الإجمالي</td>
+        <td>${Number(currentBonus.totalAmount).toFixed(2)} ر.س</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="levels-info">
+    <h3>📊 مستويات البونص</h3>
+    <div class="levels-grid">
+      <div class="level-item"><span class="level-dot" style="background: #a855f7"></span> المستوى 5: ≥2400 ر.س → 180 ر.س</div>
+      <div class="level-item"><span class="level-dot" style="background: #3b82f6"></span> المستوى 4: 2100-2399 ر.س → 135 ر.س</div>
+      <div class="level-item"><span class="level-dot" style="background: #22c55e"></span> المستوى 3: 1800-2099 ر.س → 95 ر.س</div>
+      <div class="level-item"><span class="level-dot" style="background: #eab308"></span> المستوى 2: 1500-1799 ر.س → 60 ر.س</div>
+      <div class="level-item"><span class="level-dot" style="background: #f97316"></span> المستوى 1: 1200-1499 ر.س → 35 ر.س</div>
+      <div class="level-item"><span class="level-dot" style="background: #9ca3af"></span> غير مؤهل: أقل من 1200 ر.س</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>تم إنشاء هذا التقرير بواسطة Symbol AI - ${new Date().toLocaleDateString('ar-SA')} ${new Date().toLocaleTimeString('ar-SA')}</p>
+  </div>
+</body>
+</html>
+      `;
+
+      // إنشاء Blob وفتح نافذة الطباعة
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      
+      toast.success("تم فتح تقرير البونص للطباعة أو الحفظ كـ PDF");
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error("فشل تصدير التقرير");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -187,6 +352,17 @@ export default function Bonuses() {
               <RefreshCw className={`h-4 w-4 ml-2 ${syncMutation.isPending ? "animate-spin" : ""}`} />
               تزامن
             </Button>
+            
+            {currentBonus && currentBonus.details && currentBonus.details.length > 0 && (
+              <Button variant="outline" onClick={handleExportPDF} disabled={isExporting}>
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 ml-2" />
+                )}
+                تصدير PDF
+              </Button>
+            )}
           </div>
         </div>
 

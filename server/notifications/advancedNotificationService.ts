@@ -690,3 +690,176 @@ export async function sendTestNotification(recipientEmail: string): Promise<{ su
     return { success: false, error: error.message };
   }
 }
+
+
+// إرسال إشعار اكتمال حساب البونص الأسبوعي
+export async function notifyBonusCalculationCompleted(data: {
+  branchId?: number;
+  branchName?: string;
+  weekNumber: number;
+  month: number;
+  year: number;
+  totalAmount: number;
+  eligibleCount: number;
+  totalEmployees: number;
+  details: Array<{
+    employeeName: string;
+    weeklyRevenue: number;
+    bonusAmount: number;
+    bonusTier: string;
+  }>;
+}): Promise<{ success: boolean; result?: any }> {
+  console.log(`🎁 إشعار اكتمال حساب البونص: الأسبوع ${data.weekNumber} من ${data.month}/${data.year}`);
+  
+  const tierNames: Record<string, string> = {
+    tier_5: "المستوى 5 (180 ر.س)",
+    tier_4: "المستوى 4 (135 ر.س)",
+    tier_3: "المستوى 3 (95 ر.س)",
+    tier_2: "المستوى 2 (60 ر.س)",
+    tier_1: "المستوى 1 (35 ر.س)",
+    none: "غير مؤهل",
+  };
+  
+  const tierColors: Record<string, string> = {
+    tier_5: "#a855f7",
+    tier_4: "#3b82f6",
+    tier_3: "#22c55e",
+    tier_2: "#eab308",
+    tier_1: "#f97316",
+    none: "#9ca3af",
+  };
+  
+  const eligibilityPercentage = data.totalEmployees > 0 
+    ? ((data.eligibleCount / data.totalEmployees) * 100).toFixed(0) 
+    : 0;
+  
+  const detailsRows = data.details.map((detail, index) => `
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 10px; text-align: right;">${index + 1}</td>
+      <td style="padding: 10px; text-align: right;">${detail.employeeName}</td>
+      <td style="padding: 10px; text-align: right;">${detail.weeklyRevenue.toFixed(2)} ر.س</td>
+      <td style="padding: 10px; text-align: right;">
+        <span style="background-color: ${tierColors[detail.bonusTier] || '#9ca3af'}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+          ${tierNames[detail.bonusTier] || detail.bonusTier}
+        </span>
+      </td>
+      <td style="padding: 10px; text-align: right; font-weight: bold; color: #22c55e;">${detail.bonusAmount.toFixed(2)} ر.س</td>
+    </tr>
+  `).join('');
+  
+  const recipients = await getRecipients("bonus_request", data.branchId);
+  
+  if (recipients.length === 0) {
+    console.log("⚠️ لا يوجد مستلمين لإشعار البونص");
+    return { success: false, result: "No recipients found" };
+  }
+  
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; direction: rtl; text-align: right; }
+        .container { max-width: 700px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); color: white; padding: 30px; border-radius: 12px 12px 0 0; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .header .subtitle { margin-top: 10px; opacity: 0.9; }
+        .content { background: white; padding: 30px; border: 1px solid #e2e8f0; }
+        .summary { display: flex; justify-content: space-around; margin-bottom: 30px; flex-wrap: wrap; }
+        .summary-item { text-align: center; padding: 15px; min-width: 120px; }
+        .summary-item .value { font-size: 28px; font-weight: bold; margin-bottom: 5px; }
+        .summary-item .label { font-size: 12px; color: #64748b; }
+        .purple { color: #a855f7; }
+        .green { color: #22c55e; }
+        .blue { color: #3b82f6; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #f8fafc; padding: 12px; text-align: right; font-weight: 600; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+        .footer { background: #f8fafc; padding: 20px; text-align: center; color: #64748b; font-size: 12px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none; }
+        .total-row { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); color: white; font-weight: bold; }
+        .total-row td { border: none; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🎁 تقرير البونص الأسبوعي</h1>
+          <div class="subtitle">فرع ${data.branchName || 'غير محدد'} - الأسبوع ${data.weekNumber} من ${data.month}/${data.year}</div>
+        </div>
+        
+        <div class="content">
+          <div class="summary">
+            <div class="summary-item">
+              <div class="value purple">${data.totalAmount.toFixed(2)} ر.س</div>
+              <div class="label">إجمالي البونص</div>
+            </div>
+            <div class="summary-item">
+              <div class="value green">${data.eligibleCount}</div>
+              <div class="label">موظفين مؤهلين</div>
+            </div>
+            <div class="summary-item">
+              <div class="value blue">${data.totalEmployees}</div>
+              <div class="label">إجمالي الموظفين</div>
+            </div>
+            <div class="summary-item">
+              <div class="value" style="color: #eab308;">${eligibilityPercentage}%</div>
+              <div class="label">نسبة الأهلية</div>
+            </div>
+          </div>
+          
+          <h3 style="color: #1a1a2e; margin-bottom: 15px;">📋 تفاصيل البونص</h3>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>اسم الموظف</th>
+                <th>الإيراد الأسبوعي</th>
+                <th>المستوى</th>
+                <th>البونص</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${detailsRows}
+              <tr class="total-row">
+                <td colspan="4" style="padding: 12px;">الإجمالي</td>
+                <td style="padding: 12px;">${data.totalAmount.toFixed(2)} ر.س</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="footer">
+          <p>تم إنشاء هذا التقرير تلقائياً بواسطة Symbol AI</p>
+          <p>${new Date().toLocaleDateString('ar-SA')} ${new Date().toLocaleTimeString('ar-SA')}</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  let successCount = 0;
+  for (const recipient of recipients) {
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: recipient.email,
+        subject: `🎁 تقرير البونص الأسبوعي - ${data.branchName || 'غير محدد'} - الأسبوع ${data.weekNumber}`,
+        html: htmlContent,
+      });
+      console.log(`✓ تم إرسال تقرير البونص إلى: ${recipient.name} (${recipient.email})`);
+      successCount++;
+    } catch (error: any) {
+      console.error(`✗ فشل إرسال تقرير البونص إلى ${recipient.email}:`, error.message);
+    }
+  }
+  
+  return { 
+    success: successCount > 0, 
+    result: { 
+      sent: successCount, 
+      total: recipients.length 
+    } 
+  };
+}

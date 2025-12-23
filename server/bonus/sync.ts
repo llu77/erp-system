@@ -9,10 +9,12 @@ import {
   employeeRevenues, 
   weeklyBonuses, 
   bonusDetails, 
-  employees 
+  employees,
+  branches
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { calculateBonus, getWeekInfo, getWeekDateRange } from "./calculator";
+import { notifyBonusCalculationCompleted } from "../notifications/advancedNotificationService";
 
 /**
  * تزامن البونص عند تغيير الإيرادات
@@ -302,9 +304,55 @@ export async function syncWeeklyBonusForBranch(
       ))
       .limit(1);
 
+    // الحصول على اسم الفرع
+    const branchData = await db
+      .select({ nameAr: branches.nameAr })
+      .from(branches)
+      .where(eq(branches.id, branchId))
+      .limit(1);
+    
+    const branchName = branchData[0]?.nameAr || 'غير محدد';
+    
+    // الحصول على تفاصيل البونص للإشعار
+    const bonusDetailsList = await db
+      .select({
+        employeeName: employees.name,
+        weeklyRevenue: bonusDetails.weeklyRevenue,
+        bonusAmount: bonusDetails.bonusAmount,
+        bonusTier: bonusDetails.bonusTier,
+      })
+      .from(bonusDetails)
+      .leftJoin(employees, eq(bonusDetails.employeeId, employees.id))
+      .where(eq(bonusDetails.weeklyBonusId, weeklyBonus[0]?.id || 0));
+    
+    const eligibleCount = bonusDetailsList.filter(d => Number(d.bonusAmount) > 0).length;
+    
+    // إرسال إشعار البريد الإلكتروني
+    try {
+      await notifyBonusCalculationCompleted({
+        branchId,
+        branchName,
+        weekNumber,
+        month,
+        year,
+        totalAmount: Number(weeklyBonus[0]?.totalAmount || 0),
+        eligibleCount,
+        totalEmployees: branchEmployees.length,
+        details: bonusDetailsList.map(d => ({
+          employeeName: d.employeeName || 'غير محدد',
+          weeklyRevenue: Number(d.weeklyRevenue || 0),
+          bonusAmount: Number(d.bonusAmount || 0),
+          bonusTier: d.bonusTier || 'none',
+        })),
+      });
+      console.log(`[Bonus Sync] Email notification sent for branch ${branchId}`);
+    } catch (emailError) {
+      console.error('[Bonus Sync] Failed to send email notification:', emailError);
+    }
+    
     return {
       success: true,
-      message: `تم تزامن البونص لـ ${branchEmployees.length} موظف`,
+      message: `تم تزامن البونص لـ ${branchEmployees.length} موظف وإرسال الإشعار`,
       data: {
         employeeCount: branchEmployees.length,
         totalAmount: Number(weeklyBonus[0]?.totalAmount || 0),
