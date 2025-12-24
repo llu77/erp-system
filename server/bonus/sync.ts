@@ -15,6 +15,7 @@ import {
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { calculateBonus, getWeekInfo, getWeekDateRange } from "./calculator";
 import { notifyBonusCalculationCompleted } from "../notifications/advancedNotificationService";
+import * as emailNotifications from "../notifications/emailNotificationService";
 
 /**
  * تزامن البونص عند تغيير الإيرادات
@@ -327,8 +328,9 @@ export async function syncWeeklyBonusForBranch(
     
     const eligibleCount = bonusDetailsList.filter(d => Number(d.bonusAmount) > 0).length;
     
-    // إرسال إشعار البريد الإلكتروني
+    // إرسال إشعار البريد الإلكتروني المتقدم
     try {
+      // إشعار المالك (الطريقة القديمة)
       await notifyBonusCalculationCompleted({
         branchId,
         branchName,
@@ -345,7 +347,27 @@ export async function syncWeeklyBonusForBranch(
           bonusTier: d.bonusTier || 'none',
         })),
       });
-      console.log(`[Bonus Sync] Email notification sent for branch ${branchId}`);
+      
+      // إشعار البريد الإلكتروني المتقدم للمشرفين والأدمن
+      await emailNotifications.notifyWeeklyBonusReport({
+        branchId,
+        branchName,
+        weekNumber,
+        month,
+        year,
+        totalAmount: Number(weeklyBonus[0]?.totalAmount || 0),
+        eligibleCount,
+        totalEmployees: branchEmployees.length,
+        details: bonusDetailsList.map(d => ({
+          employeeName: d.employeeName || 'غير محدد',
+          weeklyRevenue: Number(d.weeklyRevenue || 0),
+          tier: d.bonusTier || 'none',
+          bonusAmount: Number(d.bonusAmount || 0),
+          isEligible: Number(d.bonusAmount || 0) > 0,
+        })),
+      });
+      
+      console.log(`[Bonus Sync] Email notifications sent for branch ${branchId}`);
     } catch (emailError) {
       console.error('[Bonus Sync] Failed to send email notification:', emailError);
     }

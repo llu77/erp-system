@@ -10,6 +10,7 @@ import { notifyOwner } from "./_core/notification";
 import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from "./email/scheduledReports";
 import * as advancedNotifications from "./notifications/advancedNotificationService";
 import * as reminderService from "./notifications/reminderService";
+import * as emailNotifications from "./notifications/emailNotificationService";
 
 // إجراء للمدير فقط (كامل الصلاحيات)
 const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -953,6 +954,23 @@ export const appRouter = router({
           content: `تم إنشاء أمر شراء جديد رقم ${orderNumber} بقيمة ${total.toFixed(2)} ر.س`,
         });
 
+        // إرسال إشعار بريد إلكتروني لأمر الشراء
+        const branch = branchId ? await db.getBranchById(branchId) : null;
+        emailNotifications.notifyNewPurchaseOrder({
+          orderNumber,
+          supplierName: input.supplierName,
+          totalAmount: total,
+          itemsCount: input.items.length,
+          branchId: branchId,
+          branchName: branch?.nameAr,
+          createdBy: ctx.user.name || 'مستخدم',
+          items: input.items.map(item => ({
+            name: item.productName,
+            quantity: item.quantity,
+            price: parseFloat(item.unitCost),
+          })),
+        }).catch(err => console.error('خطأ في إرسال إشعار أمر الشراء:', err));
+
         await db.createActivityLog({
           userId: ctx.user.id,
           userName: ctx.user.name || 'مستخدم',
@@ -1521,6 +1539,20 @@ export const appRouter = router({
           details: `تم إدخال إيرادات يوم ${input.date}`,
         });
 
+        // إرسال إشعار بريد إلكتروني إذا كان هناك عدم تطابق
+        if (!isMatched && unmatchReason) {
+          const branch = await db.getBranchById(input.branchId);
+          emailNotifications.notifyRevenueMismatch({
+            branchId: input.branchId,
+            branchName: branch?.nameAr || 'غير محدد',
+            date: input.date,
+            expectedAmount: expectedAmount,
+            actualAmount: totalEmployeeAmount,
+            difference: Math.abs(expectedAmount - totalEmployeeAmount),
+            reason: unmatchReason,
+          }).catch(err => console.error('خطأ في إرسال إشعار عدم التطابق:', err));
+        }
+
         // تشغيل المراقبة الذكية (Trigger)
         try {
           const { monitorNewRevenue } = await import('./ai/smartMonitoringService');
@@ -1698,6 +1730,30 @@ export const appRouter = router({
           title: 'طلب صرف بونص جديد',
           content: `تم طلب صرف بونص أسبوعي من ${ctx.user.name || 'مشرف'}`,
         });
+
+        // إرسال إشعار بريد إلكتروني متقدم
+        const bonusDetails = await db.getBonusDetails(input.weeklyBonusId);
+        if (bonusDetails.length > 0) {
+          const now = new Date();
+          const branchId = bonusDetails[0].employeeId ? (await db.getEmployeeById(bonusDetails[0].employeeId))?.branchId || 1 : 1;
+          const weeklyBonus = await db.getCurrentWeekBonus(branchId, now.getFullYear(), now.getMonth() + 1, Math.ceil(now.getDate() / 7));
+          if (weeklyBonus) {
+            const branch = await db.getBranchById(weeklyBonus.branchId);
+            const userDetail = bonusDetails.find(d => d.employeeName === ctx.user.name);
+            
+            emailNotifications.notifyBonusRequest({
+              employeeName: ctx.user.name || 'مشرف',
+              amount: userDetail ? parseFloat(String(userDetail.bonusAmount)) : parseFloat(String(weeklyBonus.totalAmount)),
+              weekNumber: weeklyBonus.weekNumber,
+              month: weeklyBonus.month,
+              year: weeklyBonus.year,
+              branchId: weeklyBonus.branchId,
+              branchName: branch?.nameAr || 'غير محدد',
+              weeklyRevenue: userDetail ? parseFloat(String(userDetail.weeklyRevenue)) : 0,
+              tier: userDetail?.bonusTier || 'none',
+            }).catch(err => console.error('خطأ في إرسال إشعار طلب البونص:', err));
+          }
+        }
 
         return { success: true, message: 'تم إرسال طلب الصرف بنجاح' };
       }),
@@ -1924,6 +1980,48 @@ export const appRouter = router({
             relatedType: 'employee_request',
             relatedId: Number(result.insertId),
           });
+
+          // إرسال إشعار بريد إلكتروني متقدم للأدمن والمشرفين
+          const requestDetails: Record<string, any> = {};
+          if (input.requestType === 'advance') {
+            requestDetails['المبلغ المطلوب'] = `${input.advanceAmount || 0} ر.س`;
+            requestDetails['سبب السلفة'] = input.advanceReason || 'غير محدد';
+            requestDetails['طريقة السداد'] = input.repaymentMethod || 'غير محدد';
+          } else if (input.requestType === 'vacation') {
+            requestDetails['نوع الإجازة'] = input.vacationType || 'غير محدد';
+            requestDetails['تاريخ البداية'] = input.vacationStartDate?.toLocaleDateString('ar-SA') || 'غير محدد';
+            requestDetails['تاريخ النهاية'] = input.vacationEndDate?.toLocaleDateString('ar-SA') || 'غير محدد';
+            requestDetails['عدد الأيام'] = input.vacationDays || 0;
+          } else if (input.requestType === 'permission') {
+            requestDetails['تاريخ الاستئذان'] = input.permissionDate?.toLocaleDateString('ar-SA') || 'غير محدد';
+            requestDetails['وقت البداية'] = input.permissionStartTime || 'غير محدد';
+            requestDetails['وقت النهاية'] = input.permissionEndTime || 'غير محدد';
+            requestDetails['سبب الاستئذان'] = input.permissionReason || 'غير محدد';
+          } else if (input.requestType === 'resignation') {
+            requestDetails['تاريخ الاستقالة'] = input.resignationDate?.toLocaleDateString('ar-SA') || 'غير محدد';
+            requestDetails['سبب الاستقالة'] = input.resignationReason || 'غير محدد';
+            requestDetails['آخر يوم عمل'] = input.lastWorkingDay?.toLocaleDateString('ar-SA') || 'غير محدد';
+          } else if (input.requestType === 'arrears') {
+            requestDetails['المبلغ'] = `${input.arrearsAmount || 0} ر.س`;
+            requestDetails['الفترة'] = input.arrearsPeriod || 'غير محدد';
+            requestDetails['التفاصيل'] = input.arrearsDetails || 'غير محدد';
+          } else if (input.requestType === 'objection') {
+            requestDetails['نوع الاعتراض'] = input.objectionType || 'غير محدد';
+            requestDetails['تاريخ الاعتراض'] = input.objectionDate?.toLocaleDateString('ar-SA') || 'غير محدد';
+            requestDetails['التفاصيل'] = input.objectionDetails || 'غير محدد';
+          }
+
+          emailNotifications.notifyNewEmployeeRequest({
+            employeeName: input.employeeName,
+            requestType: input.requestType,
+            title: input.title,
+            description: input.description,
+            priority: input.priority,
+            branchId: input.branchId,
+            branchName: input.branchName,
+            requestNumber: result?.requestNumber,
+            details: requestDetails,
+          }).catch(err => console.error('خطأ في إرسال إشعار البريد:', err));
         }
 
         return { success: true, message: 'تم تقديم الطلب بنجاح', requestNumber: result?.requestNumber };
@@ -1974,6 +2072,21 @@ export const appRouter = router({
           relatedType: 'employee_request',
           relatedId: input.id,
         });
+
+        // إرسال إشعار بريد إلكتروني بتحديث الحالة
+        emailNotifications.notifyRequestStatusUpdate({
+          employeeName: request.employeeName,
+          requestType: request.requestType,
+          title: request.title,
+          requestNumber: request.requestNumber,
+          oldStatus,
+          newStatus: input.status,
+          reviewNotes: input.reviewNotes,
+          rejectionReason: input.rejectionReason,
+          reviewerName: ctx.user.name || 'مسؤول',
+          branchId: request.branchId ?? undefined,
+          branchName: request.branchName ?? undefined,
+        }).catch(err => console.error('خطأ في إرسال إشعار تحديث الحالة:', err));
 
         return { success: true, message: `تم ${statusText} الطلب بنجاح` };
       }),
@@ -2230,6 +2343,45 @@ export const appRouter = router({
           title: 'مصروف جديد',
           content: `تم إضافة مصروف جديد: ${input.title} بقيمة ${input.amount} ر.س.`,
         });
+
+        // إرسال إشعار بريد إلكتروني إذا كان المصروف مرتفع (أكثر من 500 ر.س)
+        const expenseAmount = parseFloat(input.amount);
+        if (expenseAmount >= 500) {
+          const categoryNames: Record<string, string> = {
+            shop_supplies: 'مستلزمات المحل',
+            printing: 'طباعة',
+            carpet_cleaning: 'غسيل سجاد',
+            small_needs: 'احتياجات صغيرة',
+            residency: 'إقامة',
+            medical_exam: 'فحص طبي',
+            transportation: 'مواصلات',
+            electricity: 'كهرباء',
+            internet: 'إنترنت',
+            license_renewal: 'تجديد رخصة',
+            visa: 'تأشيرة',
+            residency_renewal: 'تجديد إقامة',
+            health_cert_renewal: 'تجديد شهادة صحية',
+            maintenance: 'صيانة',
+            health_cert: 'شهادة صحية',
+            violation: 'مخالفة',
+            emergency: 'طوارئ',
+            shop_rent: 'إيجار محل',
+            housing_rent: 'إيجار سكن',
+            improvements: 'تحسينات',
+            bonus: 'بونص',
+            other: 'أخرى',
+          };
+          
+          emailNotifications.notifyHighExpense({
+            amount: expenseAmount,
+            category: categoryNames[input.category] || input.category,
+            description: input.description,
+            branchId: input.branchId,
+            branchName: input.branchName,
+            date: input.expenseDate,
+            threshold: 500,
+          }).catch(err => console.error('خطأ في إرسال إشعار المصروف:', err));
+        }
 
         // تشغيل المراقبة الذكية للمصاريف (Trigger)
         try {
