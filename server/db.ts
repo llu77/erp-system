@@ -19,6 +19,8 @@ import {
   monitorSettings,
   notificationRecipients,
   sentNotifications,
+  deletedRecords,
+  InsertDeletedRecord,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -3201,4 +3203,41 @@ export async function deleteExpenseById(id: number) {
   if (!db) return null;
   
   return await db.delete(expenses).where(eq(expenses.id, id));
+}
+
+
+// ==================== دوال السجلات المحذوفة ====================
+export async function createDeletedRecord(data: InsertDeletedRecord) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.insert(deletedRecords).values(data);
+  return result;
+}
+
+export async function getDeletedRecords(entityType?: string, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  if (entityType) {
+    return await db.select().from(deletedRecords)
+      .where(eq(deletedRecords.entityType, entityType as any))
+      .orderBy(desc(deletedRecords.deletedAt))
+      .limit(limit);
+  }
+  
+  return await db.select().from(deletedRecords)
+    .orderBy(desc(deletedRecords.deletedAt))
+    .limit(limit);
+}
+
+export async function getDeletedRecordById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const results = await db.select().from(deletedRecords)
+    .where(eq(deletedRecords.id, id))
+    .limit(1);
+  
+  return results[0] || null;
 }

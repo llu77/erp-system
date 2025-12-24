@@ -1219,3 +1219,44 @@ export const sentNotifications = mysqlTable("sentNotifications", {
 
 export type SentNotification = typeof sentNotifications.$inferSelect;
 export type InsertSentNotification = typeof sentNotifications.$inferInsert;
+
+
+// ==================== جدول السجلات المحذوفة ====================
+export const deletedRecords = mysqlTable("deletedRecords", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // معلومات المستخدم الذي قام بالحذف
+  deletedByUserId: int("deletedByUserId").notNull(),
+  deletedByUserName: varchar("deletedByUserName", { length: 200 }).notNull(),
+  
+  // نوع السجل المحذوف
+  entityType: mysqlEnum("entityType", [
+    "purchase_order",
+    "expense",
+    "revenue",
+    "employee",
+    "product",
+    "supplier",
+    "customer",
+    "invoice",
+    "employee_request",
+    "bonus_request"
+  ]).notNull(),
+  
+  // معرف السجل الأصلي
+  originalId: int("originalId").notNull(),
+  
+  // البيانات الكاملة للسجل المحذوف (JSON)
+  originalData: text("originalData").notNull(),
+  
+  // معلومات إضافية
+  reason: text("reason"),
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 100 }),
+  
+  // تاريخ الحذف
+  deletedAt: timestamp("deletedAt").defaultNow().notNull(),
+});
+
+export type DeletedRecord = typeof deletedRecords.$inferSelect;
+export type InsertDeletedRecord = typeof deletedRecords.$inferInsert;

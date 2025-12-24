@@ -1037,8 +1037,23 @@ export const appRouter = router({
       }),
 
     delete: adminProcedure
-      .input(z.object({ id: z.number() }))
+      .input(z.object({ id: z.number(), reason: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
+        // جلب بيانات أمر الشراء قبل الحذف
+        const orderData = await db.getPurchaseOrderById(input.id);
+        const orderItems = await db.getPurchaseOrderItems(input.id);
+        
+        // تسجيل البيانات المحذوفة
+        await db.createDeletedRecord({
+          deletedByUserId: ctx.user.id,
+          deletedByUserName: ctx.user.name || 'مستخدم',
+          entityType: 'purchase_order',
+          originalId: input.id,
+          originalData: JSON.stringify({ order: orderData, items: orderItems }),
+          reason: input.reason,
+          branchId: orderData?.branchId || null,
+        });
+        
         await db.deletePurchaseOrder(input.id);
         await db.createActivityLog({
           userId: ctx.user.id,
@@ -1046,7 +1061,7 @@ export const appRouter = router({
           action: 'delete',
           entityType: 'purchase_order',
           entityId: input.id,
-          details: `تم حذف أمر الشراء`,
+          details: `تم حذف أمر الشراء ${orderData?.orderNumber || ''}`,
         });
         return { success: true, message: 'تم حذف أمر الشراء بنجاح' };
       }),
