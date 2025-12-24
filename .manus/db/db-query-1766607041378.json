@@ -1,0 +1,50 @@
+{
+  "query": "SELECT date, cash, network, balance, total, branchId FROM dailyRevenues WHERE date >= '2024-12-01' ORDER BY date DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT date, cash, network, balance, total, branchId FROM dailyRevenues WHERE date >= '2024-12-01' ORDER BY date DESC LIMIT 10;",
+  "rows": [
+    {
+      "date": "2025-12-23 00:00:00",
+      "cash": "80.00",
+      "network": "680.00",
+      "balance": "680.00",
+      "total": "760.00",
+      "branchId": "1"
+    },
+    {
+      "date": "2025-12-23 00:00:00",
+      "cash": "75.00",
+      "network": "785.00",
+      "balance": "785.00",
+      "total": "860.00",
+      "branchId": "30001"
+    },
+    {
+      "date": "2025-12-22 00:00:00",
+      "cash": "115.00",
+      "network": "260.00",
+      "balance": "260.00",
+      "total": "375.00",
+      "branchId": "30001"
+    },
+    {
+      "date": "2025-12-22 00:00:00",
+      "cash": "25.00",
+      "network": "850.00",
+      "balance": "850.00",
+      "total": "875.00",
+      "branchId": "1"
+    },
+    {
+      "date": "2025-12-19 00:00:00",
+      "cash": "100.00",
+      "network": "10.00",
+      "balance": "0.00",
+      "total": "110.00",
+      "branchId": "30003"
+    }
+  ],
+  "messages": [],
+  "stdout": "date\tcash\tnetwork\tbalance\ttotal\tbranchId\n2025-12-23 00:00:00\t80.00\t680.00\t680.00\t760.00\t1\n2025-12-23 00:00:00\t75.00\t785.00\t785.00\t860.00\t30001\n2025-12-22 00:00:00\t115.00\t260.00\t260.00\t375.00\t30001\n2025-12-22 00:00:00\t25.00\t850.00\t850.00\t875.00\t1\n2025-12-19 00:00:00\t100.00\t10.00\t0.00\t110.00\t30003\n",
+  "stderr": "",
+  "execution_time_ms": 1610
+}
