@@ -3360,6 +3360,50 @@ export const appRouter = router({
         };
       }),
   }),
+
+  // ==================== التقارير الشهرية والتذكيرات ====================
+  monthlyReports: router({
+    // إرسال التقرير الشهري للمشرف العام
+    sendReport: adminProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2100),
+      }))
+      .mutation(async ({ input }) => {
+        const { sendMonthlyReportToSupervisor } = await import('./reports/monthlyReportService');
+        const success = await sendMonthlyReportToSupervisor(input.month, input.year);
+        return {
+          success,
+          message: success ? 'تم إرسال التقرير الشهري بنجاح' : 'فشل إرسال التقرير',
+        };
+      }),
+
+    // إرسال تذكير المصاريف لمشرفي الفروع
+    sendExpenseReminder: adminProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2100),
+      }))
+      .mutation(async ({ input }) => {
+        const { sendExpenseReminder } = await import('./reports/monthlyReportService');
+        const success = await sendExpenseReminder(input.month, input.year);
+        return {
+          success,
+          message: success ? 'تم إرسال التذكيرات بنجاح' : 'فشل إرسال التذكيرات',
+        };
+      }),
+
+    // الحصول على بيانات التقرير الشهري
+    getData: protectedProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2100),
+      }))
+      .query(async ({ input }) => {
+        const { getMonthlyReportData } = await import('./reports/monthlyReportService');
+        return await getMonthlyReportData(input.month, input.year);
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

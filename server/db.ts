@@ -3241,3 +3241,45 @@ export async function getDeletedRecordById(id: number) {
   
   return results[0] || null;
 }
+
+
+// ==================== دوال إضافية للتقارير ====================
+export async function getEmployeeRevenuesByDateRange(startDate: Date, endDate: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(employeeRevenues)
+    .where(and(
+      gte(employeeRevenues.createdAt, startDate),
+      lte(employeeRevenues.createdAt, endDate)
+    ));
+}
+
+export async function getAllWeeklyBonusDetails() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select({
+    id: bonusDetails.id,
+    employeeId: bonusDetails.employeeId,
+    employeeName: employees.name,
+    weeklyRevenue: bonusDetails.weeklyRevenue,
+    bonusAmount: bonusDetails.bonusAmount,
+    bonusTier: bonusDetails.bonusTier,
+    isEligible: bonusDetails.isEligible,
+    createdAt: bonusDetails.createdAt,
+  })
+    .from(bonusDetails)
+    .leftJoin(employees, eq(bonusDetails.employeeId, employees.id));
+}
+
+
+// دالة جلب جميع الإيرادات اليومية بنطاق تاريخ (بدون فلتر فرع)
+export async function getAllDailyRevenuesByDateRange(startDate: Date, endDate: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(dailyRevenues)
+    .where(and(
+      gte(dailyRevenues.date, startDate),
+      lte(dailyRevenues.date, endDate)
+    ))
+    .orderBy(desc(dailyRevenues.date));
+}
