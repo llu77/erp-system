@@ -546,34 +546,44 @@ export async function getDashboardStats(branchId?: number) {
   // إجمالي الموردين
   const totalSuppliers = await db.select({ count: sql<number>`COUNT(*)` }).from(suppliers);
 
-  // شروط التصفية حسب الفرع
-  const branchCondition = branchId ? eq(invoices.branchId, branchId) : undefined;
+  // شروط التصفية حسب الفرع للإيرادات اليومية
+  const revenueBranchCondition = branchId ? eq(dailyRevenues.branchId, branchId) : undefined;
   const purchaseBranchCondition = branchId ? eq(purchaseOrders.branchId, branchId) : undefined;
 
-  // مبيعات الشهر
-  const monthlySalesConditions = [
-    gte(invoices.invoiceDate, startOfMonth),
-    eq(invoices.status, 'paid')
+  // إيرادات الشهر الفعلية من dailyRevenues (كاش + شبكة + رصيد)
+  const monthlyRevenueConditions = [
+    gte(dailyRevenues.date, startOfMonth)
   ];
-  if (branchCondition) monthlySalesConditions.push(branchCondition);
+  if (revenueBranchCondition) monthlyRevenueConditions.push(revenueBranchCondition);
   
-  const monthlySales = await db.select({ 
-    total: sql<string>`COALESCE(SUM(total), 0)`,
+  const monthlyRevenue = await db.select({ 
+    totalCash: sql<string>`COALESCE(SUM(${dailyRevenues.cash}), 0)`,
+    totalNetwork: sql<string>`COALESCE(SUM(${dailyRevenues.network}), 0)`,
+    totalBalance: sql<string>`COALESCE(SUM(${dailyRevenues.balance}), 0)`,
     count: sql<number>`COUNT(*)`
-  }).from(invoices)
-    .where(and(...monthlySalesConditions));
+  }).from(dailyRevenues)
+    .where(and(...monthlyRevenueConditions));
 
-  // مبيعات السنة
-  const yearlySalesConditions = [
-    gte(invoices.invoiceDate, startOfYear),
-    eq(invoices.status, 'paid')
+  const monthlyTotal = parseFloat(monthlyRevenue[0]?.totalCash || '0') + 
+                       parseFloat(monthlyRevenue[0]?.totalNetwork || '0') + 
+                       parseFloat(monthlyRevenue[0]?.totalBalance || '0');
+
+  // إيرادات السنة الفعلية
+  const yearlyRevenueConditions = [
+    gte(dailyRevenues.date, startOfYear)
   ];
-  if (branchCondition) yearlySalesConditions.push(branchCondition);
+  if (revenueBranchCondition) yearlyRevenueConditions.push(revenueBranchCondition);
   
-  const yearlySales = await db.select({ 
-    total: sql<string>`COALESCE(SUM(total), 0)` 
-  }).from(invoices)
-    .where(and(...yearlySalesConditions));
+  const yearlyRevenue = await db.select({ 
+    totalCash: sql<string>`COALESCE(SUM(${dailyRevenues.cash}), 0)`,
+    totalNetwork: sql<string>`COALESCE(SUM(${dailyRevenues.network}), 0)`,
+    totalBalance: sql<string>`COALESCE(SUM(${dailyRevenues.balance}), 0)`
+  }).from(dailyRevenues)
+    .where(and(...yearlyRevenueConditions));
+
+  const yearlyTotal = parseFloat(yearlyRevenue[0]?.totalCash || '0') + 
+                      parseFloat(yearlyRevenue[0]?.totalNetwork || '0') + 
+                      parseFloat(yearlyRevenue[0]?.totalBalance || '0');
 
   // مشتريات الشهر
   const monthlyPurchasesConditions = [
@@ -588,12 +598,12 @@ export async function getDashboardStats(branchId?: number) {
   }).from(purchaseOrders)
     .where(and(...monthlyPurchasesConditions));
 
-  // آخر الفواتير
-  const recentInvoicesQuery = db.select().from(invoices);
+  // آخر الإيرادات اليومية (بدلاً من الفواتير)
+  const recentRevenuesQuery = db.select().from(dailyRevenues);
   if (branchId) {
-    const recentInvoices = await recentInvoicesQuery
-      .where(eq(invoices.branchId, branchId))
-      .orderBy(desc(invoices.createdAt))
+    const recentRevenues = await recentRevenuesQuery
+      .where(eq(dailyRevenues.branchId, branchId))
+      .orderBy(desc(dailyRevenues.date))
       .limit(5);
     
     // آخر أوامر الشراء
@@ -602,16 +612,26 @@ export async function getDashboardStats(branchId?: number) {
       .orderBy(desc(purchaseOrders.createdAt))
       .limit(5);
 
+    // تحويل الإيرادات إلى شكل فواتير للتوافق مع الواجهة
+    const recentInvoices = recentRevenues.map(r => ({
+      id: r.id,
+      invoiceNumber: `REV-${r.date.toISOString().split('T')[0]}`,
+      customerName: 'إيرادات يومية',
+      total: String(Number(r.cash) + Number(r.network) + Number(r.balance)),
+      invoiceDate: r.date,
+      status: r.isMatched ? 'paid' : 'pending'
+    }));
+
     return {
       totalProducts: totalProducts[0]?.count || 0,
       lowStockCount: lowStockCount[0]?.count || 0,
       totalCustomers: totalCustomers[0]?.count || 0,
       totalSuppliers: totalSuppliers[0]?.count || 0,
       monthlySales: {
-        total: parseFloat(monthlySales[0]?.total || '0'),
-        count: monthlySales[0]?.count || 0
+        total: monthlyTotal,
+        count: monthlyRevenue[0]?.count || 0
       },
-      yearlySales: parseFloat(yearlySales[0]?.total || '0'),
+      yearlySales: yearlyTotal,
       monthlyPurchases: {
         total: parseFloat(monthlyPurchases[0]?.total || '0'),
         count: monthlyPurchases[0]?.count || 0
@@ -622,9 +642,9 @@ export async function getDashboardStats(branchId?: number) {
     };
   }
 
-  // آخر الفواتير (بدون تصفية)
-  const recentInvoices = await recentInvoicesQuery
-    .orderBy(desc(invoices.createdAt))
+  // آخر الإيرادات (بدون تصفية)
+  const recentRevenues = await recentRevenuesQuery
+    .orderBy(desc(dailyRevenues.date))
     .limit(5);
 
   // آخر أوامر الشراء (بدون تصفية)
@@ -632,16 +652,26 @@ export async function getDashboardStats(branchId?: number) {
     .orderBy(desc(purchaseOrders.createdAt))
     .limit(5);
 
+  // تحويل الإيرادات إلى شكل فواتير للتوافق مع الواجهة
+  const recentInvoices = recentRevenues.map(r => ({
+    id: r.id,
+    invoiceNumber: `REV-${r.date.toISOString().split('T')[0]}`,
+    customerName: 'إيرادات يومية',
+    total: String(Number(r.cash) + Number(r.network) + Number(r.balance)),
+    invoiceDate: r.date,
+    status: r.isMatched ? 'paid' : 'pending'
+  }));
+
   return {
     totalProducts: totalProducts[0]?.count || 0,
     lowStockCount: lowStockCount[0]?.count || 0,
     totalCustomers: totalCustomers[0]?.count || 0,
     totalSuppliers: totalSuppliers[0]?.count || 0,
     monthlySales: {
-      total: parseFloat(monthlySales[0]?.total || '0'),
-      count: monthlySales[0]?.count || 0
+      total: monthlyTotal,
+      count: monthlyRevenue[0]?.count || 0
     },
-    yearlySales: parseFloat(yearlySales[0]?.total || '0'),
+    yearlySales: yearlyTotal,
     monthlyPurchases: {
       total: parseFloat(monthlyPurchases[0]?.total || '0'),
       count: monthlyPurchases[0]?.count || 0
