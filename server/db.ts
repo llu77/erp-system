@@ -550,40 +550,32 @@ export async function getDashboardStats(branchId?: number) {
   const revenueBranchCondition = branchId ? eq(dailyRevenues.branchId, branchId) : undefined;
   const purchaseBranchCondition = branchId ? eq(purchaseOrders.branchId, branchId) : undefined;
 
-  // إيرادات الشهر الفعلية من dailyRevenues (كاش + شبكة + رصيد)
+  // إيرادات الشهر الفعلية من dailyRevenues (استخدام حقل total = كاش + شبكة)
   const monthlyRevenueConditions = [
     gte(dailyRevenues.date, startOfMonth)
   ];
   if (revenueBranchCondition) monthlyRevenueConditions.push(revenueBranchCondition);
   
   const monthlyRevenue = await db.select({ 
-    totalCash: sql<string>`COALESCE(SUM(${dailyRevenues.cash}), 0)`,
-    totalNetwork: sql<string>`COALESCE(SUM(${dailyRevenues.network}), 0)`,
-    totalBalance: sql<string>`COALESCE(SUM(${dailyRevenues.balance}), 0)`,
+    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.total}), 0)`,
     count: sql<number>`COUNT(*)`
   }).from(dailyRevenues)
     .where(and(...monthlyRevenueConditions));
 
-  const monthlyTotal = parseFloat(monthlyRevenue[0]?.totalCash || '0') + 
-                       parseFloat(monthlyRevenue[0]?.totalNetwork || '0') + 
-                       parseFloat(monthlyRevenue[0]?.totalBalance || '0');
+  const monthlyTotal = parseFloat(monthlyRevenue[0]?.totalRevenue || '0');
 
-  // إيرادات السنة الفعلية
+  // إيرادات السنة الفعلية (استخدام حقل total = كاش + شبكة)
   const yearlyRevenueConditions = [
     gte(dailyRevenues.date, startOfYear)
   ];
   if (revenueBranchCondition) yearlyRevenueConditions.push(revenueBranchCondition);
   
   const yearlyRevenue = await db.select({ 
-    totalCash: sql<string>`COALESCE(SUM(${dailyRevenues.cash}), 0)`,
-    totalNetwork: sql<string>`COALESCE(SUM(${dailyRevenues.network}), 0)`,
-    totalBalance: sql<string>`COALESCE(SUM(${dailyRevenues.balance}), 0)`
+    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.total}), 0)`
   }).from(dailyRevenues)
     .where(and(...yearlyRevenueConditions));
 
-  const yearlyTotal = parseFloat(yearlyRevenue[0]?.totalCash || '0') + 
-                      parseFloat(yearlyRevenue[0]?.totalNetwork || '0') + 
-                      parseFloat(yearlyRevenue[0]?.totalBalance || '0');
+  const yearlyTotal = parseFloat(yearlyRevenue[0]?.totalRevenue || '0');
 
   // مشتريات الشهر
   const monthlyPurchasesConditions = [
@@ -612,12 +604,12 @@ export async function getDashboardStats(branchId?: number) {
       .orderBy(desc(purchaseOrders.createdAt))
       .limit(5);
 
-    // تحويل الإيرادات إلى شكل فواتير للتوافق مع الواجهة
+    // تحويل الإيرادات إلى شكل فواتير للتوافق مع الواجهة (استخدام حقل total)
     const recentInvoices = recentRevenues.map(r => ({
       id: r.id,
       invoiceNumber: `REV-${r.date.toISOString().split('T')[0]}`,
       customerName: 'إيرادات يومية',
-      total: String(Number(r.cash) + Number(r.network) + Number(r.balance)),
+      total: String(Number(r.total)),
       invoiceDate: r.date,
       status: r.isMatched ? 'paid' : 'pending'
     }));
@@ -652,12 +644,12 @@ export async function getDashboardStats(branchId?: number) {
     .orderBy(desc(purchaseOrders.createdAt))
     .limit(5);
 
-  // تحويل الإيرادات إلى شكل فواتير للتوافق مع الواجهة
+  // تحويل الإيرادات إلى شكل فواتير للتوافق مع الواجهة (استخدام حقل total)
   const recentInvoices = recentRevenues.map(r => ({
     id: r.id,
     invoiceNumber: `REV-${r.date.toISOString().split('T')[0]}`,
     customerName: 'إيرادات يومية',
-    total: String(Number(r.cash) + Number(r.network) + Number(r.balance)),
+    total: String(Number(r.total)),
     invoiceDate: r.date,
     status: r.isMatched ? 'paid' : 'pending'
   }));
@@ -3467,18 +3459,23 @@ export async function getDailyRevenuesForChart(startDate: Date, endDate: Date, b
     conditions.push(eq(dailyRevenues.branchId, branchId));
   }
   
-  const result = await db.select({
-    date: sql<string>`DATE(${dailyRevenues.date})`,
-    totalCash: sql<string>`COALESCE(SUM(${dailyRevenues.cash}), 0)`,
-    totalNetwork: sql<string>`COALESCE(SUM(${dailyRevenues.network}), 0)`,
-    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.total}), 0)`,
-  })
-    .from(dailyRevenues)
-    .where(and(...conditions))
-    .groupBy(sql`DATE(${dailyRevenues.date})`)
-    .orderBy(sql`DATE(${dailyRevenues.date})`);
+  // استخدام استعلام SQL مباشر لتجنب مشاكل Drizzle مع التجميع
+  const result = await db.execute(
+    sql`SELECT 
+      DATE(${dailyRevenues.date}) as date,
+      COALESCE(SUM(${dailyRevenues.cash}), 0) as totalCash,
+      COALESCE(SUM(${dailyRevenues.network}), 0) as totalNetwork,
+      COALESCE(SUM(${dailyRevenues.total}), 0) as totalRevenue
+    FROM ${dailyRevenues}
+    WHERE ${and(...conditions)}
+    GROUP BY DATE(${dailyRevenues.date})
+    ORDER BY DATE(${dailyRevenues.date})`
+  );
   
-  return result.map(r => ({
+  // النتيجة تأتي كمصفوفة من الصفوف
+  const rows = result[0] as unknown as Array<{ date: string; totalCash: string; totalNetwork: string; totalRevenue: string }>;
+  
+  return rows.map(r => ({
     date: r.date,
     cash: parseFloat(r.totalCash || '0'),
     network: parseFloat(r.totalNetwork || '0'),
