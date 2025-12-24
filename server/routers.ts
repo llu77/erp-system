@@ -3404,6 +3404,73 @@ export const appRouter = router({
         return await getMonthlyReportData(input.month, input.year);
       }),
   }),
+
+  // ==================== لوحة التحكم التنفيذية المحسنة ====================
+  executiveDashboard: router({
+    // حساب مؤشرات الأداء الفعلية
+    kpis: managerProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.calculateExecutiveKPIs(
+          new Date(input.startDate),
+          new Date(input.endDate),
+          input.branchId
+        );
+      }),
+
+    // الإيرادات اليومية للرسم البياني
+    dailyChart: managerProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getDailyRevenuesForChart(
+          new Date(input.startDate),
+          new Date(input.endDate),
+          input.branchId
+        );
+      }),
+
+    // مقارنة الأداء بين فترتين
+    compare: managerProcedure
+      .input(z.object({
+        currentStart: z.string(),
+        currentEnd: z.string(),
+        previousStart: z.string(),
+        previousEnd: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.comparePerformance(
+          new Date(input.currentStart),
+          new Date(input.currentEnd),
+          new Date(input.previousStart),
+          new Date(input.previousEnd),
+          input.branchId
+        );
+      }),
+
+    // أداء الموظفين
+    employeesPerformance: managerProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getEmployeesPerformance(
+          new Date(input.startDate),
+          new Date(input.endDate),
+          input.branchId
+        );
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

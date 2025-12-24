@@ -3283,3 +3283,203 @@ export async function getAllDailyRevenuesByDateRange(startDate: Date, endDate: D
     ))
     .orderBy(desc(dailyRevenues.date));
 }
+
+
+// ==================== دوال لوحة التحكم التنفيذية ====================
+
+// حساب إجمالي الإيرادات الفعلية من جدول dailyRevenues
+export async function getActualRevenues(startDate: Date, endDate: Date, branchId?: number) {
+  const db = await getDb();
+  if (!db) return { totalCash: 0, totalNetwork: 0, totalBalance: 0, totalRevenue: 0, daysCount: 0 };
+  
+  const conditions = [
+    gte(dailyRevenues.date, startDate),
+    lte(dailyRevenues.date, endDate)
+  ];
+  
+  if (branchId) {
+    conditions.push(eq(dailyRevenues.branchId, branchId));
+  }
+  
+  const result = await db.select({
+    totalCash: sql<string>`COALESCE(SUM(${dailyRevenues.cash}), 0)`,
+    totalNetwork: sql<string>`COALESCE(SUM(${dailyRevenues.network}), 0)`,
+    totalBalance: sql<string>`COALESCE(SUM(${dailyRevenues.balance}), 0)`,
+    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.total}), 0)`,
+    daysCount: sql<number>`COUNT(DISTINCT DATE(${dailyRevenues.date}))`,
+  }).from(dailyRevenues).where(and(...conditions));
+  
+  return {
+    totalCash: parseFloat(result[0]?.totalCash || '0'),
+    totalNetwork: parseFloat(result[0]?.totalNetwork || '0'),
+    totalBalance: parseFloat(result[0]?.totalBalance || '0'),
+    totalRevenue: parseFloat(result[0]?.totalRevenue || '0'),
+    daysCount: result[0]?.daysCount || 0,
+  };
+}
+
+// حساب إجمالي المصاريف الفعلية
+export async function getActualExpenses(startDate: Date, endDate: Date, branchId?: number) {
+  const db = await getDb();
+  if (!db) return { totalExpenses: 0, expensesCount: 0 };
+  
+  const conditions = [
+    gte(expenses.expenseDate, startDate),
+    lte(expenses.expenseDate, endDate),
+    eq(expenses.status, 'approved')
+  ];
+  
+  if (branchId) {
+    conditions.push(eq(expenses.branchId, branchId));
+  }
+  
+  const result = await db.select({
+    totalExpenses: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`,
+    expensesCount: sql<number>`COUNT(*)`,
+  }).from(expenses).where(and(...conditions));
+  
+  return {
+    totalExpenses: parseFloat(result[0]?.totalExpenses || '0'),
+    expensesCount: result[0]?.expensesCount || 0,
+  };
+}
+
+// حساب أداء الموظفين
+export async function getEmployeesPerformance(startDate: Date, endDate: Date, branchId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // الربط مع dailyRevenues للحصول على التاريخ
+  const conditions = [
+    gte(dailyRevenues.date, startDate),
+    lte(dailyRevenues.date, endDate)
+  ];
+  
+  if (branchId) {
+    conditions.push(eq(employees.branchId, branchId));
+  }
+  
+  const result = await db.select({
+    employeeId: employees.id,
+    employeeName: employees.name,
+    employeeCode: employees.code,
+    branchId: employees.branchId,
+    totalRevenue: sql<string>`COALESCE(SUM(${employeeRevenues.total}), 0)`,
+    daysWorked: sql<number>`COUNT(DISTINCT DATE(${dailyRevenues.date}))`,
+  })
+    .from(employeeRevenues)
+    .innerJoin(employees, eq(employeeRevenues.employeeId, employees.id))
+    .innerJoin(dailyRevenues, eq(employeeRevenues.dailyRevenueId, dailyRevenues.id))
+    .where(and(...conditions))
+    .groupBy(employees.id, employees.name, employees.code, employees.branchId)
+    .orderBy(sql`SUM(${employeeRevenues.total}) DESC`);
+  
+  return result.map(r => ({
+    ...r,
+    totalRevenue: parseFloat(r.totalRevenue || '0'),
+    averageDaily: r.daysWorked > 0 ? parseFloat(r.totalRevenue || '0') / r.daysWorked : 0,
+  }));
+}
+
+// حساب مؤشرات الأداء الفعلية للوحة التنفيذية
+export async function calculateExecutiveKPIs(startDate: Date, endDate: Date, branchId?: number) {
+  const revenues = await getActualRevenues(startDate, endDate, branchId);
+  const expensesData = await getActualExpenses(startDate, endDate, branchId);
+  const employeesPerformance = await getEmployeesPerformance(startDate, endDate, branchId);
+  
+  const netProfit = revenues.totalRevenue - expensesData.totalExpenses;
+  const profitMargin = revenues.totalRevenue > 0 ? (netProfit / revenues.totalRevenue) * 100 : 0;
+  const averageDailyRevenue = revenues.daysCount > 0 ? revenues.totalRevenue / revenues.daysCount : 0;
+  
+  // أفضل 5 موظفين
+  const topEmployees = employeesPerformance.slice(0, 5);
+  
+  // إجمالي إيرادات الموظفين
+  const totalEmployeeRevenue = employeesPerformance.reduce((sum, emp) => sum + emp.totalRevenue, 0);
+  
+  return {
+    // الإيرادات
+    totalRevenue: revenues.totalRevenue,
+    totalCash: revenues.totalCash,
+    totalNetwork: revenues.totalNetwork,
+    totalBalance: revenues.totalBalance,
+    daysCount: revenues.daysCount,
+    averageDailyRevenue,
+    
+    // المصاريف والأرباح
+    totalExpenses: expensesData.totalExpenses,
+    expensesCount: expensesData.expensesCount,
+    netProfit,
+    profitMargin,
+    
+    // أداء الموظفين
+    employeesCount: employeesPerformance.length,
+    topEmployees,
+    totalEmployeeRevenue,
+    
+    // مؤشرات إضافية
+    cashPercentage: revenues.totalRevenue > 0 ? (revenues.totalCash / revenues.totalRevenue) * 100 : 0,
+    networkPercentage: revenues.totalRevenue > 0 ? (revenues.totalNetwork / revenues.totalRevenue) * 100 : 0,
+  };
+}
+
+// الحصول على الإيرادات اليومية للرسم البياني
+export async function getDailyRevenuesForChart(startDate: Date, endDate: Date, branchId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [
+    gte(dailyRevenues.date, startDate),
+    lte(dailyRevenues.date, endDate)
+  ];
+  
+  if (branchId) {
+    conditions.push(eq(dailyRevenues.branchId, branchId));
+  }
+  
+  const result = await db.select({
+    date: sql<string>`DATE(${dailyRevenues.date})`,
+    totalCash: sql<string>`COALESCE(SUM(${dailyRevenues.cash}), 0)`,
+    totalNetwork: sql<string>`COALESCE(SUM(${dailyRevenues.network}), 0)`,
+    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.total}), 0)`,
+  })
+    .from(dailyRevenues)
+    .where(and(...conditions))
+    .groupBy(sql`DATE(${dailyRevenues.date})`)
+    .orderBy(sql`DATE(${dailyRevenues.date})`);
+  
+  return result.map(r => ({
+    date: r.date,
+    cash: parseFloat(r.totalCash || '0'),
+    network: parseFloat(r.totalNetwork || '0'),
+    total: parseFloat(r.totalRevenue || '0'),
+  }));
+}
+
+// مقارنة الأداء بين فترتين
+export async function comparePerformance(
+  currentStart: Date, 
+  currentEnd: Date, 
+  previousStart: Date, 
+  previousEnd: Date, 
+  branchId?: number
+) {
+  const current = await calculateExecutiveKPIs(currentStart, currentEnd, branchId);
+  const previous = await calculateExecutiveKPIs(previousStart, previousEnd, branchId);
+  
+  const calculateChange = (curr: number, prev: number) => {
+    if (prev === 0) return curr > 0 ? 100 : 0;
+    return ((curr - prev) / Math.abs(prev)) * 100;
+  };
+  
+  return {
+    current,
+    previous,
+    changes: {
+      revenueChange: calculateChange(current.totalRevenue, previous.totalRevenue),
+      expensesChange: calculateChange(current.totalExpenses, previous.totalExpenses),
+      profitChange: calculateChange(current.netProfit, previous.netProfit),
+      employeeRevenueChange: calculateChange(current.totalEmployeeRevenue, previous.totalEmployeeRevenue),
+    }
+  };
+}

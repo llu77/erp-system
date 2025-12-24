@@ -3,254 +3,282 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
-import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
-import { ar } from "date-fns/locale";
+import { Progress } from "@/components/ui/progress";
 import { 
   TrendingUp, 
   TrendingDown,
   DollarSign,
-  ShoppingCart,
   Users,
-  Package,
-  BarChart3,
-  PieChart,
   Calendar,
   RefreshCw,
-  Mail,
+  Building2,
+  Banknote,
+  CreditCard,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  BarChart3,
+  Target,
+  Wallet
 } from "lucide-react";
 
 export default function SalesDashboard() {
-  const [dateRange, setDateRange] = useState<'week' | 'month' | '3months' | 'year'>('month');
-  const [emailSending, setEmailSending] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [period, setPeriod] = useState<"week" | "month" | "quarter" | "year">("month");
 
-  // حساب التواريخ بناءً على النطاق المحدد
-  const { startDate, endDate, previousStartDate, previousEndDate } = useMemo(() => {
-    const now = new Date();
-    let start: Date, end: Date, prevStart: Date, prevEnd: Date;
+  // حساب نطاق التاريخ بناءً على الفترة المختارة
+  const dateRange = useMemo(() => {
+    const end = new Date();
+    const start = new Date();
     
-    switch (dateRange) {
-      case 'week':
-        start = subDays(now, 7);
-        end = now;
-        prevStart = subDays(now, 14);
-        prevEnd = subDays(now, 7);
+    switch (period) {
+      case "week":
+        start.setDate(start.getDate() - 7);
         break;
-      case 'month':
-        start = startOfMonth(now);
-        end = endOfMonth(now);
-        prevStart = startOfMonth(subMonths(now, 1));
-        prevEnd = endOfMonth(subMonths(now, 1));
+      case "month":
+        start.setMonth(start.getMonth() - 1);
         break;
-      case '3months':
-        start = subMonths(now, 3);
-        end = now;
-        prevStart = subMonths(now, 6);
-        prevEnd = subMonths(now, 3);
+      case "quarter":
+        start.setMonth(start.getMonth() - 3);
         break;
-      case 'year':
-        start = new Date(now.getFullYear(), 0, 1);
-        end = now;
-        prevStart = new Date(now.getFullYear() - 1, 0, 1);
-        prevEnd = new Date(now.getFullYear() - 1, 11, 31);
+      case "year":
+        start.setFullYear(start.getFullYear() - 1);
         break;
-      default:
-        start = startOfMonth(now);
-        end = endOfMonth(now);
-        prevStart = startOfMonth(subMonths(now, 1));
-        prevEnd = endOfMonth(subMonths(now, 1));
     }
     
-    return { startDate: start, endDate: end, previousStartDate: prevStart, previousEndDate: prevEnd };
-  }, [dateRange]);
+    return { start, end };
+  }, [period]);
 
-  // جلب بيانات المبيعات اليومية
-  const { data: dailySales, isLoading: dailyLoading } = trpc.scheduledReports.dailySales.useQuery({
-    startDate,
-    endDate,
-  });
+  // حساب نطاق الفترة السابقة للمقارنة
+  const previousDateRange = useMemo(() => {
+    const end = new Date(dateRange.start);
+    end.setDate(end.getDate() - 1);
+    const start = new Date(end);
+    
+    switch (period) {
+      case "week":
+        start.setDate(start.getDate() - 7);
+        break;
+      case "month":
+        start.setMonth(start.getMonth() - 1);
+        break;
+      case "quarter":
+        start.setMonth(start.getMonth() - 3);
+        break;
+      case "year":
+        start.setFullYear(start.getFullYear() - 1);
+        break;
+    }
+    
+    return { start, end };
+  }, [dateRange, period]);
 
-  // جلب أفضل المنتجات
-  const { data: topProducts, isLoading: productsLoading } = trpc.scheduledReports.topProducts.useQuery({
-    limit: 10,
-    startDate,
-    endDate,
-  });
-
-  // جلب أفضل العملاء
-  const { data: topCustomers, isLoading: customersLoading } = trpc.scheduledReports.topCustomers.useQuery({
-    limit: 10,
-    startDate,
-    endDate,
-  });
-
-  // جلب المبيعات حسب الفئة
-  const { data: salesByCategory, isLoading: categoryLoading } = trpc.scheduledReports.salesByCategory.useQuery({
-    startDate,
-    endDate,
-  });
+  // جلب الفروع
+  const { data: branches } = trpc.branches.list.useQuery();
 
   // جلب مؤشرات الأداء
-  const { data: kpis, isLoading: kpisLoading } = trpc.kpis.calculate.useQuery({
-    startDate: startDate.toISOString(),
-    endDate: endDate.toISOString(),
+  const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = trpc.executiveDashboard.kpis.useQuery({
+    startDate: dateRange.start.toISOString(),
+    endDate: dateRange.end.toISOString(),
+    branchId: selectedBranch !== "all" ? parseInt(selectedBranch) : undefined,
   });
 
-  // إرسال التقرير الأسبوعي
-  const sendWeeklyReport = trpc.scheduledReports.sendWeekly.useMutation({
-    onSuccess: () => {
-      toast.success('تم إرسال التقرير الأسبوعي بنجاح');
-      setEmailSending(false);
-    },
-    onError: (error) => {
-      toast.error(error.message);
-      setEmailSending(false);
-    },
+  // جلب المقارنة مع الفترة السابقة
+  const { data: comparison } = trpc.executiveDashboard.compare.useQuery({
+    currentStart: dateRange.start.toISOString(),
+    currentEnd: dateRange.end.toISOString(),
+    previousStart: previousDateRange.start.toISOString(),
+    previousEnd: previousDateRange.end.toISOString(),
+    branchId: selectedBranch !== "all" ? parseInt(selectedBranch) : undefined,
   });
 
-  const formatCurrency = (value: number | string | null | undefined) => {
-    const num = typeof value === 'string' ? parseFloat(value) : (value || 0);
+  // جلب أداء الموظفين
+  const { data: employeesPerformance, isLoading: employeesLoading } = trpc.executiveDashboard.employeesPerformance.useQuery({
+    startDate: dateRange.start.toISOString(),
+    endDate: dateRange.end.toISOString(),
+    branchId: selectedBranch !== "all" ? parseInt(selectedBranch) : undefined,
+  });
+
+  // جلب بيانات الرسم البياني
+  const { data: chartData } = trpc.executiveDashboard.dailyChart.useQuery({
+    startDate: dateRange.start.toISOString(),
+    endDate: dateRange.end.toISOString(),
+    branchId: selectedBranch !== "all" ? parseInt(selectedBranch) : undefined,
+  });
+
+  const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('ar-SA', {
       style: 'currency',
       currency: 'SAR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(num);
+    }).format(value);
   };
 
-  const formatNumber = (value: number | string | null | undefined) => {
-    const num = typeof value === 'string' ? parseFloat(value) : (value || 0);
-    return new Intl.NumberFormat('ar-SA').format(num);
+  const formatPercent = (value: number) => {
+    const sign = value >= 0 ? '+' : '';
+    return `${sign}${value.toFixed(1)}%`;
   };
 
-  // حساب إجمالي المبيعات
-  const totalSales = dailySales?.reduce((sum, day) => sum + parseFloat(String(day.totalSales || 0)), 0) || 0;
-  const totalOrders = dailySales?.reduce((sum, day) => sum + (day.invoiceCount || 0), 0) || 0;
-  const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+  const getPeriodLabel = () => {
+    switch (period) {
+      case "week": return "الأسبوع الماضي";
+      case "month": return "الشهر الماضي";
+      case "quarter": return "الربع الماضي";
+      case "year": return "السنة الماضية";
+    }
+  };
 
-  // حساب أعلى يوم مبيعات
-  const maxSalesDay = dailySales?.reduce((max, day) => 
-    parseFloat(String(day.totalSales || 0)) > parseFloat(String(max?.totalSales || 0)) ? day : max
-  , dailySales?.[0]);
+  const getSelectedBranchName = () => {
+    if (selectedBranch === "all") return "جميع الفروع";
+    return branches?.find(b => b.id.toString() === selectedBranch)?.name || "";
+  };
 
-  // ألوان للرسوم البيانية
-  const chartColors = [
-    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-    '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'
-  ];
+  // حساب أفضل يوم مبيعات
+  const bestDay = useMemo(() => {
+    if (!chartData || chartData.length === 0) return null;
+    return chartData.reduce((best, day) => day.total > best.total ? day : best, chartData[0]);
+  }, [chartData]);
 
   return (
     <div className="space-y-6">
-      {/* العنوان والفلاتر */}
+      {/* العنوان والتحكم */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <BarChart3 className="h-6 w-6" />
             لوحة تحكم المبيعات
           </h1>
-          <p className="text-muted-foreground">تحليل أداء المبيعات والرسوم البيانية التفاعلية</p>
+          <p className="text-muted-foreground">تحليل أداء المبيعات والإيرادات - {getSelectedBranchName()}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={dateRange} onValueChange={(v: any) => setDateRange(v)}>
-            <SelectTrigger className="w-[150px]">
-              <Calendar className="h-4 w-4 ml-2" />
-              <SelectValue />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* اختيار الفرع */}
+          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <SelectTrigger className="w-[160px]">
+              <Building2 className="h-4 w-4 ml-2" />
+              <SelectValue placeholder="اختر الفرع" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="week">آخر أسبوع</SelectItem>
-              <SelectItem value="month">هذا الشهر</SelectItem>
-              <SelectItem value="3months">آخر 3 أشهر</SelectItem>
-              <SelectItem value="year">هذه السنة</SelectItem>
+              <SelectItem value="all">جميع الفروع</SelectItem>
+              {branches?.map((branch) => (
+                <SelectItem key={branch.id} value={branch.id.toString()}>
+                  {branch.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          <Button 
-            variant="outline"
-            onClick={() => {
-              setEmailSending(true);
-              sendWeeklyReport.mutate({ email: 'info@symbolai.net' });
-            }}
-            disabled={emailSending}
-          >
-            <Mail className={`h-4 w-4 ml-2 ${emailSending ? 'animate-pulse' : ''}`} />
-            إرسال تقرير
+          
+          {/* اختيار الفترة */}
+          <Select value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
+            <SelectTrigger className="w-[140px]">
+              <Calendar className="h-4 w-4 ml-2" />
+              <SelectValue placeholder="الفترة" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="week">أسبوع</SelectItem>
+              <SelectItem value="month">شهر</SelectItem>
+              <SelectItem value="quarter">ربع سنة</SelectItem>
+              <SelectItem value="year">سنة</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Button variant="outline" size="icon" onClick={() => refetchKpis()}>
+            <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* بطاقات الملخص */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+      {/* بطاقات الملخص الرئيسية */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* إجمالي الإيرادات */}
+        <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي المبيعات</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium">إجمالي الإيرادات</CardTitle>
+            <DollarSign className="h-4 w-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
-            {dailyLoading ? (
+            {kpisLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
               <>
-                <div className="text-2xl font-bold">{formatCurrency(totalSales)}</div>
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <TrendingUp className="h-3 w-3 text-green-500" />
-                  {dateRange === 'week' ? 'آخر 7 أيام' : dateRange === 'month' ? 'هذا الشهر' : dateRange === '3months' ? 'آخر 3 أشهر' : 'هذه السنة'}
+                <div className="text-2xl font-bold text-emerald-600">
+                  {formatCurrency(kpis?.totalRevenue || 0)}
+                </div>
+                {comparison && (
+                  <p className={`text-xs flex items-center gap-1 mt-1 ${comparison.changes.revenueChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {comparison.changes.revenueChange >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                    {formatPercent(comparison.changes.revenueChange)} عن {getPeriodLabel()}
+                  </p>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* صافي الربح */}
+        <Card className={`bg-gradient-to-br ${(kpis?.netProfit || 0) >= 0 ? 'from-blue-500/10 to-blue-600/5 border-blue-500/20' : 'from-red-500/10 to-red-600/5 border-red-500/20'}`}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">صافي الربح</CardTitle>
+            {(kpis?.netProfit || 0) >= 0 ? <TrendingUp className="h-4 w-4 text-blue-600" /> : <TrendingDown className="h-4 w-4 text-red-600" />}
+          </CardHeader>
+          <CardContent>
+            {kpisLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <>
+                <div className={`text-2xl font-bold ${(kpis?.netProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  {formatCurrency(kpis?.netProfit || 0)}
+                </div>
+                {comparison && (
+                  <p className={`text-xs flex items-center gap-1 mt-1 ${comparison.changes.profitChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {comparison.changes.profitChange >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                    {formatPercent(comparison.changes.profitChange)} عن {getPeriodLabel()}
+                  </p>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* متوسط الإيراد اليومي */}
+        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">متوسط الإيراد اليومي</CardTitle>
+            <Target className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            {kpisLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-purple-600">
+                  {formatCurrency(kpis?.averageDailyRevenue || 0)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  من {kpis?.daysCount || 0} يوم عمل
                 </p>
               </>
             )}
           </CardContent>
         </Card>
 
-        <Card>
+        {/* أفضل يوم */}
+        <Card className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">عدد الطلبات</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium">أفضل يوم مبيعات</CardTitle>
+            <Calendar className="h-4 w-4 text-amber-600" />
           </CardHeader>
           <CardContent>
-            {dailyLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{formatNumber(totalOrders)}</div>
-                <p className="text-xs text-muted-foreground">طلب</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">متوسط قيمة الطلب</CardTitle>
-            <TrendingUp className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            {dailyLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{formatCurrency(avgOrderValue)}</div>
-                <p className="text-xs text-muted-foreground">لكل طلب</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">أعلى يوم مبيعات</CardTitle>
-            <Calendar className="h-4 w-4 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            {dailyLoading ? (
+            {kpisLoading ? (
               <Skeleton className="h-8 w-24" />
-            ) : maxSalesDay ? (
+            ) : bestDay ? (
               <>
-                <div className="text-2xl font-bold">{formatCurrency(maxSalesDay.totalSales)}</div>
-                <p className="text-xs text-muted-foreground">
-                  {format(new Date(maxSalesDay.date), 'dd MMM yyyy', { locale: ar })}
+                <div className="text-2xl font-bold text-amber-600">
+                  {formatCurrency(bestDay.total)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {new Date(bestDay.date).toLocaleDateString('ar-SA', { weekday: 'long', day: 'numeric', month: 'short' })}
                 </p>
               </>
             ) : (
@@ -260,252 +288,197 @@ export default function SalesDashboard() {
         </Card>
       </div>
 
-      {/* الرسوم البيانية */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* المبيعات اليومية */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>المبيعات اليومية</CardTitle>
-            <CardDescription>تطور المبيعات خلال الفترة المحددة</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {dailyLoading ? (
-              <Skeleton className="h-64 w-full" />
-            ) : dailySales && dailySales.length > 0 ? (
-              <div className="h-64">
-                <div className="flex h-full items-end gap-1">
-                  {dailySales.map((day, index) => {
-                    const maxValue = Math.max(...dailySales.map(d => parseFloat(String(d.totalSales || 0))));
-                    const height = maxValue > 0 ? (parseFloat(String(day.totalSales || 0)) / maxValue) * 100 : 0;
-                    return (
-                      <div
-                        key={index}
-                        className="flex-1 bg-primary/80 hover:bg-primary rounded-t transition-all cursor-pointer group relative"
-                        style={{ height: `${Math.max(height, 2)}%` }}
-                        title={`${format(new Date(day.date), 'dd/MM', { locale: ar })}: ${formatCurrency(day.totalSales)}`}
-                      >
-                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg">
-                          <div className="font-medium">{format(new Date(day.date), 'dd MMM', { locale: ar })}</div>
-                          <div>{formatCurrency(day.totalSales)}</div>
-                          <div className="text-muted-foreground">{day.invoiceCount} طلب</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-                  <span>{dailySales[0] ? format(new Date(dailySales[0].date), 'dd/MM', { locale: ar }) : ''}</span>
-                  <span>{dailySales[dailySales.length - 1] ? format(new Date(dailySales[dailySales.length - 1].date), 'dd/MM', { locale: ar }) : ''}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                لا توجد بيانات مبيعات في هذه الفترة
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* أفضل المنتجات */}
+      {/* تفاصيل طرق الدفع */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* النقدي */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              أفضل المنتجات مبيعاً
-            </CardTitle>
-            <CardDescription>المنتجات الأكثر مبيعاً في الفترة المحددة</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">إجمالي النقدي</CardTitle>
+            <Banknote className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            {productsLoading ? (
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : topProducts && topProducts.length > 0 ? (
-              <div className="space-y-3">
-                {topProducts.map((product, index) => {
-                  const maxRevenue = Math.max(...topProducts.map(p => parseFloat(String(p.totalRevenue || 0))));
-                  const percentage = maxRevenue > 0 ? (parseFloat(String(product.totalRevenue || 0)) / maxRevenue) * 100 : 0;
-                  return (
-                    <div key={index} className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center">
-                            {index + 1}
-                          </span>
-                          <span className="text-sm font-medium truncate max-w-[150px]">{product.name}</span>
-                        </div>
-                        <div className="text-left">
-                          <div className="text-sm font-bold">{formatCurrency(product.totalRevenue)}</div>
-                          <div className="text-xs text-muted-foreground">{formatNumber(product.totalQuantity)} وحدة</div>
-                        </div>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full rounded-full transition-all"
-                          style={{ 
-                            width: `${percentage}%`,
-                            backgroundColor: chartColors[index % chartColors.length]
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+            {kpisLoading ? (
+              <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>لا توجد بيانات منتجات</p>
-              </div>
+              <>
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrency(kpis?.totalCash || 0)}
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <Progress value={kpis?.cashPercentage || 0} className="h-2 flex-1" />
+                  <span className="text-xs text-muted-foreground">{(kpis?.cashPercentage || 0).toFixed(1)}%</span>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
 
-        {/* أفضل العملاء */}
+        {/* الشبكة */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              أفضل العملاء
-            </CardTitle>
-            <CardDescription>العملاء الأكثر شراءً في الفترة المحددة</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">إجمالي الشبكة</CardTitle>
+            <CreditCard className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            {customersLoading ? (
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : topCustomers && topCustomers.length > 0 ? (
-              <div className="space-y-3">
-                {topCustomers.map((customer, index) => {
-                  const maxPurchases = Math.max(...topCustomers.map(c => parseFloat(String(c.totalPurchases || 0))));
-                  const percentage = maxPurchases > 0 ? (parseFloat(String(customer.totalPurchases || 0)) / maxPurchases) * 100 : 0;
-                  return (
-                    <div key={index} className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center">
-                            {index + 1}
-                          </span>
-                          <span className="text-sm font-medium truncate max-w-[150px]">{customer.name}</span>
-                        </div>
-                        <div className="text-left">
-                          <div className="text-sm font-bold">{formatCurrency(customer.totalPurchases)}</div>
-                          <div className="text-xs text-muted-foreground">{customer.invoiceCount} طلب</div>
-                        </div>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full rounded-full transition-all"
-                          style={{ 
-                            width: `${percentage}%`,
-                            backgroundColor: chartColors[index % chartColors.length]
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+            {kpisLoading ? (
+              <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>لا توجد بيانات عملاء</p>
-              </div>
+              <>
+                <div className="text-2xl font-bold text-blue-600">
+                  {formatCurrency(kpis?.totalNetwork || 0)}
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <Progress value={kpis?.networkPercentage || 0} className="h-2 flex-1" />
+                  <span className="text-xs text-muted-foreground">{(kpis?.networkPercentage || 0).toFixed(1)}%</span>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
 
-        {/* المبيعات حسب الفئة */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PieChart className="h-5 w-5" />
-              المبيعات حسب الفئة
-            </CardTitle>
-            <CardDescription>توزيع المبيعات على فئات المنتجات</CardDescription>
+        {/* الرصيد */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">إجمالي الرصيد</CardTitle>
+            <Wallet className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            {categoryLoading ? (
-              <Skeleton className="h-48 w-full" />
-            ) : salesByCategory && salesByCategory.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                {/* الرسم البياني الدائري */}
-                <div className="flex items-center justify-center">
-                  <div className="relative w-48 h-48">
-                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                      {(() => {
-                        const total = salesByCategory.reduce((sum, cat) => sum + parseFloat(String(cat.totalSales || 0)), 0);
-                        let currentAngle = 0;
-                        return salesByCategory.map((category, index) => {
-                          const percentage = total > 0 ? (parseFloat(String(category.totalSales || 0)) / total) * 100 : 0;
-                          const angle = (percentage / 100) * 360;
-                          const startAngle = currentAngle;
-                          currentAngle += angle;
-                          
-                          // حساب نقاط القوس
-                          const startX = 50 + 40 * Math.cos((startAngle * Math.PI) / 180);
-                          const startY = 50 + 40 * Math.sin((startAngle * Math.PI) / 180);
-                          const endX = 50 + 40 * Math.cos(((startAngle + angle) * Math.PI) / 180);
-                          const endY = 50 + 40 * Math.sin(((startAngle + angle) * Math.PI) / 180);
-                          const largeArc = angle > 180 ? 1 : 0;
-                          
-                          return (
-                            <path
-                              key={index}
-                              d={`M 50 50 L ${startX} ${startY} A 40 40 0 ${largeArc} 1 ${endX} ${endY} Z`}
-                              fill={chartColors[index % chartColors.length]}
-                              className="hover:opacity-80 transition-opacity cursor-pointer"
-                            />
-                          );
-                        });
-                      })()}
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="text-lg font-bold">{formatCurrency(salesByCategory.reduce((sum, cat) => sum + parseFloat(String(cat.totalSales || 0)), 0))}</div>
-                        <div className="text-xs text-muted-foreground">إجمالي</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* قائمة الفئات */}
-                <div className="space-y-2">
-                  {salesByCategory.map((category, index) => {
-                    const total = salesByCategory.reduce((sum, cat) => sum + parseFloat(String(cat.totalSales || 0)), 0);
-                    const percentage = total > 0 ? (parseFloat(String(category.totalSales || 0)) / total) * 100 : 0;
-                    return (
-                      <div key={index} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50">
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: chartColors[index % chartColors.length] }}
-                          />
-                          <span className="text-sm">{category.categoryName || 'بدون فئة'}</span>
-                        </div>
-                        <div className="text-left">
-                          <div className="text-sm font-medium">{formatCurrency(category.totalSales)}</div>
-                          <div className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+            {kpisLoading ? (
+              <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <PieChart className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>لا توجد بيانات فئات</p>
-              </div>
+              <>
+                <div className="text-2xl font-bold text-purple-600">
+                  {formatCurrency(kpis?.totalBalance || 0)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  هامش الربح: {(kpis?.profitMargin || 0).toFixed(1)}%
+                </p>
+              </>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* الرسم البياني للإيرادات اليومية */}
+      <Card>
+        <CardHeader>
+          <CardTitle>الإيرادات اليومية</CardTitle>
+          <CardDescription>
+            تطور الإيرادات خلال الفترة المحددة - {getSelectedBranchName()}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {kpisLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : chartData && chartData.length > 0 ? (
+            <div className="h-64 flex items-end gap-1">
+              {chartData.map((day, index) => {
+                const maxTotal = Math.max(...chartData.map(d => d.total));
+                const height = maxTotal > 0 ? (day.total / maxTotal) * 100 : 0;
+                
+                return (
+                  <div key={index} className="flex-1 flex flex-col items-center gap-1">
+                    <div 
+                      className="w-full bg-gradient-to-t from-emerald-500 to-emerald-400 rounded-t hover:from-emerald-600 hover:to-emerald-500 transition-colors cursor-pointer group relative"
+                      style={{ height: `${Math.max(height, 2)}%` }}
+                      title={`${day.date}: ${formatCurrency(day.total)}`}
+                    >
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10">
+                        {formatCurrency(day.total)}
+                      </div>
+                    </div>
+                    {chartData.length <= 14 && (
+                      <span className="text-[10px] text-muted-foreground rotate-45 origin-left">
+                        {new Date(day.date).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' })}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="h-64 flex items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <BarChart3 className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>لا توجد بيانات إيرادات في هذه الفترة</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* أداء الموظفين */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                أداء الموظفين
+              </CardTitle>
+              <CardDescription>
+                ترتيب الموظفين حسب الإيرادات - {getSelectedBranchName()}
+              </CardDescription>
+            </div>
+            <Badge variant="outline">
+              {employeesPerformance?.length || 0} موظف
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {employeesLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : employeesPerformance && employeesPerformance.length > 0 ? (
+            <div className="space-y-3">
+              {employeesPerformance.slice(0, 10).map((emp, index) => {
+                const maxRevenue = employeesPerformance[0]?.totalRevenue || 1;
+                const percentage = (emp.totalRevenue / maxRevenue) * 100;
+                const branch = branches?.find(b => b.id === emp.branchId);
+                
+                return (
+                  <div key={emp.employeeId} className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      index === 0 ? 'bg-yellow-500 text-yellow-950' :
+                      index === 1 ? 'bg-gray-400 text-gray-950' :
+                      index === 2 ? 'bg-amber-600 text-amber-950' :
+                      'bg-muted text-muted-foreground'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium truncate">{emp.employeeName}</span>
+                          <Badge variant="outline" className="text-xs">{emp.employeeCode}</Badge>
+                          {branch && selectedBranch === "all" && (
+                            <Badge variant="secondary" className="text-xs">{branch.name}</Badge>
+                          )}
+                        </div>
+                        <span className="font-bold text-emerald-600">{formatCurrency(emp.totalRevenue)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Progress value={percentage} className="h-2 flex-1" />
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {emp.daysWorked} يوم | متوسط: {formatCurrency(emp.averageDaily)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p>لا توجد بيانات إيرادات للموظفين في هذه الفترة</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
