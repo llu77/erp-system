@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -63,6 +64,8 @@ export default function PurchasesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingOrder, setViewingOrder] = useState<any>(null);
   const [deleteOrderId, setDeleteOrderId] = useState<number | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   // Create order state
   const [selectedSupplier, setSelectedSupplier] = useState<string>("");
@@ -286,6 +289,7 @@ export default function PurchasesPage() {
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
+{isAdmin && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -294,6 +298,7 @@ export default function PurchasesPage() {
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
