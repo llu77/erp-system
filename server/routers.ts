@@ -3592,6 +3592,69 @@ export const appRouter = router({
         );
       }),
   }),
+
+  // ==================== تذكيرات الجرد ====================
+  inventoryReminders: router({
+    // التحقق من موعد الجرد القادم
+    nextDate: protectedProcedure.query(() => {
+      const today = new Date();
+      const currentDay = today.getDate();
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      
+      let nextDate: Date;
+      let dayOfMonth: number;
+      
+      if (currentDay < 12) {
+        nextDate = new Date(currentYear, currentMonth, 12);
+        dayOfMonth = 12;
+      } else if (currentDay < 27) {
+        nextDate = new Date(currentYear, currentMonth, 27);
+        dayOfMonth = 27;
+      } else {
+        nextDate = new Date(currentYear, currentMonth + 1, 12);
+        dayOfMonth = 12;
+      }
+      
+      const daysUntil = Math.ceil((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      return { 
+        date: nextDate.toISOString(), 
+        daysUntil, 
+        dayOfMonth,
+        isReminderDay: [0, 1, 3].includes(daysUntil),
+      };
+    }),
+
+    // إرسال تذكير يدوي (للأدمن فقط)
+    sendManual: adminProcedure.mutation(async () => {
+      // استيراد ديناميكي لتجنب مشاكل التحميل
+      const { checkAndSendInventoryReminders, getNextInventoryDate } = await import('./jobs/inventoryReminder');
+      
+      const { date, daysUntil } = getNextInventoryDate();
+      
+      // إرسال التذكير بغض النظر عن اليوم
+      const { sendInventoryReminderEmail } = await import('./jobs/inventoryReminder');
+      
+      const emails = [
+        'llu771230@gmail.com',
+        'Salemalwadai1997@gmail.com',
+      ];
+      
+      let sent = 0;
+      for (const email of emails) {
+        const success = await sendInventoryReminderEmail(email, daysUntil, date);
+        if (success) sent++;
+      }
+      
+      return { 
+        success: true, 
+        message: `تم إرسال ${sent} تذكير بنجاح`,
+        nextInventoryDate: date.toISOString(),
+        daysUntil,
+      };
+    }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية
