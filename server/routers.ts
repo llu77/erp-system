@@ -46,6 +46,16 @@ const adminOnlyEditProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+// إجراء للمشرف العام - الوصول للوحات التحكم والتقارير
+const supervisorViewProcedure = protectedProcedure.use(({ ctx, next }) => {
+  // المشرف العام والمدير والمسؤول يمكنهم الوصول
+  const allowedRoles = ['admin', 'manager', 'supervisor'];
+  if (!allowedRoles.includes(ctx.user.role)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'هذا الإجراء متاح للمشرف العام والمدير والمسؤول فقط' });
+  }
+  return next({ ctx });
+});
+
 // إجراء للمشاهدة فقط (كل المستخدمين بما فيهم viewer)
 const viewerProcedure = protectedProcedure.use(({ ctx, next }) => {
   // جميع المستخدمين يمكنهم المشاهدة
@@ -2560,7 +2570,7 @@ export const appRouter = router({
   // ==================== مؤشرات الأداء المالي (KPIs) ====================
   kpis: router({
     // حساب مؤشرات الأداء المالي
-    calculate: managerProcedure
+    calculate: supervisorViewProcedure
       .input(z.object({
         startDate: z.string(),
         endDate: z.string(),
@@ -2575,7 +2585,7 @@ export const appRouter = router({
       }),
 
     // الحصول على سجل مؤشرات الأداء
-    history: managerProcedure
+    history: supervisorViewProcedure
       .input(z.object({
         periodType: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']),
         limit: z.number().default(12),
@@ -2585,14 +2595,14 @@ export const appRouter = router({
       }),
 
     // تحليل الاتجاهات الشهرية
-    trends: managerProcedure
+    trends: supervisorViewProcedure
       .input(z.object({ months: z.number().default(12) }).optional())
       .query(async ({ input }) => {
         return await db.getMonthlyTrends(input?.months || 12);
       }),
 
     // تقرير ABC للمخزون
-    abcReport: managerProcedure.query(async () => {
+    abcReport: supervisorViewProcedure.query(async () => {
       return await db.getABCInventoryReport();
     }),
   }),
@@ -2920,7 +2930,7 @@ export const appRouter = router({
       }),
 
     // الحصول على أفضل المنتجات
-    topProducts: managerProcedure
+    topProducts: supervisorViewProcedure
       .input(z.object({
         limit: z.number().optional().default(10),
         startDate: z.date().optional(),
@@ -2931,7 +2941,7 @@ export const appRouter = router({
       }),
 
     // الحصول على أفضل العملاء
-    topCustomers: managerProcedure
+    topCustomers: supervisorViewProcedure
       .input(z.object({
         limit: z.number().optional().default(10),
         startDate: z.date().optional(),
@@ -2942,7 +2952,7 @@ export const appRouter = router({
       }),
 
     // الحصول على بيانات المبيعات اليومية
-    dailySales: managerProcedure
+    dailySales: supervisorViewProcedure
       .input(z.object({
         startDate: z.date(),
         endDate: z.date(),
@@ -2952,7 +2962,7 @@ export const appRouter = router({
       }),
 
     // الحصول على المبيعات حسب الفئة
-    salesByCategory: managerProcedure
+    salesByCategory: supervisorViewProcedure
       .input(z.object({
         startDate: z.date().optional(),
         endDate: z.date().optional(),
@@ -3408,7 +3418,7 @@ export const appRouter = router({
   // ==================== لوحة التحكم التنفيذية المحسنة ====================
   executiveDashboard: router({
     // حساب مؤشرات الأداء الفعلية
-    kpis: managerProcedure
+    kpis: supervisorViewProcedure
       .input(z.object({
         startDate: z.string(),
         endDate: z.string(),
@@ -3423,7 +3433,7 @@ export const appRouter = router({
       }),
 
     // الإيرادات اليومية للرسم البياني
-    dailyChart: managerProcedure
+    dailyChart: supervisorViewProcedure
       .input(z.object({
         startDate: z.string(),
         endDate: z.string(),
@@ -3438,7 +3448,7 @@ export const appRouter = router({
       }),
 
     // مقارنة الأداء بين فترتين
-    compare: managerProcedure
+    compare: supervisorViewProcedure
       .input(z.object({
         currentStart: z.string(),
         currentEnd: z.string(),
@@ -3457,7 +3467,7 @@ export const appRouter = router({
       }),
 
     // أداء الموظفين
-    employeesPerformance: managerProcedure
+    employeesPerformance: supervisorViewProcedure
       .input(z.object({
         startDate: z.string(),
         endDate: z.string(),
