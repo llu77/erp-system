@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte, lte, like, or } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte, lt, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users,
@@ -21,6 +21,8 @@ import {
   sentNotifications,
   deletedRecords,
   InsertDeletedRecord,
+  employeeInvoices,
+  InsertEmployeeInvoice,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -3508,5 +3510,269 @@ export async function comparePerformance(
       profitChange: calculateChange(current.netProfit, previous.netProfit),
       employeeRevenueChange: calculateChange(current.totalEmployeeRevenue, previous.totalEmployeeRevenue),
     }
+  };
+}
+
+
+// ==================== دوال فواتير الموظفين (سالب ومبيعات) ====================
+
+// إنشاء رقم فاتورة موظف فريد
+async function generateEmployeeInvoiceNumber(type: 'negative' | 'sales'): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  const prefix = type === 'negative' ? 'NEG' : 'SALE';
+  const date = new Date();
+  const year = date.getFullYear().toString().slice(-2);
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  
+  // الحصول على آخر رقم فاتورة
+  const lastInvoice = await db.select({ invoiceNumber: employeeInvoices.invoiceNumber })
+    .from(employeeInvoices)
+    .where(like(employeeInvoices.invoiceNumber, `${prefix}-${year}${month}%`))
+    .orderBy(desc(employeeInvoices.id))
+    .limit(1);
+  
+  let sequence = 1;
+  if (lastInvoice.length > 0) {
+    const lastNum = lastInvoice[0].invoiceNumber.split('-').pop();
+    sequence = parseInt(lastNum || '0') + 1;
+  }
+  
+  return `${prefix}-${year}${month}-${sequence.toString().padStart(4, '0')}`;
+}
+
+// إنشاء فاتورة موظف جديدة
+export async function createEmployeeInvoice(data: {
+  type: 'negative' | 'sales';
+  employeeId: number;
+  employeeName: string;
+  branchId: number;
+  branchName?: string;
+  amount: string;
+  customerPhone?: string;
+  customerName?: string;
+  notes?: string;
+  reason?: string;
+  createdBy: number;
+  createdByName?: string;
+}): Promise<{ success: boolean; invoiceNumber: string; invoiceId: number }> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  const invoiceNumber = await generateEmployeeInvoiceNumber(data.type);
+  
+  const result = await db.insert(employeeInvoices).values({
+    invoiceNumber,
+    type: data.type,
+    employeeId: data.employeeId,
+    employeeName: data.employeeName,
+    branchId: data.branchId,
+    branchName: data.branchName,
+    amount: data.amount,
+    customerPhone: data.customerPhone,
+    customerName: data.customerName,
+    notes: data.notes,
+    reason: data.reason,
+    createdBy: data.createdBy,
+    createdByName: data.createdByName,
+  });
+  
+  // إذا كانت فاتورة مبيعات، أضفها إلى الإيرادات اليومية
+  if (data.type === 'sales') {
+    await addSalesInvoiceToRevenue({
+      employeeId: data.employeeId,
+      branchId: data.branchId,
+      amount: parseFloat(data.amount),
+      invoiceId: result[0].insertId,
+    });
+  }
+  
+  return { 
+    success: true, 
+    invoiceNumber,
+    invoiceId: result[0].insertId 
+  };
+}
+
+// إضافة فاتورة مبيعات إلى الإيرادات اليومية
+async function addSalesInvoiceToRevenue(data: {
+  employeeId: number;
+  branchId: number;
+  amount: number;
+  invoiceId: number;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  // البحث عن إيراد يومي موجود لهذا الفرع اليوم
+  const existingDailyRevenue = await db.select()
+    .from(dailyRevenues)
+    .where(and(
+      eq(dailyRevenues.branchId, data.branchId),
+      gte(dailyRevenues.date, today),
+      lt(dailyRevenues.date, tomorrow)
+    ))
+    .limit(1);
+  
+  if (existingDailyRevenue.length > 0) {
+    const dailyRevenueId = existingDailyRevenue[0].id;
+    
+    // البحث عن إيراد الموظف لهذا اليوم
+    const existingEmployeeRevenue = await db.select()
+      .from(employeeRevenues)
+      .where(and(
+        eq(employeeRevenues.dailyRevenueId, dailyRevenueId),
+        eq(employeeRevenues.employeeId, data.employeeId)
+      ))
+      .limit(1);
+    
+    if (existingEmployeeRevenue.length > 0) {
+      // تحديث إيراد الموظف الموجود
+      const currentTotal = parseFloat(existingEmployeeRevenue[0].total);
+      const currentNetwork = parseFloat(existingEmployeeRevenue[0].network);
+      await db.update(employeeRevenues)
+        .set({
+          network: (currentNetwork + data.amount).toFixed(2),
+          total: (currentTotal + data.amount).toFixed(2),
+        })
+        .where(eq(employeeRevenues.id, existingEmployeeRevenue[0].id));
+    } else {
+      // إنشاء إيراد موظف جديد
+      await db.insert(employeeRevenues).values({
+        dailyRevenueId,
+        employeeId: data.employeeId,
+        cash: '0.00',
+        network: data.amount.toFixed(2),
+        total: data.amount.toFixed(2),
+      });
+    }
+    
+    // تحديث إجمالي الإيراد اليومي
+    const currentDailyTotal = parseFloat(existingDailyRevenue[0].total);
+    const currentDailyNetwork = parseFloat(existingDailyRevenue[0].network);
+    await db.update(dailyRevenues)
+      .set({
+        network: (currentDailyNetwork + data.amount).toFixed(2),
+        total: (currentDailyTotal + data.amount).toFixed(2),
+      })
+      .where(eq(dailyRevenues.id, dailyRevenueId));
+  }
+  // إذا لم يوجد إيراد يومي، لا نفعل شيء - سيتم إضافة الفاتورة عند إنشاء الإيراد اليومي
+}
+
+// الحصول على جميع فواتير الموظفين
+export async function getAllEmployeeInvoices(filters?: {
+  type?: 'negative' | 'sales';
+  branchId?: number;
+  employeeId?: number;
+  startDate?: Date;
+  endDate?: Date;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [];
+  
+  if (filters?.type) {
+    conditions.push(eq(employeeInvoices.type, filters.type));
+  }
+  if (filters?.branchId) {
+    conditions.push(eq(employeeInvoices.branchId, filters.branchId));
+  }
+  if (filters?.employeeId) {
+    conditions.push(eq(employeeInvoices.employeeId, filters.employeeId));
+  }
+  if (filters?.startDate) {
+    conditions.push(gte(employeeInvoices.invoiceDate, filters.startDate));
+  }
+  if (filters?.endDate) {
+    conditions.push(lte(employeeInvoices.invoiceDate, filters.endDate));
+  }
+  
+  if (conditions.length > 0) {
+    return await db.select().from(employeeInvoices)
+      .where(and(...conditions))
+      .orderBy(desc(employeeInvoices.invoiceDate));
+  }
+  
+  return await db.select().from(employeeInvoices)
+    .orderBy(desc(employeeInvoices.invoiceDate));
+}
+
+// الحصول على فاتورة موظف بالمعرف
+export async function getEmployeeInvoiceById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select().from(employeeInvoices)
+    .where(eq(employeeInvoices.id, id))
+    .limit(1);
+  
+  return result[0] || null;
+}
+
+// حذف فاتورة موظف (للأدمن فقط)
+export async function deleteEmployeeInvoice(id: number, deletedBy: { userId: number; userName: string }) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  // الحصول على بيانات الفاتورة قبل الحذف
+  const invoice = await getEmployeeInvoiceById(id);
+  if (!invoice) throw new Error('الفاتورة غير موجودة');
+  
+  // حفظ السجل المحذوف
+  await db.insert(deletedRecords).values({
+    deletedByUserId: deletedBy.userId,
+    deletedByUserName: deletedBy.userName,
+    entityType: 'invoice',
+    originalId: id,
+    originalData: JSON.stringify(invoice),
+    branchId: invoice.branchId,
+    branchName: invoice.branchName,
+  });
+  
+  // حذف الفاتورة
+  await db.delete(employeeInvoices).where(eq(employeeInvoices.id, id));
+  
+  return { success: true };
+}
+
+// إحصائيات فواتير الموظفين
+export async function getEmployeeInvoicesStats(branchId?: number, startDate?: Date, endDate?: Date) {
+  const db = await getDb();
+  if (!db) return { negativeCount: 0, negativeTotal: 0, salesCount: 0, salesTotal: 0 };
+  
+  const conditions = [];
+  if (branchId) conditions.push(eq(employeeInvoices.branchId, branchId));
+  if (startDate) conditions.push(gte(employeeInvoices.invoiceDate, startDate));
+  if (endDate) conditions.push(lte(employeeInvoices.invoiceDate, endDate));
+  
+  // فواتير السالب
+  const negativeConditions = [...conditions, eq(employeeInvoices.type, 'negative')];
+  const negativeStats = await db.select({
+    count: sql<number>`COUNT(*)`,
+    total: sql<string>`COALESCE(SUM(${employeeInvoices.amount}), 0)`,
+  }).from(employeeInvoices)
+    .where(negativeConditions.length > 0 ? and(...negativeConditions) : undefined);
+  
+  // فواتير المبيعات
+  const salesConditions = [...conditions, eq(employeeInvoices.type, 'sales')];
+  const salesStats = await db.select({
+    count: sql<number>`COUNT(*)`,
+    total: sql<string>`COALESCE(SUM(${employeeInvoices.amount}), 0)`,
+  }).from(employeeInvoices)
+    .where(salesConditions.length > 0 ? and(...salesConditions) : undefined);
+  
+  return {
+    negativeCount: negativeStats[0]?.count || 0,
+    negativeTotal: parseFloat(negativeStats[0]?.total || '0'),
+    salesCount: salesStats[0]?.count || 0,
+    salesTotal: parseFloat(salesStats[0]?.total || '0'),
   };
 }

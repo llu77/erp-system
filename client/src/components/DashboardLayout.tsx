@@ -49,6 +49,7 @@ import {
   TrendingUp,
   Mail,
   Calendar,
+  MinusCircle,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -73,6 +74,7 @@ const menuItems = [
   { icon: Users, label: "العملاء", path: "/customers", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
   { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager", "viewer"] },
   { icon: FileText, label: "الفواتير", path: "/invoices", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
+  { icon: MinusCircle, label: "فواتير الموظفين", path: "/employee-invoices", roles: ["admin", "manager", "supervisor"] },
   { icon: ShoppingCart, label: "المشتريات", path: "/purchases", roles: ["admin", "manager", "supervisor", "viewer"] },
   { icon: DollarSign, label: "الإيرادات", path: "/revenues", roles: ["admin", "manager", "supervisor", "viewer"] },
   { icon: Gift, label: "البونص", path: "/bonuses", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },

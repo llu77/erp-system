@@ -1260,3 +1260,43 @@ export const deletedRecords = mysqlTable("deletedRecords", {
 
 export type DeletedRecord = typeof deletedRecords.$inferSelect;
 export type InsertDeletedRecord = typeof deletedRecords.$inferInsert;
+
+
+// ==================== جدول فواتير الموظفين (سالب ومبيعات) ====================
+export const employeeInvoices = mysqlTable("employeeInvoices", {
+  id: int("id").autoincrement().primaryKey(),
+  invoiceNumber: varchar("invoiceNumber", { length: 50 }).notNull().unique(),
+  
+  // نوع الفاتورة: سالب (خصم على الموظف) أو مبيعات (إيراد)
+  type: mysqlEnum("type", ["negative", "sales"]).notNull(),
+  
+  // معلومات الموظف
+  employeeId: int("employeeId").notNull(),
+  employeeName: varchar("employeeName", { length: 200 }).notNull(),
+  
+  // معلومات الفرع
+  branchId: int("branchId").notNull(),
+  branchName: varchar("branchName", { length: 100 }),
+  
+  // المبلغ
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  
+  // معلومات العميل (لفاتورة السالب)
+  customerPhone: varchar("customerPhone", { length: 20 }),
+  customerName: varchar("customerName", { length: 200 }),
+  
+  // ملاحظات
+  notes: text("notes"),
+  reason: text("reason"), // سبب الفاتورة السالب
+  
+  // معلومات الإنشاء
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 200 }),
+  
+  // التواريخ
+  invoiceDate: timestamp("invoiceDate").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type EmployeeInvoice = typeof employeeInvoices.$inferSelect;
+export type InsertEmployeeInvoice = typeof employeeInvoices.$inferInsert;

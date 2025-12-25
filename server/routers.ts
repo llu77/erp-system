@@ -46,10 +46,10 @@ const adminOnlyEditProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
-// إجراء للمشرف العام - الوصول للوحات التحكم والتقارير
+// إجراء للمشرف العام - الوصول للوحات التحكم والتقارير وإدارة الطلبات
 const supervisorViewProcedure = protectedProcedure.use(({ ctx, next }) => {
-  // المشرف العام والمدير والمسؤول يمكنهم الوصول
-  const allowedRoles = ['admin', 'manager', 'supervisor'];
+  // المشرف العام (viewer) والمشرف (supervisor) والمدير والمسؤول يمكنهم الوصول
+  const allowedRoles = ['admin', 'manager', 'supervisor', 'viewer'];
   if (!allowedRoles.includes(ctx.user.role)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'هذا الإجراء متاح للمشرف العام والمدير والمسؤول فقط' });
   }
@@ -861,6 +861,117 @@ export const appRouter = router({
       }))
       .query(async ({ input }) => {
         return await db.getInvoicesByDateRange(input.startDate, input.endDate);
+      }),
+  }),
+
+  // ==================== فواتير الموظفين (سالب ومبيعات) ====================
+  employeeInvoices: router({
+    // قائمة الفواتير
+    list: protectedProcedure
+      .input(z.object({
+        type: z.enum(['negative', 'sales']).optional(),
+        branchId: z.number().optional(),
+        employeeId: z.number().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }).optional())
+      .query(async ({ input, ctx }) => {
+        const filters: any = {};
+        if (input?.type) filters.type = input.type;
+        if (input?.branchId) filters.branchId = input.branchId;
+        if (input?.employeeId) filters.employeeId = input.employeeId;
+        if (input?.startDate) filters.startDate = new Date(input.startDate);
+        if (input?.endDate) filters.endDate = new Date(input.endDate);
+        
+        // المشرف يرى فواتير فرعه فقط
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
+          filters.branchId = ctx.user.branchId;
+        }
+        
+        return await db.getAllEmployeeInvoices(filters);
+      }),
+
+    // الحصول على فاتورة بالمعرف
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getEmployeeInvoiceById(input.id);
+      }),
+
+    // إنشاء فاتورة جديدة
+    create: supervisorInputProcedure
+      .input(z.object({
+        type: z.enum(['negative', 'sales']),
+        employeeId: z.number(),
+        employeeName: z.string(),
+        branchId: z.number(),
+        branchName: z.string().optional(),
+        amount: z.string(),
+        customerPhone: z.string().optional(),
+        customerName: z.string().optional(),
+        notes: z.string().optional(),
+        reason: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const result = await db.createEmployeeInvoice({
+          ...input,
+          createdBy: ctx.user.id,
+          createdByName: ctx.user.name || 'مستخدم',
+        });
+        
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'create',
+          entityType: 'invoice',
+          entityId: result.invoiceId,
+          details: `تم إنشاء فاتورة ${input.type === 'negative' ? 'سالب' : 'مبيعات'}: ${result.invoiceNumber} - ${input.employeeName}`,
+        });
+        
+        return result;
+      }),
+
+    // حذف فاتورة (للأدمن فقط)
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await db.deleteEmployeeInvoice(input.id, {
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+        });
+        
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'delete',
+          entityType: 'invoice',
+          entityId: input.id,
+          details: `تم حذف فاتورة موظف`,
+        });
+        
+        return { success: true, message: 'تم حذف الفاتورة بنجاح' };
+      }),
+
+    // إحصائيات الفواتير
+    stats: supervisorViewProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }).optional())
+      .query(async ({ input, ctx }) => {
+        let branchId = input?.branchId;
+        
+        // المشرف يرى إحصائيات فرعه فقط
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
+          branchId = ctx.user.branchId;
+        }
+        
+        return await db.getEmployeeInvoicesStats(
+          branchId,
+          input?.startDate ? new Date(input.startDate) : undefined,
+          input?.endDate ? new Date(input.endDate) : undefined
+        );
       }),
   }),
 
@@ -1914,8 +2025,8 @@ export const appRouter = router({
       return await db.getEmployeeRequestsByEmployeeId(employee.id);
     }),
 
-    // الطلبات المعلقة
-    pending: managerProcedure.query(async () => {
+    // الطلبات المعلقة - متاح للمشرف العام والمدير والمسؤول
+    pending: supervisorViewProcedure.query(async () => {
       return await db.getPendingEmployeeRequests();
     }),
 
@@ -1926,8 +2037,8 @@ export const appRouter = router({
         return await db.getEmployeeRequestById(input.id);
       }),
 
-    // إحصائيات الطلبات
-    stats: managerProcedure.query(async () => {
+    // إحصائيات الطلبات - متاح للمشرف العام والمدير والمسؤول
+    stats: supervisorViewProcedure.query(async () => {
       return await db.getEmployeeRequestsStats();
     }),
 
@@ -2052,8 +2163,8 @@ export const appRouter = router({
         return { success: true, message: 'تم تقديم الطلب بنجاح', requestNumber: result?.requestNumber };
       }),
 
-    // تحديث حالة الطلب (موافقة/رفض)
-    updateStatus: managerProcedure
+    // تحديث حالة الطلب (موافقة/رفض) - متاح للمشرف العام والمدير والمسؤول
+    updateStatus: supervisorViewProcedure
       .input(z.object({
         id: z.number(),
         status: z.enum(["approved", "rejected", "cancelled"]),

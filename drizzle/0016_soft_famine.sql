@@ -1,0 +1,21 @@
+CREATE TABLE `employeeInvoices` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`invoiceNumber` varchar(50) NOT NULL,
+	`type` enum('negative','sales') NOT NULL,
+	`employeeId` int NOT NULL,
+	`employeeName` varchar(200) NOT NULL,
+	`branchId` int NOT NULL,
+	`branchName` varchar(100),
+	`amount` decimal(12,2) NOT NULL,
+	`customerPhone` varchar(20),
+	`customerName` varchar(200),
+	`notes` text,
+	`reason` text,
+	`createdBy` int NOT NULL,
+	`createdByName` varchar(200),
+	`invoiceDate` timestamp NOT NULL DEFAULT (now()),
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `employeeInvoices_id` PRIMARY KEY(`id`),
+	CONSTRAINT `employeeInvoices_invoiceNumber_unique` UNIQUE(`invoiceNumber`)
+);

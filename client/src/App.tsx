@@ -38,6 +38,7 @@ import ReportSettings from "./pages/ReportSettings";
 import HROnboarding from "./pages/HROnboarding";
 import SchedulerSettings from "./pages/SchedulerSettings";
 import NotificationRecipients from "./pages/NotificationRecipients";
+import EmployeeInvoices from "./pages/EmployeeInvoices";
 
 function Router() {
   return (
@@ -74,6 +75,11 @@ function Router() {
       <Route path="/suppliers">
         <DashboardLayout>
           <Suppliers />
+        </DashboardLayout>
+      </Route>
+      <Route path="/employee-invoices">
+        <DashboardLayout>
+          <EmployeeInvoices />
         </DashboardLayout>
       </Route>
       <Route path="/invoices">
