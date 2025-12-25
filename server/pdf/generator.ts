@@ -32,7 +32,11 @@ export interface PayrollReportData {
     employeeCode: string;
     position: string;
     baseSalary: string;
+    overtimeEnabled?: boolean;
     overtimeAmount: string;
+    workDays?: number;
+    absentDays?: number;
+    absentDeduction?: string;
     incentiveAmount: string;
     deductionAmount: string;
     advanceDeduction: string;
@@ -395,14 +399,14 @@ export function generatePayrollHTML(data: PayrollReportData): string {
         <th>#</th>
         <th>اسم الموظف</th>
         <th>الرمز</th>
-        <th>المنصب</th>
-        <th>الراتب الأساسي</th>
-        <th>ساعات إضافية</th>
+        <th>الأساسي</th>
+        <th>إضافي</th>
+        <th>أيام العمل</th>
+        <th>خصم غياب</th>
         <th>حوافز</th>
         <th>خصومات</th>
         <th>سلف</th>
-        <th>إجمالي الخصم</th>
-        <th>صافي الراتب</th>
+        <th>الصافي</th>
       </tr>
     </thead>
     <tbody>
@@ -411,13 +415,13 @@ export function generatePayrollHTML(data: PayrollReportData): string {
           <td>${index + 1}</td>
           <td style="text-align: right;">${emp.employeeName}</td>
           <td>${emp.employeeCode}</td>
-          <td>${emp.position || '-'}</td>
           <td>${formatAmount(emp.baseSalary)}</td>
-          <td>${formatAmount(emp.overtimeAmount)}</td>
-          <td>${formatAmount(emp.incentiveAmount)}</td>
-          <td>${formatAmount(emp.deductionAmount)}</td>
-          <td>${formatAmount(emp.advanceDeduction)}</td>
-          <td>${formatAmount(emp.totalDeductions)}</td>
+          <td style="color: ${parseFloat(emp.overtimeAmount) > 0 ? '#2563eb' : '#666'};">${parseFloat(emp.overtimeAmount) > 0 ? formatAmount(emp.overtimeAmount) : '-'}</td>
+          <td>${(emp as any).workDays || 30}</td>
+          <td style="color: ${parseFloat((emp as any).absentDeduction || '0') > 0 ? '#dc2626' : '#666'};">${parseFloat((emp as any).absentDeduction || '0') > 0 ? '-' + formatAmount((emp as any).absentDeduction) : '-'}</td>
+          <td style="color: ${parseFloat(emp.incentiveAmount) > 0 ? '#16a34a' : '#666'};">${parseFloat(emp.incentiveAmount) > 0 ? formatAmount(emp.incentiveAmount) : '-'}</td>
+          <td style="color: ${parseFloat(emp.deductionAmount) > 0 ? '#dc2626' : '#666'};">${parseFloat(emp.deductionAmount) > 0 ? '-' + formatAmount(emp.deductionAmount) : '-'}</td>
+          <td style="color: ${parseFloat(emp.advanceDeduction) > 0 ? '#dc2626' : '#666'};">${parseFloat(emp.advanceDeduction) > 0 ? '-' + formatAmount(emp.advanceDeduction) : '-'}</td>
           <td style="font-weight: bold; color: #166534;">${formatAmount(emp.netSalary)}</td>
         </tr>
       `).join('')}

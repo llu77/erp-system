@@ -603,8 +603,17 @@ export const payrollDetails = mysqlTable("payrollDetails", {
   
   // مكونات الراتب
   baseSalary: decimal("baseSalary", { precision: 12, scale: 2 }).default("2000.00").notNull(),
-  overtimeAmount: decimal("overtimeAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  
+  // الساعات الإضافية
   overtimeEnabled: boolean("overtimeEnabled").default(false).notNull(),
+  overtimeAmount: decimal("overtimeAmount", { precision: 12, scale: 2 }).default("1000.00").notNull(),
+  
+  // أيام العمل (افتراضي 30 يوم)
+  workDays: int("workDays").default(30).notNull(),
+  absentDays: int("absentDays").default(0).notNull(),
+  absentDeduction: decimal("absentDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  
+  // الحوافز
   incentiveAmount: decimal("incentiveAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
   isSupervisor: boolean("isSupervisor").default(false).notNull(),
   

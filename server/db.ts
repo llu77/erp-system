@@ -1638,27 +1638,42 @@ export async function getPendingExpenses() {
 
 // ==================== دوال حساب الرواتب ====================
 
-// حساب راتب موظف
+// حساب راتب موظف (محدث مع أيام العمل)
 export function calculateEmployeeSalary(
   baseSalary: number,
   overtimeEnabled: boolean,
   overtimeRate: number,
-  isSupervisor: boolean,
-  supervisorIncentive: number,
+  workDays: number,
+  incentiveAmount: number,
   deductions: number,
   advanceDeduction: number
 ) {
+  // الساعات الإضافية (1000 إذا مفعل)
   const overtime = overtimeEnabled ? overtimeRate : 0;
-  const incentive = isSupervisor ? supervisorIncentive : 0;
   
-  const grossSalary = baseSalary + overtime + incentive;
-  const totalDeductions = deductions + advanceDeduction;
+  // حساب الراتب اليومي (الأساسي + الساعات الإضافية) / 30
+  const dailyRate = (baseSalary + overtime) / 30;
+  
+  // حساب خصم الغياب (إذا أقل من 30 يوم)
+  const absentDays = 30 - workDays;
+  const absentDeduction = absentDays > 0 ? dailyRate * absentDays : 0;
+  
+  // إجمالي الراتب قبل الخصومات
+  const grossSalary = baseSalary + overtime + incentiveAmount;
+  
+  // إجمالي الخصومات
+  const totalDeductions = deductions + advanceDeduction + absentDeduction;
+  
+  // صافي الراتب
   const netSalary = grossSalary - totalDeductions;
   
   return {
     baseSalary,
     overtimeAmount: overtime,
-    incentiveAmount: incentive,
+    workDays,
+    absentDays,
+    absentDeduction,
+    incentiveAmount,
     grossSalary,
     totalDeductions,
     netSalary,
@@ -1731,12 +1746,15 @@ export async function generateMonthlyPayroll(
     
     const advanceDeduction = advancesMap.get(emp.id) || 0;
     
+    // حساب الحوافز (للمشرف 400)
+    const incentive = settings.isSupervisor ? parseFloat(settings.supervisorIncentive as string) : 0;
+    
     const salary = calculateEmployeeSalary(
       parseFloat(settings.baseSalary as string),
       settings.overtimeEnabled as boolean,
       parseFloat(settings.overtimeRate as string),
-      settings.isSupervisor as boolean,
-      parseFloat(settings.supervisorIncentive as string),
+      30, // أيام العمل الافتراضية
+      incentive,
       parseFloat(settings.fixedDeduction as string),
       advanceDeduction
     );
@@ -1794,6 +1812,88 @@ export async function generateMonthlyPayroll(
   
   // إضافة التفاصيل
   const detailsWithPayrollId = details.map(d => ({ ...d, payrollId: newPayroll.id }));
+  await createPayrollDetails(detailsWithPayrollId);
+  
+  return newPayroll;
+}
+
+// إنشاء مسيرة رواتب مع التفاصيل (النموذج الجديد)
+export async function createPayrollWithDetails(
+  branchId: number,
+  branchName: string,
+  year: number,
+  month: number,
+  totalBaseSalary: number,
+  totalOvertime: number,
+  totalIncentives: number,
+  totalDeductions: number,
+  totalNetSalary: number,
+  employeeCount: number,
+  details: any[],
+  createdBy: number,
+  createdByName: string
+) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  // التحقق من عدم وجود مسيرة سابقة
+  const existing = await getPayrollByBranchAndMonth(branchId, year, month);
+  if (existing) {
+    throw new Error("توجد مسيرة رواتب لهذا الشهر بالفعل");
+  }
+  
+  // إنشاء رقم المسيرة
+  const payrollNumber = await generatePayrollNumber();
+  const periodStart = new Date(year, month - 1, 1);
+  const periodEnd = new Date(year, month, 0);
+  
+  // إنشاء المسيرة بحالة "تحت الإجراء"
+  await db.insert(payrolls).values({
+    payrollNumber,
+    branchId,
+    branchName,
+    year,
+    month,
+    periodStart,
+    periodEnd,
+    totalBaseSalary: totalBaseSalary.toFixed(2),
+    totalOvertime: totalOvertime.toFixed(2),
+    totalIncentives: totalIncentives.toFixed(2),
+    totalDeductions: totalDeductions.toFixed(2),
+    totalNetSalary: totalNetSalary.toFixed(2),
+    employeeCount,
+    status: "pending", // تحت الإجراء لحين الموافقة
+    createdBy,
+    createdByName,
+  });
+  
+  // الحصول على معرف المسيرة
+  const newPayroll = await getPayrollByBranchAndMonth(branchId, year, month);
+  if (!newPayroll) {
+    throw new Error("فشل في إنشاء مسيرة الرواتب");
+  }
+  
+  // إضافة التفاصيل
+  const detailsWithPayrollId = details.map(d => ({
+    payrollId: newPayroll.id,
+    employeeId: d.employeeId,
+    employeeName: d.employeeName,
+    employeeCode: d.employeeCode,
+    position: d.position || '',
+    baseSalary: d.baseSalary,
+    overtimeEnabled: d.overtimeEnabled,
+    overtimeAmount: d.overtimeAmount,
+    workDays: d.workDays,
+    absentDays: d.absentDays,
+    absentDeduction: d.absentDeduction,
+    incentiveAmount: d.incentiveAmount,
+    deductionAmount: d.deductionAmount,
+    advanceDeduction: d.advanceDeduction,
+    grossSalary: d.grossSalary,
+    totalDeductions: d.totalDeductions,
+    netSalary: d.netSalary,
+  }));
+  
   await createPayrollDetails(detailsWithPayrollId);
   
   return newPayroll;

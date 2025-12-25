@@ -2295,8 +2295,8 @@ export const appRouter = router({
         }
       }),
 
-    // تحديث حالة المسيرة
-    updateStatus: adminProcedure
+    // تحديث حالة المسيرة (للمشرف العام والأدمن)
+    updateStatus: supervisorViewProcedure
       .input(z.object({
         id: z.number(),
         status: z.enum(['draft', 'pending', 'approved', 'paid', 'cancelled']),
@@ -2345,6 +2345,61 @@ export const appRouter = router({
         const { id, ...data } = input;
         await db.updatePayrollDetail(id, data);
         return { success: true, message: 'تم تحديث بيانات الراتب بنجاح' };
+      }),
+
+    // إنشاء مسيرة رواتب مع التفاصيل (النموذج الجديد)
+    createWithDetails: supervisorInputProcedure
+      .input(z.object({
+        branchId: z.number(),
+        branchName: z.string(),
+        year: z.number(),
+        month: z.number(),
+        totalBaseSalary: z.number(),
+        totalOvertime: z.number(),
+        totalIncentives: z.number(),
+        totalDeductions: z.number(),
+        totalNetSalary: z.number(),
+        employeeCount: z.number(),
+        details: z.array(z.object({
+          employeeId: z.number(),
+          employeeName: z.string(),
+          employeeCode: z.string(),
+          position: z.string().optional(),
+          baseSalary: z.string(),
+          overtimeEnabled: z.boolean(),
+          overtimeAmount: z.string(),
+          workDays: z.number(),
+          absentDays: z.number(),
+          absentDeduction: z.string(),
+          incentiveAmount: z.string(),
+          deductionAmount: z.string(),
+          advanceDeduction: z.string(),
+          grossSalary: z.string(),
+          totalDeductions: z.string(),
+          netSalary: z.string(),
+        })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const payroll = await db.createPayrollWithDetails(
+            input.branchId,
+            input.branchName,
+            input.year,
+            input.month,
+            input.totalBaseSalary,
+            input.totalOvertime,
+            input.totalIncentives,
+            input.totalDeductions,
+            input.totalNetSalary,
+            input.employeeCount,
+            input.details,
+            ctx.user.id,
+            ctx.user.name || 'موظف'
+          );
+          return { success: true, message: 'تم إنشاء مسيرة الرواتب وإرسالها للمراجعة', payroll };
+        } catch (error: any) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+        }
       }),
   }),
 
