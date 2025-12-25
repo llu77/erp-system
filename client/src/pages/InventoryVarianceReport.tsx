@@ -4,6 +4,15 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { 
+  PDF_BASE_STYLES, 
+  getPDFHeader, 
+  getPDFFooter, 
+  getPDFInfoSection, 
+  getPDFSummarySection, 
+  openPrintWindow,
+  formatCurrency 
+} from "@/utils/pdfTemplates";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -138,110 +147,80 @@ export default function InventoryVarianceReport() {
   const handleExportPDF = () => {
     if (!varianceReport) return;
     
-    // إنشاء مستند PDF
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
-    });
-
-    // إضافة خط عربي
-    doc.setFont("helvetica");
-    doc.setR2L(true);
+    const countDate = varianceReport.count?.countDate 
+      ? new Date(varianceReport.count.countDate).toLocaleDateString('ar-SA')
+      : 'غير محدد';
     
-    // العنوان
-    doc.setFontSize(20);
-    doc.text("Symbol AI", 105, 15, { align: "center" });
+    const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير فروقات الجرد - ${varianceReport.count?.countNumber || ''}</title>
+  <style>
+    ${PDF_BASE_STYLES}
+    .variance-positive { color: #22c55e; font-weight: 600; }
+    .variance-negative { color: #ef4444; font-weight: 600; }
+    .variance-zero { color: #64748b; }
+  </style>
+</head>
+<body>
+  ${getPDFHeader('تقرير فروقات الجرد', varianceReport.count?.countNumber)}
+  
+  ${getPDFInfoSection([
+    { label: 'رقم الجرد', value: varianceReport.count?.countNumber || '-' },
+    { label: 'تاريخ الجرد', value: countDate },
+    { label: 'الفرع', value: varianceReport.count?.branchName || 'جميع الفروع' },
+    { label: 'إجمالي المنتجات', value: varianceReport.summary.totalProducts },
+  ])}
+  
+  ${getPDFSummarySection([
+    { label: 'نواقص', value: varianceReport.summary.shortages },
+    { label: 'زيادات', value: varianceReport.summary.surpluses },
+    { label: 'متطابق', value: varianceReport.summary.matched },
+    { label: 'صافي الفروقات', value: formatCurrency(varianceReport.summary.netVariance) },
+    { label: 'قيمة النواقص', value: formatCurrency(-varianceReport.summary.totalShortageValue) },
+  ])}
+  
+  <table class="pdf-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>المنتج</th>
+        <th>SKU</th>
+        <th>كمية النظام</th>
+        <th>الكمية الفعلية</th>
+        <th>الفرق</th>
+        <th>القيمة</th>
+        <th>السبب</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${varianceReport.items.map((item, index) => {
+        const varianceClass = item.variance > 0 ? 'variance-positive' : item.variance < 0 ? 'variance-negative' : 'variance-zero';
+        return `
+          <tr>
+            <td>${index + 1}</td>
+            <td class="text-right">${item.productName}</td>
+            <td>${item.productSku || '-'}</td>
+            <td>${item.systemQuantity}</td>
+            <td>${item.countedQuantity}</td>
+            <td class="${varianceClass}">${item.variance > 0 ? '+' : ''}${item.variance}</td>
+            <td class="${varianceClass}">${formatCurrency(item.varianceValue)}</td>
+            <td class="text-right">${item.reason || '-'}</td>
+          </tr>
+        `;
+      }).join('')}
+    </tbody>
+  </table>
+  
+  ${getPDFFooter()}
+</body>
+</html>
+    `;
     
-    doc.setFontSize(16);
-    doc.text("Inventory Variance Report", 105, 25, { align: "center" });
-    doc.text("تقرير فروقات الجرد", 105, 33, { align: "center" });
-    
-    // معلومات الجرد
-    doc.setFontSize(10);
-    const countInfo = [
-      `Count Number: ${varianceReport.count?.countNumber || 'N/A'}`,
-      `Date: ${varianceReport.count?.countDate ? new Date(varianceReport.count.countDate).toLocaleDateString("en-US") : 'N/A'}`,
-      `Branch: ${varianceReport.count?.branchName || 'All Branches'}`,
-    ];
-    countInfo.forEach((info, index) => {
-      doc.text(info, 15, 45 + (index * 6));
-    });
-    
-    // ملخص الفروقات
-    doc.setFontSize(12);
-    doc.text("Summary", 15, 70);
-    
-    const summaryData = [
-      ["Total Products", varianceReport.summary.totalProducts.toString()],
-      ["Shortages", varianceReport.summary.shortages.toString()],
-      ["Surpluses", varianceReport.summary.surpluses.toString()],
-      ["Matched", varianceReport.summary.matched.toString()],
-      ["Net Variance (SAR)", varianceReport.summary.netVariance.toFixed(2)],
-      ["Total Shortage Value (SAR)", `-${varianceReport.summary.totalShortageValue.toFixed(2)}`],
-      ["Total Surplus Value (SAR)", `+${varianceReport.summary.totalSurplusValue.toFixed(2)}`],
-    ];
-    
-    autoTable(doc, {
-      startY: 75,
-      head: [["Description", "Value"]],
-      body: summaryData,
-      theme: "striped",
-      headStyles: { fillColor: [59, 130, 246], halign: "center" },
-      columnStyles: {
-        0: { halign: "left" },
-        1: { halign: "center" },
-      },
-      margin: { left: 15, right: 15 },
-      tableWidth: 80,
-    });
-    
-    // جدول التفاصيل
-    const tableData = varianceReport.items.map(item => [
-      item.productName,
-      item.productSku || "-",
-      item.systemQuantity.toString(),
-      item.countedQuantity.toString(),
-      item.variance.toString(),
-      `${Number(item.varianceValue).toFixed(2)} SAR`,
-      item.reason || "-",
-    ]);
-    
-    autoTable(doc, {
-      startY: (doc as any).lastAutoTable.finalY + 15,
-      head: [["Product", "SKU", "System Qty", "Counted Qty", "Variance", "Value", "Reason"]],
-      body: tableData,
-      theme: "striped",
-      headStyles: { fillColor: [59, 130, 246], halign: "center", fontSize: 8 },
-      bodyStyles: { fontSize: 7 },
-      columnStyles: {
-        0: { cellWidth: 40 },
-        1: { cellWidth: 20, halign: "center" },
-        2: { cellWidth: 18, halign: "center" },
-        3: { cellWidth: 18, halign: "center" },
-        4: { cellWidth: 18, halign: "center" },
-        5: { cellWidth: 25, halign: "center" },
-        6: { cellWidth: 35 },
-      },
-      margin: { left: 10, right: 10 },
-    });
-    
-    // التذييل
-    const pageCount = doc.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.text(
-        `Page ${i} of ${pageCount} - Generated on ${new Date().toLocaleString("en-US")}`,
-        105,
-        290,
-        { align: "center" }
-      );
-    }
-    
-    // حفظ الملف
-    doc.save(`variance-report-${varianceReport.count?.countNumber || 'unknown'}.pdf`);
-    toast.success("تم تصدير التقرير PDF بنجاح");
+    openPrintWindow(htmlContent);
+    toast.success("تم فتح تقرير فروقات الجرد للطباعة أو الحفظ كـ PDF");
   };
 
   // الجرد المكتملة والمعتمدة

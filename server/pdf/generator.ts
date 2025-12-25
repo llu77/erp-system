@@ -355,10 +355,13 @@ export function generatePayrollHTML(data: PayrollReportData): string {
 </head>
 <body>
   <div class="header">
-    <div class="company-info">
-      <h1>${companyInfo.name}</h1>
-      ${companyInfo.address ? `<p>${companyInfo.address}</p>` : ''}
-      ${companyInfo.phone ? `<p>هاتف: ${companyInfo.phone}</p>` : ''}
+    <div class="company-info" style="display: flex; align-items: center; gap: 15px;">
+      <img src="/symbol-ai-logo.png" alt="Symbol AI" style="height: 50px; width: auto; object-fit: contain;" />
+      <div>
+        <h1>${companyInfo.name}</h1>
+        ${companyInfo.address ? `<p>${companyInfo.address}</p>` : ''}
+        ${companyInfo.phone ? `<p>هاتف: ${companyInfo.phone}</p>` : ''}
+      </div>
     </div>
     <div class="report-title">
       <h2>مسيرة رواتب</h2>

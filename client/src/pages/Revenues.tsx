@@ -36,6 +36,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ar } from "date-fns/locale";
+import { 
+  PDF_BASE_STYLES, 
+  getPDFHeader, 
+  getPDFFooter, 
+  getPDFInfoSection, 
+  getPDFSummarySection, 
+  openPrintWindow,
+  formatCurrency 
+} from "@/utils/pdfTemplates";
 
 interface EmployeeRevenueInput {
   employeeId: number;
@@ -720,7 +729,6 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
     
     setIsExporting(true);
     try {
-      // إنشاء محتوى HTML للتقرير
       const htmlContent = `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -728,63 +736,29 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
   <meta charset="UTF-8">
   <title>سجل إيرادات شهر ${monthName}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Cairo', sans-serif; padding: 40px; background: #fff; color: #1a1a2e; }
-    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #0ea5e9; padding-bottom: 20px; }
-    .header h1 { color: #0ea5e9; font-size: 28px; margin-bottom: 10px; }
-    .header p { color: #64748b; font-size: 14px; }
-    .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 30px; }
-    .summary-card { background: #f8fafc; border-radius: 10px; padding: 15px; text-align: center; border: 1px solid #e2e8f0; }
-    .summary-card .value { font-size: 20px; font-weight: 700; margin-bottom: 5px; }
-    .summary-card .label { font-size: 12px; color: #64748b; }
-    .cash { color: #22c55e; }
-    .network { color: #3b82f6; }
-    .balance { color: #a855f7; }
-    .matched { color: #22c55e; }
-    .unmatched { color: #ef4444; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th { background: #0ea5e9; color: white; padding: 12px; text-align: right; font-weight: 600; }
-    td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: right; }
-    tr:nth-child(even) { background: #f8fafc; }
-    tr:hover { background: #f1f5f9; }
+    ${PDF_BASE_STYLES}
     .status-matched { color: #22c55e; font-weight: 600; }
     .status-unmatched { color: #ef4444; font-weight: 600; }
-    .total-row { background: #0ea5e9 !important; color: white; font-weight: 700; }
-    .total-row td { border: none; }
-    .footer { margin-top: 30px; text-align: center; color: #94a3b8; font-size: 12px; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>سجل إيرادات شهر ${monthName}</h1>
-    <p>من ${format(monthStart, "d MMMM", { locale: ar })} إلى ${format(monthEnd, "d MMMM yyyy", { locale: ar })}</p>
-  </div>
+  ${getPDFHeader(`سجل إيرادات شهر ${monthName}`)}
   
-  <div class="summary">
-    <div class="summary-card">
-      <div class="value cash">${totals.cash.toLocaleString()}</div>
-      <div class="label">إجمالي النقدي</div>
-    </div>
-    <div class="summary-card">
-      <div class="value network">${totals.network.toLocaleString()}</div>
-      <div class="label">إجمالي الشبكة</div>
-    </div>
-    <div class="summary-card">
-      <div class="value balance">${totals.balance.toLocaleString()}</div>
-      <div class="label">إجمالي الرصيد</div>
-    </div>
-    <div class="summary-card">
-      <div class="value matched">${totals.matched}</div>
-      <div class="label">أيام متطابقة</div>
-    </div>
-    <div class="summary-card">
-      <div class="value unmatched">${totals.unmatched}</div>
-      <div class="label">أيام غير متطابقة</div>
-    </div>
-  </div>
+  ${getPDFInfoSection([
+    { label: 'من تاريخ', value: format(monthStart, "d MMMM", { locale: ar }) },
+    { label: 'إلى تاريخ', value: format(monthEnd, "d MMMM yyyy", { locale: ar }) },
+    { label: 'عدد الأيام', value: revenues.length },
+  ])}
   
-  <table>
+  ${getPDFSummarySection([
+    { label: 'إجمالي النقدي', value: formatCurrency(totals.cash) },
+    { label: 'إجمالي الشبكة', value: formatCurrency(totals.network) },
+    { label: 'إجمالي الرصيد', value: formatCurrency(totals.balance) },
+    { label: 'أيام متطابقة', value: totals.matched },
+    { label: 'أيام غير متطابقة', value: totals.unmatched },
+  ])}
+  
+  <table class="pdf-table">
     <thead>
       <tr>
         <th>التاريخ</th>
@@ -803,46 +777,33 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
           <tr>
             <td>${format(revDate, "d/M/yyyy")}</td>
             <td>${format(revDate, "EEEE", { locale: ar })}</td>
-            <td class="cash">${parseFloat(rev.cash || "0").toLocaleString()}</td>
-            <td class="network">${parseFloat(rev.network || "0").toLocaleString()}</td>
-            <td class="balance">${parseFloat(rev.balance || "0").toLocaleString()}</td>
-            <td><strong>${parseFloat(rev.total || "0").toLocaleString()} ر.س</strong></td>
+            <td class="text-success">${parseFloat(rev.cash || "0").toLocaleString()}</td>
+            <td class="text-primary">${parseFloat(rev.network || "0").toLocaleString()}</td>
+            <td>${parseFloat(rev.balance || "0").toLocaleString()}</td>
+            <td class="font-bold">${formatCurrency(rev.total || "0")}</td>
             <td class="${rev.isMatched ? 'status-matched' : 'status-unmatched'}">
               ${rev.isMatched ? '✓ متطابق' : '✗ غير متطابق'}
             </td>
           </tr>
         `;
       }).join('')}
-      <tr class="total-row">
-        <td colspan="2">الإجمالي</td>
-        <td>${totals.cash.toLocaleString()}</td>
-        <td>${totals.network.toLocaleString()}</td>
-        <td>${totals.balance.toLocaleString()}</td>
-        <td>${totals.total.toLocaleString()} ر.س</td>
-        <td>${revenues.length} يوم</td>
+      <tr style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; font-weight: 700;">
+        <td colspan="2" style="border: none;">الإجمالي</td>
+        <td style="border: none;">${totals.cash.toLocaleString()}</td>
+        <td style="border: none;">${totals.network.toLocaleString()}</td>
+        <td style="border: none;">${totals.balance.toLocaleString()}</td>
+        <td style="border: none;">${formatCurrency(totals.total)}</td>
+        <td style="border: none;">${revenues.length} يوم</td>
       </tr>
     </tbody>
   </table>
   
-  <div class="footer">
-    <p>تم إنشاء هذا التقرير بواسطة Symbol AI - ${format(new Date(), "d MMMM yyyy - h:mm a", { locale: ar })}</p>
-  </div>
+  ${getPDFFooter()}
 </body>
 </html>
       `;
 
-      // إنشاء Blob وتحميله
-      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      
-      // فتح نافذة جديدة للطباعة
-      const printWindow = window.open(url, '_blank');
-      if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print();
-        };
-      }
-      
+      openPrintWindow(htmlContent);
       toast.success("تم فتح التقرير للطباعة أو الحفظ ك PDF");
     } catch (error) {
       console.error('Export error:', error);

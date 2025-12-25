@@ -8,6 +8,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { 
+  PDF_BASE_STYLES, 
+  getPDFHeader, 
+  getPDFFooter, 
+  getPDFSummarySection,
+  openPrintWindow 
+} from "@/utils/pdfTemplates";
 
 interface ExportData {
   title: string;
@@ -161,135 +168,40 @@ export function ExportReports({ data, filename }: ExportReportsProps) {
     try {
       setIsExporting(true);
       
-      // إنشاء محتوى HTML للطباعة
       const htmlContent = `
-        <!DOCTYPE html>
-        <html dir="rtl" lang="ar">
-        <head>
-          <meta charset="UTF-8">
-          <title>${data.title}</title>
-          <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-              font-family: 'Cairo', sans-serif; 
-              padding: 20mm;
-              direction: rtl;
-            }
-            .title {
-              font-size: 24px;
-              font-weight: bold;
-              color: #1e40af;
-              text-align: center;
-              margin-bottom: 20px;
-              padding-bottom: 10px;
-              border-bottom: 3px solid #1e40af;
-            }
-            .date {
-              text-align: center;
-              color: #6b7280;
-              margin-bottom: 20px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-bottom: 20px;
-            }
-            th {
-              background-color: #1e40af;
-              color: white;
-              padding: 12px;
-              text-align: right;
-              font-weight: 600;
-            }
-            td {
-              padding: 10px 12px;
-              border-bottom: 1px solid #e5e7eb;
-              text-align: right;
-            }
-            tr:nth-child(even) {
-              background-color: #f9fafb;
-            }
-            .summary {
-              margin-top: 20px;
-              padding: 15px;
-              background-color: #f3f4f6;
-              border-radius: 8px;
-            }
-            .summary-row {
-              display: flex;
-              justify-content: space-between;
-              padding: 8px 0;
-              border-bottom: 1px solid #e5e7eb;
-            }
-            .summary-row:last-child {
-              border-bottom: none;
-              font-weight: bold;
-              font-size: 18px;
-              color: #1e40af;
-            }
-            .footer {
-              margin-top: 30px;
-              text-align: center;
-              color: #9ca3af;
-              font-size: 12px;
-            }
-            @media print {
-              body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-            }
-          </style>
-        </head>
-        <body>
-          <div style="text-align: center; margin-bottom: 20px;">
-            <img src="/symbol-ai-logo.png" alt="Symbol AI" style="height: 80px; object-fit: contain;" />
-          </div>
-          <div class="title">${data.title}</div>
-          <div class="date">تاريخ التقرير: ${new Date().toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })}</div>
-          
-          <table>
-            <thead>
-              <tr>
-                ${data.headers.map(h => `<th>${h}</th>`).join("")}
-              </tr>
-            </thead>
-            <tbody>
-              ${data.rows.map(row => `
-                <tr>
-                  ${row.map(cell => `<td>${cell}</td>`).join("")}
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-          
-          ${data.summary && data.summary.length > 0 ? `
-            <div class="summary">
-              ${data.summary.map(item => `
-                <div class="summary-row">
-                  <span>${item.label}</span>
-                  <span>${item.value}</span>
-                </div>
-              `).join("")}
-            </div>
-          ` : ""}
-          
-          <div class="footer">
-            تم إنشاء هذا التقرير بواسطة Symbol AI
-          </div>
-        </body>
-        </html>
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>${data.title}</title>
+  <style>${PDF_BASE_STYLES}</style>
+</head>
+<body>
+  ${getPDFHeader(data.title)}
+  
+  <table class="pdf-table">
+    <thead>
+      <tr>
+        ${data.headers.map(h => `<th>${h}</th>`).join("")}
+      </tr>
+    </thead>
+    <tbody>
+      ${data.rows.map(row => `
+        <tr>
+          ${row.map(cell => `<td>${cell}</td>`).join("")}
+        </tr>
+      `).join("")}
+    </tbody>
+  </table>
+  
+  ${data.summary && data.summary.length > 0 ? getPDFSummarySection(data.summary) : ""}
+  
+  ${getPDFFooter()}
+</body>
+</html>
       `;
       
-      // فتح نافذة جديدة للطباعة
-      const printWindow = window.open("", "_blank");
-      if (printWindow) {
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-          printWindow.print();
-        }, 500);
-      }
-      
+      openPrintWindow(htmlContent);
       toast.success("تم فتح نافذة الطباعة - احفظ كـ PDF");
     } catch (error) {
       toast.error("حدث خطأ أثناء التصدير");

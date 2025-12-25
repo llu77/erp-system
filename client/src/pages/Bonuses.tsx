@@ -26,6 +26,16 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { 
+  PDF_BASE_STYLES, 
+  getPDFHeader, 
+  getPDFFooter, 
+  getPDFInfoSection, 
+  getPDFSummarySection, 
+  getPDFTable,
+  openPrintWindow,
+  formatCurrency 
+} from "@/utils/pdfTemplates";
 
 export default function Bonuses() {
   const { user } = useAuth();
@@ -139,66 +149,34 @@ export default function Bonuses() {
   <meta charset="UTF-8">
   <title>تقرير البونص الأسبوعي - ${branchName}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Cairo', sans-serif; padding: 40px; background: #fff; color: #1a1a2e; }
-    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #a855f7; padding-bottom: 20px; }
-    .header img { height: 60px; margin-bottom: 15px; }
-    .header h1 { color: #a855f7; font-size: 28px; margin-bottom: 10px; }
-    .header .subtitle { color: #64748b; font-size: 16px; }
-    .header .period { color: #1a1a2e; font-size: 14px; margin-top: 10px; }
-    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
-    .summary-card { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #e2e8f0; }
-    .summary-card .value { font-size: 24px; font-weight: 700; margin-bottom: 5px; }
-    .summary-card .label { font-size: 12px; color: #64748b; }
-    .purple { color: #a855f7; }
-    .green { color: #22c55e; }
-    .blue { color: #3b82f6; }
-    .yellow { color: #eab308; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); color: white; padding: 14px; text-align: right; font-weight: 600; }
-    td { padding: 12px 14px; border-bottom: 1px solid #e2e8f0; text-align: right; }
-    tr:nth-child(even) { background: #f8fafc; }
-    tr:hover { background: #f1f5f9; }
-    .tier-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; color: white; }
-    .bonus-amount { font-weight: 700; color: #22c55e; font-size: 16px; }
-    .total-row { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%) !important; color: white; font-weight: 700; }
-    .total-row td { border: none; }
-    .footer { margin-top: 30px; text-align: center; color: #94a3b8; font-size: 12px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
-    .levels-info { margin-top: 30px; background: #f8fafc; border-radius: 12px; padding: 20px; }
-    .levels-info h3 { color: #a855f7; margin-bottom: 15px; font-size: 16px; }
+    ${PDF_BASE_STYLES}
+    .tier-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; color: white; }
+    .bonus-amount { font-weight: 700; color: #22c55e; }
+    .levels-info { margin-top: 25px; background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; }
+    .levels-info h3 { color: #6366f1; margin-bottom: 15px; font-size: 14px; font-weight: 600; }
     .levels-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .level-item { display: flex; align-items: center; gap: 10px; font-size: 13px; }
-    .level-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .level-item { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+    .level-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>🎁 تقرير البونص الأسبوعي</h1>
-    <div class="subtitle">فرع ${branchName} - الأسبوع ${currentBonus.weekNumber}</div>
-    <div class="period">من ${weekStart.toLocaleDateString('ar-SA')} إلى ${weekEnd.toLocaleDateString('ar-SA')}</div>
-  </div>
+  ${getPDFHeader('تقرير البونص الأسبوعي', `الأسبوع ${currentBonus.weekNumber}`)}
   
-  <div class="summary">
-    <div class="summary-card">
-      <div class="value purple">${Number(currentBonus.totalAmount).toFixed(2)} ر.س</div>
-      <div class="label">إجمالي البونص</div>
-    </div>
-    <div class="summary-card">
-      <div class="value green">${currentBonus.eligibleCount}</div>
-      <div class="label">موظفين مؤهلين</div>
-    </div>
-    <div class="summary-card">
-      <div class="value blue">${currentBonus.totalEmployees}</div>
-      <div class="label">إجمالي الموظفين</div>
-    </div>
-    <div class="summary-card">
-      <div class="value yellow">${currentBonus.totalEmployees > 0 ? ((currentBonus.eligibleCount / currentBonus.totalEmployees) * 100).toFixed(0) : 0}%</div>
-      <div class="label">نسبة الأهلية</div>
-    </div>
-  </div>
+  ${getPDFInfoSection([
+    { label: 'الفرع', value: branchName },
+    { label: 'رقم الأسبوع', value: currentBonus.weekNumber },
+    { label: 'من تاريخ', value: weekStart.toLocaleDateString('ar-SA') },
+    { label: 'إلى تاريخ', value: weekEnd.toLocaleDateString('ar-SA') },
+  ])}
+  
+  ${getPDFSummarySection([
+    { label: 'إجمالي البونص', value: formatCurrency(currentBonus.totalAmount) },
+    { label: 'موظفين مؤهلين', value: currentBonus.eligibleCount },
+    { label: 'إجمالي الموظفين', value: currentBonus.totalEmployees },
+    { label: 'نسبة الأهلية', value: `${currentBonus.totalEmployees > 0 ? ((currentBonus.eligibleCount / currentBonus.totalEmployees) * 100).toFixed(0) : 0}%` },
+  ])}
 
-  <table>
+  <table class="pdf-table">
     <thead>
       <tr>
         <th>#</th>
@@ -213,16 +191,16 @@ export default function Bonuses() {
       ${currentBonus.details.map((detail, index) => `
         <tr>
           <td>${index + 1}</td>
-          <td>${detail.employeeName || 'غير محدد'}</td>
+          <td class="text-right">${detail.employeeName || 'غير محدد'}</td>
           <td>${detail.employeeCode || '-'}</td>
-          <td>${Number(detail.weeklyRevenue).toFixed(2)} ر.س</td>
+          <td>${formatCurrency(detail.weeklyRevenue)}</td>
           <td><span class="tier-badge" style="background-color: ${tierColors[detail.bonusTier] || '#9ca3af'}">${tierNames[detail.bonusTier] || detail.bonusTier}</span></td>
-          <td class="bonus-amount">${Number(detail.bonusAmount).toFixed(2)} ر.س</td>
+          <td class="bonus-amount font-bold">${formatCurrency(detail.bonusAmount)}</td>
         </tr>
       `).join('')}
-      <tr class="total-row">
-        <td colspan="5">الإجمالي</td>
-        <td>${Number(currentBonus.totalAmount).toFixed(2)} ر.س</td>
+      <tr style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; font-weight: 700;">
+        <td colspan="5" style="border: none; text-align: right;">الإجمالي</td>
+        <td style="border: none;">${formatCurrency(currentBonus.totalAmount)}</td>
       </tr>
     </tbody>
   </table>
@@ -239,24 +217,12 @@ export default function Bonuses() {
     </div>
   </div>
 
-  <div class="footer">
-    <p>تم إنشاء هذا التقرير بواسطة Symbol AI - ${new Date().toLocaleDateString('ar-SA')} ${new Date().toLocaleTimeString('ar-SA')}</p>
-  </div>
+  ${getPDFFooter()}
 </body>
 </html>
       `;
 
-      // إنشاء Blob وفتح نافذة الطباعة
-      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      
-      const printWindow = window.open(url, '_blank');
-      if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print();
-        };
-      }
-      
+      openPrintWindow(htmlContent);
       toast.success("تم فتح تقرير البونص للطباعة أو الحفظ كـ PDF");
     } catch (error) {
       console.error('Export error:', error);
