@@ -39,6 +39,8 @@ import HROnboarding from "./pages/HROnboarding";
 import SchedulerSettings from "./pages/SchedulerSettings";
 import NotificationRecipients from "./pages/NotificationRecipients";
 import EmployeeInvoices from "./pages/EmployeeInvoices";
+import InventoryCounting from "./pages/InventoryCounting";
+import InventoryVarianceReport from "./pages/InventoryVarianceReport";
 
 function Router() {
   return (
@@ -185,6 +187,18 @@ function Router() {
       <Route path="/advanced-inventory">
         <DashboardLayout>
           <AdvancedInventory />
+        </DashboardLayout>
+      </Route>
+      {/* Inventory Counting */}
+      <Route path="/inventory-counting">
+        <DashboardLayout>
+          <InventoryCounting />
+        </DashboardLayout>
+      </Route>
+      {/* Inventory Variance Report */}
+      <Route path="/inventory-variance-report">
+        <DashboardLayout>
+          <InventoryVarianceReport />
         </DashboardLayout>
       </Route>
       <Route path="/sales-dashboard">

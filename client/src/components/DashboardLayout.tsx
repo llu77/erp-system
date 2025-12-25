@@ -92,6 +92,8 @@ const menuItems = [
   { icon: Shield, label: "تنبيهات الأمان", path: "/security-alerts", roles: ["admin"] },
   { icon: Lock, label: "إدارة الصلاحيات", path: "/permissions", roles: ["admin"] },
   { icon: Boxes, label: "المخزون المتقدم", path: "/advanced-inventory", roles: ["admin", "manager", "viewer"] },
+  { icon: ClipboardList, label: "الجرد الفعلي", path: "/inventory-counting", roles: ["admin", "manager", "supervisor"] },
+  { icon: FileText, label: "تقرير فروقات الجرد", path: "/inventory-variance-report", roles: ["admin", "manager", "viewer"] },
   { icon: BarChart3, label: "لوحة المبيعات", path: "/sales-dashboard", roles: ["admin", "manager", "viewer"] },
   { icon: Mail, label: "إعدادات التقارير", path: "/report-settings", roles: ["admin"] },
   { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee", "supervisor"] },

@@ -3655,6 +3655,130 @@ export const appRouter = router({
       };
     }),
   }),
+
+  // ==================== نظام الجرد المتقدم ====================
+  inventoryCounting: router({
+    // بدء جرد جديد
+    start: managerProcedure
+      .input(z.object({
+        branchId: z.number().nullable().optional(),
+        branchName: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { startNewInventoryCount } = await import('./db');
+        const result = await startNewInventoryCount(
+          input.branchId || null,
+          input.branchName || null,
+          ctx.user.id,
+          ctx.user.name || 'Unknown'
+        );
+        return result;
+      }),
+
+    // الحصول على الجرد الجاري
+    active: protectedProcedure.query(async () => {
+      const { getActiveInventoryCount } = await import('./db');
+      return await getActiveInventoryCount();
+    }),
+
+    // الحصول على جميع عمليات الجرد
+    list: protectedProcedure.query(async () => {
+      const { getAllInventoryCounts } = await import('./db');
+      return await getAllInventoryCounts();
+    }),
+
+    // الحصول على تفاصيل جرد
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const { getInventoryCountById } = await import('./db');
+        return await getInventoryCountById(input.id);
+      }),
+
+    // الحصول على عناصر الجرد
+    items: protectedProcedure
+      .input(z.object({ countId: z.number() }))
+      .query(async ({ input }) => {
+        const { getInventoryCountItems } = await import('./db');
+        return await getInventoryCountItems(input.countId);
+      }),
+
+    // البحث في عناصر الجرد
+    searchItems: protectedProcedure
+      .input(z.object({ countId: z.number(), searchTerm: z.string() }))
+      .query(async ({ input }) => {
+        const { searchInventoryCountItems } = await import('./db');
+        return await searchInventoryCountItems(input.countId, input.searchTerm);
+      }),
+
+    // تحديث كمية منتج في الجرد
+    updateItemQuantity: supervisorInputProcedure
+      .input(z.object({
+        itemId: z.number(),
+        countedQuantity: z.number().min(0),
+        reason: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { updateInventoryCountItemQuantity } = await import('./db');
+        return await updateInventoryCountItemQuantity(
+          input.itemId,
+          input.countedQuantity,
+          ctx.user.id,
+          input.reason
+        );
+      }),
+
+    // تحديث سبب الفرق
+    updateItemReason: supervisorInputProcedure
+      .input(z.object({
+        itemId: z.number(),
+        reason: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { updateInventoryItemReason } = await import('./db');
+        return await updateInventoryItemReason(input.itemId, input.reason);
+      }),
+
+    // تقرير فروقات الجرد
+    varianceReport: supervisorViewProcedure
+      .input(z.object({ countId: z.number() }))
+      .query(async ({ input }) => {
+        const { getInventoryVarianceReport } = await import('./db');
+        return await getInventoryVarianceReport(input.countId);
+      }),
+
+    // اعتماد الجرد وتحديث المخزون
+    approve: adminProcedure
+      .input(z.object({
+        countId: z.number(),
+        updateStock: z.boolean().default(true),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { approveInventoryCount } = await import('./db');
+        return await approveInventoryCount(
+          input.countId,
+          ctx.user.id,
+          ctx.user.name || 'Unknown',
+          input.updateStock
+        );
+      }),
+
+    // إلغاء الجرد
+    cancel: adminProcedure
+      .input(z.object({ countId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { cancelInventoryCount } = await import('./db');
+        return await cancelInventoryCount(input.countId);
+      }),
+
+    // حساب إحصائيات الجرد
+    calculateStats: protectedProcedure
+      .input(z.object({ countId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { calculateInventoryCountStats } = await import('./db');
+        return await calculateInventoryCountStats(input.countId);
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

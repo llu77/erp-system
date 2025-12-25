@@ -3776,3 +3776,225 @@ export async function getEmployeeInvoicesStats(branchId?: number, startDate?: Da
     salesTotal: parseFloat(salesStats[0]?.total || '0'),
   };
 }
+
+
+// ==================== دوال الجرد المتقدمة ====================
+
+// بدء جرد جديد مع تحميل جميع المنتجات
+export async function startNewInventoryCount(branchId: number | null, branchName: string | null, createdBy: number, createdByName: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  // إنشاء جرد جديد
+  const countNumber = await generateInventoryCountNumber();
+  const [result] = await db.insert(inventoryCounts).values({
+    countNumber,
+    branchId,
+    branchName,
+    countDate: new Date(),
+    status: 'in_progress',
+    createdBy,
+    createdByName,
+  });
+  
+  const countId = result.insertId;
+  
+  // تحميل جميع المنتجات إلى الجرد
+  const allProducts = await getAllProducts();
+  
+  for (const product of allProducts) {
+    await db.insert(inventoryCountItems).values({
+      countId,
+      productId: product.id,
+      productName: product.name,
+      productSku: product.sku || '',
+      systemQuantity: product.quantity,
+      countedQuantity: 0,
+      variance: -product.quantity,
+      unitCost: product.costPrice,
+      varianceValue: (-product.quantity * parseFloat(product.costPrice)).toFixed(2),
+      status: 'pending',
+    });
+  }
+  
+  // تحديث إحصائيات الجرد
+  await updateInventoryCount(countId, {
+    totalProducts: allProducts.length,
+  });
+  
+  return { countId, countNumber };
+}
+
+// تحديث كمية منتج في الجرد
+export async function updateInventoryCountItemQuantity(
+  itemId: number, 
+  countedQuantity: number, 
+  countedBy: number,
+  reason?: string
+) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  // الحصول على العنصر الحالي
+  const [item] = await db.select().from(inventoryCountItems).where(eq(inventoryCountItems.id, itemId)).limit(1);
+  if (!item) return null;
+  
+  const variance = countedQuantity - item.systemQuantity;
+  const varianceValue = variance * parseFloat(item.unitCost as string);
+  
+  await db.update(inventoryCountItems).set({
+    countedQuantity,
+    variance,
+    varianceValue: varianceValue.toFixed(2),
+    status: 'counted',
+    countedBy,
+    countedAt: new Date(),
+    reason: reason || null,
+  }).where(eq(inventoryCountItems.id, itemId));
+  
+  // إعادة حساب إحصائيات الجرد
+  await calculateInventoryCountStats(item.countId);
+  
+  return { itemId, countedQuantity, variance, varianceValue };
+}
+
+// الحصول على تقرير فروقات الجرد
+export async function getInventoryVarianceReport(countId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const count = await getInventoryCountById(countId);
+  if (!count) return null;
+  
+  const items = await db.select().from(inventoryCountItems)
+    .where(eq(inventoryCountItems.countId, countId))
+    .orderBy(desc(inventoryCountItems.varianceValue));
+  
+  // تصنيف الفروقات
+  const shortages = items.filter(item => item.variance < 0);
+  const surpluses = items.filter(item => item.variance > 0);
+  const matched = items.filter(item => item.variance === 0);
+  
+  // حساب الإجماليات
+  const totalShortageValue = shortages.reduce((sum, item) => sum + parseFloat(item.varianceValue as string), 0);
+  const totalSurplusValue = surpluses.reduce((sum, item) => sum + parseFloat(item.varianceValue as string), 0);
+  
+  return {
+    count,
+    items,
+    summary: {
+      totalProducts: items.length,
+      shortages: shortages.length,
+      surpluses: surpluses.length,
+      matched: matched.length,
+      totalShortageValue: Math.abs(totalShortageValue),
+      totalSurplusValue,
+      netVariance: totalSurplusValue + totalShortageValue,
+    },
+    shortages,
+    surpluses,
+    matched,
+  };
+}
+
+// اعتماد الجرد وتحديث المخزون
+export async function approveInventoryCount(
+  countId: number, 
+  approvedBy: number, 
+  approvedByName: string,
+  updateStock: boolean = true
+) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const count = await getInventoryCountById(countId);
+  if (!count || count.status === 'approved') return null;
+  
+  // تحديث حالة الجرد
+  await updateInventoryCount(countId, {
+    status: 'approved',
+    approvedBy,
+    approvedByName,
+    approvedAt: new Date(),
+  });
+  
+  // تحديث كميات المخزون إذا مطلوب
+  if (updateStock) {
+    const items = await getInventoryCountItems(countId);
+    
+    for (const item of items) {
+      if (item.status === 'counted' && item.variance !== 0) {
+        // تحديث كمية المنتج
+        await db.update(products).set({
+          quantity: item.countedQuantity,
+        }).where(eq(products.id, item.productId));
+        
+        // تسجيل في سجل التدقيق
+        await createActivityLog({
+          userId: approvedBy,
+          userName: approvedByName,
+          action: 'update',
+          entityType: 'product',
+          entityId: item.productId,
+          details: `تحديث المخزون من الجرد: ${count.countNumber} - الكمية السابقة: ${item.systemQuantity}, الكمية الجديدة: ${item.countedQuantity}, الفرق: ${item.variance}`,
+        });
+      }
+    }
+  }
+  
+  return { success: true, countId, updatedProducts: updateStock };
+}
+
+// الحصول على الجرد الجاري
+export async function getActiveInventoryCount() {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const [result] = await db.select().from(inventoryCounts)
+    .where(eq(inventoryCounts.status, 'in_progress'))
+    .orderBy(desc(inventoryCounts.createdAt))
+    .limit(1);
+  
+  return result || null;
+}
+
+// إلغاء الجرد
+export async function cancelInventoryCount(countId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  // حذف عناصر الجرد
+  await db.delete(inventoryCountItems).where(eq(inventoryCountItems.countId, countId));
+  
+  // حذف الجرد
+  await db.delete(inventoryCounts).where(eq(inventoryCounts.id, countId));
+  
+  return { success: true };
+}
+
+// البحث في عناصر الجرد
+export async function searchInventoryCountItems(countId: number, searchTerm: string) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(inventoryCountItems)
+    .where(and(
+      eq(inventoryCountItems.countId, countId),
+      or(
+        like(inventoryCountItems.productName, `%${searchTerm}%`),
+        like(inventoryCountItems.productSku, `%${searchTerm}%`)
+      )
+    ));
+}
+
+// تحديث سبب الفرق
+export async function updateInventoryItemReason(itemId: number, reason: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  await db.update(inventoryCountItems).set({
+    reason,
+  }).where(eq(inventoryCountItems.id, itemId));
+  
+  return { success: true };
+}
