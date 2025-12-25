@@ -128,7 +128,10 @@ export default function PurchasesPage() {
   };
 
   const addItem = () => {
-    if (!selectedProduct || !itemPrice) return;
+    if (!selectedProduct || !itemPrice) {
+      toast.error("يرجى اختيار المنتج وإدخال السعر");
+      return;
+    }
     const product = products.find((p) => p.id.toString() === selectedProduct);
     if (!product) return;
 
@@ -197,54 +200,54 @@ export default function PurchasesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <CardHeader className="py-3 px-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5 text-primary" />
-              <CardTitle>إدارة المشتريات</CardTitle>
-              <Badge variant="secondary">{orders.length}</Badge>
+              <ShoppingCart className="h-4 w-4 text-primary" />
+              <CardTitle className="text-base">إدارة المشتريات</CardTitle>
+              <Badge variant="secondary" className="text-xs">{orders.length}</Badge>
             </div>
             <div className="flex items-center gap-2">
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="relative w-full sm:w-48">
+                <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   placeholder="بحث برقم الطلب..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pr-9"
+                  className="pr-7 h-8 text-sm"
                 />
               </div>
-              <Button onClick={() => setIsCreateOpen(true)}>
-                <Plus className="h-4 w-4 ml-2" />
+              <Button size="sm" onClick={() => setIsCreateOpen(true)} className="h-8">
+                <Plus className="h-3.5 w-3.5 ml-1" />
                 أمر شراء جديد
               </Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-4">
           {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="flex items-center justify-center h-40">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
             </div>
           ) : (
             <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>رقم الطلب</TableHead>
-                    <TableHead>المورد</TableHead>
-                    <TableHead>التاريخ</TableHead>
-                    <TableHead>الإجمالي</TableHead>
-                    <TableHead>الحالة</TableHead>
-                    <TableHead className="w-[150px]">إجراءات</TableHead>
+                    <TableHead className="text-xs py-2">رقم الطلب</TableHead>
+                    <TableHead className="text-xs py-2">المورد</TableHead>
+                    <TableHead className="text-xs py-2">التاريخ</TableHead>
+                    <TableHead className="text-xs py-2">الإجمالي</TableHead>
+                    <TableHead className="text-xs py-2">الحالة</TableHead>
+                    <TableHead className="text-xs py-2 w-[100px]">إجراءات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredOrders.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground text-sm">
                         لا يوجد أوامر شراء
                       </TableCell>
                     </TableRow>
@@ -253,51 +256,52 @@ export default function PurchasesPage() {
                       const status = statusLabels[order.status] || statusLabels.draft;
                       return (
                         <TableRow key={order.id}>
-                          <TableCell className="font-mono">{order.orderNumber}</TableCell>
-                          <TableCell>{order.supplierName || "-"}</TableCell>
-                          <TableCell>
+                          <TableCell className="font-mono text-xs py-2">{order.orderNumber}</TableCell>
+                          <TableCell className="text-xs py-2">{order.supplierName || "-"}</TableCell>
+                          <TableCell className="text-xs py-2">
                             {format(new Date(order.orderDate), "dd MMM yyyy", {
                               locale: ar,
                             })}
                           </TableCell>
-                          <TableCell className="font-semibold text-orange-600">
+                          <TableCell className="font-semibold text-orange-600 text-xs py-2">
                             {formatCurrency(order.total)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-2">
                             <Select
                               value={order.status}
                               onValueChange={(value) => handleStatusChange(order.id, value)}
                             >
-                              <SelectTrigger className="w-32">
-                                <Badge variant={status.variant}>{status.label}</Badge>
+                              <SelectTrigger className="w-24 h-7 text-xs">
+                                <Badge variant={status.variant} className="text-[10px] px-1.5 py-0">{status.label}</Badge>
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="draft">مسودة</SelectItem>
-                                <SelectItem value="pending">قيد الانتظار</SelectItem>
-                                <SelectItem value="approved">موافق عليه</SelectItem>
-                                <SelectItem value="received">مستلم</SelectItem>
-                                <SelectItem value="cancelled">ملغى</SelectItem>
+                                <SelectItem value="draft" className="text-xs">مسودة</SelectItem>
+                                <SelectItem value="pending" className="text-xs">قيد الانتظار</SelectItem>
+                                <SelectItem value="approved" className="text-xs">موافق عليه</SelectItem>
+                                <SelectItem value="received" className="text-xs">مستلم</SelectItem>
+                                <SelectItem value="cancelled" className="text-xs">ملغى</SelectItem>
                               </SelectContent>
                             </Select>
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
+                          <TableCell className="py-2">
+                            <div className="flex items-center gap-0.5">
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-7 w-7"
                                 onClick={() => setViewingOrder(order)}
                               >
-                                <Eye className="h-4 w-4" />
+                                <Eye className="h-3.5 w-3.5" />
                               </Button>
-{isAdmin && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => setDeleteOrderId(order.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              {isAdmin && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                  onClick={() => setDeleteOrderId(order.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
                               )}
                             </div>
                           </TableCell>
@@ -312,23 +316,24 @@ export default function PurchasesPage() {
         </CardContent>
       </Card>
 
-      {/* Create Order Dialog */}
+      {/* Create Order Dialog - Compact Layout */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-[700px]">
-          <DialogHeader>
-            <DialogTitle>إنشاء أمر شراء جديد</DialogTitle>
-            <DialogDescription>أضف المنتجات لإنشاء أمر شراء جديد</DialogDescription>
+        <DialogContent className="sm:max-w-[550px] p-4">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-base">إنشاء أمر شراء جديد</DialogTitle>
+            <DialogDescription className="text-xs">أضف المنتجات لإنشاء أمر شراء جديد</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>المورد *</Label>
+          <div className="space-y-3">
+            {/* Supplier Selection */}
+            <div className="space-y-1">
+              <Label className="text-xs">المورد *</Label>
               <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
-                <SelectTrigger>
+                <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="اختر المورد" />
                 </SelectTrigger>
                 <SelectContent>
                   {suppliers.map((supplier) => (
-                    <SelectItem key={supplier.id} value={supplier.id.toString()}>
+                    <SelectItem key={supplier.id} value={supplier.id.toString()} className="text-sm">
                       {supplier.name}
                     </SelectItem>
                   ))}
@@ -336,73 +341,80 @@ export default function PurchasesPage() {
               </Select>
             </div>
 
-            <div className="border rounded-lg p-4 space-y-4">
-              <div className="flex items-end gap-2">
-                <div className="flex-1 space-y-2">
-                  <Label>المنتج</Label>
+            {/* Add Product Section */}
+            <div className="border rounded-md p-3 space-y-3 bg-muted/30">
+              <div className="grid grid-cols-12 gap-2 items-end">
+                <div className="col-span-5 space-y-1">
+                  <Label className="text-xs">المنتج</Label>
                   <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-8 text-sm">
                       <SelectValue placeholder="اختر المنتج" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[200px]">
                       {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id.toString()}>
+                        <SelectItem key={product.id} value={product.id.toString()} className="text-sm">
                           {product.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="w-24 space-y-2">
-                  <Label>الكمية</Label>
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs">الكمية</Label>
                   <Input
                     type="number"
                     min="1"
                     value={itemQuantity}
                     onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
+                    className="h-8 text-sm"
                   />
                 </div>
-                <div className="w-28 space-y-2">
-                  <Label>السعر</Label>
+                <div className="col-span-3 space-y-1">
+                  <Label className="text-xs">السعر</Label>
                   <Input
                     type="number"
                     step="0.01"
                     value={itemPrice}
                     onChange={(e) => setItemPrice(e.target.value)}
                     placeholder="0.00"
+                    className="h-8 text-sm"
                   />
                 </div>
-                <Button type="button" onClick={addItem}>
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <div className="col-span-2">
+                  <Button type="button" onClick={addItem} size="sm" className="w-full h-8">
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
 
+              {/* Items Table */}
               {orderItems.length > 0 && (
-                <div className="rounded-md border">
+                <div className="rounded-md border bg-background">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>المنتج</TableHead>
-                        <TableHead>الكمية</TableHead>
-                        <TableHead>السعر</TableHead>
-                        <TableHead>الإجمالي</TableHead>
-                        <TableHead className="w-[50px]"></TableHead>
+                        <TableHead className="text-xs py-1.5">المنتج</TableHead>
+                        <TableHead className="text-xs py-1.5 w-16">الكمية</TableHead>
+                        <TableHead className="text-xs py-1.5 w-20">السعر</TableHead>
+                        <TableHead className="text-xs py-1.5 w-24">الإجمالي</TableHead>
+                        <TableHead className="w-8 py-1.5"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {orderItems.map((item, index) => (
                         <TableRow key={index}>
-                          <TableCell>{item.productName}</TableCell>
-                          <TableCell>{item.quantity}</TableCell>
-                          <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-                          <TableCell>{formatCurrency(item.total)}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-xs py-1.5">{item.productName}</TableCell>
+                          <TableCell className="text-xs py-1.5">{item.quantity}</TableCell>
+                          <TableCell className="text-xs py-1.5">{formatCurrency(item.unitPrice)}</TableCell>
+                          <TableCell className="text-xs py-1.5 font-medium">{formatCurrency(item.total)}</TableCell>
+                          <TableCell className="py-1.5">
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-6 w-6"
                               onClick={() => removeItem(index)}
                             >
-                              <X className="h-4 w-4" />
+                              <X className="h-3 w-3" />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -412,89 +424,91 @@ export default function PurchasesPage() {
                 </div>
               )}
 
-              <div className="flex justify-between items-center pt-4 border-t">
-                <span className="font-semibold text-lg">الإجمالي:</span>
-                <span className="font-bold text-xl text-orange-600">
+              {/* Total */}
+              <div className="flex justify-between items-center pt-2 border-t">
+                <span className="font-medium text-sm">الإجمالي:</span>
+                <span className="font-bold text-base text-orange-600">
                   {formatCurrency(calculateTotal())}
                 </span>
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+          <DialogFooter className="pt-2 gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(false)}>
               إلغاء
             </Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending}>
+            <Button size="sm" onClick={handleCreate} disabled={createMutation.isPending}>
               {createMutation.isPending ? "جاري الإنشاء..." : "إنشاء أمر الشراء"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* View Order Dialog */}
+      {/* View Order Dialog - Compact */}
       <Dialog open={!!viewingOrder} onOpenChange={() => setViewingOrder(null)}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>تفاصيل أمر الشراء</DialogTitle>
+        <DialogContent className="sm:max-w-[450px] p-4">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-base">تفاصيل أمر الشراء</DialogTitle>
           </DialogHeader>
           {viewingOrder && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-sm text-muted-foreground">رقم الطلب</p>
-                  <p className="font-mono font-medium">{viewingOrder.orderNumber}</p>
+                  <p className="text-xs text-muted-foreground">رقم الطلب</p>
+                  <p className="font-mono font-medium text-sm">{viewingOrder.orderNumber}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">التاريخ</p>
-                  <p className="font-medium">
+                  <p className="text-xs text-muted-foreground">التاريخ</p>
+                  <p className="font-medium text-sm">
                     {format(new Date(viewingOrder.orderDate), "dd MMM yyyy", {
                       locale: ar,
                     })}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">المورد</p>
-                  <p className="font-medium">{viewingOrder.supplierName || "-"}</p>
+                  <p className="text-xs text-muted-foreground">المورد</p>
+                  <p className="font-medium text-sm">{viewingOrder.supplierName || "-"}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">الحالة</p>
-                  <Badge variant={statusLabels[viewingOrder.status]?.variant || "secondary"}>
+                  <p className="text-xs text-muted-foreground">الحالة</p>
+                  <Badge variant={statusLabels[viewingOrder.status]?.variant || "secondary"} className="text-xs">
                     {statusLabels[viewingOrder.status]?.label || viewingOrder.status}
                   </Badge>
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center text-xl font-bold">
+              <div className="border-t pt-3">
+                <div className="flex justify-between items-center text-base font-bold">
                   <span>الإجمالي:</span>
                   <span className="text-orange-600">{formatCurrency(viewingOrder.total)}</span>
                 </div>
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewingOrder(null)}>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" size="sm" onClick={() => setViewingOrder(null)}>
               إغلاق
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* Delete Confirmation - Compact */}
       <Dialog open={!!deleteOrderId} onOpenChange={() => setDeleteOrderId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>تأكيد الحذف</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="sm:max-w-[350px] p-4">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-base">تأكيد الحذف</DialogTitle>
+            <DialogDescription className="text-xs">
               هل أنت متأكد من حذف أمر الشراء هذا؟ لا يمكن التراجع عن هذا الإجراء.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOrderId(null)}>
+          <DialogFooter className="pt-2 gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteOrderId(null)}>
               إلغاء
             </Button>
             <Button
               variant="destructive"
+              size="sm"
               onClick={() => deleteOrderId && deleteMutation.mutate({ id: deleteOrderId })}
               disabled={deleteMutation.isPending}
             >
