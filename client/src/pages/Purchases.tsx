@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,6 +78,18 @@ export default function PurchasesPage() {
   const { data: orders = [], isLoading } = trpc.purchaseOrders.list.useQuery();
   const { data: suppliers = [] } = trpc.suppliers.list.useQuery();
   const { data: products = [] } = trpc.products.list.useQuery();
+
+  // تحديث السعر تلقائياً عند اختيار منتج
+  useEffect(() => {
+    if (selectedProduct) {
+      const product = products.find((p) => p.id.toString() === selectedProduct);
+      if (product && product.costPrice) {
+        setItemPrice(product.costPrice.toString());
+      }
+    } else {
+      setItemPrice("");
+    }
+  }, [selectedProduct, products]);
 
   const createMutation = trpc.purchaseOrders.create.useMutation({
     onSuccess: () => {
@@ -343,23 +355,25 @@ export default function PurchasesPage() {
 
             {/* Add Product Section */}
             <div className="border rounded-md p-3 space-y-3 bg-muted/30">
-              <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-5 space-y-1">
-                  <Label className="text-xs">المنتج</Label>
-                  <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue placeholder="اختر المنتج" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[200px]">
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id.toString()} className="text-sm">
-                          {product.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-2 space-y-1">
+              {/* صف المنتج */}
+              <div className="space-y-1">
+                <Label className="text-xs">المنتج</Label>
+                <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="اختر المنتج" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[200px]">
+                    {products.map((product) => (
+                      <SelectItem key={product.id} value={product.id.toString()} className="text-sm">
+                        <span className="truncate max-w-[280px] block">{product.name}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* صف الكمية والسعر وزر الإضافة */}
+              <div className="grid grid-cols-3 gap-2 items-end">
+                <div className="space-y-1">
                   <Label className="text-xs">الكمية</Label>
                   <Input
                     type="number"
@@ -369,8 +383,8 @@ export default function PurchasesPage() {
                     className="h-8 text-sm"
                   />
                 </div>
-                <div className="col-span-3 space-y-1">
-                  <Label className="text-xs">السعر</Label>
+                <div className="space-y-1">
+                  <Label className="text-xs">السعر (تلقائي من التكلفة)</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -378,11 +392,13 @@ export default function PurchasesPage() {
                     onChange={(e) => setItemPrice(e.target.value)}
                     placeholder="0.00"
                     className="h-8 text-sm"
+                    readOnly
                   />
                 </div>
-                <div className="col-span-2">
+                <div>
                   <Button type="button" onClick={addItem} size="sm" className="w-full h-8">
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-3.5 w-3.5 ml-1" />
+                    إضافة
                   </Button>
                 </div>
               </div>
