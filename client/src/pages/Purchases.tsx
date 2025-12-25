@@ -371,8 +371,8 @@ export default function PurchasesPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {/* صف الكمية والسعر وزر الإضافة */}
-              <div className="grid grid-cols-3 gap-2 items-end">
+              {/* صف الكمية والسعر */}
+              <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs">الكمية</Label>
                   <Input
@@ -384,7 +384,7 @@ export default function PurchasesPage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">السعر (تلقائي من التكلفة)</Label>
+                  <Label className="text-xs">السعر (تلقائي)</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -395,13 +395,12 @@ export default function PurchasesPage() {
                     readOnly
                   />
                 </div>
-                <div>
-                  <Button type="button" onClick={addItem} size="sm" className="w-full h-8">
-                    <Plus className="h-3.5 w-3.5 ml-1" />
-                    إضافة
-                  </Button>
-                </div>
               </div>
+              {/* زر الإضافة */}
+              <Button type="button" onClick={addItem} size="sm" className="w-full h-8">
+                <Plus className="h-3.5 w-3.5 ml-1" />
+                إضافة المنتج
+              </Button>
 
               {/* Items Table */}
               {orderItems.length > 0 && (
