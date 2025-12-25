@@ -24,6 +24,7 @@ const defaultConfig: InventoryReminderConfig = {
   recipientEmails: [
     'llu771230@gmail.com', // الأدمن
     'Salemalwadai1997@gmail.com', // المشرف العام
+    'elsayed.gouda.mohamed@gmail.com', // مشرف المخزون - السيد محمد
   ],
 };
 
