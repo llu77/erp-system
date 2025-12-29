@@ -179,6 +179,8 @@ export default function InventoryCounting() {
 
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "admin" || user?.role === "manager";
+  // السماح للمشرف ببدء الجرد (إذا كان لديه صلاحية inventoryCounts.create)
+  const canStartCount = isManager || user?.role === "supervisor";
 
   return (
     <div className="space-y-6">
@@ -189,7 +191,7 @@ export default function InventoryCounting() {
           <p className="text-muted-foreground">تسجيل الكميات الفعلية ومقارنتها بالمخزون النظري</p>
         </div>
         
-        {!activeCount && isManager && (
+        {!activeCount && canStartCount && (
           <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -482,7 +484,7 @@ export default function InventoryCounting() {
             <p className="text-muted-foreground text-center mb-4">
               ابدأ جرد جديد لتسجيل الكميات الفعلية ومقارنتها بالمخزون النظري
             </p>
-            {isManager && (
+            {canStartCount && (
               <Button onClick={() => setShowStartDialog(true)}>
                 <Play className="h-4 w-4 ml-2" />
                 بدء جرد جديد

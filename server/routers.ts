@@ -3771,17 +3771,28 @@ export const appRouter = router({
 
   // ==================== نظام الجرد المتقدم ====================
   inventoryCounting: router({
-    // بدء جرد جديد
-    start: managerProcedure
+    // بدء جرد جديد (متاح للمشرف أيضاً)
+    start: supervisorInputProcedure
       .input(z.object({
         branchId: z.number().nullable().optional(),
         branchName: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { startNewInventoryCount } = await import('./db');
+        const { startNewInventoryCount, getBranchById } = await import('./db');
+        
+        // إذا كان المستخدم مشرف فرع، يستخدم فرعه تلقائياً
+        let branchId = input.branchId || null;
+        let branchName = input.branchName || null;
+        
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
+          branchId = ctx.user.branchId;
+          const branch = await getBranchById(ctx.user.branchId);
+          branchName = branch?.name || null;
+        }
+        
         const result = await startNewInventoryCount(
-          input.branchId || null,
-          input.branchName || null,
+          branchId,
+          branchName,
           ctx.user.id,
           ctx.user.name || 'Unknown'
         );
