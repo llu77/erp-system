@@ -23,6 +23,10 @@ import {
   InsertDeletedRecord,
   employeeInvoices,
   InsertEmployeeInvoice,
+  tasks,
+  taskLogs,
+  InsertTask,
+  InsertTaskLog,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -4097,4 +4101,315 @@ export async function updateInventoryItemReason(itemId: number, reason: string) 
   }).where(eq(inventoryCountItems.id, itemId));
   
   return { success: true };
+}
+
+
+// ==================== دوال نظام المهام ====================
+
+// توليد رقم مرجعي فريد من 6 أرقام
+export async function generateTaskReferenceNumber(): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  let referenceNumber: string;
+  let exists = true;
+  
+  while (exists) {
+    // توليد رقم عشوائي من 6 أرقام
+    referenceNumber = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // التحقق من عدم وجوده مسبقاً
+    const existing = await db.select({ id: tasks.id })
+      .from(tasks)
+      .where(eq(tasks.referenceNumber, referenceNumber))
+      .limit(1);
+    
+    exists = existing.length > 0;
+  }
+  
+  return referenceNumber!;
+}
+
+// إنشاء مهمة جديدة
+export async function createTask(data: {
+  subject: string;
+  details?: string;
+  requirement: string;
+  responseType: 'file_upload' | 'confirmation' | 'text_response' | 'multiple_files';
+  confirmationYesText?: string;
+  confirmationNoText?: string;
+  branchId?: number;
+  branchName?: string;
+  assignedToId: number;
+  assignedToName: string;
+  assignedToEmail?: string;
+  dueDate?: Date;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  createdBy: number;
+  createdByName?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const referenceNumber = await generateTaskReferenceNumber();
+  
+  const result = await db.insert(tasks).values({
+    referenceNumber,
+    subject: data.subject,
+    details: data.details,
+    requirement: data.requirement,
+    responseType: data.responseType,
+    confirmationYesText: data.confirmationYesText || 'نعم، قمت بذلك',
+    confirmationNoText: data.confirmationNoText || 'لا، لم أقم بذلك حتى الآن',
+    branchId: data.branchId,
+    branchName: data.branchName,
+    assignedToId: data.assignedToId,
+    assignedToName: data.assignedToName,
+    assignedToEmail: data.assignedToEmail,
+    dueDate: data.dueDate,
+    priority: data.priority || 'medium',
+    createdBy: data.createdBy,
+    createdByName: data.createdByName,
+    status: 'pending',
+  });
+  
+  const taskId = Number((result as any).insertId || (result as any)[0]?.insertId);
+  
+  // تسجيل في سجل المهام
+  await db.insert(taskLogs).values({
+    taskId: taskId,
+    action: 'created',
+    newStatus: 'pending',
+    performedBy: data.createdBy,
+    performedByName: data.createdByName,
+    notes: `تم إنشاء المهمة برقم مرجعي ${referenceNumber}`,
+  });
+  
+  return { id: taskId, referenceNumber };
+}
+
+// البحث عن مهمة بالرقم المرجعي
+export async function getTaskByReference(referenceNumber: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select()
+    .from(tasks)
+    .where(eq(tasks.referenceNumber, referenceNumber))
+    .limit(1);
+  
+  return result[0] || null;
+}
+
+// الحصول على مهمة بالـ ID
+export async function getTaskById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select()
+    .from(tasks)
+    .where(eq(tasks.id, id))
+    .limit(1);
+  
+  return result[0] || null;
+}
+
+// الحصول على جميع المهام
+export async function getAllTasks(filters?: {
+  status?: string;
+  assignedToId?: number;
+  branchId?: number;
+  priority?: string;
+  createdBy?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [];
+  
+  if (filters?.status) {
+    conditions.push(eq(tasks.status, filters.status as any));
+  }
+  if (filters?.assignedToId) {
+    conditions.push(eq(tasks.assignedToId, filters.assignedToId));
+  }
+  if (filters?.branchId) {
+    conditions.push(eq(tasks.branchId, filters.branchId));
+  }
+  if (filters?.priority) {
+    conditions.push(eq(tasks.priority, filters.priority as any));
+  }
+  if (filters?.createdBy) {
+    conditions.push(eq(tasks.createdBy, filters.createdBy));
+  }
+  
+  const result = await db.select()
+    .from(tasks)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(tasks.createdAt));
+  
+  return result;
+}
+
+// الحصول على مهام الموظف
+export async function getTasksForEmployee(employeeId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db.select()
+    .from(tasks)
+    .where(eq(tasks.assignedToId, employeeId))
+    .orderBy(desc(tasks.createdAt));
+  
+  return result;
+}
+
+// تحديث استجابة المهمة (رفع ملف أو تأكيد)
+export async function respondToTask(data: {
+  taskId: number;
+  responseType: 'file_upload' | 'confirmation' | 'text_response' | 'multiple_files';
+  responseText?: string;
+  responseConfirmation?: boolean;
+  responseFiles?: string[];
+  respondedBy?: number;
+  respondedByName?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const task = await getTaskById(data.taskId);
+  if (!task) throw new Error("المهمة غير موجودة");
+  
+  const updateData: any = {
+    status: 'in_progress',
+    respondedAt: new Date(),
+  };
+  
+  if (data.responseText) {
+    updateData.responseText = data.responseText;
+  }
+  
+  if (data.responseConfirmation !== undefined) {
+    updateData.responseConfirmation = data.responseConfirmation;
+  }
+  
+  if (data.responseFiles && data.responseFiles.length > 0) {
+    updateData.responseFiles = JSON.stringify(data.responseFiles);
+  }
+  
+  await db.update(tasks)
+    .set(updateData)
+    .where(eq(tasks.id, data.taskId));
+  
+  // تسجيل في سجل المهام
+  let actionNote = '';
+  if (data.responseType === 'file_upload' || data.responseType === 'multiple_files') {
+    actionNote = `تم رفع ${data.responseFiles?.length || 1} ملف`;
+  } else if (data.responseType === 'confirmation') {
+    actionNote = data.responseConfirmation ? 'تم التأكيد بنعم' : 'تم التأكيد بلا';
+  } else {
+    actionNote = 'تم إرسال رد نصي';
+  }
+  
+  await db.insert(taskLogs).values({
+    taskId: data.taskId,
+    action: 'responded',
+    oldStatus: task.status,
+    newStatus: 'in_progress',
+    performedBy: data.respondedBy,
+    performedByName: data.respondedByName,
+    notes: actionNote,
+  });
+  
+  return { success: true };
+}
+
+// تحديث حالة المهمة
+export async function updateTaskStatus(data: {
+  taskId: number;
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  updatedBy: number;
+  updatedByName?: string;
+  notes?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const task = await getTaskById(data.taskId);
+  if (!task) throw new Error("المهمة غير موجودة");
+  
+  await db.update(tasks)
+    .set({ status: data.status })
+    .where(eq(tasks.id, data.taskId));
+  
+  // تسجيل في سجل المهام
+  await db.insert(taskLogs).values({
+    taskId: data.taskId,
+    action: 'status_changed',
+    oldStatus: task.status,
+    newStatus: data.status,
+    performedBy: data.updatedBy,
+    performedByName: data.updatedByName,
+    notes: data.notes || `تم تغيير الحالة من ${task.status} إلى ${data.status}`,
+  });
+  
+  return { success: true };
+}
+
+// تحديث حالة إرسال الإشعار
+export async function markTaskEmailSent(taskId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(tasks)
+    .set({ 
+      emailSent: true,
+      emailSentAt: new Date(),
+    })
+    .where(eq(tasks.id, taskId));
+  
+  return { success: true };
+}
+
+// حذف مهمة
+export async function deleteTask(taskId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // حذف سجلات المهمة أولاً
+  await db.delete(taskLogs).where(eq(taskLogs.taskId, taskId));
+  
+  // حذف المهمة
+  await db.delete(tasks).where(eq(tasks.id, taskId));
+  
+  return { success: true };
+}
+
+// الحصول على سجل المهمة
+export async function getTaskLogs(taskId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db.select()
+    .from(taskLogs)
+    .where(eq(taskLogs.taskId, taskId))
+    .orderBy(desc(taskLogs.createdAt));
+  
+  return result;
+}
+
+// إحصائيات المهام
+export async function getTaskStats() {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const stats = await db.select({
+    total: sql<number>`COUNT(*)`,
+    pending: sql<number>`SUM(CASE WHEN ${tasks.status} = 'pending' THEN 1 ELSE 0 END)`,
+    inProgress: sql<number>`SUM(CASE WHEN ${tasks.status} = 'in_progress' THEN 1 ELSE 0 END)`,
+    completed: sql<number>`SUM(CASE WHEN ${tasks.status} = 'completed' THEN 1 ELSE 0 END)`,
+    cancelled: sql<number>`SUM(CASE WHEN ${tasks.status} = 'cancelled' THEN 1 ELSE 0 END)`,
+  }).from(tasks);
+  
+  return stats[0];
 }

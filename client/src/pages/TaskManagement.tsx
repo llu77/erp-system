@@ -1,0 +1,636 @@
+import { useState } from 'react';
+import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/_core/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
+import { 
+  Plus, 
+  Search, 
+  FileText, 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  AlertTriangle,
+  Eye,
+  Trash2,
+  Send,
+  Loader2,
+  ClipboardList,
+  Users,
+  Building2,
+  Calendar
+} from 'lucide-react';
+
+export default function TaskManagement() {
+  const { user } = useAuth();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Form state
+  const [formData, setFormData] = useState({
+    subject: '',
+    details: '',
+    requirement: '',
+    responseType: 'file_upload' as 'file_upload' | 'confirmation' | 'text_response' | 'multiple_files',
+    confirmationYesText: '',
+    confirmationNoText: '',
+    branchId: undefined as number | undefined,
+    assignedToId: undefined as number | undefined,
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
+    dueDate: '',
+  });
+
+  // Queries
+  const { data: tasks, isLoading, refetch } = trpc.tasks.getAll.useQuery(
+    statusFilter === 'all' ? undefined : { status: statusFilter }
+  );
+  const { data: stats } = trpc.tasks.getStats.useQuery();
+  const { data: employees } = trpc.employees.list.useQuery();
+  const { data: branches } = trpc.branches.list.useQuery();
+
+  // Mutations
+  const createMutation = trpc.tasks.create.useMutation({
+    onSuccess: (data) => {
+      toast.success(`تم إنشاء المهمة بنجاح - الرقم المرجعي: ${data.referenceNumber}`);
+      setIsCreateDialogOpen(false);
+      resetForm();
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || 'حدث خطأ أثناء إنشاء المهمة');
+    },
+  });
+
+  const updateStatusMutation = trpc.tasks.updateStatus.useMutation({
+    onSuccess: () => {
+      toast.success('تم تحديث حالة المهمة');
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || 'حدث خطأ أثناء تحديث الحالة');
+    },
+  });
+
+  const deleteMutation = trpc.tasks.delete.useMutation({
+    onSuccess: () => {
+      toast.success('تم حذف المهمة');
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || 'حدث خطأ أثناء حذف المهمة');
+    },
+  });
+
+  const resetForm = () => {
+    setFormData({
+      subject: '',
+      details: '',
+      requirement: '',
+      responseType: 'file_upload',
+      confirmationYesText: '',
+      confirmationNoText: '',
+      branchId: undefined,
+      assignedToId: undefined,
+      priority: 'medium',
+      dueDate: '',
+    });
+  };
+
+  const handleCreateTask = () => {
+    if (!formData.subject || !formData.requirement || !formData.assignedToId) {
+      toast.error('يرجى ملء جميع الحقول المطلوبة');
+      return;
+    }
+
+    const employee = employees?.find((e: any) => e.id === formData.assignedToId);
+    const branch = branches?.find((b: any) => b.id === formData.branchId);
+
+    createMutation.mutate({
+      subject: formData.subject,
+      details: formData.details || undefined,
+      requirement: formData.requirement,
+      responseType: formData.responseType,
+      confirmationYesText: formData.confirmationYesText || undefined,
+      confirmationNoText: formData.confirmationNoText || undefined,
+      branchId: formData.branchId,
+      branchName: branch?.name,
+      assignedToId: formData.assignedToId,
+      assignedToName: employee?.name || '',
+      assignedToEmail: employee?.email || undefined,
+      priority: formData.priority,
+      dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20"><Clock className="w-3 h-3 ml-1" /> في انتظار الرد</Badge>;
+      case 'in_progress':
+        return <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20"><Loader2 className="w-3 h-3 ml-1" /> تحت المعالجة</Badge>;
+      case 'completed':
+        return <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20"><CheckCircle className="w-3 h-3 ml-1" /> مكتملة</Badge>;
+      case 'cancelled':
+        return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20"><XCircle className="w-3 h-3 ml-1" /> ملغاة</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'urgent':
+        return <Badge variant="destructive"><AlertTriangle className="w-3 h-3 ml-1" /> عاجل</Badge>;
+      case 'high':
+        return <Badge className="bg-orange-500">مرتفع</Badge>;
+      case 'medium':
+        return <Badge className="bg-blue-500">متوسط</Badge>;
+      case 'low':
+        return <Badge variant="secondary">منخفض</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const filteredTasks = tasks?.filter(task => 
+    task.subject.includes(searchTerm) || 
+    task.referenceNumber.includes(searchTerm) ||
+    task.assignedToName.includes(searchTerm)
+  );
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <ClipboardList className="w-7 h-7" />
+            إدارة المهام
+          </h1>
+          <p className="text-slate-400 mt-1">إنشاء وإدارة المهام المرسلة للموظفين</p>
+        </div>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="w-4 h-4 ml-2" />
+              مهمة جديدة
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>إنشاء مهمة جديدة</DialogTitle>
+              <DialogDescription>أدخل تفاصيل المهمة المطلوب إرسالها للموظف</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>الفرع</Label>
+                  <Select
+                    value={formData.branchId?.toString() || ''}
+                    onValueChange={(value) => setFormData({ ...formData, branchId: parseInt(value) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر الفرع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches?.map((branch: any) => (
+                        <SelectItem key={branch.id} value={branch.id.toString()}>
+                          {branch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>الموظف *</Label>
+                  <Select
+                    value={formData.assignedToId?.toString() || ''}
+                    onValueChange={(value) => setFormData({ ...formData, assignedToId: parseInt(value) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر الموظف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employees?.filter((e: any) => !formData.branchId || e.branchId === formData.branchId).map((employee: any) => (
+                        <SelectItem key={employee.id} value={employee.id.toString()}>
+                          {employee.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>موضوع المهمة *</Label>
+                <Input
+                  value={formData.subject}
+                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                  placeholder="مثال: رفع صورة الموازنة"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>التفاصيل</Label>
+                <Textarea
+                  value={formData.details}
+                  onChange={(e) => setFormData({ ...formData, details: e.target.value })}
+                  placeholder="تفاصيل إضافية عن المهمة..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>المطلوب من الموظف *</Label>
+                <Textarea
+                  value={formData.requirement}
+                  onChange={(e) => setFormData({ ...formData, requirement: e.target.value })}
+                  placeholder="مثال: برجاء رفع صورة من الموازنة المرفوعة مسبقاً بتاريخ 2025/12/10"
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>نوع الاستجابة *</Label>
+                  <Select
+                    value={formData.responseType}
+                    onValueChange={(value: any) => setFormData({ ...formData, responseType: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="file_upload">رفع ملف واحد</SelectItem>
+                      <SelectItem value="multiple_files">رفع عدة ملفات</SelectItem>
+                      <SelectItem value="confirmation">تأكيد (نعم/لا)</SelectItem>
+                      <SelectItem value="text_response">رد نصي</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>الأولوية</Label>
+                  <Select
+                    value={formData.priority}
+                    onValueChange={(value: any) => setFormData({ ...formData, priority: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">منخفضة</SelectItem>
+                      <SelectItem value="medium">متوسطة</SelectItem>
+                      <SelectItem value="high">مرتفعة</SelectItem>
+                      <SelectItem value="urgent">عاجلة</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {formData.responseType === 'confirmation' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>نص زر "نعم"</Label>
+                    <Input
+                      value={formData.confirmationYesText}
+                      onChange={(e) => setFormData({ ...formData, confirmationYesText: e.target.value })}
+                      placeholder="نعم، قمت بذلك"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>نص زر "لا"</Label>
+                    <Input
+                      value={formData.confirmationNoText}
+                      onChange={(e) => setFormData({ ...formData, confirmationNoText: e.target.value })}
+                      placeholder="لا، لم أقم بذلك حتى الآن"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label>تاريخ الاستحقاق</Label>
+                <Input
+                  type="date"
+                  value={formData.dueDate}
+                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  إلغاء
+                </Button>
+                <Button onClick={handleCreateTask} disabled={createMutation.isPending}>
+                  {createMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin ml-2" />
+                  ) : (
+                    <Send className="w-4 h-4 ml-2" />
+                  )}
+                  إرسال المهمة
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-4 gap-4">
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-sm">إجمالي المهام</p>
+                <p className="text-2xl font-bold text-white">{stats?.total || 0}</p>
+              </div>
+              <ClipboardList className="w-8 h-8 text-slate-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-sm">في انتظار الرد</p>
+                <p className="text-2xl font-bold text-yellow-500">{stats?.pending || 0}</p>
+              </div>
+              <Clock className="w-8 h-8 text-yellow-500/50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-sm">تحت المعالجة</p>
+                <p className="text-2xl font-bold text-blue-500">{stats?.inProgress || 0}</p>
+              </div>
+              <Loader2 className="w-8 h-8 text-blue-500/50" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-sm">مكتملة</p>
+                <p className="text-2xl font-bold text-green-500">{stats?.completed || 0}</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-500/50" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card className="bg-slate-800/50 border-slate-700">
+        <CardContent className="pt-6">
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <Input
+                  placeholder="بحث بالموضوع أو الرقم المرجعي أو اسم الموظف..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pr-10"
+                />
+              </div>
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="فلترة حسب الحالة" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">جميع الحالات</SelectItem>
+                <SelectItem value="pending">في انتظار الرد</SelectItem>
+                <SelectItem value="in_progress">تحت المعالجة</SelectItem>
+                <SelectItem value="completed">مكتملة</SelectItem>
+                <SelectItem value="cancelled">ملغاة</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tasks Table */}
+      <Card className="bg-slate-800/50 border-slate-700">
+        <CardContent className="pt-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
+            </div>
+          ) : filteredTasks?.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+              <ClipboardList className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>لا توجد مهام</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-700">
+                  <TableHead className="text-slate-400">الرقم المرجعي</TableHead>
+                  <TableHead className="text-slate-400">الموضوع</TableHead>
+                  <TableHead className="text-slate-400">الموظف</TableHead>
+                  <TableHead className="text-slate-400">الفرع</TableHead>
+                  <TableHead className="text-slate-400">الحالة</TableHead>
+                  <TableHead className="text-slate-400">الأولوية</TableHead>
+                  <TableHead className="text-slate-400">التاريخ</TableHead>
+                  <TableHead className="text-slate-400">الإجراءات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTasks?.map((task) => (
+                  <TableRow key={task.id} className="border-slate-700">
+                    <TableCell className="font-mono text-blue-400">{task.referenceNumber}</TableCell>
+                    <TableCell className="text-white max-w-xs truncate">{task.subject}</TableCell>
+                    <TableCell className="text-slate-300">{task.assignedToName}</TableCell>
+                    <TableCell className="text-slate-300">{task.branchName || '-'}</TableCell>
+                    <TableCell>{getStatusBadge(task.status)}</TableCell>
+                    <TableCell>{getPriorityBadge(task.priority)}</TableCell>
+                    <TableCell className="text-slate-400">
+                      {new Date(task.createdAt).toLocaleDateString('ar-SA')}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTask(task);
+                            setIsViewDialogOpen(true);
+                          }}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        {task.status === 'in_progress' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-green-500 hover:text-green-400"
+                            onClick={() => updateStatusMutation.mutate({ taskId: task.id, status: 'completed' })}
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {(user?.role === 'admin' || user?.role === 'manager') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-500 hover:text-red-400"
+                            onClick={() => {
+                              if (confirm('هل أنت متأكد من حذف هذه المهمة؟')) {
+                                deleteMutation.mutate({ taskId: task.id });
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* View Task Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>تفاصيل المهمة</DialogTitle>
+            <DialogDescription>الرقم المرجعي: {selectedTask?.referenceNumber}</DialogDescription>
+          </DialogHeader>
+          {selectedTask && (
+            <div className="space-y-4 mt-4">
+              <div className="flex gap-2">
+                {getStatusBadge(selectedTask.status)}
+                {getPriorityBadge(selectedTask.priority)}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-slate-400">الموظف</Label>
+                  <p className="text-white">{selectedTask.assignedToName}</p>
+                </div>
+                <div>
+                  <Label className="text-slate-400">الفرع</Label>
+                  <p className="text-white">{selectedTask.branchName || '-'}</p>
+                </div>
+                <div>
+                  <Label className="text-slate-400">تاريخ الإنشاء</Label>
+                  <p className="text-white">{new Date(selectedTask.createdAt).toLocaleDateString('ar-SA')}</p>
+                </div>
+                <div>
+                  <Label className="text-slate-400">تاريخ الاستحقاق</Label>
+                  <p className="text-white">
+                    {selectedTask.dueDate ? new Date(selectedTask.dueDate).toLocaleDateString('ar-SA') : '-'}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-slate-400">الموضوع</Label>
+                <p className="text-white">{selectedTask.subject}</p>
+              </div>
+
+              {selectedTask.details && (
+                <div>
+                  <Label className="text-slate-400">التفاصيل</Label>
+                  <p className="text-slate-300 whitespace-pre-wrap">{selectedTask.details}</p>
+                </div>
+              )}
+
+              <div>
+                <Label className="text-slate-400">المطلوب</Label>
+                <p className="text-white whitespace-pre-wrap">{selectedTask.requirement}</p>
+              </div>
+
+              {selectedTask.respondedAt && (
+                <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+                  <Label className="text-blue-400">الاستجابة</Label>
+                  <p className="text-slate-300 mt-2">
+                    تاريخ الاستجابة: {new Date(selectedTask.respondedAt).toLocaleDateString('ar-SA')}
+                  </p>
+                  {selectedTask.responseConfirmation !== null && (
+                    <p className="text-white mt-1">
+                      الإجابة: {selectedTask.responseConfirmation ? 'نعم' : 'لا'}
+                    </p>
+                  )}
+                  {selectedTask.responseText && (
+                    <p className="text-white mt-1">{selectedTask.responseText}</p>
+                  )}
+                  {selectedTask.responseFiles && JSON.parse(selectedTask.responseFiles).length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-slate-400 text-sm">الملفات المرفقة:</p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {JSON.parse(selectedTask.responseFiles).map((file: string, index: number) => (
+                          <a
+                            key={index}
+                            href={file}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:underline text-sm"
+                          >
+                            ملف {index + 1}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-4">
+                {selectedTask.status === 'pending' && (
+                  <Button
+                    variant="outline"
+                    className="border-red-600 text-red-400"
+                    onClick={() => {
+                      updateStatusMutation.mutate({ taskId: selectedTask.id, status: 'cancelled' });
+                      setIsViewDialogOpen(false);
+                    }}
+                  >
+                    <XCircle className="w-4 h-4 ml-2" />
+                    إلغاء المهمة
+                  </Button>
+                )}
+                {selectedTask.status === 'in_progress' && (
+                  <Button
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={() => {
+                      updateStatusMutation.mutate({ taskId: selectedTask.id, status: 'completed' });
+                      setIsViewDialogOpen(false);
+                    }}
+                  >
+                    <CheckCircle className="w-4 h-4 ml-2" />
+                    إكمال المهمة
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+                  إغلاق
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

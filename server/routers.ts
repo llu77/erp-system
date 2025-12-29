@@ -3834,6 +3834,164 @@ export const appRouter = router({
         return await calculateInventoryCountStats(input.countId);
       }),
   }),
+
+  // ==================== نظام المهام ====================
+  tasks: router({
+    // البحث عن مهمة بالرقم المرجعي (عام - لا يحتاج تسجيل دخول)
+    getByReference: publicProcedure
+      .input(z.object({ referenceNumber: z.string().length(6) }))
+      .query(async ({ input }) => {
+        const { getTaskByReference } = await import('./db');
+        return await getTaskByReference(input.referenceNumber);
+      }),
+
+    // الحصول على مهمة بالـ ID
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const { getTaskById } = await import('./db');
+        return await getTaskById(input.id);
+      }),
+
+    // الحصول على جميع المهام
+    getAll: protectedProcedure
+      .input(z.object({
+        status: z.string().optional(),
+        assignedToId: z.number().optional(),
+        branchId: z.number().optional(),
+        priority: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const { getAllTasks } = await import('./db');
+        return await getAllTasks(input);
+      }),
+
+    // الحصول على مهام الموظف الحالي
+    getMyTasks: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getTasksForEmployee } = await import('./db');
+        return await getTasksForEmployee(ctx.user.id);
+      }),
+
+    // إحصائيات المهام
+    getStats: protectedProcedure
+      .query(async () => {
+        const { getTaskStats } = await import('./db');
+        return await getTaskStats();
+      }),
+
+    // إنشاء مهمة جديدة (للمشرفين والأدمن فقط)
+    create: adminProcedure
+      .input(z.object({
+        subject: z.string().min(1, 'موضوع المهمة مطلوب'),
+        details: z.string().optional(),
+        requirement: z.string().min(1, 'المطلوب من الموظف مطلوب'),
+        responseType: z.enum(['file_upload', 'confirmation', 'text_response', 'multiple_files']),
+        confirmationYesText: z.string().optional(),
+        confirmationNoText: z.string().optional(),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+        assignedToId: z.number(),
+        assignedToName: z.string(),
+        assignedToEmail: z.string().optional(),
+        dueDate: z.date().optional(),
+        priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { createTask } = await import('./db');
+        const task = await createTask({
+          ...input,
+          createdBy: ctx.user.id,
+          createdByName: ctx.user.name || 'Unknown',
+        });
+
+        // إرسال إشعار بريد إلكتروني للموظف
+        if (input.assignedToEmail) {
+          try {
+            await emailNotifications.notifyTaskAssignment({
+              employeeEmail: input.assignedToEmail,
+              employeeName: input.assignedToName,
+              subject: input.subject,
+              details: input.details,
+              requirement: input.requirement,
+              referenceNumber: task.referenceNumber,
+              priority: input.priority || 'medium',
+              dueDate: input.dueDate ? new Date(input.dueDate).toLocaleDateString('ar-SA') : undefined,
+              branchName: input.branchName,
+              createdByName: ctx.user.name || 'Unknown',
+            });
+          } catch (error) {
+            console.error('[Task Create] Failed to send email notification:', error);
+          }
+        }
+
+        return task;
+      }),
+
+    // الاستجابة للمهمة (رفع ملف أو تأكيد)
+    respond: publicProcedure
+      .input(z.object({
+        referenceNumber: z.string().length(6),
+        responseType: z.enum(['file_upload', 'confirmation', 'text_response', 'multiple_files']),
+        responseText: z.string().optional(),
+        responseConfirmation: z.boolean().optional(),
+        responseFiles: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { getTaskByReference, respondToTask } = await import('./db');
+        
+        const task = await getTaskByReference(input.referenceNumber);
+        if (!task) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'المهمة غير موجودة' });
+        }
+        
+        if (task.status === 'completed' || task.status === 'cancelled') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن الاستجابة لمهمة مكتملة أو ملغاة' });
+        }
+        
+        return await respondToTask({
+          taskId: task.id,
+          responseType: input.responseType,
+          responseText: input.responseText,
+          responseConfirmation: input.responseConfirmation,
+          responseFiles: input.responseFiles,
+        });
+      }),
+
+    // تحديث حالة المهمة
+    updateStatus: adminProcedure
+      .input(z.object({
+        taskId: z.number(),
+        status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { updateTaskStatus } = await import('./db');
+        return await updateTaskStatus({
+          taskId: input.taskId,
+          status: input.status,
+          updatedBy: ctx.user.id,
+          updatedByName: ctx.user.name || 'Unknown',
+          notes: input.notes,
+        });
+      }),
+
+    // حذف مهمة
+    delete: adminProcedure
+      .input(z.object({ taskId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { deleteTask } = await import('./db');
+        return await deleteTask(input.taskId);
+      }),
+
+    // الحصول على سجل المهمة
+    getLogs: protectedProcedure
+      .input(z.object({ taskId: z.number() }))
+      .query(async ({ input }) => {
+        const { getTaskLogs } = await import('./db');
+        return await getTaskLogs(input.taskId);
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

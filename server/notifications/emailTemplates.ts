@@ -1134,3 +1134,106 @@ export function getPayrollReminderTemplate(data: {
     html: getBaseTemplate(content, 'تذكير بإنشاء مسيرات الرواتب'),
   };
 }
+
+
+// ==================== قالب إشعار المهام ====================
+export function getTaskNotificationTemplate(data: {
+  employeeName: string;
+  subject: string;
+  details?: string;
+  requirement: string;
+  referenceNumber: string;
+  priority: string;
+  dueDate?: string;
+  branchName?: string;
+  createdByName: string;
+}): string {
+  const priorityColors: Record<string, string> = {
+    urgent: '#ef4444',
+    high: '#f97316',
+    medium: '#3b82f6',
+    low: '#6b7280',
+  };
+
+  const priorityNames: Record<string, string> = {
+    urgent: 'عاجل',
+    high: 'مرتفع',
+    medium: 'متوسط',
+    low: 'منخفض',
+  };
+
+  const content = `
+    <div style="padding: 30px;">
+      <h2 style="color: #1f2937; margin-bottom: 20px; font-size: 22px;">
+        مهمة جديدة مطلوبة منك
+      </h2>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <span style="font-size: 14px; color: #64748b;">الرقم المرجعي</span>
+          <span style="font-size: 24px; font-weight: bold; color: #3b82f6; font-family: monospace; letter-spacing: 3px;">${data.referenceNumber}</span>
+        </div>
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 15px;">
+          <span style="display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; color: white; background: ${priorityColors[data.priority] || '#6b7280'};">
+            الأولوية: ${priorityNames[data.priority] || data.priority}
+          </span>
+        </div>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #64748b; width: 120px;">الموظف</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937; font-weight: 600;">${data.employeeName}</td>
+        </tr>
+        ${data.branchName ? `
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #64748b;">الفرع</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">${data.branchName}</td>
+        </tr>
+        ` : ''}
+        ${data.dueDate ? `
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #64748b;">تاريخ الاستحقاق</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">${data.dueDate}</td>
+        </tr>
+        ` : ''}
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #64748b;">المرسل</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">${data.createdByName}</td>
+        </tr>
+      </table>
+
+      <div style="background: #f0f9ff; border-right: 4px solid #3b82f6; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="color: #1e40af; margin-bottom: 10px; font-size: 16px;">موضوع المهمة</h3>
+        <p style="color: #1f2937; font-size: 18px; font-weight: 600; margin: 0;">${data.subject}</p>
+      </div>
+
+      ${data.details ? `
+      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="color: #64748b; margin-bottom: 10px; font-size: 14px;">التفاصيل</h3>
+        <p style="color: #374151; margin: 0; white-space: pre-wrap;">${data.details}</p>
+      </div>
+      ` : ''}
+
+      <div style="background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%); padding: 25px; border-radius: 12px; margin-bottom: 25px;">
+        <h3 style="color: #1e40af; margin-bottom: 15px; font-size: 16px; display: flex; align-items: center;">
+          <span style="margin-left: 8px;">📋</span>
+          المطلوب منك
+        </h3>
+        <p style="color: #1f2937; font-size: 16px; margin: 0; line-height: 1.8; white-space: pre-wrap;">${data.requirement}</p>
+      </div>
+
+      <div style="text-align: center; padding: 20px; background: #f8fafc; border-radius: 12px;">
+        <p style="color: #64748b; margin-bottom: 15px; font-size: 14px;">
+          للاستجابة للمهمة، قم بالدخول على صفحة المهام وأدخل الرقم المرجعي
+        </p>
+        <a href="https://sym.manus.space/task-lookup" 
+           style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; padding: 14px 35px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+          الذهاب لصفحة المهام
+        </a>
+      </div>
+    </div>
+  `;
+
+  return getBaseTemplate(content, 'مهمة جديدة - Symbol AI');
+}

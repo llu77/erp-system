@@ -58,6 +58,7 @@ import {
   LineChart,
   FolderOpen,
   ListOrdered,
+  ClipboardCheck,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -170,6 +171,14 @@ const menuStructure: MenuItem[] = [
       { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager", "viewer"] },
       { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee", "supervisor"] },
     ]
+  },
+  
+  // إدارة المهام
+  {
+    icon: ClipboardCheck,
+    label: "إدارة المهام",
+    path: "/task-management",
+    roles: ["admin", "manager"],
   },
   
   // إعدادات النظام (للأدمن فقط)

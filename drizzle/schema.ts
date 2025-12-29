@@ -272,6 +272,7 @@ export const employees = mysqlTable("employees", {
   name: varchar("name", { length: 255 }).notNull(),
   branchId: int("branchId").notNull(),
   phone: varchar("phone", { length: 50 }),
+  email: varchar("email", { length: 255 }),
   position: varchar("position", { length: 100 }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -1309,3 +1310,90 @@ export const employeeInvoices = mysqlTable("employeeInvoices", {
 });
 export type EmployeeInvoice = typeof employeeInvoices.$inferSelect;
 export type InsertEmployeeInvoice = typeof employeeInvoices.$inferInsert;
+
+
+// ==================== جدول المهام ====================
+export const tasks = mysqlTable("tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // الرقم المرجعي (6 أرقام مميزة)
+  referenceNumber: varchar("referenceNumber", { length: 6 }).notNull().unique(),
+  
+  // معلومات المهمة
+  subject: varchar("subject", { length: 255 }).notNull(), // موضوع المهمة
+  details: text("details"), // تفاصيل المهمة
+  requirement: text("requirement").notNull(), // المطلوب من الموظف
+  
+  // نوع الاستجابة المطلوبة
+  responseType: mysqlEnum("responseType", [
+    "file_upload",      // رفع ملف
+    "confirmation",     // تأكيد (نعم/لا)
+    "text_response",    // رد نصي
+    "multiple_files"    // رفع عدة ملفات
+  ]).default("file_upload").notNull(),
+  
+  // خيارات التأكيد (إذا كان نوع الاستجابة confirmation)
+  confirmationYesText: varchar("confirmationYesText", { length: 255 }).default("نعم، قمت بذلك"),
+  confirmationNoText: varchar("confirmationNoText", { length: 255 }).default("لا، لم أقم بذلك حتى الآن"),
+  
+  // الفرع المستهدف
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // الموظف المستهدف
+  assignedToId: int("assignedToId").notNull(),
+  assignedToName: varchar("assignedToName", { length: 255 }).notNull(),
+  assignedToEmail: varchar("assignedToEmail", { length: 320 }),
+  
+  // الحالة
+  status: mysqlEnum("status", [
+    "pending",      // في انتظار الرد
+    "in_progress",  // تحت المعالجة
+    "completed",    // مكتملة
+    "cancelled"     // ملغاة
+  ]).default("pending").notNull(),
+  
+  // الاستجابة
+  responseText: text("responseText"),
+  responseConfirmation: boolean("responseConfirmation"),
+  responseFiles: text("responseFiles"), // JSON array of file URLs
+  respondedAt: timestamp("respondedAt"),
+  
+  // تاريخ الاستحقاق
+  dueDate: timestamp("dueDate"),
+  
+  // الأولوية
+  priority: mysqlEnum("priority", ["low", "medium", "high", "urgent"]).default("medium").notNull(),
+  
+  // المنشئ
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }),
+  
+  // الإشعارات
+  emailSent: boolean("emailSent").default(false).notNull(),
+  emailSentAt: timestamp("emailSentAt"),
+  reminderSent: boolean("reminderSent").default(false).notNull(),
+  
+  // التواريخ
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = typeof tasks.$inferInsert;
+
+// ==================== جدول سجل المهام ====================
+export const taskLogs = mysqlTable("taskLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  taskId: int("taskId").notNull(),
+  action: varchar("action", { length: 100 }).notNull(),
+  oldStatus: varchar("oldStatus", { length: 50 }),
+  newStatus: varchar("newStatus", { length: 50 }),
+  performedBy: int("performedBy"),
+  performedByName: varchar("performedByName", { length: 255 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TaskLog = typeof taskLogs.$inferSelect;
+export type InsertTaskLog = typeof taskLogs.$inferInsert;

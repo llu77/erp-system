@@ -41,6 +41,8 @@ import NotificationRecipients from "./pages/NotificationRecipients";
 import EmployeeInvoices from "./pages/EmployeeInvoices";
 import InventoryCounting from "./pages/InventoryCounting";
 import InventoryVarianceReport from "./pages/InventoryVarianceReport";
+import TaskLookup from "./pages/TaskLookup";
+import TaskManagement from "./pages/TaskManagement";
 
 function Router() {
   return (
@@ -225,6 +227,14 @@ function Router() {
       </Route>
       {/* HR Onboarding Portal - Public Page */}
       <Route path="/hr-onboarding" component={HROnboarding} />
+      {/* Task Lookup - Public Page */}
+      <Route path="/task-lookup" component={TaskLookup} />
+      {/* Task Management - Admin Only */}
+      <Route path="/task-management">
+        <DashboardLayout>
+          <TaskManagement />
+        </DashboardLayout>
+      </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

@@ -546,3 +546,57 @@ export default {
   notifyInventoryReminder,
   notifyPayrollReminder,
 };
+
+
+// ==================== إشعار المهام الجديدة ====================
+export async function notifyTaskAssignment(data: {
+  employeeEmail: string;
+  employeeName: string;
+  subject: string;
+  details?: string;
+  requirement: string;
+  referenceNumber: string;
+  priority: string;
+  dueDate?: string;
+  branchName?: string;
+  createdByName: string;
+}): Promise<boolean> {
+  try {
+    const html = templates.getTaskNotificationTemplate({
+      employeeName: data.employeeName,
+      subject: data.subject,
+      details: data.details,
+      requirement: data.requirement,
+      referenceNumber: data.referenceNumber,
+      priority: data.priority,
+      dueDate: data.dueDate,
+      branchName: data.branchName,
+      createdByName: data.createdByName,
+    });
+
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: data.employeeEmail,
+      subject: `مهمة جديدة: ${data.subject} - الرقم المرجعي: ${data.referenceNumber}`,
+      html,
+    });
+
+    // تسجيل الإشعار
+    await db.logSentNotification({
+      recipientId: 0,
+      recipientEmail: data.employeeEmail,
+      recipientName: data.employeeName,
+      notificationType: 'task_assignment',
+      subject: `مهمة جديدة: ${data.subject}`,
+      bodyArabic: `مهمة جديدة - الرقم المرجعي: ${data.referenceNumber}`,
+      status: 'sent',
+      sentAt: new Date(),
+    });
+
+    console.log(`[Task Notification] Sent to ${data.employeeName} (${data.employeeEmail}) - Ref: ${data.referenceNumber}`);
+    return true;
+  } catch (error) {
+    console.error('[Task Notification] Error:', error);
+    return false;
+  }
+}

@@ -127,6 +127,20 @@
       "when": 1766705827750,
       "tag": "0017_nasty_purple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1766982052461,
+      "tag": "0018_parallel_silver_samurai",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1766982796154,
+      "tag": "0019_absent_silhouette",
+      "breakpoints": true
     }
   ]
 }
