@@ -79,6 +79,9 @@ function cleanupMemory(): void {
 
 /**
  * التحقق مما إذا كان الإشعار قد أُرسل اليوم في قاعدة البيانات
+ * يبحث عن:
+ * 1. الإشعارات الجديدة بتنسيق [SCHEDULED:type]
+ * 2. الإشعارات القديمة بتنسيق notificationType = type
  */
 async function wasNotificationSentTodayDB(type: ScheduledNotificationType): Promise<boolean> {
   try {
@@ -92,16 +95,22 @@ async function wasNotificationSentTodayDB(type: ScheduledNotificationType): Prom
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     
-    // البحث عن إشعار بنفس النوع الدقيق أُرسل اليوم
-    // نستخدم subject يحتوي على نوع الإشعار الدقيق
+    // تحديد أنماط البحث بناءً على نوع الإشعار
+    const searchPatterns = getSearchPatternsForType(type);
+    
+    // البحث عن أي إشعار مطابق أُرسل اليوم
     const result = await database.select({ count: sql<number>`count(*)` })
       .from(sentNotifications)
       .where(
         and(
           gte(sentNotifications.createdAt, today),
           eq(sentNotifications.status, 'sent'),
-          // البحث عن النوع الدقيق في subject
-          sql`${sentNotifications.subject} LIKE ${`%[SCHEDULED:${type}]%`}`
+          // البحث عن أي من الأنماط المطابقة
+          sql`(
+            ${sentNotifications.subject} LIKE ${`%[SCHEDULED:${type}]%`}
+            OR ${sentNotifications.notificationType} = ${type}
+            OR ${sentNotifications.subject} LIKE ${searchPatterns.subjectPattern}
+          )`
         )
       );
     
@@ -116,6 +125,21 @@ async function wasNotificationSentTodayDB(type: ScheduledNotificationType): Prom
   } catch (error) {
     console.error(`[DB] خطأ في فحص قاعدة البيانات:`, error);
     return false;
+  }
+}
+
+/**
+ * الحصول على أنماط البحث لنوع الإشعار
+ */
+function getSearchPatternsForType(type: ScheduledNotificationType): { subjectPattern: string } {
+  switch (type) {
+    case 'inventory_reminder_12':
+    case 'inventory_reminder_29':
+      return { subjectPattern: '%تذكير الجرد%' };
+    case 'payroll_reminder_29':
+      return { subjectPattern: '%تذكير الرواتب%' };
+    default:
+      return { subjectPattern: '%' };
   }
 }
 
