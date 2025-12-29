@@ -3356,7 +3356,7 @@ export const appRouter = router({
     getSentLogs: adminProcedure
       .input(z.object({ limit: z.number().optional() }))
       .query(async ({ input }) => {
-        return await db.getSentNotifications(input.limit || 100);
+        return await db.getSentNotifications({ limit: input.limit || 100 });
       }),
   }),
 
@@ -3402,8 +3402,23 @@ export const appRouter = router({
       }),
 
     // إرسال تذكير الجرد الشهري
+    // مهم: يستخدم النظام الموحد لمنع التكرار
     sendMonthlyReminder: adminProcedure.mutation(async () => {
-      return await advancedNotifications.sendMonthlyInventoryReminder();
+      const { checkAndSendScheduledReminders } = await import('./notifications/scheduledNotificationService');
+      const result = await checkAndSendScheduledReminders();
+      
+      if (result.inventoryResult?.skipped) {
+        return { 
+          success: false, 
+          skipped: true,
+          message: result.inventoryResult.reason || 'تم تخطي الإرسال - أُرسل مسبقاً اليوم'
+        };
+      }
+      
+      return { 
+        success: result.inventoryResult?.success || false, 
+        result: { sentCount: result.inventoryResult?.sentCount || 0 }
+      };
     }),
 
     // إرسال إشعار طلب موظف
@@ -3455,6 +3470,36 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return await advancedNotifications.notifyProductUpdate(input);
       }),
+
+    // الحصول على حالة الإشعارات المجدولة اليوم
+    getScheduledStatus: adminProcedure.query(async () => {
+      const { getTodayNotificationStatus } = await import('./notifications/scheduledNotificationService');
+      return await getTodayNotificationStatus();
+    }),
+
+    // الحصول على سجل الإشعارات المرسلة اليوم
+    getTodaySentNotifications: adminProcedure.query(async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const notifications = await db.getSentNotifications({
+        startDate: today,
+        endDate: new Date(),
+      });
+      
+      return {
+        date: today.toISOString().split('T')[0],
+        count: notifications.length,
+        notifications: notifications.map(n => ({
+          id: n.id,
+          type: n.notificationType,
+          subject: n.subject,
+          status: n.status,
+          sentAt: n.sentAt,
+          recipientEmail: n.recipientEmail,
+        })),
+      };
+    }),
   }),
 
   // ==================== نظام المراقبة الذكية ====================
@@ -3682,29 +3727,42 @@ export const appRouter = router({
     }),
 
     // إرسال تذكير يدوي (للأدمن فقط)
+    // مهم: يستخدم النظام الموحد لمنع التكرار
     sendManual: adminProcedure.mutation(async () => {
-      // استيراد ديناميكي لتجنب مشاكل التحميل
-      const { checkAndSendInventoryReminders, getNextInventoryDate } = await import('./jobs/inventoryReminder');
+      const { getNextInventoryDate } = await import('./jobs/inventoryReminder');
+      const { sendInventoryReminderUnified, getTodayNotificationStatus } = await import('./notifications/scheduledNotificationService');
       
       const { date, daysUntil } = getNextInventoryDate();
+      const today = new Date();
+      const dayOfMonth = today.getDate();
       
-      // إرسال التذكير بغض النظر عن اليوم
-      const { sendInventoryReminderEmail } = await import('./jobs/inventoryReminder');
+      // التحقق من حالة الإشعارات اليوم
+      const status = await getTodayNotificationStatus();
       
-      const emails = [
-        'llu771230@gmail.com',
-        'Salemalwadai1997@gmail.com',
-      ];
-      
-      let sent = 0;
-      for (const email of emails) {
-        const success = await sendInventoryReminderEmail(email, daysUntil, date);
-        if (success) sent++;
+      // إرسال فقط إذا كان اليوم 12 أو 29
+      if (dayOfMonth === 12 || dayOfMonth === 29) {
+        const result = await sendInventoryReminderUnified(dayOfMonth as 12 | 29);
+        
+        if (result.skipped) {
+          return {
+            success: false,
+            message: `تم تخطي الإرسال - ${result.reason}`,
+            nextInventoryDate: date.toISOString(),
+            daysUntil,
+          };
+        }
+        
+        return { 
+          success: result.success, 
+          message: `تم إرسال ${result.sentCount} تذكير بنجاح`,
+          nextInventoryDate: date.toISOString(),
+          daysUntil,
+        };
       }
       
-      return { 
-        success: true, 
-        message: `تم إرسال ${sent} تذكير بنجاح`,
+      return {
+        success: false,
+        message: `اليوم ${dayOfMonth} - ليس موعد تذكير الجرد (يوم 12 أو 29 فقط)`,
         nextInventoryDate: date.toISOString(),
         daysUntil,
       };

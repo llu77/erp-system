@@ -203,10 +203,15 @@ export async function executeScheduledTask(task: any): Promise<{ success: boolea
         break;
         
       case 'monthly_inventory_reminder':
-        // تذكير الجرد الشهري (يوم 27)
-        const reminderResult = await advancedNotifications.sendMonthlyInventoryReminder();
-        emailsSent = reminderResult.result?.sentCount || 0;
-        message = `تم إرسال تذكير الجرد الشهري إلى ${emailsSent} مستلم`;
+        // تذكير الجرد الشهري - يستخدم النظام الموحد
+        const { checkAndSendScheduledReminders } = await import('../notifications/scheduledNotificationService');
+        const scheduledResult = await checkAndSendScheduledReminders();
+        emailsSent = scheduledResult.inventoryResult?.sentCount || 0;
+        if (scheduledResult.inventoryResult?.skipped) {
+          message = `تم تخطي تذكير الجرد - أُرسل مسبقاً اليوم`;
+        } else {
+          message = `تم إرسال تذكير الجرد الشهري إلى ${emailsSent} مستلم`;
+        }
         break;
         
       default:

@@ -163,18 +163,21 @@ describe('Advanced Notification Service', () => {
   });
 
   describe('sendMonthlyInventoryReminder', () => {
-    it('should send monthly reminder to all recipients', async () => {
-      const mockRecipients = [
-        { id: 1, name: 'Admin', email: 'admin@test.com', role: 'admin', isActive: true, receiveMonthlyReminders: true },
-        { id: 2, name: 'Manager', email: 'manager@test.com', role: 'general_supervisor', isActive: true, receiveMonthlyReminders: true },
-      ];
-      
-      vi.mocked(db.getNotificationRecipients).mockResolvedValue(mockRecipients);
-      vi.mocked(db.logSentNotification).mockResolvedValue(null);
+    it('should return result with skipped flag when not on reminder day', async () => {
+      // هذه الدالة معطلة وتستخدم النظام الموحد
+      // ترجع skipped: true إذا لم يكن اليوم 12 أو 29
+      const today = new Date();
+      const dayOfMonth = today.getDate();
       
       const result = await sendMonthlyInventoryReminder();
       
-      expect(result.success).toBe(true);
+      // الدالة ترجع skipped: true إذا لم يكن اليوم 12 أو 29
+      if (dayOfMonth !== 12 && dayOfMonth !== 29) {
+        expect(result.skipped).toBe(true);
+      } else {
+        // في يوم 12 أو 29، يمكن أن تنجح أو تُتخطى (إذا أُرسلت مسبقاً)
+        expect(result).toHaveProperty('success');
+      }
     });
   });
 

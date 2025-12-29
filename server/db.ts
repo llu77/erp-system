@@ -3296,14 +3296,40 @@ export async function logSentNotification(data: {
   });
 }
 
-export async function getSentNotifications(limit: number = 100) {
+export async function getSentNotifications(options?: {
+  limit?: number;
+  startDate?: Date;
+  endDate?: Date;
+  type?: string;
+}) {
   const db = await getDb();
   if (!db) return [];
   
-  return await db.select()
+  const { limit = 100, startDate, endDate, type } = options || {};
+  
+  let query = db.select()
     .from(sentNotifications)
     .orderBy(desc(sentNotifications.createdAt))
     .limit(limit);
+  
+  // إضافة فلتر التاريخ إذا وُجد
+  if (startDate || endDate || type) {
+    const conditions = [];
+    if (startDate) {
+      conditions.push(gte(sentNotifications.createdAt, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(sentNotifications.createdAt, endDate));
+    }
+    if (type) {
+      conditions.push(eq(sentNotifications.notificationType, type as any));
+    }
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+  }
+  
+  return await query;
 }
 
 

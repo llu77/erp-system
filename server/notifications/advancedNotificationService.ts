@@ -545,29 +545,29 @@ export async function notifyRevenueMismatch(data: {
   return { success: result.success, result };
 }
 
-// إرسال تذكير الجرد الشهري (يوم 27)
-// يستخدم نظام التتبع لمنع التكرار
+// إرسال تذكير الجرد الشهري
+// مهم: هذه الدالة معطلة - استخدم scheduledNotificationService.ts بدلاً منها
+// السبب: منع تكرار الإشعارات من مصادر متعددة
 
 export async function sendMonthlyInventoryReminder(): Promise<{ success: boolean; result?: any; skipped?: boolean }> {
-  // التحقق من عدم الإرسال المسبق اليوم
-  const alreadySent = await wasNotificationSentToday('monthly_inventory_reminder');
-  if (alreadySent) {
-    console.log(`⚠️ تذكير الجرد الشهري أُرسل مسبقاً اليوم - تخطي`);
-    return { success: false, skipped: true };
+  console.log(`⚠️ [DEPRECATED] sendMonthlyInventoryReminder - استخدم scheduledNotificationService.checkAndSendScheduledReminders() بدلاً`);
+  
+  // استخدام النظام الموحد
+  const { sendInventoryReminderUnified } = await import('./scheduledNotificationService');
+  const today = new Date();
+  const dayOfMonth = today.getDate();
+  
+  // إرسال فقط إذا كان اليوم 12 أو 29
+  if (dayOfMonth === 12 || dayOfMonth === 29) {
+    const result = await sendInventoryReminderUnified(dayOfMonth as 12 | 29);
+    return { 
+      success: result.success, 
+      result: { sentCount: result.sentCount },
+      skipped: result.skipped 
+    };
   }
   
-  console.log(`📅 إرسال تذكير الجرد الشهري...`);
-  const result = await sendAdvancedNotification({
-    type: "monthly_reminder",
-    date: new Date().toLocaleDateString('ar-SA'),
-  });
-  
-  // تسجيل الإرسال لمنع التكرار
-  if (result.success) {
-    await markNotificationAsSent('monthly_inventory_reminder', result.sentCount || 1, 'تذكير الجرد الشهري');
-  }
-  
-  return { success: result.success, result };
+  return { success: false, skipped: true };
 }
 
 // إرسال إشعار طلب موظف
