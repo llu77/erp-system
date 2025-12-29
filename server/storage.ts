@@ -2,6 +2,7 @@
 // Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
 
 import { ENV } from './_core/env';
+import { StorageException } from './exceptions';
 
 type StorageConfig = { baseUrl: string; apiKey: string };
 
@@ -10,8 +11,13 @@ function getStorageConfig(): StorageConfig {
   const apiKey = ENV.forgeApiKey;
 
   if (!baseUrl || !apiKey) {
-    throw new Error(
-      "Storage proxy credentials missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY"
+    throw new StorageException(
+      "بيانات اعتماد التخزين مفقودة: يرجى تعيين BUILT_IN_FORGE_API_URL و BUILT_IN_FORGE_API_KEY",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { missingCredentials: true }
     );
   }
 
@@ -34,11 +40,36 @@ async function buildDownloadUrl(
     ensureTrailingSlash(baseUrl)
   );
   downloadApiUrl.searchParams.set("path", normalizeKey(relKey));
-  const response = await fetch(downloadApiUrl, {
-    method: "GET",
-    headers: buildAuthHeaders(apiKey),
-  });
-  return (await response.json()).url;
+  
+  try {
+    const response = await fetch(downloadApiUrl, {
+      method: "GET",
+      headers: buildAuthHeaders(apiKey),
+    });
+    
+    if (!response.ok) {
+      throw new StorageException(
+        `فشل الحصول على رابط التحميل (${response.status})`,
+        'download',
+        undefined,
+        relKey,
+        undefined,
+        { statusCode: response.status, statusText: response.statusText }
+      );
+    }
+    
+    return (await response.json()).url;
+  } catch (error) {
+    if (error instanceof StorageException) throw error;
+    throw new StorageException(
+      'فشل الاتصال بخدمة التخزين',
+      'download',
+      undefined,
+      relKey,
+      error instanceof Error ? error : undefined,
+      { originalError: String(error) }
+    );
+  }
 }
 
 function ensureTrailingSlash(value: string): string {
@@ -76,20 +107,44 @@ export async function storagePut(
   const key = normalizeKey(relKey);
   const uploadUrl = buildUploadUrl(baseUrl, key);
   const formData = toFormData(data, contentType, key.split("/").pop() ?? key);
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers: buildAuthHeaders(apiKey),
-    body: formData,
-  });
+  
+  try {
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      headers: buildAuthHeaders(apiKey),
+      body: formData,
+    });
 
-  if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
-    throw new Error(
-      `Storage upload failed (${response.status} ${response.statusText}): ${message}`
+    if (!response.ok) {
+      const message = await response.text().catch(() => response.statusText);
+      throw new StorageException(
+        `فشل رفع الملف إلى التخزين (${response.status} ${response.statusText}): ${message}`,
+        'upload',
+        undefined,
+        key,
+        undefined,
+        { 
+          statusCode: response.status, 
+          statusText: response.statusText,
+          responseMessage: message,
+          contentType 
+        }
+      );
+    }
+    
+    const url = (await response.json()).url;
+    return { key, url };
+  } catch (error) {
+    if (error instanceof StorageException) throw error;
+    throw new StorageException(
+      'فشل الاتصال بخدمة التخزين أثناء الرفع',
+      'upload',
+      undefined,
+      key,
+      error instanceof Error ? error : undefined,
+      { originalError: String(error), contentType }
     );
   }
-  const url = (await response.json()).url;
-  return { key, url };
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
@@ -99,4 +154,42 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
     key,
     url: await buildDownloadUrl(baseUrl, key, apiKey),
   };
+}
+
+export async function storageDelete(relKey: string): Promise<{ success: boolean }> {
+  const { baseUrl, apiKey } = getStorageConfig();
+  const key = normalizeKey(relKey);
+  
+  try {
+    const deleteUrl = new URL("v1/storage/delete", ensureTrailingSlash(baseUrl));
+    deleteUrl.searchParams.set("path", key);
+    
+    const response = await fetch(deleteUrl, {
+      method: "DELETE",
+      headers: buildAuthHeaders(apiKey),
+    });
+
+    if (!response.ok) {
+      throw new StorageException(
+        `فشل حذف الملف من التخزين (${response.status})`,
+        'delete',
+        undefined,
+        key,
+        undefined,
+        { statusCode: response.status }
+      );
+    }
+    
+    return { success: true };
+  } catch (error) {
+    if (error instanceof StorageException) throw error;
+    throw new StorageException(
+      'فشل الاتصال بخدمة التخزين أثناء الحذف',
+      'delete',
+      undefined,
+      key,
+      error instanceof Error ? error : undefined,
+      { originalError: String(error) }
+    );
+  }
 }

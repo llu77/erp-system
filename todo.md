@@ -1094,3 +1094,14 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] تقرير المهام المتأخرة (التي تجاوزت تاريخ الاستحقاق)
 - [x] إرفاق ملفات عند إنشاء المهمة
 - [x] اختبار التحسينات
+
+## نظام معالجة الأخطاء المتقدم (طلب المستخدم)
+- [x] NotificationException - استثناء فشل الإشعارات
+- [x] TemplateException - استثناء أخطاء القوالب
+- [x] SMTPException - استثناء أخطاء البريد الإلكتروني SMTP
+- [x] StorageException - استثناء أخطاء التخزين S3
+- [x] RateLimitException - استثناء تجاوز حد الطلبات
+- [x] TimeoutException - استثناء انتهاء المهلة
+- [x] تحسين GlobalExceptionHandler لدعم جميع الاستثناءات
+- [x] تطبيق الاستثناءات في الكود الموجود
+- [x] كتابة اختبارات للاستثناءات الجديدة

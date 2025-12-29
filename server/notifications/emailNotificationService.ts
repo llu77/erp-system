@@ -4,6 +4,12 @@
 import { Resend } from "resend";
 import * as db from "../db";
 import * as templates from "./emailTemplates";
+import { 
+  EmailException, 
+  SMTPException, 
+  NotificationException,
+  TemplateException 
+} from "../exceptions";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "info@symbolai.net";
@@ -118,6 +124,24 @@ async function getRecipientsForNotification(
 // ==================== إرسال البريد ====================
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   try {
+    // التحقق من صحة البريد الإلكتروني
+    if (!to || !isValidEmail(to)) {
+      console.error(`✗ عنوان بريد إلكتروني غير صالح: ${to}`);
+      return false;
+    }
+    
+    // التحقق من وجود المحتوى
+    if (!html || html.trim().length === 0) {
+      throw new TemplateException(
+        'محتوى البريد فارغ',
+        'email',
+        'email',
+        undefined,
+        undefined,
+        { recipient: to, subject }
+      );
+    }
+    
     await resend.emails.send({
       from: FROM_EMAIL,
       to,
@@ -127,9 +151,38 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
     console.log(`✓ تم إرسال البريد إلى: ${to}`);
     return true;
   } catch (error: any) {
-    console.error(`✗ فشل إرسال البريد إلى ${to}:`, error.message);
+    // تحليل نوع الخطأ
+    const errorMessage = error.message || 'خطأ غير معروف';
+    const errorCode = error.statusCode || error.code;
+    
+    // أخطاء SMTP محددة
+    if (errorCode >= 500 && errorCode < 600) {
+      console.error(`✗ خطأ SMTP (${errorCode}):`, errorMessage);
+      // لا نرمي الاستثناء - نرجع false للسماح بالاستمرار
+      return false;
+    }
+    
+    // أخطاء المصادقة أو التكوين
+    if (errorCode === 401 || errorCode === 403) {
+      console.error(`✗ خطأ مصادقة البريد:`, errorMessage);
+      return false;
+    }
+    
+    // أخطاء تجاوز الحد
+    if (errorCode === 429) {
+      console.error(`✗ تجاوز حد إرسال البريد`);
+      return false;
+    }
+    
+    console.error(`✗ فشل إرسال البريد إلى ${to}:`, errorMessage);
     return false;
   }
+}
+
+// التحقق من صحة البريد الإلكتروني
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
 }
 
 // ==================== إشعار طلب موظف جديد ====================
