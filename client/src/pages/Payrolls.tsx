@@ -45,6 +45,7 @@ import {
   Send,
   Clock,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 
@@ -390,11 +391,21 @@ export default function Payrolls() {
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent>
-                        {branches?.map((branch) => (
-                          <SelectItem key={branch.id} value={branch.id.toString()}>
-                            {branch.nameAr || branch.name}
-                          </SelectItem>
-                        ))}
+                        {branches?.map((branch) => {
+                          const hasPayroll = payrolls?.some(
+                            (p: any) => p.branchId === branch.id && p.year === selectedYear && p.month === selectedMonth
+                          );
+                          return (
+                            <SelectItem 
+                              key={branch.id} 
+                              value={branch.id.toString()}
+                              disabled={hasPayroll}
+                            >
+                              {branch.nameAr || branch.name}
+                              {hasPayroll && " (توجد مسيرة)"}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
@@ -441,6 +452,14 @@ export default function Payrolls() {
                     onClick={() => {
                       if (!selectedBranch) {
                         toast.error("يرجى اختيار الفرع");
+                        return;
+                      }
+                      // التحقق من عدم وجود مسيرة لهذا الفرع والشهر
+                      const existingPayroll = payrolls?.find(
+                        (p: any) => p.branchId === selectedBranch && p.year === selectedYear && p.month === selectedMonth
+                      );
+                      if (existingPayroll) {
+                        toast.error(`توجد مسيرة رواتب لهذا الفرع في ${arabicMonths[selectedMonth - 1]} ${selectedYear}`);
                         return;
                       }
                       setStep('form');
@@ -845,8 +864,8 @@ export default function Payrolls() {
                                 <DollarSign className="h-3.5 w-3.5 text-blue-500" />
                               </Button>
                             )}
-                            {/* حذف - للمسودات فقط */}
-                            {payroll.status === 'draft' && (
+                            {/* حذف - للأدمن فقط */}
+                            {user?.role === 'admin' && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -858,7 +877,7 @@ export default function Payrolls() {
                                 }}
                                 title="حذف"
                               >
-                                <XCircle className="h-3.5 w-3.5 text-red-500" />
+                                <Trash2 className="h-3.5 w-3.5 text-red-500" />
                               </Button>
                             )}
                           </div>
