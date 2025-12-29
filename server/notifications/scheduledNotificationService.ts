@@ -1,11 +1,14 @@
 /**
- * نظام الإشعارات المجدولة الموحد
+ * نظام الإشعارات المجدولة الموحد - الإصدار المُصحح
  * ========================================
  * 
  * هذا الملف هو المصدر الوحيد لإرسال الإشعارات المجدولة (الجرد والرواتب)
- * يستخدم قاعدة البيانات للتتبع ومنع التكرار
  * 
- * مهم جداً: لا تستدعِ دوال الإرسال من أي مكان آخر!
+ * الإصلاحات الجذرية:
+ * 1. تتبع مزدوج: في الذاكرة + قاعدة البيانات
+ * 2. نوع واحد واضح للتتبع في قاعدة البيانات
+ * 3. قفل صارم لمنع التنفيذ المتزامن
+ * 4. تسجيل مفصل لكل عملية
  */
 
 import { getDb } from "../db";
@@ -29,47 +32,89 @@ interface SendResult {
   timestamp: string;
 }
 
-// ==================== دوال التتبع في قاعدة البيانات ====================
+// ==================== تتبع في الذاكرة (الطبقة الأولى) ====================
+// هذا التتبع يعمل حتى لو فشلت قاعدة البيانات
+const memorySentToday: Map<string, { date: string; time: string }> = new Map();
+
+function getMemoryKey(type: ScheduledNotificationType): string {
+  const today = new Date().toISOString().split('T')[0];
+  return `${type}_${today}`;
+}
+
+function wasAlreadySentInMemory(type: ScheduledNotificationType): boolean {
+  const key = getMemoryKey(type);
+  const record = memorySentToday.get(key);
+  if (record) {
+    console.log(`[Memory] ⚠️ الإشعار ${type} أُرسل مسبقاً في ${record.time}`);
+    return true;
+  }
+  return false;
+}
+
+function markAsSentInMemory(type: ScheduledNotificationType): void {
+  const key = getMemoryKey(type);
+  const now = new Date();
+  memorySentToday.set(key, {
+    date: now.toISOString().split('T')[0],
+    time: now.toISOString()
+  });
+  console.log(`[Memory] ✅ تم تسجيل الإشعار ${type} في الذاكرة`);
+}
+
+// تنظيف الذاكرة من السجلات القديمة (أكثر من يوم)
+function cleanupMemory(): void {
+  const today = new Date().toISOString().split('T')[0];
+  const keysToDelete: string[] = [];
+  
+  memorySentToday.forEach((record, key) => {
+    if (record.date !== today) {
+      keysToDelete.push(key);
+    }
+  });
+  
+  keysToDelete.forEach(key => memorySentToday.delete(key));
+}
+
+// ==================== تتبع في قاعدة البيانات (الطبقة الثانية) ====================
 
 /**
- * التحقق مما إذا كان الإشعار قد أُرسل اليوم
- * يستخدم قاعدة البيانات للتتبع (أكثر موثوقية من الملفات)
+ * التحقق مما إذا كان الإشعار قد أُرسل اليوم في قاعدة البيانات
  */
 async function wasNotificationSentTodayDB(type: ScheduledNotificationType): Promise<boolean> {
-  const database = await getDb();
-  if (!database) return false;
-  
-  // الحصول على بداية اليوم
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  // تحويل نوع الإشعار إلى النوع المخزن في قاعدة البيانات
-  const dbType = type.startsWith('inventory') ? 'monthly_reminder' : 'payroll_created';
-  
   try {
-    // البحث عن إشعار من نفس النوع أُرسل اليوم
+    const database = await getDb();
+    if (!database) {
+      console.log(`[DB] ⚠️ قاعدة البيانات غير متاحة - الاعتماد على الذاكرة فقط`);
+      return false;
+    }
+    
+    // الحصول على بداية اليوم (UTC)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    
+    // البحث عن إشعار بنفس النوع الدقيق أُرسل اليوم
+    // نستخدم subject يحتوي على نوع الإشعار الدقيق
     const result = await database.select({ count: sql<number>`count(*)` })
       .from(sentNotifications)
       .where(
         and(
-          eq(sentNotifications.notificationType, dbType),
           gte(sentNotifications.createdAt, today),
           eq(sentNotifications.status, 'sent'),
-          // إضافة فلتر للتمييز بين أنواع التذكيرات
-          sql`${sentNotifications.subject} LIKE ${`%${type.includes('12') ? 'يوم 12' : type.includes('29') ? 'يوم 29' : 'الرواتب'}%`}`
+          // البحث عن النوع الدقيق في subject
+          sql`${sentNotifications.subject} LIKE ${`%[SCHEDULED:${type}]%`}`
         )
       );
     
-    const count = result[0]?.count || 0;
+    const count = Number(result[0]?.count) || 0;
     
     if (count > 0) {
-      console.log(`[ScheduledNotifications] ⚠️ الإشعار ${type} أُرسل مسبقاً اليوم (${count} سجل)`);
+      console.log(`[DB] ⚠️ الإشعار ${type} أُرسل مسبقاً اليوم (${count} سجل في قاعدة البيانات)`);
       return true;
     }
     
     return false;
   } catch (error) {
-    console.error(`[ScheduledNotifications] خطأ في فحص قاعدة البيانات:`, error);
+    console.error(`[DB] خطأ في فحص قاعدة البيانات:`, error);
     return false;
   }
 }
@@ -77,64 +122,103 @@ async function wasNotificationSentTodayDB(type: ScheduledNotificationType): Prom
 /**
  * تسجيل الإشعار المرسل في قاعدة البيانات
  */
-async function logNotificationSent(
+async function logNotificationSentDB(
   type: ScheduledNotificationType,
-  recipientCount: number,
-  subject: string
+  recipientCount: number
 ): Promise<void> {
-  const database = await getDb();
-  if (!database) return;
-  
-  const dbType = type.startsWith('inventory') ? 'monthly_reminder' : 'payroll_created';
-  
   try {
+    const database = await getDb();
+    if (!database) return;
+    
     await database.insert(sentNotifications).values({
-      recipientId: 0, // نظام
+      recipientId: 0,
       recipientEmail: 'system@symbolai.net',
-      recipientName: 'النظام',
-      notificationType: dbType,
-      subject: `[${type}] ${subject}`,
-      bodyArabic: `تم إرسال ${recipientCount} إشعار`,
+      recipientName: 'النظام الآلي',
+      notificationType: 'monthly_reminder',
+      // نضع النوع الدقيق في subject للبحث عنه لاحقاً
+      subject: `[SCHEDULED:${type}] تذكير مجدول - ${recipientCount} مستلم`,
+      bodyArabic: `تم إرسال ${recipientCount} إشعار من نوع ${type}`,
       status: 'sent',
       sentAt: new Date(),
     });
     
-    console.log(`[ScheduledNotifications] ✅ تم تسجيل الإشعار ${type} في قاعدة البيانات`);
+    console.log(`[DB] ✅ تم تسجيل الإشعار ${type} في قاعدة البيانات`);
   } catch (error) {
-    console.error(`[ScheduledNotifications] خطأ في تسجيل الإشعار:`, error);
+    console.error(`[DB] خطأ في تسجيل الإشعار:`, error);
   }
 }
 
-// ==================== قفل لمنع التنفيذ المتزامن ====================
+// ==================== قفل صارم لمنع التنفيذ المتزامن ====================
 const sendingLocks: Map<ScheduledNotificationType, boolean> = new Map();
+const lockTimestamps: Map<ScheduledNotificationType, number> = new Map();
+const LOCK_TIMEOUT = 5 * 60 * 1000; // 5 دقائق
 
 function acquireLock(type: ScheduledNotificationType): boolean {
+  const now = Date.now();
+  const lockTime = lockTimestamps.get(type);
+  
+  // إذا كان القفل موجوداً وانتهت صلاحيته، حرره
+  if (sendingLocks.get(type) && lockTime && (now - lockTime > LOCK_TIMEOUT)) {
+    console.log(`[Lock] ⏰ انتهت صلاحية القفل ${type} - تحريره`);
+    sendingLocks.set(type, false);
+  }
+  
   if (sendingLocks.get(type)) {
-    console.log(`[ScheduledNotifications] ⏳ الإشعار ${type} قيد الإرسال حالياً...`);
+    console.log(`[Lock] ⏳ الإشعار ${type} قيد الإرسال حالياً - تم رفض الطلب`);
     return false;
   }
+  
   sendingLocks.set(type, true);
+  lockTimestamps.set(type, now);
+  console.log(`[Lock] 🔒 تم الحصول على القفل ${type}`);
   return true;
 }
 
 function releaseLock(type: ScheduledNotificationType): void {
   sendingLocks.set(type, false);
+  lockTimestamps.delete(type);
+  console.log(`[Lock] 🔓 تم تحرير القفل ${type}`);
+}
+
+// ==================== الدالة الموحدة للتحقق من الإرسال ====================
+
+/**
+ * التحقق الشامل: هل تم إرسال هذا الإشعار اليوم؟
+ * يفحص الذاكرة أولاً ثم قاعدة البيانات
+ */
+async function wasAlreadySentToday(type: ScheduledNotificationType): Promise<boolean> {
+  // 1. فحص الذاكرة أولاً (أسرع)
+  if (wasAlreadySentInMemory(type)) {
+    return true;
+  }
+  
+  // 2. فحص قاعدة البيانات
+  const sentInDB = await wasNotificationSentTodayDB(type);
+  if (sentInDB) {
+    // تحديث الذاكرة للتناسق
+    markAsSentInMemory(type);
+    return true;
+  }
+  
+  return false;
 }
 
 // ==================== دوال الإرسال الموحدة ====================
 
 /**
  * إرسال تذكير الجرد - المصدر الوحيد والموحد
- * يُستدعى فقط من نظام الجدولة المركزي
  */
 export async function sendInventoryReminderUnified(dayOfMonth: 12 | 29): Promise<SendResult> {
   const type: ScheduledNotificationType = dayOfMonth === 12 ? 'inventory_reminder_12' : 'inventory_reminder_29';
   const timestamp = new Date().toISOString();
   
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`[ScheduledNotifications] 📦 بدء إرسال تذكير الجرد - يوم ${dayOfMonth}`);
-  console.log(`[ScheduledNotifications] الوقت: ${timestamp}`);
-  console.log(`${'='.repeat(60)}\n`);
+  console.log(`\n${'='.repeat(70)}`);
+  console.log(`[Inventory] 📦 طلب إرسال تذكير الجرد - يوم ${dayOfMonth}`);
+  console.log(`[Inventory] الوقت: ${timestamp}`);
+  console.log(`${'='.repeat(70)}`);
+  
+  // تنظيف الذاكرة من السجلات القديمة
+  cleanupMemory();
   
   // 1. محاولة الحصول على القفل
   if (!acquireLock(type)) {
@@ -142,15 +226,16 @@ export async function sendInventoryReminderUnified(dayOfMonth: 12 | 29): Promise
       success: false,
       sentCount: 0,
       skipped: true,
-      reason: 'الإشعار قيد الإرسال حالياً',
+      reason: 'الإشعار قيد الإرسال حالياً (مقفل)',
       timestamp,
     };
   }
   
   try {
-    // 2. التحقق من قاعدة البيانات
-    const alreadySent = await wasNotificationSentTodayDB(type);
+    // 2. التحقق الشامل من الإرسال السابق
+    const alreadySent = await wasAlreadySentToday(type);
     if (alreadySent) {
+      console.log(`[Inventory] ⛔ تم تخطي الإرسال - أُرسل مسبقاً اليوم`);
       return {
         success: false,
         sentCount: 0,
@@ -160,7 +245,11 @@ export async function sendInventoryReminderUnified(dayOfMonth: 12 | 29): Promise
       };
     }
     
-    // 3. جمع البيانات
+    // 3. تسجيل في الذاكرة فوراً (قبل الإرسال لمنع التكرار)
+    markAsSentInMemory(type);
+    
+    // 4. جمع البيانات
+    console.log(`[Inventory] 📊 جمع بيانات الفروع...`);
     const branches = await db.getBranches();
     const inventoryReport = await db.getInventoryReport();
     const branchesInfo = branches.filter(b => b.isActive).map((branch) => ({
@@ -168,19 +257,20 @@ export async function sendInventoryReminderUnified(dayOfMonth: 12 | 29): Promise
       productCount: inventoryReport?.products?.length || 0
     }));
     
-    // 4. إرسال الإشعار
-    console.log(`[ScheduledNotifications] 📤 إرسال الإشعارات...`);
+    // 5. إرسال الإشعار
+    console.log(`[Inventory] 📤 إرسال الإشعارات إلى المستلمين...`);
     const result = await emailNotifications.notifyInventoryReminder({
       dayOfMonth,
       branches: branchesInfo
     });
     
-    // 5. تسجيل في قاعدة البيانات
+    // 6. تسجيل في قاعدة البيانات
     if (result.success) {
-      await logNotificationSent(type, result.sentCount, `تذكير الجرد - يوم ${dayOfMonth}`);
+      await logNotificationSentDB(type, result.sentCount);
     }
     
-    console.log(`[ScheduledNotifications] ✅ تم إرسال ${result.sentCount} تذكير جرد`);
+    console.log(`[Inventory] ✅ اكتمل الإرسال - ${result.sentCount} مستلم`);
+    console.log(`${'='.repeat(70)}\n`);
     
     return {
       success: result.success,
@@ -190,7 +280,7 @@ export async function sendInventoryReminderUnified(dayOfMonth: 12 | 29): Promise
     };
     
   } catch (error: any) {
-    console.error(`[ScheduledNotifications] ❌ خطأ في إرسال تذكير الجرد:`, error.message);
+    console.error(`[Inventory] ❌ خطأ:`, error.message);
     return {
       success: false,
       sentCount: 0,
@@ -205,16 +295,18 @@ export async function sendInventoryReminderUnified(dayOfMonth: 12 | 29): Promise
 
 /**
  * إرسال تذكير مسيرات الرواتب - المصدر الوحيد والموحد
- * يُستدعى فقط من نظام الجدولة المركزي
  */
 export async function sendPayrollReminderUnified(): Promise<SendResult> {
   const type: ScheduledNotificationType = 'payroll_reminder_29';
   const timestamp = new Date().toISOString();
   
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`[ScheduledNotifications] 💰 بدء إرسال تذكير مسيرات الرواتب`);
-  console.log(`[ScheduledNotifications] الوقت: ${timestamp}`);
-  console.log(`${'='.repeat(60)}\n`);
+  console.log(`\n${'='.repeat(70)}`);
+  console.log(`[Payroll] 💰 طلب إرسال تذكير مسيرات الرواتب`);
+  console.log(`[Payroll] الوقت: ${timestamp}`);
+  console.log(`${'='.repeat(70)}`);
+  
+  // تنظيف الذاكرة من السجلات القديمة
+  cleanupMemory();
   
   // 1. محاولة الحصول على القفل
   if (!acquireLock(type)) {
@@ -222,15 +314,16 @@ export async function sendPayrollReminderUnified(): Promise<SendResult> {
       success: false,
       sentCount: 0,
       skipped: true,
-      reason: 'الإشعار قيد الإرسال حالياً',
+      reason: 'الإشعار قيد الإرسال حالياً (مقفل)',
       timestamp,
     };
   }
   
   try {
-    // 2. التحقق من قاعدة البيانات
-    const alreadySent = await wasNotificationSentTodayDB(type);
+    // 2. التحقق الشامل من الإرسال السابق
+    const alreadySent = await wasAlreadySentToday(type);
     if (alreadySent) {
+      console.log(`[Payroll] ⛔ تم تخطي الإرسال - أُرسل مسبقاً اليوم`);
       return {
         success: false,
         sentCount: 0,
@@ -240,7 +333,11 @@ export async function sendPayrollReminderUnified(): Promise<SendResult> {
       };
     }
     
-    // 3. جمع البيانات
+    // 3. تسجيل في الذاكرة فوراً (قبل الإرسال لمنع التكرار)
+    markAsSentInMemory(type);
+    
+    // 4. جمع البيانات
+    console.log(`[Payroll] 📊 جمع بيانات الفروع والموظفين...`);
     const today = new Date();
     const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
     const currentMonth = monthNames[today.getMonth()];
@@ -257,20 +354,21 @@ export async function sendPayrollReminderUnified(): Promise<SendResult> {
       })
     );
     
-    // 4. إرسال الإشعار
-    console.log(`[ScheduledNotifications] 📤 إرسال الإشعارات...`);
+    // 5. إرسال الإشعار
+    console.log(`[Payroll] 📤 إرسال الإشعارات إلى المستلمين...`);
     const result = await emailNotifications.notifyPayrollReminder({
       month: currentMonth,
       year: currentYear,
       branches: branchesInfo
     });
     
-    // 5. تسجيل في قاعدة البيانات
+    // 6. تسجيل في قاعدة البيانات
     if (result.success) {
-      await logNotificationSent(type, result.sentCount, `تذكير الرواتب - ${currentMonth} ${currentYear}`);
+      await logNotificationSentDB(type, result.sentCount);
     }
     
-    console.log(`[ScheduledNotifications] ✅ تم إرسال ${result.sentCount} تذكير رواتب`);
+    console.log(`[Payroll] ✅ اكتمل الإرسال - ${result.sentCount} مستلم`);
+    console.log(`${'='.repeat(70)}\n`);
     
     return {
       success: result.success,
@@ -280,7 +378,7 @@ export async function sendPayrollReminderUnified(): Promise<SendResult> {
     };
     
   } catch (error: any) {
-    console.error(`[ScheduledNotifications] ❌ خطأ في إرسال تذكير الرواتب:`, error.message);
+    console.error(`[Payroll] ❌ خطأ:`, error.message);
     return {
       success: false,
       sentCount: 0,
@@ -306,10 +404,11 @@ export async function checkAndSendScheduledReminders(): Promise<{
   const today = new Date();
   const dayOfMonth = today.getDate();
   
-  console.log(`\n${'#'.repeat(70)}`);
-  console.log(`# [ScheduledNotifications] فحص التذكيرات الشهرية - يوم ${dayOfMonth}`);
-  console.log(`# الوقت: ${today.toISOString()}`);
-  console.log(`${'#'.repeat(70)}\n`);
+  console.log(`\n${'#'.repeat(80)}`);
+  console.log(`# [Scheduler] فحص التذكيرات الشهرية`);
+  console.log(`# التاريخ: ${today.toISOString()}`);
+  console.log(`# اليوم من الشهر: ${dayOfMonth}`);
+  console.log(`${'#'.repeat(80)}\n`);
   
   const results: {
     inventoryResult?: SendResult;
@@ -318,24 +417,33 @@ export async function checkAndSendScheduledReminders(): Promise<{
   
   // تذكير الجرد (يوم 12 أو 29)
   if (dayOfMonth === 12) {
+    console.log(`[Scheduler] 📦 يوم 12 - إرسال تذكير الجرد`);
     results.inventoryResult = await sendInventoryReminderUnified(12);
   } else if (dayOfMonth === 29) {
+    console.log(`[Scheduler] 📦 يوم 29 - إرسال تذكير الجرد`);
     results.inventoryResult = await sendInventoryReminderUnified(29);
+  } else {
+    console.log(`[Scheduler] ℹ️ اليوم ${dayOfMonth} - لا حاجة لتذكير الجرد`);
   }
   
   // تذكير الرواتب (يوم 29 فقط)
   if (dayOfMonth === 29) {
+    console.log(`[Scheduler] 💰 يوم 29 - إرسال تذكير الرواتب`);
     results.payrollResult = await sendPayrollReminderUnified();
+  } else {
+    console.log(`[Scheduler] ℹ️ اليوم ${dayOfMonth} - لا حاجة لتذكير الرواتب`);
   }
   
   // طباعة ملخص
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`[ScheduledNotifications] 📊 ملخص التذكيرات:`);
+  console.log(`[Scheduler] 📊 ملخص النتائج:`);
   if (results.inventoryResult) {
-    console.log(`  - الجرد: ${results.inventoryResult.skipped ? 'تم التخطي' : results.inventoryResult.success ? `✅ ${results.inventoryResult.sentCount} إشعار` : '❌ فشل'}`);
+    const ir = results.inventoryResult;
+    console.log(`  - الجرد: ${ir.skipped ? `⏭️ تخطي (${ir.reason})` : ir.success ? `✅ ${ir.sentCount} إشعار` : `❌ فشل (${ir.reason})`}`);
   }
   if (results.payrollResult) {
-    console.log(`  - الرواتب: ${results.payrollResult.skipped ? 'تم التخطي' : results.payrollResult.success ? `✅ ${results.payrollResult.sentCount} إشعار` : '❌ فشل'}`);
+    const pr = results.payrollResult;
+    console.log(`  - الرواتب: ${pr.skipped ? `⏭️ تخطي (${pr.reason})` : pr.success ? `✅ ${pr.sentCount} إشعار` : `❌ فشل (${pr.reason})`}`);
   }
   console.log(`${'='.repeat(60)}\n`);
   
@@ -349,16 +457,45 @@ export async function checkAndSendScheduledReminders(): Promise<{
  */
 export async function getTodayNotificationStatus(): Promise<{
   date: string;
-  inventory12: { sent: boolean; time?: string };
-  inventory29: { sent: boolean; time?: string };
-  payroll29: { sent: boolean; time?: string };
+  inventory12: { sent: boolean; source?: string };
+  inventory29: { sent: boolean; source?: string };
+  payroll29: { sent: boolean; source?: string };
 }> {
   const today = new Date().toISOString().split('T')[0];
   
+  const checkStatus = async (type: ScheduledNotificationType) => {
+    const inMemory = wasAlreadySentInMemory(type);
+    const inDB = await wasNotificationSentTodayDB(type);
+    return {
+      sent: inMemory || inDB,
+      source: inMemory ? 'memory' : inDB ? 'database' : undefined
+    };
+  };
+  
   return {
     date: today,
-    inventory12: { sent: await wasNotificationSentTodayDB('inventory_reminder_12') },
-    inventory29: { sent: await wasNotificationSentTodayDB('inventory_reminder_29') },
-    payroll29: { sent: await wasNotificationSentTodayDB('payroll_reminder_29') },
+    inventory12: await checkStatus('inventory_reminder_12'),
+    inventory29: await checkStatus('inventory_reminder_29'),
+    payroll29: await checkStatus('payroll_reminder_29'),
+  };
+}
+
+/**
+ * إعادة تعيين حالة الإشعارات (للاختبار فقط)
+ */
+export function resetNotificationStatus(): void {
+  memorySentToday.clear();
+  sendingLocks.clear();
+  lockTimestamps.clear();
+  console.log(`[Reset] 🔄 تم إعادة تعيين جميع حالات الإشعارات`);
+}
+
+/**
+ * الحصول على حالة الذاكرة (للتشخيص)
+ */
+export function getMemoryStatus(): { entries: number; keys: string[] } {
+  return {
+    entries: memorySentToday.size,
+    keys: Array.from(memorySentToday.keys())
   };
 }

@@ -1,0 +1,73 @@
+{
+  "query": "SELECT id, recipientEmail, notificationType, SUBSTRING(subject, 1, 80) as subject_short, status, sentAt, createdAt \nFROM sentNotifications \nWHERE DATE(createdAt) = CURDATE() \nORDER BY createdAt DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, recipientEmail, notificationType, SUBSTRING(subject, 1, 80) as subject_short, status, sentAt, createdAt \nFROM sentNotifications \nWHERE DATE(createdAt) = CURDATE() \nORDER BY createdAt DESC;",
+  "rows": [
+    {
+      "id": "510002",
+      "recipientEmail": "system@symbolai.net",
+      "notificationType": "payroll_created",
+      "subject_short": "[payroll_reminder_29] تذكير الرواتب - ديسمبر 2025",
+      "status": "sent",
+      "sentAt": "2025-12-29 08:25:25",
+      "createdAt": "2025-12-29 08:25:25"
+    },
+    {
+      "id": "510001",
+      "recipientEmail": "system@symbolai.net",
+      "notificationType": "payroll_created",
+      "subject_short": "[payroll_reminder_29] تذكير الرواتب - ديسمبر 2025",
+      "status": "sent",
+      "sentAt": "2025-12-29 08:22:17",
+      "createdAt": "2025-12-29 08:22:17"
+    },
+    {
+      "id": "480004",
+      "recipientEmail": "system@symbolai.net",
+      "notificationType": "payroll_created",
+      "subject_short": "[payroll_reminder_29] تذكير الرواتب - ديسمبر 2025",
+      "status": "sent",
+      "sentAt": "2025-12-29 08:11:15",
+      "createdAt": "2025-12-29 08:11:15"
+    },
+    {
+      "id": "480003",
+      "recipientEmail": "system@symbolai.net",
+      "notificationType": "payroll_created",
+      "subject_short": "[payroll_reminder_29] تذكير الرواتب - ديسمبر 2025",
+      "status": "sent",
+      "sentAt": "2025-12-29 08:04:48",
+      "createdAt": "2025-12-29 08:04:48"
+    },
+    {
+      "id": "480002",
+      "recipientEmail": "system@symbolai.net",
+      "notificationType": "payroll_created",
+      "subject_short": "[payroll_reminder_29] تذكير الرواتب - ديسمبر 2025",
+      "status": "sent",
+      "sentAt": "2025-12-29 08:04:15",
+      "createdAt": "2025-12-29 08:04:14"
+    },
+    {
+      "id": "480001",
+      "recipientEmail": "system@symbolai.net",
+      "notificationType": "monthly_reminder",
+      "subject_short": "[inventory_reminder_29] تذكير الجرد - يوم 29",
+      "status": "sent",
+      "sentAt": "2025-12-29 08:04:13",
+      "createdAt": "2025-12-29 08:04:12"
+    },
+    {
+      "id": "450001",
+      "recipientEmail": "monitoring@system.local",
+      "notificationType": "general",
+      "subject_short": "Monitoring: revenue",
+      "status": "sent",
+      "sentAt": "2025-12-29 00:44:25",
+      "createdAt": "2025-12-29 00:44:25"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trecipientEmail\tnotificationType\tsubject_short\tstatus\tsentAt\tcreatedAt\n510002\tsystem@symbolai.net\tpayroll_created\t[payroll_reminder_29] تذكير الرواتب - ديسمبر 2025\tsent\t2025-12-29 08:25:25\t2025-12-29 08:25:25\n510001\tsystem@symbolai.net\tpayroll_created\t[payroll_reminder_29] تذكير الرواتب - ديسمبر 2025\tsent\t2025-12-29 08:22:17\t2025-12-29 08:22:17\n480004\tsystem@symbolai.net\tpayroll_created\t[payroll_reminder_29] تذكير الرواتب - ديسمبر 2025\tsent\t2025-12-29 08:11:15\t2025-12-29 08:11:15\n480003\tsystem@symbolai.net\tpayroll_created\t[payroll_reminder_29] تذكير الرواتب - ديسمبر 2025\tsent\t2025-12-29 08:04:48\t2025-12-29 08:04:48\n480002\tsystem@symbolai.net\tpayroll_created\t[payroll_reminder_29] تذكير الرواتب - ديسمبر 2025\tsent\t2025-12-29 08:04:15\t2025-12-29 08:04:14\n480001\tsystem@symbolai.net\tmonthly_reminder\t[inventory_reminder_29] تذكير الجرد - يوم 29\tsent\t2025-12-29 08:04:13\t2025-12-29 08:04:12\n450001\tmonitoring@system.local\tgeneral\tMonitoring: revenue\tsent\t2025-12-29 00:44:25\t2025-12-29 00:44:25\n",
+  "stderr": "",
+  "execution_time_ms": 1581
+}
