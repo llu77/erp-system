@@ -2389,19 +2389,59 @@ export const appRouter = router({
             ctx.user.id,
             ctx.user.name || 'مسؤول'
           );
+          
+          // إرسال إشعار بريدي للأدمن عند إنشاء مسيرة جديدة
+          const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+          const roleNames: Record<string, string> = {
+            admin: 'مسؤول',
+            manager: 'مدير',
+            supervisor: 'مشرف',
+            viewer: 'مشاهد',
+            employee: 'موظف',
+          };
+          
+          if (payroll) {
+            emailNotifications.notifyNewPayrollCreated({
+              createdByName: ctx.user.name || 'مستخدم',
+              createdByRole: roleNames[ctx.user.role] || ctx.user.role,
+              branchId: input.branchId,
+              branchName: input.branchName,
+              month: monthNames[input.month - 1] || `شهر ${input.month}`,
+              year: input.year,
+              employeeCount: payroll.employeeCount || 0,
+              totalNetSalary: parseFloat(payroll.totalNetSalary || '0'),
+            }).catch(err => console.error('خطأ في إرسال إشعار مسيرة الرواتب:', err));
+          }
+          
           return { success: true, message: 'تم إنشاء مسيرة الرواتب بنجاح', payroll };
         } catch (error: any) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
         }
       }),
 
-    // تحديث حالة المسيرة (للمشرف العام والأدمن)
-    updateStatus: supervisorViewProcedure
+    // تحديث حالة المسيرة (الاعتماد للأدمن فقط)
+    updateStatus: supervisorInputProcedure
       .input(z.object({
         id: z.number(),
         status: z.enum(['draft', 'pending', 'approved', 'paid', 'cancelled']),
       }))
       .mutation(async ({ input, ctx }) => {
+        // الاعتماد والدفع للأدمن فقط
+        if ((input.status === 'approved' || input.status === 'paid') && ctx.user.role !== 'admin') {
+          throw new TRPCError({ 
+            code: 'FORBIDDEN', 
+            message: 'فقط المسؤول يمكنه اعتماد أو تأكيد دفع المسيرة' 
+          });
+        }
+        
+        // الإلغاء للأدمن والمدير فقط
+        if (input.status === 'cancelled' && ctx.user.role !== 'admin' && ctx.user.role !== 'manager') {
+          throw new TRPCError({ 
+            code: 'FORBIDDEN', 
+            message: 'فقط المسؤول أو المدير يمكنه إلغاء المسيرة' 
+          });
+        }
+        
         const updateData: any = { status: input.status };
         
         if (input.status === 'approved') {

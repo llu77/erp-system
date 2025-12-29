@@ -587,6 +587,64 @@ export async function notifyPayrollReminder(data: {
   return { success: sentCount > 0, sentCount };
 }
 
+// ==================== إشعار إنشاء مسيرة رواتب جديدة ====================
+export async function notifyNewPayrollCreated(data: {
+  createdByName: string;
+  createdByRole: string;
+  branchId: number;
+  branchName: string;
+  month: string;
+  year: number;
+  employeeCount: number;
+  totalNetSalary: number;
+}): Promise<{ success: boolean; sentCount: number }> {
+  console.log(`📧 إرسال إشعار مسيرة رواتب جديدة - ${data.branchName} - ${data.month} ${data.year}`);
+  
+  // الحصول على الأدمن والمدير فقط (للاعتماد)
+  const recipients: { name: string; email: string }[] = [];
+  
+  try {
+    const allUsers = await db.getAllUsers();
+    
+    for (const user of allUsers) {
+      if (!user.email || !user.isActive) continue;
+      // إرسال للأدمن والمدير فقط
+      if (user.role === 'admin' || user.role === 'manager') {
+        recipients.push({ name: user.name || 'مسؤول', email: user.email });
+      }
+    }
+  } catch (error) {
+    console.error('خطأ في جلب المستلمين:', error);
+  }
+  
+  if (recipients.length === 0) {
+    console.log('⚠️ لا يوجد مستلمين لإشعار مسيرة الرواتب');
+    return { success: false, sentCount: 0 };
+  }
+  
+  let sentCount = 0;
+  
+  for (const recipient of recipients) {
+    const { subject, html } = templates.getNewPayrollCreatedTemplate({
+      recipientName: recipient.name,
+      createdByName: data.createdByName,
+      createdByRole: data.createdByRole,
+      branchName: data.branchName,
+      month: data.month,
+      year: data.year,
+      employeeCount: data.employeeCount,
+      totalNetSalary: data.totalNetSalary,
+    });
+    
+    if (await sendEmail(recipient.email, subject, html)) {
+      sentCount++;
+    }
+  }
+  
+  console.log(`✓ تم إرسال إشعار مسيرة الرواتب إلى ${sentCount} مستلم`);
+  return { success: sentCount > 0, sentCount };
+}
+
 // ==================== تصدير الدوال ====================
 export default {
   notifyNewEmployeeRequest,
@@ -598,6 +656,7 @@ export default {
   notifyRevenueMismatch,
   notifyInventoryReminder,
   notifyPayrollReminder,
+  notifyNewPayrollCreated,
 };
 
 

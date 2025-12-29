@@ -1136,6 +1136,84 @@ export function getPayrollReminderTemplate(data: {
 }
 
 
+// ==================== قالب إشعار إنشاء مسيرة رواتب ====================
+export function getNewPayrollCreatedTemplate(data: {
+  recipientName: string;
+  createdByName: string;
+  createdByRole: string;
+  branchName: string;
+  month: string;
+  year: number;
+  employeeCount: number;
+  totalNetSalary: number;
+}): { subject: string; html: string } {
+  const content = `
+    <div class="header">
+      <div class="logo">
+        <span class="logo-text">💰</span>
+      </div>
+      <h1>مسيرة رواتب جديدة</h1>
+      <div class="subtitle">${data.branchName} - ${data.month} ${data.year}</div>
+    </div>
+    
+    <div class="content">
+      <div class="greeting">
+        السلام عليكم ورحمة الله وبركاته،<br><br>
+        <strong>${data.recipientName}</strong><br><br>
+        تم إنشاء مسيرة رواتب جديدة وهي بانتظار الاعتماد.
+      </div>
+      
+      <div class="alert-box purple">
+        <div style="font-size: 18px; font-weight: 700; color: #7c3aed; margin-bottom: 10px;">
+          📝 تفاصيل المسيرة
+        </div>
+        <div style="font-size: 14px; color: #374151; line-height: 1.8;">
+          تم إنشاء مسيرة رواتب جديدة بواسطة <strong>${data.createdByName}</strong> (${data.createdByRole})
+        </div>
+      </div>
+      
+      <h3 style="color: #1a1a2e; margin: 25px 0 15px; font-size: 16px;">📊 ملخص المسيرة</h3>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="label">🏢 الفرع</div>
+          <div class="value">${data.branchName}</div>
+        </div>
+        <div class="info-item">
+          <div class="label">📅 الشهر</div>
+          <div class="value">${data.month} ${data.year}</div>
+        </div>
+        <div class="info-item">
+          <div class="label">👥 عدد الموظفين</div>
+          <div class="value">${data.employeeCount} موظف</div>
+        </div>
+        <div class="info-item">
+          <div class="label">💵 إجمالي الرواتب</div>
+          <div class="value">${data.totalNetSalary.toLocaleString('ar-SA')} ر.س</div>
+        </div>
+      </div>
+      
+      <div class="divider"></div>
+      
+      <div style="text-align: center;">
+        <p style="color: #64748b; margin-bottom: 15px;">يرجى مراجعة المسيرة واعتمادها:</p>
+        <a href="#" class="cta-button">مراجعة المسيرة</a>
+      </div>
+      
+      <div class="alert-box info" style="margin-top: 20px;">
+        <div style="font-weight: 600; margin-bottom: 8px;">⚠️ ملاحظة هامة:</div>
+        <div style="color: #374151; line-height: 1.8;">
+          هذه المسيرة بانتظار الاعتماد من المسؤول. يرجى مراجعة البيانات والتأكد من صحتها قبل الاعتماد.
+        </div>
+      </div>
+    </div>
+  `;
+  
+  return {
+    subject: `💰 مسيرة رواتب جديدة - ${data.branchName} - ${data.month} ${data.year} | Symbol AI`,
+    html: getBaseTemplate(content, 'مسيرة رواتب جديدة'),
+  };
+}
+
 // ==================== قالب إشعار المهام ====================
 export function getTaskNotificationTemplate(data: {
   employeeName: string;
