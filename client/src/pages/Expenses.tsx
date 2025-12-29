@@ -46,6 +46,8 @@ import {
   TrendingDown,
   Clock,
   Filter,
+  Printer,
+  FileText,
 } from "lucide-react";
 
 // تصنيفات المصاريف
@@ -144,6 +146,8 @@ export default function Expenses() {
   const [selectedExpense, setSelectedExpense] = useState<number | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterBranch, setFilterBranch] = useState<string>("all");
+  const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
 
   // التحقق من الصلاحيات
   const canAdd = user?.role !== 'viewer';
@@ -260,8 +264,233 @@ export default function Expenses() {
   const filteredExpenses = expenses?.filter(expense => {
     if (filterCategory !== "all" && expense.category !== filterCategory) return false;
     if (filterStatus !== "all" && expense.status !== filterStatus) return false;
+    if (filterBranch !== "all" && expense.branchId?.toString() !== filterBranch) return false;
+    // فلتر الشهر
+    if (filterMonth) {
+      const expenseDate = new Date(expense.expenseDate);
+      const [year, month] = filterMonth.split('-').map(Number);
+      if (expenseDate.getFullYear() !== year || expenseDate.getMonth() + 1 !== month) return false;
+    }
     return true;
   });
+
+  // حساب إجمالي المصاريف المفلترة
+  const filteredTotal = filteredExpenses?.reduce((sum, exp) => sum + parseFloat(exp.amount || '0'), 0) || 0;
+
+  // طباعة تقرير المصاريف
+  const printExpensesReport = () => {
+    const [year, month] = filterMonth.split('-').map(Number);
+    const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    const monthName = monthNames[month - 1];
+    const branchName = filterBranch === 'all' ? 'جميع الفروع' : branches?.find(b => b.id.toString() === filterBranch)?.nameAr || 'غير محدد';
+    
+    // تجميع المصاريف حسب التصنيف
+    const expensesByCategory: Record<string, { count: number; total: number; items: typeof filteredExpenses }> = {};
+    filteredExpenses?.forEach(exp => {
+      if (!expensesByCategory[exp.category]) {
+        expensesByCategory[exp.category] = { count: 0, total: 0, items: [] };
+      }
+      expensesByCategory[exp.category].count++;
+      expensesByCategory[exp.category].total += parseFloat(exp.amount || '0');
+      expensesByCategory[exp.category].items?.push(exp);
+    });
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('يرجى السماح بالنوافذ المنبثقة');
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>تقرير المصاريف - ${monthName} ${year}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
+            padding: 20px; 
+            background: #fff;
+            color: #333;
+            font-size: 12px;
+          }
+          .header { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            padding-bottom: 20px;
+            border-bottom: 3px solid #1e40af;
+          }
+          .logo { font-size: 28px; font-weight: bold; color: #1e40af; margin-bottom: 5px; }
+          .report-title { font-size: 20px; color: #374151; margin: 10px 0; }
+          .report-info { color: #6b7280; font-size: 14px; }
+          .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+          }
+          .summary-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+          }
+          .summary-card .label { color: #64748b; font-size: 12px; margin-bottom: 5px; }
+          .summary-card .value { font-size: 20px; font-weight: bold; color: #1e40af; }
+          .category-section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+          }
+          .category-header {
+            background: #1e40af;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .category-name { font-weight: bold; font-size: 14px; }
+          .category-total { font-size: 14px; }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 10px;
+            background: white;
+          }
+          th { 
+            background: #f1f5f9; 
+            padding: 10px 8px; 
+            text-align: right; 
+            font-weight: 600;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+          }
+          td { 
+            padding: 8px; 
+            border: 1px solid #e2e8f0; 
+            text-align: right;
+          }
+          tr:nth-child(even) { background: #f8fafc; }
+          .amount { color: #dc2626; font-weight: 600; }
+          .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 500;
+          }
+          .status-pending { background: #fef3c7; color: #92400e; }
+          .status-approved { background: #d1fae5; color: #065f46; }
+          .status-paid { background: #dbeafe; color: #1e40af; }
+          .status-rejected { background: #fee2e2; color: #991b1b; }
+          .grand-total {
+            background: #1e40af;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 18px;
+            margin-top: 20px;
+          }
+          .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 11px;
+          }
+          @media print {
+            body { padding: 10px; }
+            .summary-cards { grid-template-columns: repeat(4, 1fr); }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="logo">Symbol AI</div>
+          <div class="report-title">تقرير المصاريف الشهري</div>
+          <div class="report-info">
+            <strong>الشهر:</strong> ${monthName} ${year} | 
+            <strong>الفرع:</strong> ${branchName} | 
+            <strong>تاريخ الطباعة:</strong> ${new Date().toLocaleDateString('ar-SA')}
+          </div>
+        </div>
+
+        <div class="summary-cards">
+          <div class="summary-card">
+            <div class="label">عدد المصاريف</div>
+            <div class="value">${filteredExpenses?.length || 0}</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">عدد التصنيفات</div>
+            <div class="value">${Object.keys(expensesByCategory).length}</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">متوسط المصروف</div>
+            <div class="value">${filteredExpenses?.length ? (filteredTotal / filteredExpenses.length).toFixed(2) : '0.00'} ر.س</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">إجمالي المصاريف</div>
+            <div class="value">${filteredTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</div>
+          </div>
+        </div>
+
+        ${Object.entries(expensesByCategory).map(([category, data]) => `
+          <div class="category-section">
+            <div class="category-header">
+              <span class="category-name">${categoryNames[category] || category}</span>
+              <span class="category-total">${data.count} مصروف | ${data.total.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>رقم المصروف</th>
+                  <th>العنوان</th>
+                  <th>التاريخ</th>
+                  <th>طريقة الدفع</th>
+                  <th>الحالة</th>
+                  <th>المبلغ</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.items?.map(exp => `
+                  <tr>
+                    <td>${exp.expenseNumber}</td>
+                    <td>${exp.title}</td>
+                    <td>${new Date(exp.expenseDate).toLocaleDateString('ar-SA')}</td>
+                    <td>${paymentMethods.find(p => p.value === exp.paymentMethod)?.label || exp.paymentMethod}</td>
+                    <td><span class="status-badge status-${exp.status}">${statusNames[exp.status]}</span></td>
+                    <td class="amount">${parseFloat(exp.amount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `).join('')}
+
+        <div class="grand-total">
+          <span>إجمالي المصاريف لشهر ${monthName} ${year}</span>
+          <span>${filteredTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ريال سعودي</span>
+        </div>
+
+        <div class="footer">
+          <p>تم إنشاء هذا التقرير بواسطة نظام Symbol AI لإدارة الموارد</p>
+          <p>جميع الحقوق محفوظة © ${new Date().getFullYear()}</p>
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
+  };
 
   return (
     <DashboardLayout>
@@ -480,6 +709,28 @@ export default function Expenses() {
                 <Filter className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">تصفية:</span>
               </div>
+              <Select value={filterBranch} onValueChange={setFilterBranch}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="الفرع" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع الفروع</SelectItem>
+                  {branches?.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id.toString()}>
+                      {branch.nameAr || branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="month"
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
+                  className="w-40"
+                />
+              </div>
               <Select value={filterCategory} onValueChange={setFilterCategory}>
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="التصنيف" />
@@ -505,6 +756,20 @@ export default function Expenses() {
                   <SelectItem value="paid">مدفوع</SelectItem>
                 </SelectContent>
               </Select>
+              <div className="flex-1" />
+              <Button variant="outline" onClick={printExpensesReport} className="gap-2">
+                <Printer className="h-4 w-4" />
+                طباعة التقرير
+              </Button>
+            </div>
+            {/* عرض إجمالي المصاريف المفلترة */}
+            <div className="mt-4 pt-4 border-t flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                عدد المصاريف: <strong>{filteredExpenses?.length || 0}</strong>
+              </span>
+              <span className="text-lg font-bold text-red-600">
+                إجمالي: {filteredTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س
+              </span>
             </div>
           </CardContent>
         </Card>
