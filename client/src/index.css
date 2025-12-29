@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* منع الترجمة التلقائية للمتصفح */
+.notranslate {
+  -webkit-translate: none;
+  translate: none;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @font-face {
