@@ -255,19 +255,19 @@ export default function TaskManagement() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+      {/* Header - محسن للموبايل */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ClipboardList className="w-7 h-7" />
+          <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+            <ClipboardList className="w-6 h-6 sm:w-7 sm:h-7" />
             إدارة المهام
           </h1>
-          <p className="text-slate-400 mt-1">إنشاء وإدارة المهام المرسلة للموظفين</p>
+          <p className="text-slate-400 mt-1 text-sm sm:text-base">إنشاء وإدارة المهام المرسلة للموظفين</p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="w-full sm:w-auto">
               <Plus className="w-4 h-4 ml-2" />
               مهمة جديدة
             </Button>
@@ -501,96 +501,96 @@ export default function TaskManagement() {
         </Dialog>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-5 gap-4">
+      {/* Stats Cards - محسن للموبايل */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardContent className="pt-6">
+          <CardContent className="p-4 sm:pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-slate-400 text-sm">إجمالي المهام</p>
-                <p className="text-2xl font-bold text-white">{stats?.total || 0}</p>
+                <p className="text-slate-400 text-xs sm:text-sm">إجمالي المهام</p>
+                <p className="text-xl sm:text-2xl font-bold text-white">{stats?.total || 0}</p>
               </div>
-              <ClipboardList className="w-8 h-8 text-slate-500" />
+              <ClipboardList className="w-6 h-6 sm:w-8 sm:h-8 text-slate-500 hidden sm:block" />
             </div>
           </CardContent>
         </Card>
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardContent className="pt-6">
+          <CardContent className="p-4 sm:pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-slate-400 text-sm">في انتظار الرد</p>
-                <p className="text-2xl font-bold text-yellow-500">{stats?.pending || 0}</p>
+                <p className="text-slate-400 text-xs sm:text-sm">في انتظار الرد</p>
+                <p className="text-xl sm:text-2xl font-bold text-yellow-500">{stats?.pending || 0}</p>
               </div>
-              <Clock className="w-8 h-8 text-yellow-500/50" />
+              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-500/50 hidden sm:block" />
             </div>
           </CardContent>
         </Card>
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardContent className="pt-6">
+          <CardContent className="p-4 sm:pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-slate-400 text-sm">تحت المعالجة</p>
-                <p className="text-2xl font-bold text-blue-500">{stats?.inProgress || 0}</p>
+                <p className="text-slate-400 text-xs sm:text-sm">تحت المعالجة</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-500">{stats?.inProgress || 0}</p>
               </div>
-              <Loader2 className="w-8 h-8 text-blue-500/50" />
+              <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500/50 hidden sm:block" />
             </div>
           </CardContent>
         </Card>
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardContent className="pt-6">
+          <CardContent className="p-4 sm:pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-slate-400 text-sm">مكتملة</p>
-                <p className="text-2xl font-bold text-green-500">{stats?.completed || 0}</p>
+                <p className="text-slate-400 text-xs sm:text-sm">مكتملة</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-500">{stats?.completed || 0}</p>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-500/50" />
+              <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-500/50 hidden sm:block" />
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-800/50 border-slate-700 border-red-500/30">
-          <CardContent className="pt-6">
+        <Card className="bg-slate-800/50 border-slate-700 border-red-500/30 col-span-2 sm:col-span-1">
+          <CardContent className="p-4 sm:pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-slate-400 text-sm">متأخرة</p>
-                <p className="text-2xl font-bold text-red-500">{overdueTasks?.length || 0}</p>
+                <p className="text-slate-400 text-xs sm:text-sm">متأخرة</p>
+                <p className="text-xl sm:text-2xl font-bold text-red-500">{overdueTasks?.length || 0}</p>
               </div>
-              <AlertCircle className="w-8 h-8 text-red-500/50" />
+              <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 text-red-500/50" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs - محسن للموبايل */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-slate-800/50 border border-slate-700">
-          <TabsTrigger value="all" className="data-[state=active]:bg-slate-700">
+        <TabsList className="bg-slate-800/50 border border-slate-700 w-full sm:w-auto">
+          <TabsTrigger value="all" className="data-[state=active]:bg-slate-700 flex-1 sm:flex-none text-sm">
             جميع المهام
           </TabsTrigger>
-          <TabsTrigger value="overdue" className="data-[state=active]:bg-red-600/20 data-[state=active]:text-red-400">
+          <TabsTrigger value="overdue" className="data-[state=active]:bg-red-600/20 data-[state=active]:text-red-400 flex-1 sm:flex-none text-sm">
             <AlertCircle className="w-4 h-4 ml-1" />
             المتأخرة ({overdueTasks?.length || 0})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-4 space-y-4">
-          {/* Filters */}
+          {/* Filters - محسن للموبايل */}
           <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="pt-6">
-              <div className="flex gap-4">
+            <CardContent className="p-4 sm:pt-6">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <div className="flex-1">
                   <div className="relative">
                     <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <Input
-                      placeholder="بحث بالموضوع أو الرقم المرجعي أو اسم الموظف..."
+                      placeholder="بحث..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pr-10"
+                      className="pr-10 text-sm"
                     />
                   </div>
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="فلترة حسب الحالة" />
+                  <SelectTrigger className="w-full sm:w-48">
+                    <SelectValue placeholder="جميع الحالات" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">جميع الحالات</SelectItem>
@@ -604,9 +604,9 @@ export default function TaskManagement() {
             </CardContent>
           </Card>
 
-          {/* Tasks Table */}
+          {/* Tasks - عرض بطاقات للموبايل وجدول للشاشات الكبيرة */}
           <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="pt-6">
+            <CardContent className="p-4 sm:pt-6">
               {isLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
@@ -617,36 +617,21 @@ export default function TaskManagement() {
                   <p>لا توجد مهام</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-700">
-                      <TableHead className="text-slate-400">الرقم المرجعي</TableHead>
-                      <TableHead className="text-slate-400">الموضوع</TableHead>
-                      <TableHead className="text-slate-400">الموظف</TableHead>
-                      <TableHead className="text-slate-400">الفرع</TableHead>
-                      <TableHead className="text-slate-400">الحالة</TableHead>
-                      <TableHead className="text-slate-400">الأولوية</TableHead>
-                      <TableHead className="text-slate-400">تاريخ الاستحقاق</TableHead>
-                      <TableHead className="text-slate-400">الإجراءات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  {/* عرض بطاقات للموبايل */}
+                  <div className="block sm:hidden space-y-3">
                     {filteredTasks?.map((task: any) => (
-                      <TableRow key={task.id} className="border-slate-700">
-                        <TableCell className="font-mono text-blue-400">{task.referenceNumber}</TableCell>
-                        <TableCell className="text-white max-w-[200px] truncate">{task.subject}</TableCell>
-                        <TableCell className="text-slate-300">{task.assignedToName}</TableCell>
-                        <TableCell className="text-slate-300">{task.branchName || '-'}</TableCell>
-                        <TableCell>{getStatusBadge(task.status)}</TableCell>
-                        <TableCell>{getPriorityBadge(task.priority)}</TableCell>
-                        <TableCell className="text-slate-300">
-                          {task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA') : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+                      <div key={task.id} className="bg-slate-700/30 rounded-lg p-4 space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-mono text-blue-400 text-sm">{task.referenceNumber}</p>
+                            <p className="text-white font-medium mt-1 line-clamp-2">{task.subject}</p>
+                          </div>
+                          <div className="flex gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
+                              className="h-8 w-8 p-0"
                               onClick={() => {
                                 setSelectedTask(task);
                                 setIsViewDialogOpen(true);
@@ -658,7 +643,7 @@ export default function TaskManagement() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-red-400 hover:text-red-300"
+                                className="h-8 w-8 p-0 text-red-400"
                                 onClick={() => {
                                   if (confirm('هل أنت متأكد من حذف هذه المهمة؟')) {
                                     deleteMutation.mutate({ taskId: task.id });
@@ -669,29 +654,98 @@ export default function TaskManagement() {
                               </Button>
                             )}
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {getStatusBadge(task.status)}
+                          {getPriorityBadge(task.priority)}
+                        </div>
+                        <div className="flex items-center justify-between text-sm text-slate-400">
+                          <span>{task.assignedToName}</span>
+                          <span>{task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA') : '-'}</span>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+
+                  {/* جدول للشاشات الكبيرة */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-slate-700">
+                          <TableHead className="text-slate-400">الرقم المرجعي</TableHead>
+                          <TableHead className="text-slate-400">الموضوع</TableHead>
+                          <TableHead className="text-slate-400">الموظف</TableHead>
+                          <TableHead className="text-slate-400">الفرع</TableHead>
+                          <TableHead className="text-slate-400">الحالة</TableHead>
+                          <TableHead className="text-slate-400">الأولوية</TableHead>
+                          <TableHead className="text-slate-400">تاريخ الاستحقاق</TableHead>
+                          <TableHead className="text-slate-400">الإجراءات</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredTasks?.map((task: any) => (
+                          <TableRow key={task.id} className="border-slate-700">
+                            <TableCell className="font-mono text-blue-400">{task.referenceNumber}</TableCell>
+                            <TableCell className="text-white max-w-[200px] truncate">{task.subject}</TableCell>
+                            <TableCell className="text-slate-300">{task.assignedToName}</TableCell>
+                            <TableCell className="text-slate-300">{task.branchName || '-'}</TableCell>
+                            <TableCell>{getStatusBadge(task.status)}</TableCell>
+                            <TableCell>{getPriorityBadge(task.priority)}</TableCell>
+                            <TableCell className="text-slate-300">
+                              {task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA') : '-'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedTask(task);
+                                    setIsViewDialogOpen(true);
+                                  }}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                                {user?.role === 'admin' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-400 hover:text-red-300"
+                                    onClick={() => {
+                                      if (confirm('هل أنت متأكد من حذف هذه المهمة؟')) {
+                                        deleteMutation.mutate({ taskId: task.id });
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="overdue" className="mt-4">
-          {/* Overdue Tasks */}
+          {/* Overdue Tasks - محسن للموبايل */}
           <Card className="bg-slate-800/50 border-slate-700 border-red-500/30">
-            <CardHeader>
-              <CardTitle className="text-red-400 flex items-center gap-2">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-red-400 flex items-center gap-2 text-lg sm:text-xl">
                 <AlertCircle className="w-5 h-5" />
                 المهام المتأخرة
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-sm">
                 المهام التي تجاوزت تاريخ الاستحقاق ولم تكتمل بعد
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 sm:p-6 pt-0">
               {loadingOverdue ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
@@ -702,53 +756,94 @@ export default function TaskManagement() {
                   <p className="text-green-400">لا توجد مهام متأخرة</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-700">
-                      <TableHead className="text-slate-400">الرقم المرجعي</TableHead>
-                      <TableHead className="text-slate-400">الموضوع</TableHead>
-                      <TableHead className="text-slate-400">الموظف</TableHead>
-                      <TableHead className="text-slate-400">الفرع</TableHead>
-                      <TableHead className="text-slate-400">تاريخ الاستحقاق</TableHead>
-                      <TableHead className="text-slate-400">أيام التأخير</TableHead>
-                      <TableHead className="text-slate-400">الإجراءات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  {/* عرض بطاقات للموبايل */}
+                  <div className="block sm:hidden space-y-3">
                     {overdueTasks?.map((task: any) => (
-                      <TableRow key={task.id} className="border-slate-700 bg-red-500/5">
-                        <TableCell className="font-mono text-red-400">{task.referenceNumber}</TableCell>
-                        <TableCell className="text-white max-w-[200px] truncate">{task.subject}</TableCell>
-                        <TableCell className="text-slate-300">{task.assignedToName || task.employeeName}</TableCell>
-                        <TableCell className="text-slate-300">{task.branchName || '-'}</TableCell>
-                        <TableCell className="text-red-400">
-                          {task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA') : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="destructive" className="font-bold">
-                            {task.daysOverdue} يوم
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                // البحث عن المهمة الكاملة
-                                const fullTask = tasks?.find((t: any) => t.id === task.id);
-                                setSelectedTask(fullTask || task);
-                                setIsViewDialogOpen(true);
-                              }}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
+                      <div key={task.id} className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-mono text-red-400 text-sm">{task.referenceNumber}</p>
+                            <p className="text-white font-medium mt-1 line-clamp-2">{task.subject}</p>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => {
+                              const fullTask = tasks?.find((t: any) => t.id === task.id);
+                              setSelectedTask(fullTask || task);
+                              setIsViewDialogOpen(true);
+                            }}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="destructive" className="font-bold">
+                            متأخر {task.daysOverdue} يوم
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-sm text-slate-400">
+                          <span>{task.assignedToName || task.employeeName}</span>
+                          <span className="text-red-400">
+                            {task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA') : '-'}
+                          </span>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+
+                  {/* جدول للشاشات الكبيرة */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-slate-700">
+                          <TableHead className="text-slate-400">الرقم المرجعي</TableHead>
+                          <TableHead className="text-slate-400">الموضوع</TableHead>
+                          <TableHead className="text-slate-400">الموظف</TableHead>
+                          <TableHead className="text-slate-400">الفرع</TableHead>
+                          <TableHead className="text-slate-400">تاريخ الاستحقاق</TableHead>
+                          <TableHead className="text-slate-400">أيام التأخير</TableHead>
+                          <TableHead className="text-slate-400">الإجراءات</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {overdueTasks?.map((task: any) => (
+                          <TableRow key={task.id} className="border-slate-700 bg-red-500/5">
+                            <TableCell className="font-mono text-red-400">{task.referenceNumber}</TableCell>
+                            <TableCell className="text-white max-w-[200px] truncate">{task.subject}</TableCell>
+                            <TableCell className="text-slate-300">{task.assignedToName || task.employeeName}</TableCell>
+                            <TableCell className="text-slate-300">{task.branchName || '-'}</TableCell>
+                            <TableCell className="text-red-400">
+                              {task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA') : '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="destructive" className="font-bold">
+                                {task.daysOverdue} يوم
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    const fullTask = tasks?.find((t: any) => t.id === task.id);
+                                    setSelectedTask(fullTask || task);
+                                    setIsViewDialogOpen(true);
+                                  }}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
