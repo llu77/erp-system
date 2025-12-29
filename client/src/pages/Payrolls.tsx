@@ -503,6 +503,224 @@ export default function Payrolls() {
     }
   };
 
+  // طباعة قسيمة راتب فردية
+  const handlePrintPayslip = (detail: any, payroll: any) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error("يرجى السماح بالنوافذ المنبثقة");
+      return;
+    }
+
+    const monthName = arabicMonths[payroll.month - 1];
+    const grossSalary = parseFloat(detail.baseSalary) + parseFloat(detail.overtimeAmount || '0') + parseFloat(detail.incentiveAmount || '0');
+    const totalDeductions = parseFloat(detail.absentDeduction || '0') + parseFloat(detail.deductionAmount || '0') + parseFloat(detail.advanceDeduction || '0');
+
+    const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>قسيمة راتب - ${detail.employeeName}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #333;
+      background: #fff;
+      padding: 20px;
+    }
+    .payslip {
+      max-width: 600px;
+      margin: 0 auto;
+      border: 2px solid #1e40af;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    .header h1 { font-size: 24px; margin-bottom: 5px; }
+    .header p { opacity: 0.9; font-size: 14px; }
+    .period-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.2);
+      padding: 5px 15px;
+      border-radius: 20px;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+    .employee-info {
+      background: #f8fafc;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .info-item { }
+    .info-item label { display: block; font-size: 11px; color: #666; margin-bottom: 3px; }
+    .info-item span { font-size: 14px; font-weight: bold; color: #1e40af; }
+    .salary-details { padding: 20px; }
+    .section-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #1e40af;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .salary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .salary-row:last-child { border-bottom: none; }
+    .salary-row .label { color: #666; }
+    .salary-row .value { font-weight: bold; }
+    .salary-row .value.positive { color: #16a34a; }
+    .salary-row .value.negative { color: #dc2626; }
+    .earnings { background: #f0fdf4; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+    .deductions { background: #fef2f2; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+    .net-salary {
+      background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+      margin: 20px 0;
+      border-radius: 8px;
+    }
+    .net-salary .label { font-size: 14px; opacity: 0.9; margin-bottom: 5px; }
+    .net-salary .amount { font-size: 32px; font-weight: bold; }
+    .footer {
+      background: #f8fafc;
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid #e2e8f0;
+    }
+    .signature-box { text-align: center; width: 45%; }
+    .signature-box .line { border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; font-size: 11px; color: #666; }
+    .print-date { text-align: center; padding: 10px; font-size: 10px; color: #999; }
+    @media print {
+      body { padding: 0; }
+      .payslip { border: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="payslip">
+    <div class="header">
+      <h1>Symbol AI</h1>
+      <p>قسيمة راتب</p>
+      <div class="period-badge">${monthName} ${payroll.year}</div>
+    </div>
+
+    <div class="employee-info">
+      <div class="info-item">
+        <label>اسم الموظف</label>
+        <span>${detail.employeeName}</span>
+      </div>
+      <div class="info-item">
+        <label>رقم الموظف</label>
+        <span>${detail.employeeCode || '-'}</span>
+      </div>
+      <div class="info-item">
+        <label>الفرع</label>
+        <span>${payroll.branchName}</span>
+      </div>
+      <div class="info-item">
+        <label>رقم المسيرة</label>
+        <span>${payroll.payrollNumber}</span>
+      </div>
+    </div>
+
+    <div class="salary-details">
+      <div class="earnings">
+        <div class="section-title">المستحقات</div>
+        <div class="salary-row">
+          <span class="label">الراتب الأساسي</span>
+          <span class="value positive">${parseFloat(detail.baseSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+        </div>
+        ${parseFloat(detail.overtimeAmount || '0') > 0 ? `
+        <div class="salary-row">
+          <span class="label">بدل ساعات إضافية</span>
+          <span class="value positive">${parseFloat(detail.overtimeAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+        </div>` : ''}
+        ${parseFloat(detail.incentiveAmount || '0') > 0 ? `
+        <div class="salary-row">
+          <span class="label">حوافز</span>
+          <span class="value positive">${parseFloat(detail.incentiveAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+        </div>` : ''}
+        <div class="salary-row" style="border-top: 2px solid #16a34a; margin-top: 10px; padding-top: 10px;">
+          <span class="label" style="font-weight: bold;">إجمالي المستحقات</span>
+          <span class="value positive">${grossSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+        </div>
+      </div>
+
+      <div class="deductions">
+        <div class="section-title">الاستقطاعات</div>
+        ${parseFloat(detail.absentDeduction || '0') > 0 ? `
+        <div class="salary-row">
+          <span class="label">خصم غياب (${detail.absentDays || 0} يوم)</span>
+          <span class="value negative">-${parseFloat(detail.absentDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+        </div>` : ''}
+        ${parseFloat(detail.deductionAmount || '0') > 0 ? `
+        <div class="salary-row">
+          <span class="label">خصومات أخرى</span>
+          <span class="value negative">-${parseFloat(detail.deductionAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+        </div>` : ''}
+        ${parseFloat(detail.advanceDeduction || '0') > 0 ? `
+        <div class="salary-row">
+          <span class="label">سلف مستردة</span>
+          <span class="value negative">-${parseFloat(detail.advanceDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+        </div>` : ''}
+        ${totalDeductions === 0 ? `
+        <div class="salary-row">
+          <span class="label" style="color: #16a34a;">لا توجد استقطاعات</span>
+          <span class="value">0.00 ر.س.</span>
+        </div>` : `
+        <div class="salary-row" style="border-top: 2px solid #dc2626; margin-top: 10px; padding-top: 10px;">
+          <span class="label" style="font-weight: bold;">إجمالي الاستقطاعات</span>
+          <span class="value negative">-${totalDeductions.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+        </div>`}
+      </div>
+
+      <div class="net-salary">
+        <div class="label">صافي الراتب</div>
+        <div class="amount">${parseFloat(detail.netSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="signature-box">
+        <div class="line">توقيع الموظف</div>
+      </div>
+      <div class="signature-box">
+        <div class="line">توقيع المحاسب</div>
+      </div>
+    </div>
+
+    <div class="print-date">
+      تم الطباعة في: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}
+    </div>
+  </div>
+</body>
+</html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  };
+
   // تصدير PDF
   const handleExportPDF = async (payrollId: number) => {
     try {
@@ -1133,6 +1351,7 @@ export default function Payrolls() {
                         <TableHead className="text-center">خصومات</TableHead>
                         <TableHead className="text-center">سلف</TableHead>
                         <TableHead className="text-center">الصافي</TableHead>
+                        <TableHead className="text-center">طباعة</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1164,6 +1383,22 @@ export default function Payrolls() {
                           </TableCell>
                           <TableCell className="text-center font-bold text-green-500">
                             {formatAmount(detail.netSalary)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                const currentPayroll = payrolls?.find(p => p.id === selectedPayroll);
+                                if (currentPayroll) {
+                                  handlePrintPayslip(detail, currentPayroll);
+                                }
+                              }}
+                              title="طباعة قسيمة الراتب"
+                            >
+                              <Printer className="h-3.5 w-3.5 text-blue-500" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
