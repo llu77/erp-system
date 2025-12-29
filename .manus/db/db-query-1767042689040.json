@@ -1,0 +1,29 @@
+{
+  "query": "SELECT * FROM users WHERE username = 'moh123';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT * FROM users WHERE username = 'moh123';",
+  "rows": [
+    {
+      "id": "870017",
+      "openId": "NULL",
+      "name": "السيد محمد",
+      "email": "elsayed.gouda.mohamed@gmail.com",
+      "loginMethod": "local",
+      "role": "supervisor",
+      "createdAt": "2025-12-25 17:56:30",
+      "updatedAt": "2025-12-29 21:08:59",
+      "lastSignedIn": "2025-12-29 21:08:59",
+      "phone": "NULL",
+      "department": "NULL",
+      "position": "NULL",
+      "isActive": "1",
+      "username": "moh123",
+      "password": "1218cadfe7d8cd96a42ce6dea6b465cc:e856fd59e929d2ef82805ca434b5dacf257bbd4698fe59cb51aff7eeb1222f59d43bef475e4b87ae12d61d68b683f1af3e6484454e7b22777637f687b9adbb6b",
+      "branchId": "1",
+      "permissions": "{\"inventory\":[\"view\",\"create\",\"edit\",\"delete\"],\"inventoryCounts\":[\"view\",\"create\",\"edit\",\"approve\"],\"products\":[\"view\",\"create\",\"edit\"],\"productRequests\":[\"view\",\"create\",\"edit\",\"approve\"],\"employeeInvoices\":[\"view\",\"create\",\"edit\"],\"reorderSuggestions\":[\"view\",\"create\",\"edit\",\"approve\"],\"batches\":[\"view\",\"create\",\"edit\"]}"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tname\temail\tloginMethod\trole\tcreatedAt\tupdatedAt\tlastSignedIn\tphone\tdepartment\tposition\tisActive\tusername\tpassword\tbranchId\tpermissions\n870017\tNULL\tالسيد محمد\telsayed.gouda.mohamed@gmail.com\tlocal\tsupervisor\t2025-12-25 17:56:30\t2025-12-29 21:08:59\t2025-12-29 21:08:59\tNULL\tNULL\tNULL\t1\tmoh123\t1218cadfe7d8cd96a42ce6dea6b465cc:e856fd59e929d2ef82805ca434b5dacf257bbd4698fe59cb51aff7eeb1222f59d43bef475e4b87ae12d61d68b683f1af3e6484454e7b22777637f687b9adbb6b\t1\t{\"inventory\":[\"view\",\"create\",\"edit\",\"delete\"],\"inventoryCounts\":[\"view\",\"create\",\"edit\",\"approve\"],\"products\":[\"view\",\"create\",\"edit\"],\"productRequests\":[\"view\",\"create\",\"edit\",\"approve\"],\"employeeInvoices\":[\"view\",\"create\",\"edit\"],\"reorderSuggestions\":[\"view\",\"create\",\"edit\",\"approve\"],\"batches\":[\"view\",\"create\",\"edit\"]}\n",
+  "stderr": "",
+  "execution_time_ms": 1552
+}

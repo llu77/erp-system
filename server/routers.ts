@@ -1340,6 +1340,93 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return await db.getApprovedEmployeeRequests(input?.startDate, input?.endDate);
       }),
+
+    // تقرير أمر شراء PDF
+    purchaseOrderPdf: protectedProcedure
+      .input(z.object({ orderId: z.number() }))
+      .query(async ({ input }) => {
+        const order = await db.getPurchaseOrderById(input.orderId);
+        if (!order) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'لم يتم العثور على أمر الشراء' });
+        }
+        const items = await db.getPurchaseOrderItems(input.orderId);
+        return { order, items };
+      }),
+
+    // تقرير الجرد PDF
+    inventoryCountPdf: protectedProcedure
+      .input(z.object({ countId: z.number() }))
+      .query(async ({ input }) => {
+        const { getInventoryCountById, getInventoryCountItems } = await import('./db');
+        const count = await getInventoryCountById(input.countId);
+        if (!count) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'لم يتم العثور على عملية الجرد' });
+        }
+        const items = await getInventoryCountItems(input.countId);
+        return { count, items };
+      }),
+
+    // قائمة أوامر الشراء للتقارير
+    purchaseOrdersList: protectedProcedure
+      .input(z.object({
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        status: z.string().optional(),
+      }))
+      .query(async ({ input, ctx }) => {
+        let orders = await db.getAllPurchaseOrders();
+        
+        // المشرف يرى طلبات فرعه فقط
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
+          orders = orders.filter(order => order.branchId === ctx.user.branchId || order.createdBy === ctx.user.id);
+        }
+        
+        // تصفية حسب التاريخ
+        if (input.startDate) {
+          const startDate = new Date(input.startDate);
+          orders = orders.filter(order => new Date(order.orderDate) >= startDate);
+        }
+        if (input.endDate) {
+          const endDate = new Date(input.endDate);
+          orders = orders.filter(order => new Date(order.orderDate) <= endDate);
+        }
+        
+        // تصفية حسب الحالة
+        if (input.status) {
+          orders = orders.filter(order => order.status === input.status);
+        }
+        
+        return orders;
+      }),
+
+    // قائمة عمليات الجرد للتقارير
+    inventoryCountsList: protectedProcedure
+      .input(z.object({
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        status: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { getAllInventoryCounts } = await import('./db');
+        let counts = await getAllInventoryCounts();
+        
+        // تصفية حسب التاريخ
+        if (input.startDate) {
+          const startDate = new Date(input.startDate);
+          counts = counts.filter(count => new Date(count.countDate) >= startDate);
+        }
+        if (input.endDate) {
+          const endDate = new Date(input.endDate);
+          counts = counts.filter(count => new Date(count.countDate) <= endDate);
+        }
+        
+        // تصفية حسب الحالة
+        if (input.status) {
+          counts = counts.filter(count => count.status === input.status);
+        }
+        
+        return counts;
+      }),
   }),
 
   // ==================== إدارة الفروع ====================
@@ -3871,14 +3958,27 @@ export const appRouter = router({
         return await getInventoryVarianceReport(input.countId);
       }),
 
-    // اعتماد الجرد وتحديث المخزون
-    approve: adminProcedure
+    // اعتماد الجرد وتحديث المخزون (متاح للمشرف أيضاً)
+    approve: supervisorInputProcedure
       .input(z.object({
         countId: z.number(),
         updateStock: z.boolean().default(true),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { approveInventoryCount } = await import('./db');
+        const { approveInventoryCount, getInventoryCountById } = await import('./db');
+        
+        // التحقق من صلاحية المشرف
+        if (ctx.user.role === 'supervisor') {
+          const count = await getInventoryCountById(input.countId);
+          if (!count) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'لم يتم العثور على عملية الجرد' });
+          }
+          // المشرف يمكنه اعتماد جرد فرعه فقط أو الجرد الذي بدأه
+          if (ctx.user.branchId && count.branchId !== ctx.user.branchId && count.createdBy !== ctx.user.id) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك اعتماد جرد فرع آخر' });
+          }
+        }
+        
         return await approveInventoryCount(
           input.countId,
           ctx.user.id,
@@ -3887,11 +3987,24 @@ export const appRouter = router({
         );
       }),
 
-    // إلغاء الجرد
-    cancel: adminProcedure
+    // إلغاء الجرد (متاح للمشرف أيضاً)
+    cancel: supervisorInputProcedure
       .input(z.object({ countId: z.number() }))
-      .mutation(async ({ input }) => {
-        const { cancelInventoryCount } = await import('./db');
+      .mutation(async ({ ctx, input }) => {
+        const { cancelInventoryCount, getInventoryCountById } = await import('./db');
+        
+        // التحقق من صلاحية المشرف
+        if (ctx.user.role === 'supervisor') {
+          const count = await getInventoryCountById(input.countId);
+          if (!count) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'لم يتم العثور على عملية الجرد' });
+          }
+          // المشرف يمكنه إلغاء جرد فرعه فقط أو الجرد الذي بدأه
+          if (ctx.user.branchId && count.branchId !== ctx.user.branchId && count.createdBy !== ctx.user.id) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك إلغاء جرد فرع آخر' });
+          }
+        }
+        
         return await cancelInventoryCount(input.countId);
       }),
 

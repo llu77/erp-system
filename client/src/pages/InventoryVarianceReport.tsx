@@ -223,8 +223,9 @@ export default function InventoryVarianceReport() {
     toast.success("تم فتح تقرير فروقات الجرد للطباعة أو الحفظ كـ PDF");
   };
 
-  // الجرد المكتملة والمعتمدة
-  const completedCounts = countHistory?.filter(c => c.status === "approved" || c.status === "completed") || [];
+  // جميع عمليات الجرد (بما فيها الجارية)
+  const allCounts = countHistory || [];
+  const completedCounts = allCounts.filter(c => c.status === "approved" || c.status === "completed" || c.status === "in_progress");
 
   return (
     <div className="space-y-6">
@@ -275,6 +276,8 @@ export default function InventoryVarianceReport() {
                 <SelectItem key={count.id} value={count.id.toString()}>
                   {count.countNumber} - {new Date(count.countDate).toLocaleDateString("ar-SA")}
                   {count.branchName && ` (${count.branchName})`}
+                  {count.status === "in_progress" && " (جاري)"}
+                  {count.status === "approved" && " (معتمد)"}
                 </SelectItem>
               ))}
             </SelectContent>
