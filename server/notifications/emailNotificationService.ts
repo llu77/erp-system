@@ -423,6 +423,117 @@ export async function notifyRevenueMismatch(data: {
   return { success: sentCount > 0, sentCount };
 }
 
+// ==================== إشعار تذكير الجرد ====================
+export async function notifyInventoryReminder(data: {
+  dayOfMonth: number;
+  branches?: { name: string; productCount: number }[];
+}): Promise<{ success: boolean; sentCount: number }> {
+  console.log(`📧 إرسال تذكير الجرد - يوم ${data.dayOfMonth}`);
+  
+  // الحصول على المستلمين المحددين (السيد، مشرف طويق، الأدمن)
+  const recipients: { name: string; email: string }[] = [];
+  
+  try {
+    // الحصول على جميع المستخدمين
+    const allUsers = await db.getAllUsers();
+    
+    for (const user of allUsers) {
+      if (!user.email || !user.isActive) continue;
+      
+      const userName = user.name || 'مستخدم';
+      const userRole = user.role as string;
+      
+      // الأدمن
+      if (userRole === 'admin') {
+        recipients.push({ name: userName, email: user.email });
+        continue;
+      }
+      
+      // السيد محمد
+      if (userName.includes('السيد') || user.email.toLowerCase().includes('elsayed')) {
+        recipients.push({ name: userName, email: user.email });
+        continue;
+      }
+      
+      // مشرف طويق (فرع 30001)
+      if ((userRole === 'supervisor' || userRole === 'general_supervisor') && user.branchId === 30001) {
+        recipients.push({ name: userName, email: user.email });
+        continue;
+      }
+    }
+  } catch (error) {
+    console.error('خطأ في جلب المستلمين:', error);
+  }
+  
+  if (recipients.length === 0) {
+    console.log('⚠️ لا يوجد مستلمين لتذكير الجرد');
+    return { success: false, sentCount: 0 };
+  }
+  
+  let sentCount = 0;
+  
+  for (const recipient of recipients) {
+    const { subject, html } = templates.getInventoryReminderTemplate({
+      recipientName: recipient.name,
+      dayOfMonth: data.dayOfMonth,
+      branches: data.branches,
+    });
+    
+    if (await sendEmail(recipient.email, subject, html)) {
+      sentCount++;
+    }
+  }
+  
+  console.log(`✓ تم إرسال تذكير الجرد إلى ${sentCount} مستلم`);
+  return { success: sentCount > 0, sentCount };
+}
+
+// ==================== إشعار تذكير مسيرات الرواتب ====================
+export async function notifyPayrollReminder(data: {
+  month: string;
+  year: number;
+  branches?: { name: string; employeeCount: number }[];
+}): Promise<{ success: boolean; sentCount: number }> {
+  console.log(`📧 إرسال تذكير مسيرات الرواتب - ${data.month} ${data.year}`);
+  
+  // الحصول على جميع المستخدمين النشطين
+  const recipients: { name: string; email: string }[] = [];
+  
+  try {
+    const allUsers = await db.getAllUsers();
+    
+    for (const user of allUsers) {
+      if (!user.email || !user.isActive) continue;
+      recipients.push({ name: user.name || 'مستخدم', email: user.email });
+    }
+  } catch (error) {
+    console.error('خطأ في جلب المستلمين:', error);
+  }
+  
+  if (recipients.length === 0) {
+    console.log('⚠️ لا يوجد مستلمين لتذكير الرواتب');
+    return { success: false, sentCount: 0 };
+  }
+  
+  let sentCount = 0;
+  
+  for (const recipient of recipients) {
+    const { subject, html } = templates.getPayrollReminderTemplate({
+      recipientName: recipient.name,
+      month: data.month,
+      year: data.year,
+      branches: data.branches,
+    });
+    
+    if (await sendEmail(recipient.email, subject, html)) {
+      sentCount++;
+    }
+  }
+  
+  console.log(`✓ تم إرسال تذكير الرواتب إلى ${sentCount} مستلم`);
+  return { success: sentCount > 0, sentCount };
+}
+
 // ==================== تصدير الدوال ====================
 export default {
   notifyNewEmployeeRequest,
@@ -432,4 +543,6 @@ export default {
   notifyHighExpense,
   notifyNewPurchaseOrder,
   notifyRevenueMismatch,
+  notifyInventoryReminder,
+  notifyPayrollReminder,
 };

@@ -990,3 +990,147 @@ export function getRevenueMismatchTemplate(data: {
     html: getBaseTemplate(content, 'تنبيه إيراد غير متطابق'),
   };
 }
+
+
+// ==================== قالب تذكير الجرد ====================
+export function getInventoryReminderTemplate(data: {
+  recipientName: string;
+  dayOfMonth: number;
+  branches?: { name: string; productCount: number }[];
+}): { subject: string; html: string } {
+  const branchesHtml = data.branches?.map(b => `
+    <div class="info-item">
+      <div class="label">🏢 ${b.name}</div>
+      <div class="value">${b.productCount} منتج</div>
+    </div>
+  `).join('') || '';
+  
+  const content = `
+    <div class="header">
+      <div class="logo">
+        <span class="logo-text">📦</span>
+      </div>
+      <h1>تذكير بموعد الجرد</h1>
+      <div class="subtitle">يوم ${data.dayOfMonth} من الشهر</div>
+    </div>
+    
+    <div class="content">
+      <div class="greeting">
+        السلام عليكم ورحمة الله وبركاته،<br><br>
+        <strong>${data.recipientName}</strong><br><br>
+        نذكركم بأن اليوم هو موعد إجراء الجرد الدوري للمخزون.
+      </div>
+      
+      <div class="alert-box warning">
+        <div style="font-size: 18px; font-weight: 700; color: #d97706; margin-bottom: 10px;">
+          ⚠️ يرجى إجراء الجرد اليوم
+        </div>
+        <div style="font-size: 14px; color: #64748b;">
+          الجرد الدوري يساعد في الحفاظ على دقة المخزون واكتشاف الفروقات مبكراً
+        </div>
+      </div>
+      
+      ${branchesHtml ? `
+        <h3 style="color: #1a1a2e; margin: 25px 0 15px; font-size: 16px;">📊 الفروع والمنتجات</h3>
+        <div class="info-grid">
+          ${branchesHtml}
+        </div>
+      ` : ''}
+      
+      <div class="divider"></div>
+      
+      <div style="text-align: center;">
+        <p style="color: #64748b; margin-bottom: 15px;">لبدء عملية الجرد:</p>
+        <a href="#" class="cta-button">الذهاب إلى صفحة الجرد</a>
+      </div>
+      
+      <div class="alert-box info" style="margin-top: 20px;">
+        <div style="font-weight: 600; margin-bottom: 8px;">📋 خطوات الجرد:</div>
+        <ol style="color: #374151; line-height: 2; padding-right: 20px;">
+          <li>اذهب إلى صفحة "الجرد الفعلي" في النظام</li>
+          <li>اختر الفرع المراد جرده</li>
+          <li>أدخل الكميات الفعلية لكل منتج</li>
+          <li>راجع الفروقات واحفظ الجرد</li>
+          <li>اعتمد الجرد بعد التأكد من صحة البيانات</li>
+        </ol>
+      </div>
+    </div>
+  `;
+  
+  return {
+    subject: `📦 تذكير: موعد الجرد الدوري - يوم ${data.dayOfMonth} | Symbol AI`,
+    html: getBaseTemplate(content, 'تذكير بموعد الجرد'),
+  };
+}
+
+// ==================== قالب تذكير مسيرات الرواتب ====================
+export function getPayrollReminderTemplate(data: {
+  recipientName: string;
+  month: string;
+  year: number;
+  branches?: { name: string; employeeCount: number }[];
+}): { subject: string; html: string } {
+  const branchesHtml = data.branches?.map(b => `
+    <div class="info-item">
+      <div class="label">🏢 ${b.name}</div>
+      <div class="value">${b.employeeCount} موظف</div>
+    </div>
+  `).join('') || '';
+  
+  const content = `
+    <div class="header">
+      <div class="logo">
+        <span class="logo-text">💰</span>
+      </div>
+      <h1>تذكير بإنشاء مسيرات الرواتب</h1>
+      <div class="subtitle">${data.month} ${data.year}</div>
+    </div>
+    
+    <div class="content">
+      <div class="greeting">
+        السلام عليكم ورحمة الله وبركاته،<br><br>
+        <strong>${data.recipientName}</strong><br><br>
+        نذكركم بأن اليوم هو موعد إنشاء مسيرات الرواتب الشهرية.
+      </div>
+      
+      <div class="alert-box purple">
+        <div style="font-size: 18px; font-weight: 700; color: #7c3aed; margin-bottom: 10px;">
+          💼 حان وقت إعداد الرواتب
+        </div>
+        <div style="font-size: 14px; color: #64748b;">
+          يرجى إنشاء مسيرات الرواتب لجميع الفروع قبل نهاية الشهر
+        </div>
+      </div>
+      
+      ${branchesHtml ? `
+        <h3 style="color: #1a1a2e; margin: 25px 0 15px; font-size: 16px;">👥 الفروع والموظفين</h3>
+        <div class="info-grid">
+          ${branchesHtml}
+        </div>
+      ` : ''}
+      
+      <div class="divider"></div>
+      
+      <div style="text-align: center;">
+        <p style="color: #64748b; margin-bottom: 15px;">لإنشاء مسيرات الرواتب:</p>
+        <a href="#" class="cta-button">الذهاب إلى مسيرات الرواتب</a>
+      </div>
+      
+      <div class="alert-box info" style="margin-top: 20px;">
+        <div style="font-weight: 600; margin-bottom: 8px;">📋 خطوات إنشاء المسيرة:</div>
+        <ol style="color: #374151; line-height: 2; padding-right: 20px;">
+          <li>اذهب إلى صفحة "مسيرات الرواتب" في النظام</li>
+          <li>اضغط على "إنشاء مسيرة جديدة"</li>
+          <li>اختر الفرع والشهر</li>
+          <li>أدخل بيانات الموظفين (أيام العمل، الساعات الإضافية، الحوافز، الخصومات)</li>
+          <li>راجع المسيرة وأرسلها للاعتماد</li>
+        </ol>
+      </div>
+    </div>
+  `;
+  
+  return {
+    subject: `💰 تذكير: إنشاء مسيرات رواتب ${data.month} ${data.year} | Symbol AI`,
+    html: getBaseTemplate(content, 'تذكير بإنشاء مسيرات الرواتب'),
+  };
+}
