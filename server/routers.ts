@@ -2332,34 +2332,42 @@ export const appRouter = router({
 
   // ==================== مسيرات الرواتب ====================
   payrolls: router({
-    // الحصول على جميع المسيرات
-    list: managerProcedure.query(async () => {
+    // الحصول على جميع المسيرات (متاح للمشرفين أيضاً)
+    list: supervisorInputProcedure.query(async ({ ctx }) => {
+      // المشرف يرى مسيرات فرعه فقط
+      if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
+        return await db.getPayrollsByBranch(ctx.user.branchId);
+      }
       return await db.getAllPayrolls();
     }),
 
-    // الحصول على مسيرات فرع معين
-    byBranch: managerProcedure
+    // الحصول على مسيرات فرع معين (متاح للمشرفين أيضاً)
+    byBranch: supervisorInputProcedure
       .input(z.object({ branchId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        // المشرف يمكنه رؤية مسيرات فرعه فقط
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId && ctx.user.branchId !== input.branchId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك عرض مسيرات فرع آخر' });
+        }
         return await db.getPayrollsByBranch(input.branchId);
       }),
 
-    // الحصول على مسيرة بالمعرف
-    getById: managerProcedure
+    // الحصول على مسيرة بالمعرف (متاح للمشرفين أيضاً)
+    getById: supervisorInputProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         return await db.getPayrollById(input.id);
       }),
 
-    // الحصول على تفاصيل المسيرة
-    details: managerProcedure
+    // الحصول على تفاصيل المسيرة (متاح للمشرفين أيضاً)
+    details: supervisorInputProcedure
       .input(z.object({ payrollId: z.number() }))
       .query(async ({ input }) => {
         return await db.getPayrollDetails(input.payrollId);
       }),
 
-    // إنشاء مسيرة رواتب شهرية
-    generate: adminProcedure
+    // إنشاء مسيرة رواتب شهرية (متاح للمشرفين أيضاً)
+    generate: supervisorInputProcedure
       .input(z.object({
         branchId: z.number(),
         branchName: z.string(),
@@ -2368,6 +2376,11 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         try {
+          // التحقق من صلاحية المشرف - يمكنه إنشاء مسيرة لفرعه فقط
+          if (ctx.user.role === 'supervisor' && ctx.user.branchId && ctx.user.branchId !== input.branchId) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك إنشاء مسيرة رواتب لفرع آخر' });
+          }
+          
           const payroll = await db.generateMonthlyPayroll(
             input.branchId,
             input.branchName,
