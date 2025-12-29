@@ -2454,6 +2454,51 @@ export const appRouter = router({
         
         await db.updatePayroll(input.id, updateData);
         
+        // إرسال إشعارات الراتب للموظفين عند الاعتماد
+        if (input.status === 'approved') {
+          try {
+            // جلب بيانات المسيرة والتفاصيل
+            const payroll = await db.getPayrollById(input.id);
+            const details = await db.getPayrollDetails(input.id);
+            
+            if (payroll && details.length > 0) {
+              // تحويل الشهر للعربية
+              const monthNames = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+              const monthName = monthNames[payroll.month] || `شهر ${payroll.month}`;
+              
+              // تجهيز بيانات الموظفين للإشعار
+              const employeesData = details.map((d: any) => ({
+                employeeId: d.employeeId,
+                employeeName: d.employeeName || 'موظف',
+                employeeCode: d.employeeCode,
+                email: d.employeeEmail,
+                baseSalary: parseFloat(d.baseSalary || '0'),
+                overtimeAmount: parseFloat(d.overtimeAmount || '0'),
+                incentiveAmount: parseFloat(d.incentiveAmount || '0'),
+                absentDeduction: parseFloat(d.absentDeduction || '0'),
+                deductionAmount: parseFloat(d.deductionAmount || '0'),
+                advanceDeduction: parseFloat(d.advanceDeduction || '0'),
+                netSalary: parseFloat(d.netSalary || '0'),
+                workDays: d.workDays,
+                absentDays: d.absentDays,
+              }));
+              
+              // إرسال الإشعارات
+              emailNotifications.notifyEmployeesPayslip({
+                payrollId: input.id,
+                payrollNumber: payroll.payrollNumber || `PAY-${input.id}`,
+                branchName: payroll.branchName || 'غير محدد',
+                month: monthName,
+                year: payroll.year,
+                employees: employeesData,
+              });
+            }
+          } catch (error) {
+            console.error('خطأ في إرسال إشعارات الراتب:', error);
+            // لا نريد إيقاف العملية بسبب فشل الإشعار
+          }
+        }
+        
         const statusNames: Record<string, string> = {
           draft: 'مسودة',
           pending: 'قيد المراجعة',

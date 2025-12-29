@@ -645,6 +645,77 @@ export async function notifyNewPayrollCreated(data: {
   return { success: sentCount > 0, sentCount };
 }
 
+// ==================== إشعار الموظفين بالراتب ====================
+export async function notifyEmployeesPayslip(data: {
+  payrollId: number;
+  payrollNumber: string;
+  branchName: string;
+  month: string;
+  year: number;
+  employees: Array<{
+    employeeId: number;
+    employeeName: string;
+    employeeCode?: string;
+    email?: string;
+    baseSalary: number;
+    overtimeAmount: number;
+    incentiveAmount: number;
+    absentDeduction: number;
+    deductionAmount: number;
+    advanceDeduction: number;
+    netSalary: number;
+    workDays?: number;
+    absentDays?: number;
+  }>;
+}): Promise<{ success: boolean; sentCount: number; failedCount: number }> {
+  console.log(`📧 إرسال إشعارات الراتب للموظفين - ${data.branchName} - ${data.month} ${data.year}`);
+  
+  let sentCount = 0;
+  let failedCount = 0;
+  
+  for (const employee of data.employees) {
+    // تخطي الموظفين بدون بريد إلكتروني
+    if (!employee.email) {
+      console.log(`⚠️ الموظف ${employee.employeeName} ليس لديه بريد إلكتروني`);
+      failedCount++;
+      continue;
+    }
+    
+    try {
+      const { subject, html } = templates.getEmployeePayslipTemplate({
+        employeeName: employee.employeeName,
+        employeeCode: employee.employeeCode || '',
+        branchName: data.branchName,
+        month: data.month,
+        year: data.year,
+        baseSalary: employee.baseSalary,
+        overtimeAmount: employee.overtimeAmount,
+        incentiveAmount: employee.incentiveAmount,
+        absentDeduction: employee.absentDeduction,
+        deductionAmount: employee.deductionAmount,
+        advanceDeduction: employee.advanceDeduction,
+        netSalary: employee.netSalary,
+        payrollNumber: data.payrollNumber,
+        workDays: employee.workDays,
+        absentDays: employee.absentDays,
+      });
+      
+      if (await sendEmail(employee.email, subject, html)) {
+        sentCount++;
+        console.log(`✓ تم إرسال قسيمة الراتب إلى ${employee.employeeName}`);
+      } else {
+        failedCount++;
+      }
+    } catch (error) {
+      console.error(`خطأ في إرسال قسيمة الراتب للموظف ${employee.employeeName}:`, error);
+      failedCount++;
+    }
+  }
+  
+  console.log(`✓ تم إرسال ${sentCount} قسيمة راتب، فشل ${failedCount}`);
+  return { success: sentCount > 0, sentCount, failedCount };
+}
+
 // ==================== تصدير الدوال ====================
 export default {
   notifyNewEmployeeRequest,
@@ -657,6 +728,7 @@ export default {
   notifyInventoryReminder,
   notifyPayrollReminder,
   notifyNewPayrollCreated,
+  notifyEmployeesPayslip,
 };
 
 

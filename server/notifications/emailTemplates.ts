@@ -1467,3 +1467,147 @@ export function getOverdueTasksReportTemplate(data: {
 
   return getBaseTemplate(content, 'تقرير المهام المتأخرة - Symbol AI');
 }
+
+
+// ==================== قالب إشعار الراتب للموظف ====================
+export function getEmployeePayslipTemplate(data: {
+  employeeName: string;
+  employeeCode: string;
+  branchName: string;
+  month: string;
+  year: number;
+  baseSalary: number;
+  overtimeAmount: number;
+  incentiveAmount: number;
+  absentDeduction: number;
+  deductionAmount: number;
+  advanceDeduction: number;
+  netSalary: number;
+  payrollNumber: string;
+  workDays?: number;
+  absentDays?: number;
+}): { subject: string; html: string } {
+  const grossSalary = data.baseSalary + data.overtimeAmount + data.incentiveAmount;
+  const totalDeductions = data.absentDeduction + data.deductionAmount + data.advanceDeduction;
+  
+  const content = `
+    <div class="header">
+      <div class="logo">
+        <span class="logo-text">💰</span>
+      </div>
+      <h1>قسيمة راتب</h1>
+      <div class="subtitle">${data.month} ${data.year}</div>
+    </div>
+    
+    <div class="content">
+      <div class="greeting">
+        السلام عليكم ورحمة الله وبركاته،<br><br>
+        <strong>${data.employeeName}</strong><br><br>
+        نود إعلامكم بأنه تم اعتماد مسيرة رواتب شهر ${data.month} ${data.year}. فيما يلي تفاصيل راتبكم:
+      </div>
+      
+      <!-- معلومات الموظف -->
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="label">👤 اسم الموظف</div>
+          <div class="value">${data.employeeName}</div>
+        </div>
+        <div class="info-item">
+          <div class="label">🔢 رقم الموظف</div>
+          <div class="value">${data.employeeCode || '-'}</div>
+        </div>
+        <div class="info-item">
+          <div class="label">🏢 الفرع</div>
+          <div class="value">${data.branchName}</div>
+        </div>
+        <div class="info-item">
+          <div class="label">📋 رقم المسيرة</div>
+          <div class="value">${data.payrollNumber}</div>
+        </div>
+      </div>
+      
+      <!-- المستحقات -->
+      <h3 style="color: #16a34a; margin: 25px 0 15px; font-size: 16px;">💵 المستحقات</h3>
+      <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 10px 0; color: #374151;">الراتب الأساسي</td>
+            <td style="padding: 10px 0; text-align: left; font-weight: 600; color: #16a34a;">${data.baseSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
+          </tr>
+          ${data.overtimeAmount > 0 ? `
+          <tr>
+            <td style="padding: 10px 0; color: #374151;">بدل ساعات إضافية</td>
+            <td style="padding: 10px 0; text-align: left; font-weight: 600; color: #16a34a;">${data.overtimeAmount.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
+          </tr>
+          ` : ''}
+          ${data.incentiveAmount > 0 ? `
+          <tr>
+            <td style="padding: 10px 0; color: #374151;">حوافز</td>
+            <td style="padding: 10px 0; text-align: left; font-weight: 600; color: #16a34a;">${data.incentiveAmount.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
+          </tr>
+          ` : ''}
+          <tr style="border-top: 2px solid #16a34a;">
+            <td style="padding: 15px 0 10px; font-weight: 700; color: #166534;">إجمالي المستحقات</td>
+            <td style="padding: 15px 0 10px; text-align: left; font-weight: 700; font-size: 18px; color: #16a34a;">${grossSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
+          </tr>
+        </table>
+      </div>
+      
+      <!-- الاستقطاعات -->
+      <h3 style="color: #dc2626; margin: 25px 0 15px; font-size: 16px;">📉 الاستقطاعات</h3>
+      <div style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          ${data.absentDeduction > 0 ? `
+          <tr>
+            <td style="padding: 10px 0; color: #374151;">خصم غياب ${data.absentDays ? `(${data.absentDays} يوم)` : ''}</td>
+            <td style="padding: 10px 0; text-align: left; font-weight: 600; color: #dc2626;">-${data.absentDeduction.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
+          </tr>
+          ` : ''}
+          ${data.deductionAmount > 0 ? `
+          <tr>
+            <td style="padding: 10px 0; color: #374151;">خصومات أخرى</td>
+            <td style="padding: 10px 0; text-align: left; font-weight: 600; color: #dc2626;">-${data.deductionAmount.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
+          </tr>
+          ` : ''}
+          ${data.advanceDeduction > 0 ? `
+          <tr>
+            <td style="padding: 10px 0; color: #374151;">سلف مستردة</td>
+            <td style="padding: 10px 0; text-align: left; font-weight: 600; color: #dc2626;">-${data.advanceDeduction.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
+          </tr>
+          ` : ''}
+          ${totalDeductions === 0 ? `
+          <tr>
+            <td style="padding: 10px 0; color: #16a34a;">لا توجد استقطاعات</td>
+            <td style="padding: 10px 0; text-align: left; font-weight: 600; color: #16a34a;">0.00 ر.س</td>
+          </tr>
+          ` : `
+          <tr style="border-top: 2px solid #dc2626;">
+            <td style="padding: 15px 0 10px; font-weight: 700; color: #991b1b;">إجمالي الاستقطاعات</td>
+            <td style="padding: 15px 0 10px; text-align: left; font-weight: 700; font-size: 18px; color: #dc2626;">-${totalDeductions.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
+          </tr>
+          `}
+        </table>
+      </div>
+      
+      <!-- صافي الراتب -->
+      <div class="alert-box success" style="text-align: center; background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%); padding: 30px;">
+        <div style="color: rgba(255,255,255,0.9); font-size: 14px; margin-bottom: 10px;">صافي الراتب</div>
+        <div style="color: white; font-size: 36px; font-weight: 700;">${data.netSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</div>
+      </div>
+      
+      <div class="divider"></div>
+      
+      <div class="alert-box info">
+        <div style="font-weight: 600; margin-bottom: 8px;">📌 ملاحظة:</div>
+        <div style="color: #374151; line-height: 1.8;">
+          في حال وجود أي استفسار حول تفاصيل الراتب، يرجى التواصل مع قسم الموارد البشرية.
+        </div>
+      </div>
+    </div>
+  `;
+  
+  return {
+    subject: `💰 قسيمة راتب - ${data.month} ${data.year} | ${data.netSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س`,
+    html: getBaseTemplate(content, 'قسيمة راتب'),
+  };
+}
