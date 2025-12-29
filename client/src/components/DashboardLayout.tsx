@@ -143,8 +143,8 @@ const menuStructure: MenuItem[] = [
       { icon: Package, label: "المنتجات", path: "/products", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
       { icon: ShoppingCart, label: "المشتريات", path: "/purchases", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: ClipboardList, label: "الجرد الفعلي", path: "/inventory-counting", roles: ["admin", "manager", "supervisor"] },
-      { icon: FileText, label: "تقرير فروقات الجرد", path: "/inventory-variance-report", roles: ["admin", "manager", "viewer"] },
-      { icon: FolderOpen, label: "الفئات", path: "/categories", roles: ["admin", "manager", "viewer"] },
+      { icon: FileText, label: "تقرير فروقات الجرد", path: "/inventory-variance-report", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: FolderOpen, label: "الفئات", path: "/categories", roles: ["admin", "manager", "supervisor", "viewer"] },
     ]
   },
   
