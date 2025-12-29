@@ -285,8 +285,222 @@ export default function Payrolls() {
   };
 
   // طباعة المسيرة
-  const handlePrint = (payrollId: number) => {
-    window.open(`/api/payroll/print/${payrollId}`, '_blank');
+  const handlePrint = async (payrollId: number) => {
+    try {
+      // جلب بيانات المسيرة
+      const payroll = payrolls?.find(p => p.id === payrollId);
+      if (!payroll) {
+        toast.error("لم يتم العثور على المسيرة");
+        return;
+      }
+
+      // جلب تفاصيل المسيرة
+      const detailsResponse = await fetch(`/api/trpc/payrolls.details?input=${encodeURIComponent(JSON.stringify({ payrollId: payrollId }))}`);
+      const detailsData = await detailsResponse.json();
+      const details = detailsData?.result?.data || [];
+
+      const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+      const monthName = monthNames[payroll.month - 1];
+      const statusNames: Record<string, string> = {
+        draft: 'مسودة',
+        pending: 'تحت الإجراء',
+        approved: 'معتمدة',
+        paid: 'مدفوعة',
+      };
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        toast.error("يرجى السماح بالنوافذ المنبثقة");
+        return;
+      }
+
+      const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>مسيرة رواتب - ${payroll.branchName} - ${monthName} ${payroll.year}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #333;
+      background: #fff;
+      padding: 20px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid #1e40af;
+      padding-bottom: 20px;
+      margin-bottom: 20px;
+    }
+    .company-info { display: flex; align-items: center; gap: 15px; }
+    .company-info img { height: 50px; width: auto; }
+    .company-info h1 { font-size: 24px; color: #1e40af; }
+    .report-title { text-align: left; }
+    .report-title h2 { font-size: 18px; color: #1e40af; }
+    .report-title p { color: #666; font-size: 11px; }
+    .info-section {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      background: #f8fafc;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .info-item { text-align: center; }
+    .info-item label { display: block; font-size: 10px; color: #666; margin-bottom: 3px; }
+    .info-item span { font-size: 14px; font-weight: bold; color: #1e40af; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th { background: #1e40af; color: white; padding: 10px 8px; font-size: 11px; text-align: center; }
+    td { padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 11px; }
+    tr:nth-child(even) { background: #f8fafc; }
+    .summary-section {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 15px;
+      background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+      padding: 20px;
+      border-radius: 8px;
+      color: white;
+      margin-bottom: 20px;
+    }
+    .summary-item { text-align: center; }
+    .summary-item label { display: block; font-size: 10px; opacity: 0.9; margin-bottom: 5px; }
+    .summary-item span { font-size: 16px; font-weight: bold; }
+    .footer { display: flex; justify-content: space-between; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
+    .signature-box { text-align: center; width: 200px; }
+    .signature-box .line { border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; }
+    .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; }
+    .status-approved { background: #dcfce7; color: #166534; }
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-draft { background: #e2e8f0; color: #475569; }
+    .status-paid { background: #dbeafe; color: #1e40af; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="company-info">
+      <img src="/symbol-ai-logo.png" alt="Symbol AI" />
+      <div>
+        <h1>Symbol AI</h1>
+        <p>نظام إدارة الموارد البشرية</p>
+      </div>
+    </div>
+    <div class="report-title">
+      <h2>مسيرة رواتب</h2>
+      <p>رقم المسيرة: ${payroll.payrollNumber}</p>
+      <p>تاريخ الإنشاء: ${new Date(payroll.createdAt).toLocaleDateString('ar-SA')}</p>
+    </div>
+  </div>
+
+  <div class="info-section">
+    <div class="info-item">
+      <label>الفرع</label>
+      <span>${payroll.branchName}</span>
+    </div>
+    <div class="info-item">
+      <label>الشهر</label>
+      <span>${monthName} ${payroll.year}</span>
+    </div>
+    <div class="info-item">
+      <label>عدد الموظفين</label>
+      <span>${payroll.employeeCount}</span>
+    </div>
+    <div class="info-item">
+      <label>الحالة</label>
+      <span class="status-badge status-${payroll.status}">${statusNames[payroll.status] || payroll.status}</span>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>اسم الموظف</th>
+        <th>الرمز</th>
+        <th>الأساسي</th>
+        <th>إضافي</th>
+        <th>أيام العمل</th>
+        <th>خصم غياب</th>
+        <th>حوافز</th>
+        <th>خصومات</th>
+        <th>سلف</th>
+        <th>صافي الراتب</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${details.map((d: any, i: number) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${d.employeeName}</td>
+          <td>${d.employeeCode || '-'}</td>
+          <td>${parseFloat(d.baseSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
+          <td>${parseFloat(d.overtimeAmount || '0').toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
+          <td>${d.workDays || 30}</td>
+          <td>${parseFloat(d.absentDeduction || '0').toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
+          <td>${parseFloat(d.incentiveAmount || '0').toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
+          <td>${parseFloat(d.deductionAmount || '0').toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
+          <td>${parseFloat(d.advanceDeduction || '0').toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
+          <td style="font-weight: bold; color: #166534;">${parseFloat(d.netSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <div class="summary-section">
+    <div class="summary-item">
+      <label>إجمالي الرواتب الأساسية</label>
+      <span>${parseFloat(payroll.totalBaseSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+    </div>
+    <div class="summary-item">
+      <label>إجمالي الإضافي</label>
+      <span>${parseFloat(payroll.totalOvertime).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+    </div>
+    <div class="summary-item">
+      <label>إجمالي الحوافز</label>
+      <span>${parseFloat(payroll.totalIncentives).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+    </div>
+    <div class="summary-item">
+      <label>إجمالي الخصومات</label>
+      <span>${parseFloat(payroll.totalDeductions).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+    </div>
+    <div class="summary-item">
+      <label>صافي المسيرة</label>
+      <span>${parseFloat(payroll.totalNetSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="signature-box">
+      <div class="line">توقيع المحاسب</div>
+    </div>
+    <div class="signature-box">
+      <div class="line">توقيع المدير</div>
+    </div>
+    <div class="signature-box">
+      <div class="line">توقيع المدير العام</div>
+    </div>
+  </div>
+</body>
+</html>
+      `;
+
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    } catch (error) {
+      console.error('Print error:', error);
+      toast.error("حدث خطأ أثناء الطباعة");
+    }
   };
 
   // تصدير PDF
