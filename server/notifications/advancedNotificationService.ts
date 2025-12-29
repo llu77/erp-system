@@ -1,5 +1,6 @@
 import * as db from "../db";
 import { Resend } from "resend";
+import { wasNotificationSentToday, markNotificationAsSent } from './notificationTracker';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "info@symbolai.net";
@@ -545,12 +546,27 @@ export async function notifyRevenueMismatch(data: {
 }
 
 // إرسال تذكير الجرد الشهري (يوم 27)
-export async function sendMonthlyInventoryReminder(): Promise<{ success: boolean; result?: any }> {
+// يستخدم نظام التتبع لمنع التكرار
+
+export async function sendMonthlyInventoryReminder(): Promise<{ success: boolean; result?: any; skipped?: boolean }> {
+  // التحقق من عدم الإرسال المسبق اليوم
+  const alreadySent = await wasNotificationSentToday('monthly_inventory_reminder');
+  if (alreadySent) {
+    console.log(`⚠️ تذكير الجرد الشهري أُرسل مسبقاً اليوم - تخطي`);
+    return { success: false, skipped: true };
+  }
+  
   console.log(`📅 إرسال تذكير الجرد الشهري...`);
   const result = await sendAdvancedNotification({
     type: "monthly_reminder",
     date: new Date().toLocaleDateString('ar-SA'),
   });
+  
+  // تسجيل الإرسال لمنع التكرار
+  if (result.success) {
+    await markNotificationAsSent('monthly_inventory_reminder', result.sentCount || 1, 'تذكير الجرد الشهري');
+  }
+  
   return { success: result.success, result };
 }
 

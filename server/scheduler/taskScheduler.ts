@@ -1,11 +1,14 @@
 /**
  * نظام جدولة المهام الداخلي
  * يعمل مع التطبيق ويدير التذكيرات والتقارير تلقائياً
+ * 
+ * مهم: يستخدم نظام تتبع الإشعارات لمنع التكرار
  */
 
 import * as db from "../db";
 import { sendAdvancedNotification, NotificationType } from "../notifications/advancedNotificationService";
 import * as emailNotifications from "../notifications/emailNotificationService";
+import { checkAndSend, wasNotificationSentToday, markNotificationAsSent } from "../notifications/notificationTracker";
 
 // حالة الجدولة
 let isSchedulerRunning = false;
@@ -177,8 +180,9 @@ export async function sendWeeklyReports(): Promise<{ total: number; sent: number
 
 /**
  * إرسال تذكير الجرد (يوم 12 و 29 من كل شهر)
+ * يستخدم نظام التتبع لمنع التكرار
  */
-export async function sendInventoryReminder(): Promise<{ success: boolean; sentCount: number }> {
+export async function sendInventoryReminder(): Promise<{ success: boolean; sentCount: number; skipped?: boolean }> {
   const today = new Date();
   const dayOfMonth = today.getDate();
   
@@ -186,6 +190,13 @@ export async function sendInventoryReminder(): Promise<{ success: boolean; sentC
   if (dayOfMonth !== 12 && dayOfMonth !== 29) {
     console.log(`📅 [Scheduler] اليوم ${dayOfMonth} - ليس موعد تذكير الجرد`);
     return { success: false, sentCount: 0 };
+  }
+  
+  // التحقق من عدم الإرسال المسبق اليوم
+  const alreadySent = await wasNotificationSentToday('inventory_reminder');
+  if (alreadySent) {
+    console.log(`⚠️ [Scheduler] تذكير الجرد أُرسل مسبقاً اليوم - تخطي`);
+    return { success: false, sentCount: 0, skipped: true };
   }
   
   console.log(`📦 [Scheduler] إرسال تذكير الجرد - يوم ${dayOfMonth}`);
@@ -206,6 +217,11 @@ export async function sendInventoryReminder(): Promise<{ success: boolean; sentC
       branches: branchesInfo
     });
     
+    // تسجيل الإرسال لمنع التكرار
+    if (result.success) {
+      await markNotificationAsSent('inventory_reminder', result.sentCount, `تذكير الجرد - يوم ${dayOfMonth}`);
+    }
+    
     return result;
   } catch (error: any) {
     console.error("✗ [Scheduler] خطأ في إرسال تذكير الجرد:", error.message);
@@ -215,8 +231,9 @@ export async function sendInventoryReminder(): Promise<{ success: boolean; sentC
 
 /**
  * إرسال تذكير مسيرات الرواتب (يوم 29 من كل شهر)
+ * يستخدم نظام التتبع لمنع التكرار
  */
-export async function sendPayrollReminder(): Promise<{ success: boolean; sentCount: number }> {
+export async function sendPayrollReminder(): Promise<{ success: boolean; sentCount: number; skipped?: boolean }> {
   const today = new Date();
   const dayOfMonth = today.getDate();
   
@@ -224,6 +241,13 @@ export async function sendPayrollReminder(): Promise<{ success: boolean; sentCou
   if (dayOfMonth !== 29) {
     console.log(`📅 [Scheduler] اليوم ${dayOfMonth} - ليس موعد تذكير الرواتب`);
     return { success: false, sentCount: 0 };
+  }
+  
+  // التحقق من عدم الإرسال المسبق اليوم
+  const alreadySent = await wasNotificationSentToday('payroll_reminder');
+  if (alreadySent) {
+    console.log(`⚠️ [Scheduler] تذكير الرواتب أُرسل مسبقاً اليوم - تخطي`);
+    return { success: false, sentCount: 0, skipped: true };
   }
   
   console.log(`💰 [Scheduler] إرسال تذكير مسيرات الرواتب - يوم ${dayOfMonth}`);
@@ -250,6 +274,11 @@ export async function sendPayrollReminder(): Promise<{ success: boolean; sentCou
       year: currentYear,
       branches: branchesInfo
     });
+    
+    // تسجيل الإرسال لمنع التكرار
+    if (result.success) {
+      await markNotificationAsSent('payroll_reminder', result.sentCount, `تذكير الرواتب - ${currentMonth} ${currentYear}`);
+    }
     
     return result;
   } catch (error: any) {

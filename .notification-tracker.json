@@ -1,0 +1,9 @@
+{
+  "monthly_inventory_reminder:2025-12-29": {
+    "type": "monthly_inventory_reminder",
+    "date": "2025-12-29",
+    "sentAt": "2025-12-29T05:45:40.190Z",
+    "recipientCount": 2,
+    "details": "تذكير الجرد الشهري"
+  }
+}
