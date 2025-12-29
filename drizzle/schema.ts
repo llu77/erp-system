@@ -1369,6 +1369,9 @@ export const tasks = mysqlTable("tasks", {
   createdBy: int("createdBy").notNull(),
   createdByName: varchar("createdByName", { length: 255 }),
   
+  // المرفقات عند إنشاء المهمة
+  attachments: text("attachments"), // JSON array of file URLs
+  
   // الإشعارات
   emailSent: boolean("emailSent").default(false).notNull(),
   emailSentAt: timestamp("emailSentAt"),

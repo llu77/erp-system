@@ -600,3 +600,110 @@ export async function notifyTaskAssignment(data: {
     return false;
   }
 }
+
+
+// إشعار المشرف عند استجابة الموظف للمهمة
+export async function notifyTaskResponse(data: {
+  referenceNumber: string;
+  employeeName: string;
+  branchName: string;
+  subject: string;
+  responseType: string;
+  responseValue?: string;
+  hasAttachment: boolean;
+  creatorEmail: string;
+  creatorName: string;
+}): Promise<boolean> {
+  try {
+    const { getTaskResponseTemplate } = await import('./emailTemplates');
+    
+    const html = getTaskResponseTemplate({
+      referenceNumber: data.referenceNumber,
+      employeeName: data.employeeName,
+      branchName: data.branchName,
+      subject: data.subject,
+      responseType: data.responseType,
+      responseValue: data.responseValue,
+      responseDate: new Date().toLocaleDateString('ar-SA', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      hasAttachment: data.hasAttachment,
+    });
+
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: data.creatorEmail,
+      subject: `استجابة للمهمة: ${data.subject} - الرقم المرجعي: ${data.referenceNumber}`,
+      html,
+    });
+
+    // تسجيل الإشعار
+    await db.logSentNotification({
+      recipientId: 0,
+      recipientEmail: data.creatorEmail,
+      recipientName: data.creatorName,
+      notificationType: 'task_response',
+      subject: `استجابة للمهمة: ${data.subject}`,
+      bodyArabic: `استجابة من ${data.employeeName} - الرقم المرجعي: ${data.referenceNumber}`,
+      status: 'sent',
+      sentAt: new Date(),
+    });
+
+    console.log(`[Task Response Notification] Sent to ${data.creatorName} (${data.creatorEmail}) - Ref: ${data.referenceNumber}`);
+    return true;
+  } catch (error) {
+    console.error('[Task Response Notification] Error:', error);
+    return false;
+  }
+}
+
+// إرسال تقرير المهام المتأخرة
+export async function sendOverdueTasksReport(adminEmails: string[]): Promise<boolean> {
+  try {
+    const { getOverdueTasksReportTemplate } = await import('./emailTemplates');
+    
+    // الحصول على المهام المتأخرة من قاعدة البيانات
+    const overdueTasks = await db.getOverdueTasks();
+    
+    if (overdueTasks.length === 0) {
+      console.log('[Overdue Tasks Report] No overdue tasks found');
+      return true;
+    }
+
+    const html = getOverdueTasksReportTemplate({
+      totalOverdue: overdueTasks.length,
+      tasks: overdueTasks.map(task => ({
+        referenceNumber: task.referenceNumber,
+        subject: task.subject,
+        employeeName: task.employeeName || 'غير محدد',
+        branchName: task.branchName || 'غير محدد',
+        dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA') : 'غير محدد',
+        daysOverdue: task.daysOverdue || 0,
+      })),
+      reportDate: new Date().toLocaleDateString('ar-SA', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }),
+    });
+
+    for (const email of adminEmails) {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: email,
+        subject: `تقرير المهام المتأخرة - ${overdueTasks.length} مهمة`,
+        html,
+      });
+    }
+
+    console.log(`[Overdue Tasks Report] Sent to ${adminEmails.length} admins - ${overdueTasks.length} overdue tasks`);
+    return true;
+  } catch (error) {
+    console.error('[Overdue Tasks Report] Error:', error);
+    return false;
+  }
+}

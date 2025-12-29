@@ -3896,6 +3896,7 @@ export const appRouter = router({
         assignedToEmail: z.string().optional(),
         dueDate: z.date().optional(),
         priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+        attachments: z.array(z.string()).optional(), // مرفقات عند إنشاء المهمة
       }))
       .mutation(async ({ ctx, input }) => {
         const { createTask } = await import('./db');
@@ -3938,7 +3939,7 @@ export const appRouter = router({
         responseFiles: z.array(z.string()).optional(),
       }))
       .mutation(async ({ input }) => {
-        const { getTaskByReference, respondToTask } = await import('./db');
+        const { getTaskByReference, respondToTask, getTaskCreatorInfo } = await import('./db');
         
         const task = await getTaskByReference(input.referenceNumber);
         if (!task) {
@@ -3949,13 +3950,38 @@ export const appRouter = router({
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن الاستجابة لمهمة مكتملة أو ملغاة' });
         }
         
-        return await respondToTask({
+        const result = await respondToTask({
           taskId: task.id,
           responseType: input.responseType,
           responseText: input.responseText,
           responseConfirmation: input.responseConfirmation,
           responseFiles: input.responseFiles,
         });
+        
+        // إرسال إشعار للمشرف
+        try {
+          const creatorInfo = await getTaskCreatorInfo(task.id);
+          if (creatorInfo?.email) {
+            const { notifyTaskResponse } = await import('./notifications/emailNotificationService');
+            await notifyTaskResponse({
+              referenceNumber: input.referenceNumber,
+              employeeName: task.assignedToName || 'موظف',
+              branchName: task.branchName || 'غير محدد',
+              subject: task.subject,
+              responseType: input.responseType,
+              responseValue: input.responseConfirmation !== undefined 
+                ? (input.responseConfirmation ? 'yes' : 'no') 
+                : input.responseText,
+              hasAttachment: (input.responseFiles?.length || 0) > 0,
+              creatorEmail: creatorInfo.email,
+              creatorName: creatorInfo.name || 'المشرف',
+            });
+          }
+        } catch (error) {
+          console.error('[Task Response] Failed to send notification:', error);
+        }
+        
+        return result;
       }),
 
     // تحديث حالة المهمة
@@ -3991,6 +4017,39 @@ export const appRouter = router({
         const { getTaskLogs } = await import('./db');
         return await getTaskLogs(input.taskId);
       }),
+
+    // الحصول على المهام المتأخرة
+    getOverdue: protectedProcedure.query(async () => {
+      const { getOverdueTasks } = await import('./db');
+      return await getOverdueTasks();
+    }),
+
+    // رفع مرفق للمهمة
+    uploadAttachment: protectedProcedure
+      .input(z.object({
+        fileName: z.string(),
+        fileData: z.string(), // base64
+        fileType: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { storagePut } = await import('./storage');
+        
+        // تحويل base64 إلى buffer
+        const base64Data = input.fileData.replace(/^data:[^;]+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        // إنشاء اسم فريد للملف
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const ext = input.fileName.split('.').pop() || 'file';
+        const fileKey = `task-attachments/${timestamp}-${randomSuffix}.${ext}`;
+        
+        // رفع الملف إلى S3
+        const result = await storagePut(fileKey, buffer, input.fileType);
+        
+        return { url: result.url, key: result.key };
+      }),
+
   }),
 });
 

@@ -1237,3 +1237,155 @@ export function getTaskNotificationTemplate(data: {
 
   return getBaseTemplate(content, 'مهمة جديدة - Symbol AI');
 }
+
+
+// قالب إشعار استجابة الموظف للمهمة
+export function getTaskResponseTemplate(data: {
+  referenceNumber: string;
+  employeeName: string;
+  branchName: string;
+  subject: string;
+  responseType: string;
+  responseValue?: string;
+  responseDate: string;
+  hasAttachment: boolean;
+}): string {
+  const responseTypeText = {
+    'file_single': 'رفع ملف',
+    'file_multiple': 'رفع ملفات',
+    'confirmation': 'تأكيد'
+  }[data.responseType] || data.responseType;
+
+  const content = `
+    <div style="padding: 30px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); width: 70px; height: 70px; border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center;">
+          <span style="font-size: 32px;">✅</span>
+        </div>
+        <h2 style="color: #1f2937; margin: 0; font-size: 24px;">تم الاستجابة للمهمة</h2>
+        <p style="color: #64748b; margin-top: 10px;">قام الموظف بالاستجابة للمهمة المطلوبة</p>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; background: #f8fafc; border-radius: 8px; overflow: hidden;">
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #64748b; width: 40%;">الرقم المرجعي</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937; font-weight: 600; font-family: monospace; font-size: 18px;">${data.referenceNumber}</td>
+        </tr>
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #64748b;">الموظف</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">${data.employeeName}</td>
+        </tr>
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #64748b;">الفرع</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">${data.branchName}</td>
+        </tr>
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #64748b;">تاريخ الاستجابة</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">${data.responseDate}</td>
+        </tr>
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #64748b;">نوع الاستجابة</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1f2937;">${responseTypeText}</td>
+        </tr>
+      </table>
+
+      <div style="background: #f0f9ff; border-right: 4px solid #3b82f6; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="color: #1e40af; margin-bottom: 10px; font-size: 16px;">موضوع المهمة</h3>
+        <p style="color: #1f2937; font-size: 18px; font-weight: 600; margin: 0;">${data.subject}</p>
+      </div>
+
+      ${data.responseValue ? `
+      <div style="background: #f0fdf4; border-right: 4px solid #10b981; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="color: #166534; margin-bottom: 10px; font-size: 16px;">الاستجابة</h3>
+        <p style="color: #1f2937; font-size: 16px; margin: 0;">${data.responseValue === 'yes' ? '✅ نعم، تم التنفيذ' : data.responseValue === 'no' ? '❌ لا، لم يتم التنفيذ' : data.responseValue}</p>
+      </div>
+      ` : ''}
+
+      ${data.hasAttachment ? `
+      <div style="background: #fef3c7; border-right: 4px solid #f59e0b; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="color: #92400e; margin-bottom: 10px; font-size: 16px;">📎 مرفقات</h3>
+        <p style="color: #78350f; margin: 0;">تم رفع ملفات مرفقة مع الاستجابة</p>
+      </div>
+      ` : ''}
+
+      <div style="text-align: center; padding: 20px; background: #f8fafc; border-radius: 12px;">
+        <p style="color: #64748b; margin-bottom: 15px; font-size: 14px;">
+          لمراجعة تفاصيل المهمة والمرفقات
+        </p>
+        <a href="https://sym.manus.space/task-management" 
+           style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 14px 35px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+          الذهاب لإدارة المهام
+        </a>
+      </div>
+    </div>
+  `;
+
+  return getBaseTemplate(content, 'استجابة للمهمة - Symbol AI');
+}
+
+// قالب تقرير المهام المتأخرة
+export function getOverdueTasksReportTemplate(data: {
+  totalOverdue: number;
+  tasks: Array<{
+    referenceNumber: string;
+    subject: string;
+    employeeName: string;
+    branchName: string;
+    dueDate: string;
+    daysOverdue: number;
+  }>;
+  reportDate: string;
+}): string {
+  const tasksRows = data.tasks.map(task => `
+    <tr>
+      <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-weight: 600;">${task.referenceNumber}</td>
+      <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${task.subject}</td>
+      <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${task.employeeName}</td>
+      <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${task.branchName}</td>
+      <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${task.dueDate}</td>
+      <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-weight: 600;">${task.daysOverdue} يوم</td>
+    </tr>
+  `).join('');
+
+  const content = `
+    <div style="padding: 30px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); width: 70px; height: 70px; border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center;">
+          <span style="font-size: 32px;">⚠️</span>
+        </div>
+        <h2 style="color: #1f2937; margin: 0; font-size: 24px;">تقرير المهام المتأخرة</h2>
+        <p style="color: #64748b; margin-top: 10px;">تاريخ التقرير: ${data.reportDate}</p>
+      </div>
+
+      <div style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); padding: 20px; border-radius: 12px; margin-bottom: 25px; text-align: center;">
+        <p style="color: #991b1b; margin: 0; font-size: 14px;">إجمالي المهام المتأخرة</p>
+        <p style="color: #dc2626; margin: 10px 0 0; font-size: 36px; font-weight: 700;">${data.totalOverdue}</p>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <thead>
+          <tr style="background: #f8fafc;">
+            <th style="padding: 12px; text-align: right; color: #64748b; font-weight: 600;">الرقم المرجعي</th>
+            <th style="padding: 12px; text-align: right; color: #64748b; font-weight: 600;">الموضوع</th>
+            <th style="padding: 12px; text-align: right; color: #64748b; font-weight: 600;">الموظف</th>
+            <th style="padding: 12px; text-align: right; color: #64748b; font-weight: 600;">الفرع</th>
+            <th style="padding: 12px; text-align: right; color: #64748b; font-weight: 600;">تاريخ الاستحقاق</th>
+            <th style="padding: 12px; text-align: right; color: #64748b; font-weight: 600;">التأخير</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tasksRows}
+        </tbody>
+      </table>
+
+      <div style="text-align: center; padding: 20px; background: #f8fafc; border-radius: 12px;">
+        <a href="https://sym.manus.space/task-management" 
+           style="display: inline-block; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 14px 35px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+          مراجعة المهام المتأخرة
+        </a>
+      </div>
+    </div>
+  `;
+
+  return getBaseTemplate(content, 'تقرير المهام المتأخرة - Symbol AI');
+}

@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte, lte, lt, like, or } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte, lt, like, or, isNotNull, inArray, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users,
@@ -4145,6 +4145,7 @@ export async function createTask(data: {
   assignedToEmail?: string;
   dueDate?: Date;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
+  attachments?: string[]; // مرفقات عند إنشاء المهمة
   createdBy: number;
   createdByName?: string;
 }) {
@@ -4168,6 +4169,7 @@ export async function createTask(data: {
     assignedToEmail: data.assignedToEmail,
     dueDate: data.dueDate,
     priority: data.priority || 'medium',
+    attachments: data.attachments ? JSON.stringify(data.attachments) : null,
     createdBy: data.createdBy,
     createdByName: data.createdByName,
     status: 'pending',
@@ -4412,4 +4414,69 @@ export async function getTaskStats() {
   }).from(tasks);
   
   return stats[0];
+}
+
+
+// الحصول على المهام المتأخرة
+export async function getOverdueTasks() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const now = new Date();
+  
+  const result = await db.select({
+    id: tasks.id,
+    referenceNumber: tasks.referenceNumber,
+    subject: tasks.subject,
+    assignedToName: tasks.assignedToName,
+    branchName: tasks.branchName,
+    dueDate: tasks.dueDate,
+    status: tasks.status,
+  })
+    .from(tasks)
+    .where(
+      and(
+        isNotNull(tasks.dueDate),
+        lt(tasks.dueDate, now),
+        inArray(tasks.status, ['pending', 'in_progress'])
+      )
+    )
+    .orderBy(asc(tasks.dueDate));
+  
+  return result.map(task => ({
+    ...task,
+    employeeName: task.assignedToName,
+    daysOverdue: task.dueDate ? Math.floor((now.getTime() - new Date(task.dueDate).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+  }));
+}
+
+// الحصول على معلومات منشئ المهمة
+export async function getTaskCreatorInfo(taskId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const task = await db.select({
+    createdBy: tasks.createdBy,
+    createdByName: tasks.createdByName,
+  })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  
+  if (!task.length) return null;
+  
+  // الحصول على بريد المنشئ من جدول المستخدمين
+  const user = await db.select({
+    email: users.email,
+    name: users.name,
+  })
+    .from(users)
+    .where(eq(users.id, task[0].createdBy))
+    .limit(1);
+  
+  return user.length ? {
+    id: task[0].createdBy,
+    name: task[0].createdByName || user[0].name,
+    email: user[0].email,
+  } : null;
 }

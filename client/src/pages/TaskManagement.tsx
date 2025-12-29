@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,12 @@ import {
   ClipboardList,
   Users,
   Building2,
-  Calendar
+  Calendar,
+  Upload,
+  X,
+  Paperclip,
+  AlertCircle,
+  Download
 } from 'lucide-react';
 
 export default function TaskManagement() {
@@ -37,6 +42,9 @@ export default function TaskManagement() {
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -50,6 +58,7 @@ export default function TaskManagement() {
     assignedToId: undefined as number | undefined,
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     dueDate: '',
+    attachments: [] as string[], // مرفقات عند إنشاء المهمة
   });
 
   // Queries
@@ -57,6 +66,7 @@ export default function TaskManagement() {
     statusFilter === 'all' ? undefined : { status: statusFilter }
   );
   const { data: stats } = trpc.tasks.getStats.useQuery();
+  const { data: overdueTasks, isLoading: loadingOverdue } = trpc.tasks.getOverdue.useQuery();
   const { data: employees } = trpc.employees.list.useQuery();
   const { data: branches } = trpc.branches.list.useQuery();
 
@@ -93,6 +103,8 @@ export default function TaskManagement() {
     },
   });
 
+  const uploadMutation = trpc.tasks.uploadAttachment.useMutation();
+
   const resetForm = () => {
     setFormData({
       subject: '',
@@ -105,7 +117,68 @@ export default function TaskManagement() {
       assignedToId: undefined,
       priority: 'medium',
       dueDate: '',
+      attachments: [],
     });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingFiles(true);
+    const newAttachments: string[] = [];
+
+    try {
+      for (const file of Array.from(files)) {
+        // التحقق من حجم الملف (10MB max)
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`الملف ${file.name} كبير جداً (الحد الأقصى 10MB)`);
+          continue;
+        }
+
+        // تحويل الملف إلى base64
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        // رفع الملف
+        const result = await uploadMutation.mutateAsync({
+          fileName: file.name,
+          fileData: base64,
+          fileType: file.type,
+        });
+
+        if (result.url) {
+          newAttachments.push(result.url);
+        }
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        attachments: [...prev.attachments, ...newAttachments],
+      }));
+
+      if (newAttachments.length > 0) {
+        toast.success(`تم رفع ${newAttachments.length} ملف بنجاح`);
+      }
+    } catch (error) {
+      toast.error('حدث خطأ أثناء رفع الملفات');
+    } finally {
+      setUploadingFiles(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      attachments: prev.attachments.filter((_, i) => i !== index),
+    }));
   };
 
   const handleCreateTask = () => {
@@ -131,6 +204,7 @@ export default function TaskManagement() {
       assignedToEmail: employee?.email || undefined,
       priority: formData.priority,
       dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
+      attachments: formData.attachments.length > 0 ? formData.attachments : undefined,
     });
   };
 
@@ -169,6 +243,16 @@ export default function TaskManagement() {
     task.referenceNumber.includes(searchTerm) ||
     task.assignedToName.includes(searchTerm)
   );
+
+  const getFileExtension = (url: string) => {
+    const parts = url.split('.');
+    return parts[parts.length - 1].toLowerCase();
+  };
+
+  const getFileName = (url: string) => {
+    const parts = url.split('/');
+    return parts[parts.length - 1];
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -329,6 +413,76 @@ export default function TaskManagement() {
                 />
               </div>
 
+              {/* قسم إرفاق الملفات */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Paperclip className="w-4 h-4" />
+                  إرفاق ملفات (اختياري)
+                </Label>
+                <p className="text-xs text-slate-400">يمكنك إرفاق نماذج أو مستندات مع المهمة</p>
+                
+                <div className="border-2 border-dashed border-slate-600 rounded-lg p-4 text-center hover:border-slate-500 transition-colors">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFiles}
+                  >
+                    {uploadingFiles ? (
+                      <>
+                        <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                        جاري الرفع...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 ml-2" />
+                        اختر ملفات
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-slate-500 mt-2">
+                    PDF, Word, Excel, صور (الحد الأقصى 10MB لكل ملف)
+                  </p>
+                </div>
+
+                {/* عرض الملفات المرفقة */}
+                {formData.attachments.length > 0 && (
+                  <div className="space-y-2 mt-3">
+                    <p className="text-sm text-slate-400">الملفات المرفقة ({formData.attachments.length}):</p>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.attachments.map((url, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 bg-slate-700/50 rounded-lg px-3 py-2 text-sm"
+                        >
+                          <Paperclip className="w-4 h-4 text-slate-400" />
+                          <span className="text-slate-300 max-w-[150px] truncate">
+                            {getFileName(url)}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 hover:bg-red-500/20"
+                            onClick={() => removeAttachment(index)}
+                          >
+                            <X className="w-3 h-3 text-red-400" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end gap-3 pt-4">
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   إلغاء
@@ -348,7 +502,7 @@ export default function TaskManagement() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <Card className="bg-slate-800/50 border-slate-700">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -393,126 +547,217 @@ export default function TaskManagement() {
             </div>
           </CardContent>
         </Card>
+        <Card className="bg-slate-800/50 border-slate-700 border-red-500/30">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-sm">متأخرة</p>
+                <p className="text-2xl font-bold text-red-500">{overdueTasks?.length || 0}</p>
+              </div>
+              <AlertCircle className="w-8 h-8 text-red-500/50" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Filters */}
-      <Card className="bg-slate-800/50 border-slate-700">
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <Input
-                  placeholder="بحث بالموضوع أو الرقم المرجعي أو اسم الموظف..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-10"
-                />
-              </div>
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="فلترة حسب الحالة" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">جميع الحالات</SelectItem>
-                <SelectItem value="pending">في انتظار الرد</SelectItem>
-                <SelectItem value="in_progress">تحت المعالجة</SelectItem>
-                <SelectItem value="completed">مكتملة</SelectItem>
-                <SelectItem value="cancelled">ملغاة</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="bg-slate-800/50 border border-slate-700">
+          <TabsTrigger value="all" className="data-[state=active]:bg-slate-700">
+            جميع المهام
+          </TabsTrigger>
+          <TabsTrigger value="overdue" className="data-[state=active]:bg-red-600/20 data-[state=active]:text-red-400">
+            <AlertCircle className="w-4 h-4 ml-1" />
+            المتأخرة ({overdueTasks?.length || 0})
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Tasks Table */}
-      <Card className="bg-slate-800/50 border-slate-700">
-        <CardContent className="pt-6">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
-            </div>
-          ) : filteredTasks?.length === 0 ? (
-            <div className="text-center py-12 text-slate-500">
-              <ClipboardList className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>لا توجد مهام</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="border-slate-700">
-                  <TableHead className="text-slate-400">الرقم المرجعي</TableHead>
-                  <TableHead className="text-slate-400">الموضوع</TableHead>
-                  <TableHead className="text-slate-400">الموظف</TableHead>
-                  <TableHead className="text-slate-400">الفرع</TableHead>
-                  <TableHead className="text-slate-400">الحالة</TableHead>
-                  <TableHead className="text-slate-400">الأولوية</TableHead>
-                  <TableHead className="text-slate-400">التاريخ</TableHead>
-                  <TableHead className="text-slate-400">الإجراءات</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTasks?.map((task) => (
-                  <TableRow key={task.id} className="border-slate-700">
-                    <TableCell className="font-mono text-blue-400">{task.referenceNumber}</TableCell>
-                    <TableCell className="text-white max-w-xs truncate">{task.subject}</TableCell>
-                    <TableCell className="text-slate-300">{task.assignedToName}</TableCell>
-                    <TableCell className="text-slate-300">{task.branchName || '-'}</TableCell>
-                    <TableCell>{getStatusBadge(task.status)}</TableCell>
-                    <TableCell>{getPriorityBadge(task.priority)}</TableCell>
-                    <TableCell className="text-slate-400">
-                      {new Date(task.createdAt).toLocaleDateString('ar-SA')}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedTask(task);
-                            setIsViewDialogOpen(true);
-                          }}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        {task.status === 'in_progress' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-green-500 hover:text-green-400"
-                            onClick={() => updateStatusMutation.mutate({ taskId: task.id, status: 'completed' })}
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {(user?.role === 'admin' || user?.role === 'manager') && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-500 hover:text-red-400"
-                            onClick={() => {
-                              if (confirm('هل أنت متأكد من حذف هذه المهمة؟')) {
-                                deleteMutation.mutate({ taskId: task.id });
-                              }
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+        <TabsContent value="all" className="mt-4 space-y-4">
+          {/* Filters */}
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardContent className="pt-6">
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      placeholder="بحث بالموضوع أو الرقم المرجعي أو اسم الموظف..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pr-10"
+                    />
+                  </div>
+                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="فلترة حسب الحالة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الحالات</SelectItem>
+                    <SelectItem value="pending">في انتظار الرد</SelectItem>
+                    <SelectItem value="in_progress">تحت المعالجة</SelectItem>
+                    <SelectItem value="completed">مكتملة</SelectItem>
+                    <SelectItem value="cancelled">ملغاة</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tasks Table */}
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardContent className="pt-6">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
+                </div>
+              ) : filteredTasks?.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <ClipboardList className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>لا توجد مهام</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-slate-700">
+                      <TableHead className="text-slate-400">الرقم المرجعي</TableHead>
+                      <TableHead className="text-slate-400">الموضوع</TableHead>
+                      <TableHead className="text-slate-400">الموظف</TableHead>
+                      <TableHead className="text-slate-400">الفرع</TableHead>
+                      <TableHead className="text-slate-400">الحالة</TableHead>
+                      <TableHead className="text-slate-400">الأولوية</TableHead>
+                      <TableHead className="text-slate-400">تاريخ الاستحقاق</TableHead>
+                      <TableHead className="text-slate-400">الإجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTasks?.map((task: any) => (
+                      <TableRow key={task.id} className="border-slate-700">
+                        <TableCell className="font-mono text-blue-400">{task.referenceNumber}</TableCell>
+                        <TableCell className="text-white max-w-[200px] truncate">{task.subject}</TableCell>
+                        <TableCell className="text-slate-300">{task.assignedToName}</TableCell>
+                        <TableCell className="text-slate-300">{task.branchName || '-'}</TableCell>
+                        <TableCell>{getStatusBadge(task.status)}</TableCell>
+                        <TableCell>{getPriorityBadge(task.priority)}</TableCell>
+                        <TableCell className="text-slate-300">
+                          {task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA') : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedTask(task);
+                                setIsViewDialogOpen(true);
+                              }}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            {user?.role === 'admin' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-400 hover:text-red-300"
+                                onClick={() => {
+                                  if (confirm('هل أنت متأكد من حذف هذه المهمة؟')) {
+                                    deleteMutation.mutate({ taskId: task.id });
+                                  }
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="overdue" className="mt-4">
+          {/* Overdue Tasks */}
+          <Card className="bg-slate-800/50 border-slate-700 border-red-500/30">
+            <CardHeader>
+              <CardTitle className="text-red-400 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                المهام المتأخرة
+              </CardTitle>
+              <CardDescription>
+                المهام التي تجاوزت تاريخ الاستحقاق ولم تكتمل بعد
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingOverdue ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
+                </div>
+              ) : overdueTasks?.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-500/50" />
+                  <p className="text-green-400">لا توجد مهام متأخرة</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-slate-700">
+                      <TableHead className="text-slate-400">الرقم المرجعي</TableHead>
+                      <TableHead className="text-slate-400">الموضوع</TableHead>
+                      <TableHead className="text-slate-400">الموظف</TableHead>
+                      <TableHead className="text-slate-400">الفرع</TableHead>
+                      <TableHead className="text-slate-400">تاريخ الاستحقاق</TableHead>
+                      <TableHead className="text-slate-400">أيام التأخير</TableHead>
+                      <TableHead className="text-slate-400">الإجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {overdueTasks?.map((task: any) => (
+                      <TableRow key={task.id} className="border-slate-700 bg-red-500/5">
+                        <TableCell className="font-mono text-red-400">{task.referenceNumber}</TableCell>
+                        <TableCell className="text-white max-w-[200px] truncate">{task.subject}</TableCell>
+                        <TableCell className="text-slate-300">{task.assignedToName || task.employeeName}</TableCell>
+                        <TableCell className="text-slate-300">{task.branchName || '-'}</TableCell>
+                        <TableCell className="text-red-400">
+                          {task.dueDate ? new Date(task.dueDate).toLocaleDateString('ar-SA') : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="destructive" className="font-bold">
+                            {task.daysOverdue} يوم
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                // البحث عن المهمة الكاملة
+                                const fullTask = tasks?.find((t: any) => t.id === task.id);
+                                setSelectedTask(fullTask || task);
+                                setIsViewDialogOpen(true);
+                              }}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* View Task Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>تفاصيل المهمة</DialogTitle>
             <DialogDescription>الرقم المرجعي: {selectedTask?.referenceNumber}</DialogDescription>
@@ -562,6 +807,39 @@ export default function TaskManagement() {
                 <p className="text-white whitespace-pre-wrap">{selectedTask.requirement}</p>
               </div>
 
+              {/* عرض المرفقات عند إنشاء المهمة */}
+              {selectedTask.attachments && (
+                <div className="bg-slate-700/30 border border-slate-600 rounded-lg p-4">
+                  <Label className="text-amber-400 flex items-center gap-2">
+                    <Paperclip className="w-4 h-4" />
+                    مرفقات المهمة
+                  </Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {(() => {
+                      try {
+                        const attachments = typeof selectedTask.attachments === 'string' 
+                          ? JSON.parse(selectedTask.attachments) 
+                          : selectedTask.attachments;
+                        return attachments.map((url: string, index: number) => (
+                          <a
+                            key={index}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 bg-slate-600/50 hover:bg-slate-600 rounded-lg px-3 py-2 text-sm transition-colors"
+                          >
+                            <Download className="w-4 h-4 text-blue-400" />
+                            <span className="text-blue-400">ملف {index + 1}</span>
+                          </a>
+                        ));
+                      } catch {
+                        return null;
+                      }
+                    })()}
+                  </div>
+                </div>
+              )}
+
               {selectedTask.respondedAt && (
                 <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
                   <Label className="text-blue-400">الاستجابة</Label>
@@ -586,8 +864,9 @@ export default function TaskManagement() {
                             href={file}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-400 hover:underline text-sm"
+                            className="flex items-center gap-2 text-blue-400 hover:underline text-sm bg-blue-500/10 px-3 py-1 rounded-lg"
                           >
+                            <Download className="w-3 h-3" />
                             ملف {index + 1}
                           </a>
                         ))}

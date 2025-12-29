@@ -270,6 +270,42 @@ export default function TaskLookup() {
                 <p className="text-white mt-2 whitespace-pre-wrap">{task.requirement}</p>
               </div>
 
+              {/* عرض المرفقات عند إنشاء المهمة */}
+              {task.attachments && (() => {
+                try {
+                  const attachments = typeof task.attachments === 'string' 
+                    ? JSON.parse(task.attachments) 
+                    : task.attachments;
+                  if (attachments && attachments.length > 0) {
+                    return (
+                      <div className="bg-amber-900/20 border border-amber-800/50 rounded-lg p-4">
+                        <Label className="text-amber-400 text-sm flex items-center gap-2 mb-3">
+                          <FileText className="w-4 h-4" />
+                          مرفقات المهمة (للاطلاع)
+                        </Label>
+                        <div className="flex flex-wrap gap-2">
+                          {attachments.map((url: string, index: number) => (
+                            <a
+                              key={index}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded-lg px-4 py-2 text-sm transition-colors"
+                            >
+                              <FileText className="w-4 h-4" />
+                              تحميل الملف {index + 1}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                } catch {
+                  return null;
+                }
+                return null;
+              })()}
+
               {/* Response Section */}
               {(task.status === 'pending' || task.status === 'in_progress') && (
                 <div className="border-t border-slate-700 pt-6">
