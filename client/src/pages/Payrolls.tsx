@@ -504,7 +504,7 @@ export default function Payrolls() {
     }
   };
 
-  // طباعة قسيمة راتب فردية
+  // طباعة قسيمة راتب فردية - تصميم احترافي موحد
   const handlePrintPayslip = (detail: any, payroll: any) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -516,313 +516,617 @@ export default function Payrolls() {
     const grossSalary = parseFloat(detail.baseSalary) + parseFloat(detail.overtimeAmount || '0') + parseFloat(detail.incentiveAmount || '0');
     const totalDeductions = parseFloat(detail.absentDeduction || '0') + parseFloat(detail.deductionAmount || '0') + parseFloat(detail.advanceDeduction || '0');
     const isApproved = payroll.status === 'approved';
+    
+    // التاريخ الهجري
+    const hijriDate = new Date().toLocaleDateString('ar-SA-u-ca-islamic', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
 
     const html = `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>قسيمة راتب - ${detail.employeeName}</title>
+  <title>قسيمة راتب - ${detail.employeeName} - Symbol AI</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+    
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    
     body {
-      font-family: 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif;
-      font-size: 13px;
-      line-height: 1.7;
-      color: #333;
+      font-family: 'Tajawal', 'Cairo', 'Segoe UI', sans-serif;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #2c3e50;
       background: #fff;
-      padding: 20px;
+      padding: 15px;
     }
+    
     .payslip {
-      max-width: 650px;
+      max-width: 700px;
       margin: 0 auto;
-      border: 2px solid ${PDF_COLORS.primary};
-      border-radius: 12px;
-      overflow: hidden;
+      background: #fff;
       position: relative;
     }
-    .status-badge {
-      position: absolute;
-      top: 0;
+    
+    /* العلامة المائية */
+    .watermark {
+      position: fixed;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%);
-      padding: 6px 25px;
-      border-radius: 0 0 12px 12px;
-      font-size: 12px;
-      font-weight: 700;
-      z-index: 10;
+      transform: translate(-50%, -50%) rotate(-35deg);
+      font-size: 90px;
+      font-weight: 900;
+      color: rgba(27, 94, 32, 0.05);
+      pointer-events: none;
+      z-index: 0;
+      white-space: nowrap;
+      letter-spacing: 8px;
     }
-    .status-approved { background: #276749; color: white; }
-    .status-pending { background: #c05621; color: white; }
+    
+    /* الهيدر */
     .header {
-      background: ${PDF_COLORS.primary};
+      background: linear-gradient(135deg, #0f2744 0%, #0a1929 100%);
       color: white;
-      padding: 25px 20px;
+      padding: 18px 20px;
+      border-radius: 8px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin-bottom: 15px;
+      position: relative;
     }
-    .header-logo {
+    
+    .status-badge {
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 4px 18px;
+      border-radius: 0 0 8px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    
+    .status-approved { background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%); color: white; }
+    .status-pending { background: linear-gradient(135deg, #e65100 0%, #f57c00 100%); color: white; }
+    
+    .header-right {
       display: flex;
       align-items: center;
       gap: 12px;
     }
-    .header-logo img { height: 50px; }
-    .header-logo h1 { font-size: 22px; font-weight: 800; }
-    .header-logo p { font-size: 11px; opacity: 0.9; }
-    .header-info { text-align: left; }
-    .header-info .doc-title { font-size: 16px; font-weight: 700; margin-bottom: 5px; }
-    .period-badge {
-      display: inline-block;
-      background: rgba(255,255,255,0.2);
-      padding: 5px 15px;
-      border-radius: 20px;
-      font-size: 11px;
-    }
-    .employee-info {
-      background: #f7fafc;
-      padding: 18px;
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      border-bottom: 1px solid #cbd5e0;
-    }
-    .info-item {
+    
+    .logo {
+      width: 50px;
+      height: 50px;
       background: white;
-      padding: 10px;
       border-radius: 8px;
-      border: 1px solid #cbd5e0;
+      padding: 4px;
+      object-fit: contain;
     }
-    .info-item label { display: block; font-size: 10px; color: #718096; margin-bottom: 4px; font-weight: 500; }
-    .info-item span { font-size: 13px; font-weight: 700; color: ${PDF_COLORS.primary}; }
-    .salary-details { padding: 18px; }
-    .section-title {
-      font-size: 13px;
+    
+    .company-name {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+    
+    .company-subtitle {
+      font-size: 10px;
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+    
+    .header-left {
+      text-align: left;
+      background: rgba(255,255,255,0.1);
+      padding: 10px 14px;
+      border-radius: 6px;
+    }
+    
+    .doc-title {
+      font-size: 14px;
       font-weight: 700;
-      color: ${PDF_COLORS.primary};
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 2px solid ${PDF_COLORS.primary};
+      margin-bottom: 4px;
     }
+    
+    .doc-number {
+      font-size: 10px;
+      font-family: 'Courier New', monospace;
+      background: rgba(0,0,0,0.2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 3px;
+    }
+    
+    .doc-date {
+      font-size: 9px;
+      opacity: 0.8;
+    }
+    
+    /* معلومات الموظف */
+    .employee-info {
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 15px;
+    }
+    
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    
+    .info-item {
+      text-align: center;
+      padding: 8px;
+      background: white;
+      border-radius: 6px;
+      border: 1px solid #e0e0e0;
+    }
+    
+    .info-label {
+      display: block;
+      font-size: 9px;
+      color: #607d8b;
+      margin-bottom: 3px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    
+    .info-value {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0f2744;
+    }
+    
+    /* تفاصيل الراتب */
+    .salary-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+    
+    .earnings-box {
+      background: #e8f5e9;
+      border: 1px solid #a5d6a7;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    
+    .deductions-box {
+      background: #ffebee;
+      border: 1px solid #ef9a9a;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .earnings-box .section-title {
+      color: #1b5e20;
+      border-bottom: 2px solid #1b5e20;
+    }
+    
+    .deductions-box .section-title {
+      color: #b71c1c;
+      border-bottom: 2px solid #b71c1c;
+    }
+    
     .salary-row {
       display: flex;
       justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px solid #f1f5f9;
+      padding: 6px 0;
+      border-bottom: 1px dashed rgba(0,0,0,0.1);
+      font-size: 11px;
     }
+    
     .salary-row:last-child { border-bottom: none; }
-    .salary-row .label { color: #4a5568; font-size: 12px; }
-    .salary-row .value { font-weight: 700; font-size: 12px; }
-    .salary-row .value.positive { color: #276749; }
-    .salary-row .value.negative { color: #c53030; }
-    .earnings { background: #f0fff4; padding: 15px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #c6f6d5; }
-    .deductions { background: #fff5f5; padding: 15px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #fed7d7; }
-    .net-salary {
-      background: ${PDF_COLORS.primary};
-      color: white;
-      padding: 20px;
-      text-align: center;
-      margin: 15px 0;
-      border-radius: 8px;
-    }
-    .net-salary .label { font-size: 12px; opacity: 0.9; margin-bottom: 5px; }
-    .net-salary .amount { font-size: 28px; font-weight: 800; }
-    .approval-section {
-      padding: 20px;
-      border-top: 2px solid #cbd5e0;
-      background: #f7fafc;
-    }
-    .approval-title {
-      text-align: center;
-      font-size: 12px;
+    
+    .salary-row .label { color: #455a64; }
+    .salary-row .value { font-weight: 700; }
+    .salary-row .value.positive { color: #1b5e20; }
+    .salary-row .value.negative { color: #b71c1c; }
+    
+    .total-row {
+      margin-top: 8px;
+      padding-top: 8px;
       font-weight: 700;
-      color: ${PDF_COLORS.primary};
-      margin-bottom: 20px;
-      padding-bottom: 10px;
-      border-bottom: 1px dashed #cbd5e0;
+      font-size: 12px;
     }
-    .signatures-container {
+    
+    .earnings-box .total-row { border-top: 2px solid #1b5e20; }
+    .deductions-box .total-row { border-top: 2px solid #b71c1c; }
+    
+    /* صافي الراتب */
+    .net-salary {
+      background: linear-gradient(135deg, #0f2744 0%, #0a1929 100%);
+      color: white;
+      padding: 18px;
+      border-radius: 8px;
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    
+    .net-salary .label {
+      font-size: 11px;
+      opacity: 0.9;
+      margin-bottom: 4px;
+    }
+    
+    .net-salary .amount {
+      font-size: 26px;
+      font-weight: 800;
+    }
+    
+    /* قسم التوقيعات */
+    .approval-section {
+      border-top: 2px dashed #e0e0e0;
+      padding-top: 15px;
+      margin-top: 10px;
+    }
+    
+    .approval-header {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    
+    .approval-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 16px;
+      border-radius: 16px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    
+    .approval-title.approved {
+      background: #e8f5e9;
+      color: #1b5e20;
+      border: 1px solid #1b5e20;
+    }
+    
+    .approval-title.pending {
+      background: #fff3e0;
+      color: #e65100;
+      border: 1px solid #e65100;
+    }
+    
+    .signatures-row {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 15px;
+      gap: 12px;
     }
+    
     .signature-box {
       flex: 1;
       text-align: center;
       padding: 12px;
       background: white;
+      border: 2px solid #e0e0e0;
       border-radius: 8px;
-      border: 1px solid #cbd5e0;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
-    .signature-title { font-size: 10px; color: #718096; margin-bottom: 8px; }
-    .signature-image { height: 40px; max-width: 100px; object-fit: contain; margin: 8px auto; }
-    .signature-name { font-size: 11px; font-weight: 700; color: ${PDF_COLORS.primary}; margin-top: 8px; padding-top: 8px; border-top: 1px solid #cbd5e0; }
-    .signature-role { font-size: 9px; color: #718096; }
-    .stamp-box { flex: 0 0 100px; text-align: center; }
-    .stamp-image { width: 90px; height: 90px; object-fit: contain; opacity: 0.9; }
-    .stamp-label { font-size: 9px; color: #718096; margin-top: 3px; }
-    .pending-approval {
+    
+    .signature-box.has-signature {
+      border-color: #1b5e20;
+      background: #e8f5e9;
+    }
+    
+    .signature-title {
+      font-size: 9px;
+      color: #607d8b;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-bottom: 8px;
+    }
+    
+    .signature-image-container {
+      height: 45px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .signature-image {
+      max-height: 45px;
+      max-width: 90px;
+      object-fit: contain;
+    }
+    
+    .signature-line {
+      width: 70%;
+      height: 1px;
+      background: #e0e0e0;
+      margin: 8px auto;
+    }
+    
+    .signature-name {
+      font-size: 11px;
+      font-weight: 700;
+      color: #0f2744;
+    }
+    
+    .signature-role {
+      font-size: 8px;
+      color: #607d8b;
+      margin-top: 2px;
+    }
+    
+    .stamp-box {
+      flex: 0 0 110px;
+      text-align: center;
+      padding: 8px;
+    }
+    
+    .stamp-image {
+      width: 95px;
+      height: 95px;
+      object-fit: contain;
+    }
+    
+    .stamp-label {
+      font-size: 8px;
+      color: #607d8b;
+      margin-top: 4px;
+    }
+    
+    .pending-signatures {
       text-align: center;
       padding: 20px;
-      color: #718096;
-      font-size: 12px;
+      color: #607d8b;
     }
+    
+    .pending-signatures .icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    
+    .pending-signatures .text {
+      font-size: 11px;
+    }
+    
+    .pending-signatures .subtext {
+      font-size: 9px;
+      margin-top: 4px;
+      opacity: 0.8;
+    }
+    
+    /* التذييل */
     .footer {
-      padding: 12px 18px;
+      margin-top: 15px;
+      padding-top: 10px;
+      border-top: 1px solid #e0e0e0;
+    }
+    
+    .footer-content {
       display: flex;
       justify-content: space-between;
-      border-top: 1px solid #cbd5e0;
-      font-size: 9px;
-      color: #718096;
+      align-items: center;
+      font-size: 8px;
+      color: #607d8b;
     }
-    .approved-watermark {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-30deg);
-      font-size: 60px;
-      font-weight: 800;
-      color: rgba(39, 103, 73, 0.06);
-      pointer-events: none;
-      z-index: 0;
+    
+    .footer-logo {
+      height: 16px;
+      opacity: 0.5;
     }
+    
     @media print {
-      body { padding: 10px; }
-      .payslip { border: 1px solid #cbd5e0; }
-      .approved-watermark { position: absolute; }
+      body { padding: 8px; }
+      .watermark { position: absolute; }
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
   </style>
 </head>
 <body>
-  ${isApproved ? '<div class="approved-watermark">معتمد</div>' : ''}
+  ${isApproved ? '<div class="watermark">معتمد</div>' : ''}
+  
   <div class="payslip">
-    ${isApproved ? '<div class="status-badge status-approved">✓ معتمد</div>' : '<div class="status-badge status-pending">⏳ قيد المراجعة</div>'}
+    <!-- الهيدر -->
     <div class="header">
-      <div class="header-logo">
-        <img src="/symbol-ai-logo.png" alt="Symbol AI" onerror="this.style.display='none'" />
+      <div class="status-badge ${isApproved ? 'status-approved' : 'status-pending'}">
+        ${isApproved ? '✓ معتمد' : '⏳ قيد المراجعة'}
+      </div>
+      <div class="header-right">
+        <img src="/symbol-ai-logo.png" alt="Symbol AI" class="logo" onerror="this.style.display='none'" />
         <div>
-          <h1>Symbol AI</h1>
-          <p>نظام إدارة الأعمال المتكامل</p>
+          <div class="company-name">Symbol AI</div>
+          <div class="company-subtitle">صالونات قصه وتخفيف وفروعها</div>
         </div>
       </div>
-      <div class="header-info">
+      <div class="header-left">
+        <div class="doc-number">${payroll.payrollNumber}</div>
         <div class="doc-title">قسيمة راتب</div>
-        <div class="period-badge">${monthName} ${payroll.year}</div>
+        <div class="doc-date">${hijriDate}</div>
+        <div class="doc-date">${monthName} ${payroll.year}</div>
       </div>
     </div>
-
+    
+    <!-- معلومات الموظف -->
     <div class="employee-info">
-      <div class="info-item">
-        <label>اسم الموظف</label>
-        <span>${detail.employeeName}</span>
-      </div>
-      <div class="info-item">
-        <label>رقم الموظف</label>
-        <span>${detail.employeeCode || '-'}</span>
-      </div>
-      <div class="info-item">
-        <label>الفرع</label>
-        <span>${payroll.branchName}</span>
-      </div>
-      <div class="info-item">
-        <label>رقم المسيرة</label>
-        <span>${payroll.payrollNumber}</span>
+      <div class="info-grid">
+        <div class="info-item">
+          <span class="info-label">اسم الموظف</span>
+          <span class="info-value">${detail.employeeName}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">رقم الموظف</span>
+          <span class="info-value">${detail.employeeCode || '-'}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">الفرع</span>
+          <span class="info-value">${payroll.branchName}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">الفترة</span>
+          <span class="info-value">${monthName} ${payroll.year}</span>
+        </div>
       </div>
     </div>
-
-    <div class="salary-details">
-      <div class="earnings">
-        <div class="section-title">المستحقات</div>
+    
+    <!-- تفاصيل الراتب -->
+    <div class="salary-section">
+      <div class="earnings-box">
+        <div class="section-title">▲ المستحقات</div>
         <div class="salary-row">
           <span class="label">الراتب الأساسي</span>
-          <span class="value positive">${parseFloat(detail.baseSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+          <span class="value positive">${parseFloat(detail.baseSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
         </div>
         ${parseFloat(detail.overtimeAmount || '0') > 0 ? `
         <div class="salary-row">
           <span class="label">بدل ساعات إضافية</span>
-          <span class="value positive">${parseFloat(detail.overtimeAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+          <span class="value positive">${parseFloat(detail.overtimeAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
         </div>` : ''}
         ${parseFloat(detail.incentiveAmount || '0') > 0 ? `
         <div class="salary-row">
           <span class="label">حوافز</span>
-          <span class="value positive">${parseFloat(detail.incentiveAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+          <span class="value positive">${parseFloat(detail.incentiveAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
         </div>` : ''}
-        <div class="salary-row" style="border-top: 2px solid #276749; margin-top: 10px; padding-top: 10px;">
-          <span class="label" style="font-weight: bold;">إجمالي المستحقات</span>
-          <span class="value positive">${grossSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+        <div class="salary-row total-row">
+          <span class="label">إجمالي المستحقات</span>
+          <span class="value positive">${grossSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
         </div>
       </div>
-
-      <div class="deductions">
-        <div class="section-title">الاستقطاعات</div>
+      
+      <div class="deductions-box">
+        <div class="section-title">▼ الاستقطاعات</div>
         ${parseFloat(detail.absentDeduction || '0') > 0 ? `
         <div class="salary-row">
           <span class="label">خصم غياب (${detail.absentDays || 0} يوم)</span>
-          <span class="value negative">-${parseFloat(detail.absentDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+          <span class="value negative">-${parseFloat(detail.absentDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
         </div>` : ''}
         ${parseFloat(detail.deductionAmount || '0') > 0 ? `
         <div class="salary-row">
           <span class="label">خصومات أخرى</span>
-          <span class="value negative">-${parseFloat(detail.deductionAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+          <span class="value negative">-${parseFloat(detail.deductionAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
         </div>` : ''}
         ${parseFloat(detail.advanceDeduction || '0') > 0 ? `
         <div class="salary-row">
           <span class="label">سلف مستردة</span>
-          <span class="value negative">-${parseFloat(detail.advanceDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
+          <span class="value negative">-${parseFloat(detail.advanceDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
         </div>` : ''}
         ${totalDeductions === 0 ? `
         <div class="salary-row">
-          <span class="label" style="color: #276749;">لا توجد استقطاعات</span>
-          <span class="value">0.00 ر.س.</span>
-        </div>` : `
-        <div class="salary-row" style="border-top: 2px solid #c53030; margin-top: 10px; padding-top: 10px;">
-          <span class="label" style="font-weight: bold;">إجمالي الاستقطاعات</span>
-          <span class="value negative">-${totalDeductions.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
-        </div>`}
-      </div>
-
-      <div class="net-salary">
-        <div class="label">صافي الراتب</div>
-        <div class="amount">${parseFloat(detail.netSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</div>
+          <span class="label" style="color: #1b5e20;">لا توجد استقطاعات</span>
+          <span class="value">0.00 ر.س</span>
+        </div>` : ''}
+        <div class="salary-row total-row">
+          <span class="label">إجمالي الاستقطاعات</span>
+          <span class="value negative">-${totalDeductions.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
+        </div>
       </div>
     </div>
-
+    
+    <!-- صافي الراتب -->
+    <div class="net-salary">
+      <div class="label">صافي الراتب</div>
+      <div class="amount">${parseFloat(detail.netSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</div>
+    </div>
+    
+    <!-- قسم التوقيعات والختم -->
     <div class="approval-section">
+      <div class="approval-header">
+        <div class="approval-title ${isApproved ? 'approved' : 'pending'}">
+          ${isApproved ? '✓ تم الاعتماد' : '⏳ قيد المراجعة والاعتماد'}
+        </div>
+      </div>
+      
       ${isApproved ? `
-      <div class="approval-title">✓ تم الاعتماد</div>
-      <div class="signatures-container">
-        <div class="signature-box">
+      <div class="signatures-row">
+        <div class="signature-box has-signature">
           <div class="signature-title">توقيع المشرف العام</div>
-          <img src="${SIGNATURES.supervisor.image}" alt="توقيع" class="signature-image" onerror="this.style.display='none'" />
+          <div class="signature-image-container">
+            <img src="${SIGNATURES.supervisor.image}" alt="توقيع المشرف" class="signature-image" onerror="this.parentElement.innerHTML='<span style=\\'color:#1b5e20\\'>✓ موقّع</span>'" />
+          </div>
+          <div class="signature-line"></div>
           <div class="signature-name">${SIGNATURES.supervisor.name}</div>
           <div class="signature-role">${SIGNATURES.supervisor.title}</div>
         </div>
+        
         <div class="stamp-box">
-          <img src="${SIGNATURES.stamp}" alt="ختم" class="stamp-image" onerror="this.style.display='none'" />
+          <img src="${SIGNATURES.stamp.image}" alt="ختم الإدارة" class="stamp-image" onerror="this.style.display='none'" />
           <div class="stamp-label">ختم الإدارة</div>
         </div>
-        <div class="signature-box">
-          <div class="signature-title">توقيع المدير</div>
-          <img src="${SIGNATURES.manager.image}" alt="توقيع" class="signature-image" onerror="this.style.display='none'" />
+        
+        <div class="signature-box has-signature">
+          <div class="signature-title">توقيع المدير العام</div>
+          <div class="signature-image-container">
+            <img src="${SIGNATURES.manager.image}" alt="توقيع المدير" class="signature-image" onerror="this.parentElement.innerHTML='<span style=\\'color:#1b5e20\\'>✓ موقّع</span>'" />
+          </div>
+          <div class="signature-line"></div>
           <div class="signature-name">${SIGNATURES.manager.name}</div>
           <div class="signature-role">${SIGNATURES.manager.title}</div>
         </div>
       </div>
       ` : `
-      <div class="pending-approval">
-        <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
-        <div>هذا المستند قيد المراجعة</div>
-        <div style="font-size: 10px; margin-top: 5px;">سيتم إضافة التوقيعات والختم بعد الاعتماد</div>
+      <div class="signatures-row">
+        <div class="signature-box">
+          <div class="signature-title">توقيع المشرف العام</div>
+          <div class="signature-image-container">
+            <span style="color: #607d8b; font-size: 9px;">في انتظار التوقيع</span>
+          </div>
+          <div class="signature-line"></div>
+          <div class="signature-name">${SIGNATURES.supervisor.name}</div>
+          <div class="signature-role">${SIGNATURES.supervisor.title}</div>
+        </div>
+        
+        <div class="stamp-box">
+          <div style="width: 95px; height: 95px; border: 2px dashed #e0e0e0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+            <span style="color: #607d8b; font-size: 9px;">الختم</span>
+          </div>
+          <div class="stamp-label">ختم الإدارة</div>
+        </div>
+        
+        <div class="signature-box">
+          <div class="signature-title">توقيع المدير العام</div>
+          <div class="signature-image-container">
+            <span style="color: #607d8b; font-size: 9px;">في انتظار التوقيع</span>
+          </div>
+          <div class="signature-line"></div>
+          <div class="signature-name">${SIGNATURES.manager.name}</div>
+          <div class="signature-role">${SIGNATURES.manager.title}</div>
+        </div>
       </div>
       `}
     </div>
-
+    
+    <!-- التذييل -->
     <div class="footer">
-      <span>تم إنشاء هذا المستند بواسطة Symbol AI</span>
-      <span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}</span>
-      <span>جميع الحقوق محفوظة © ${new Date().getFullYear()}</span>
+      <div class="footer-content">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <img src="/symbol-ai-logo.png" alt="Logo" class="footer-logo" onerror="this.style.display='none'" />
+          <span>Symbol AI - صالونات قصه وتخفيف وفروعها</span>
+        </div>
+        <div>جميع الحقوق محفوظة © ${new Date().getFullYear()}</div>
+        <div>تم الطباعة: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}</div>
+      </div>
     </div>
   </div>
 </body>
