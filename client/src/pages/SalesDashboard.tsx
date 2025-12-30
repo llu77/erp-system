@@ -32,6 +32,7 @@ import {
   getPDFFooter,
   getPDFInfoSection,
   getPDFSummarySection,
+  getPDFApprovalSection,
   openPrintWindow,
   formatCurrency as pdfFormatCurrency
 } from "@/utils/pdfTemplates";
@@ -554,6 +555,15 @@ export default function SalesDashboard() {
     </tbody>
   </table>
   ` : ''}
+  
+  <!-- قسم التوقيعات والختم -->
+  ${getPDFApprovalSection({
+    isApproved: true,
+    showStamp: true,
+    showSupervisorSignature: true,
+    showManagerSignature: true,
+    approvalDate: new Date().toLocaleDateString('ar-SA')
+  })}
   
   ${getPDFFooter()}
 </body>

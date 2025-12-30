@@ -3498,7 +3498,7 @@ export async function getActualExpenses(startDate: Date, endDate: Date, branchId
   };
 }
 
-// حساب أداء الموظفين
+// حساب أداء الموظفين (مع استبعاد موظفي النظام)
 export async function getEmployeesPerformance(startDate: Date, endDate: Date, branchId?: number) {
   const db = await getDb();
   if (!db) return [];
@@ -3506,7 +3506,9 @@ export async function getEmployeesPerformance(startDate: Date, endDate: Date, br
   // الربط مع dailyRevenues للحصول على التاريخ
   const conditions = [
     gte(dailyRevenues.date, startDate),
-    lte(dailyRevenues.date, endDate)
+    lte(dailyRevenues.date, endDate),
+    // استبعاد موظفي النظام (النظام، النظم، System)
+    sql`${employees.name} NOT LIKE '%النظام%' AND ${employees.name} NOT LIKE '%النظم%' AND ${employees.name} NOT LIKE '%System%' AND ${employees.code} != '0000' AND ${employees.code} != '0000t'`
   ];
   
   if (branchId) {

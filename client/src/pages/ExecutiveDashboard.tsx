@@ -33,6 +33,9 @@ import {
   getPDFInfoSection,
   getPDFSummarySection,
   getPDFTable,
+  getPDFSectionTitle,
+  getPDFApprovalSection,
+  createPDFDocument,
   openPrintWindow,
   formatCurrency as pdfFormatCurrency
 } from "@/utils/pdfTemplates";
@@ -435,6 +438,15 @@ export default function ExecutiveDashboard() {
     }).join('')}
   </div>
   ` : ''}
+  
+  <!-- قسم التوقيعات والختم -->
+  ${getPDFApprovalSection({
+    isApproved: true,
+    showStamp: true,
+    showSupervisorSignature: true,
+    showManagerSignature: true,
+    approvalDate: new Date().toLocaleDateString('ar-SA')
+  })}
   
   ${getPDFFooter()}
 </body>
