@@ -403,11 +403,11 @@ export const PDF_BASE_STYLES = `
   .pdf-signature-box {
     flex: 1;
     text-align: center;
-    padding: 15px;
+    padding: 20px;
     background: ${PDF_COLORS.white};
     border: 2px solid ${PDF_COLORS.border};
     border-radius: 10px;
-    min-height: 140px;
+    min-height: 180px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -428,16 +428,16 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-signature-image-container {
-    height: 55px;
+    height: 90px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 5px 0;
+    margin: 10px 0;
   }
   
   .pdf-signature-image {
-    max-height: 55px;
-    max-width: 100px;
+    max-height: 90px;
+    max-width: 160px;
     object-fit: contain;
   }
   
@@ -462,14 +462,14 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-stamp-box {
-    flex: 0 0 130px;
+    flex: 0 0 160px;
     text-align: center;
-    padding: 10px;
+    padding: 15px;
   }
   
   .pdf-stamp-image {
-    width: 110px;
-    height: 110px;
+    width: 140px;
+    height: 140px;
     object-fit: contain;
   }
   

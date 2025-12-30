@@ -316,7 +316,7 @@ export const appRouter = router({
       return await db.getLowStockProducts();
     }),
 
-    create: managerProcedure
+    create: supervisorInputProcedure
       .input(z.object({
         name: z.string().min(1, 'اسم المنتج مطلوب'),
         description: z.string().optional(),

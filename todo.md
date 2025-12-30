@@ -1406,3 +1406,8 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إصلاح getDashboardStats
 - [x] إصلاح getActualRevenues
 - [x] إصلاح getDailyRevenuesByDateRange
+
+
+## صلاحيات الموظف السيد وتكبير التوقيعات (طلب جديد)
+- [x] إضافة صلاحية إنشاء المنتجات للموظف السيد (supervisor)
+- [x] تكبير التوقيعات في قوالب PDF
