@@ -31,7 +31,8 @@ import {
   Printer,
   CheckSquare,
   AlertCircle,
-  Edit3
+  Edit3,
+  Pencil
 } from "lucide-react";
 
 export default function InventoryCounting() {
@@ -39,9 +40,13 @@ export default function InventoryCounting() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [countedQuantity, setCountedQuantity] = useState("");
+  const [monthlyRequiredValue, setMonthlyRequiredValue] = useState("");
+  const [productNameValue, setProductNameValue] = useState("");
   const [reason, setReason] = useState("");
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showEditNameDialog, setShowEditNameDialog] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [activeTab, setActiveTab] = useState("all");
 
@@ -73,10 +78,34 @@ export default function InventoryCounting() {
       refetchActive();
       setSelectedItem(null);
       setCountedQuantity("");
+      setMonthlyRequiredValue("");
       setReason("");
     },
     onError: (error) => {
       toast.error(error.message || "فشل في تحديث الكمية");
+    },
+  });
+
+  const updateItemName = trpc.inventoryCounting.updateItemName.useMutation({
+    onSuccess: () => {
+      toast.success("تم تحديث اسم المنتج بنجاح");
+      refetchItems();
+      setShowEditNameDialog(false);
+      setEditingItem(null);
+      setProductNameValue("");
+    },
+    onError: (error) => {
+      toast.error(error.message || "فشل في تحديث اسم المنتج");
+    },
+  });
+
+  const updateMonthlyRequired = trpc.inventoryCounting.updateMonthlyRequired.useMutation({
+    onSuccess: () => {
+      toast.success("تم تحديث المطلوب شهرياً بنجاح");
+      refetchItems();
+    },
+    onError: (error) => {
+      toast.error(error.message || "فشل في تحديث المطلوب شهرياً");
     },
   });
 
@@ -155,6 +184,14 @@ export default function InventoryCounting() {
   const handleUpdateQuantity = () => {
     if (!selectedItem || countedQuantity === "") return;
     
+    // تحديث المطلوب شهرياً إذا تم تغييره
+    if (monthlyRequiredValue !== "" && parseInt(monthlyRequiredValue) !== selectedItem.monthlyRequired) {
+      updateMonthlyRequired.mutate({
+        itemId: selectedItem.id,
+        monthlyRequired: parseInt(monthlyRequiredValue),
+      });
+    }
+    
     updateQuantity.mutate({
       itemId: selectedItem.id,
       countedQuantity: parseInt(countedQuantity),
@@ -166,7 +203,24 @@ export default function InventoryCounting() {
   const openCountDialog = (item: any) => {
     setSelectedItem(item);
     setCountedQuantity(item.status === "counted" ? item.countedQuantity.toString() : "");
+    setMonthlyRequiredValue(item.monthlyRequired?.toString() || "10");
     setReason(item.reason || "");
+  };
+
+  // فتح نافذة تعديل الاسم
+  const openEditNameDialog = (item: any) => {
+    setEditingItem(item);
+    setProductNameValue(item.productName);
+    setShowEditNameDialog(true);
+  };
+
+  // حفظ اسم المنتج
+  const handleSaveProductName = () => {
+    if (!editingItem || !productNameValue.trim()) return;
+    updateItemName.mutate({
+      itemId: editingItem.id,
+      productName: productNameValue.trim(),
+    });
   };
 
   // طباعة تقرير الجرد
@@ -238,19 +292,19 @@ export default function InventoryCounting() {
               <th>#</th>
               <th>المنتج</th>
               <th>الرمز</th>
-              <th>الكمية النظرية</th>
+              <th>المطلوب شهرياً</th>
               <th>الكمية الفعلية</th>
               <th>الفرق</th>
               <th>الحالة</th>
             </tr>
           </thead>
           <tbody>
-            ${countItems.map((item, index) => `
+            ${countItems.map((item: any, index: number) => `
               <tr>
                 <td>${index + 1}</td>
                 <td style="text-align: right;">${item.productName}</td>
                 <td>${item.productSku || "-"}</td>
-                <td>${item.systemQuantity}</td>
+                <td>${item.monthlyRequired || 10}</td>
                 <td>${item.status === "counted" ? item.countedQuantity : "-"}</td>
                 <td class="${item.variance > 0 ? 'variance-positive' : item.variance < 0 ? 'variance-negative' : ''}">
                   ${item.variance}
@@ -294,6 +348,9 @@ export default function InventoryCounting() {
   const isManager = user?.role === "admin" || user?.role === "manager";
   const isSupervisor = user?.role === "supervisor";
   
+  // صلاحية تعديل اسم المنتج والمطلوب شهرياً (للمشرف والأدمن فقط)
+  const canEditProductDetails = isAdmin || isSupervisor;
+  
   const canStartCount = isManager || isSupervisor;
   const canApproveCount = isAdmin || isManager || (isSupervisor && activeCount && 
     (activeCount.createdBy === user?.id || activeCount.branchId === user?.branchId));
@@ -305,7 +362,7 @@ export default function InventoryCounting() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl md:text-2xl font-bold">الجرد الفعلي</h1>
-          <p className="text-sm text-muted-foreground">تسجيل الكميات الفعلية ومقارنتها بالمخزون النظري</p>
+          <p className="text-sm text-muted-foreground">تسجيل الكميات الفعلية ومقارنتها بالمطلوب شهرياً</p>
         </div>
         
         {!activeCount && canStartCount && (
@@ -535,14 +592,29 @@ export default function InventoryCounting() {
 
                 {/* عرض البطاقات للموبايل */}
                 <div className="space-y-3">
-                  {filteredItems.map((item) => (
+                  {filteredItems.map((item: any) => (
                     <div 
                       key={item.id} 
                       className="border rounded-lg p-3 hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{item.productName}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium text-sm truncate">{item.productName}</div>
+                            {canEditProductDetails && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 flex-shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEditNameDialog(item);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
                           {item.productSku && (
                             <div className="text-xs text-muted-foreground">{item.productSku}</div>
                           )}
@@ -557,8 +629,8 @@ export default function InventoryCounting() {
                       
                       <div className="grid grid-cols-3 gap-2 text-center text-sm mb-3">
                         <div className="bg-muted/50 rounded p-2">
-                          <div className="text-xs text-muted-foreground">النظرية</div>
-                          <div className="font-bold">{item.systemQuantity}</div>
+                          <div className="text-xs text-muted-foreground">المطلوب شهرياً</div>
+                          <div className="font-bold">{item.monthlyRequired || 10}</div>
                         </div>
                         <div className="bg-muted/50 rounded p-2">
                           <div className="text-xs text-muted-foreground">الفعلية</div>
@@ -618,9 +690,21 @@ export default function InventoryCounting() {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-muted rounded-lg text-center">
-                    <div className="text-sm text-muted-foreground">الكمية النظرية</div>
-                    <div className="text-2xl font-bold">{selectedItem?.systemQuantity}</div>
+                  <div className="space-y-2">
+                    <Label>المطلوب شهرياً</Label>
+                    {canEditProductDetails ? (
+                      <Input
+                        type="number"
+                        min="0"
+                        value={monthlyRequiredValue}
+                        onChange={(e) => setMonthlyRequiredValue(e.target.value)}
+                        className="text-lg text-center"
+                      />
+                    ) : (
+                      <div className="p-3 bg-muted rounded-lg text-center">
+                        <div className="text-2xl font-bold">{selectedItem?.monthlyRequired || 10}</div>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>الكمية الفعلية</Label>
@@ -636,12 +720,12 @@ export default function InventoryCounting() {
                   </div>
                 </div>
                 
-                {countedQuantity !== "" && parseInt(countedQuantity) !== selectedItem?.systemQuantity && (
-                  <div className={`p-3 rounded-lg ${parseInt(countedQuantity) > selectedItem?.systemQuantity ? "bg-blue-500/10" : "bg-red-500/10"}`}>
+                {countedQuantity !== "" && parseInt(countedQuantity) !== (parseInt(monthlyRequiredValue) || selectedItem?.monthlyRequired || 10) && (
+                  <div className={`p-3 rounded-lg ${parseInt(countedQuantity) > (parseInt(monthlyRequiredValue) || selectedItem?.monthlyRequired || 10) ? "bg-blue-500/10" : "bg-red-500/10"}`}>
                     <div className="flex items-center justify-between">
                       <span>الفرق:</span>
-                      <span className={`font-bold text-lg ${parseInt(countedQuantity) > selectedItem?.systemQuantity ? "text-blue-500" : "text-red-500"}`}>
-                        {parseInt(countedQuantity) - (selectedItem?.systemQuantity || 0)}
+                      <span className={`font-bold text-lg ${parseInt(countedQuantity) > (parseInt(monthlyRequiredValue) || selectedItem?.monthlyRequired || 10) ? "text-blue-500" : "text-red-500"}`}>
+                        {parseInt(countedQuantity) - (parseInt(monthlyRequiredValue) || selectedItem?.monthlyRequired || 10)}
                       </span>
                     </div>
                   </div>
@@ -670,6 +754,40 @@ export default function InventoryCounting() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          {/* نافذة تعديل اسم المنتج */}
+          <Dialog open={showEditNameDialog} onOpenChange={setShowEditNameDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>تعديل اسم المنتج</DialogTitle>
+                <DialogDescription>
+                  يمكنك تعديل اسم المنتج في الجرد
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>اسم المنتج</Label>
+                  <Input
+                    value={productNameValue}
+                    onChange={(e) => setProductNameValue(e.target.value)}
+                    placeholder="أدخل اسم المنتج"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <Button variant="outline" onClick={() => setShowEditNameDialog(false)} className="w-full sm:w-auto">إلغاء</Button>
+                <Button 
+                  onClick={handleSaveProductName} 
+                  disabled={updateItemName.isPending || !productNameValue.trim()}
+                  className="w-full sm:w-auto"
+                >
+                  {updateItemName.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
+                  حفظ
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       ) : (
         /* لا يوجد جرد جاري */
@@ -691,7 +809,7 @@ export default function InventoryCounting() {
       )}
 
       {/* سجل الجرد */}
-      {countHistory && countHistory.filter(c => c.status !== "in_progress").length > 0 && (
+      {countHistory && countHistory.filter((c: any) => c.status !== "in_progress").length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -701,7 +819,7 @@ export default function InventoryCounting() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {countHistory.filter(c => c.status !== "in_progress").slice(0, 5).map((count) => (
+              {countHistory.filter((c: any) => c.status !== "in_progress").slice(0, 5).map((count: any) => (
                 <div key={count.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
                     <div className="font-medium text-sm">{count.countNumber}</div>

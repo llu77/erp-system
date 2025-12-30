@@ -4129,6 +4129,30 @@ export async function updateInventoryItemReason(itemId: number, reason: string) 
   return { success: true };
 }
 
+// تحديث اسم المنتج في الجرد
+export async function updateInventoryItemName(itemId: number, productName: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  await db.update(inventoryCountItems).set({
+    productName,
+  }).where(eq(inventoryCountItems.id, itemId));
+  
+  return { success: true };
+}
+
+// تحديث المطلوب شهرياً
+export async function updateInventoryMonthlyRequired(itemId: number, monthlyRequired: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  await db.update(inventoryCountItems).set({
+    monthlyRequired,
+  }).where(eq(inventoryCountItems.id, itemId));
+  
+  return { success: true };
+}
+
 
 // ==================== دوال نظام المهام ====================
 

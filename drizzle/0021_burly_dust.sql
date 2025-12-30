@@ -1,0 +1,1 @@
+ALTER TABLE `inventoryCountItems` ADD `monthlyRequired` int DEFAULT 10 NOT NULL;

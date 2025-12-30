@@ -4048,6 +4048,36 @@ export const appRouter = router({
         return await updateInventoryItemReason(input.itemId, input.reason);
       }),
 
+    // تحديث اسم المنتج (متاح للمشرف والأدمن فقط)
+    updateItemName: supervisorInputProcedure
+      .input(z.object({
+        itemId: z.number(),
+        productName: z.string().min(1, "اسم المنتج مطلوب"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // فقط المشرف والأدمن يمكنهم تعديل اسم المنتج
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'supervisor') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك تعديل اسم المنتج' });
+        }
+        const { updateInventoryItemName } = await import('./db');
+        return await updateInventoryItemName(input.itemId, input.productName);
+      }),
+
+    // تحديث المطلوب شهرياً (متاح للمشرف والأدمن فقط)
+    updateMonthlyRequired: supervisorInputProcedure
+      .input(z.object({
+        itemId: z.number(),
+        monthlyRequired: z.number().min(0, "يجب أن يكون الرقم موجباً"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // فقط المشرف والأدمن يمكنهم تعديل المطلوب شهرياً
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'supervisor') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك تعديل المطلوب شهرياً' });
+        }
+        const { updateInventoryMonthlyRequired } = await import('./db');
+        return await updateInventoryMonthlyRequired(input.itemId, input.monthlyRequired);
+      }),
+
     // تقرير فروقات الجرد
     varianceReport: supervisorViewProcedure
       .input(z.object({ countId: z.number() }))

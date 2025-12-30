@@ -921,6 +921,7 @@ export const inventoryCountItems = mysqlTable("inventoryCountItems", {
   productName: varchar("productName", { length: 255 }).notNull(),
   productSku: varchar("productSku", { length: 50 }),
   systemQuantity: int("systemQuantity").default(0).notNull(),
+  monthlyRequired: int("monthlyRequired").default(10).notNull(), // المطلوب شهرياً
   countedQuantity: int("countedQuantity").default(0).notNull(),
   variance: int("variance").default(0).notNull(),
   unitCost: decimal("unitCost", { precision: 12, scale: 2 }).default("0.00").notNull(),
