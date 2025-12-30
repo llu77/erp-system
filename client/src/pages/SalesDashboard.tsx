@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
+import { toast } from "sonner";
 import { 
   TrendingUp, 
   TrendingDown,
@@ -20,12 +21,25 @@ import {
   ArrowDownRight,
   BarChart3,
   Target,
-  Wallet
+  Wallet,
+  Download,
+  Loader2,
+  FileText
 } from "lucide-react";
+import {
+  PDF_BASE_STYLES,
+  getPDFHeader,
+  getPDFFooter,
+  getPDFInfoSection,
+  getPDFSummarySection,
+  openPrintWindow,
+  formatCurrency as pdfFormatCurrency
+} from "@/utils/pdfTemplates";
 
 export default function SalesDashboard() {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [period, setPeriod] = useState<"week" | "month" | "quarter" | "year">("month");
+  const [isExporting, setIsExporting] = useState(false);
 
   // حساب نطاق التاريخ بناءً على الفترة المختارة
   const dateRange = useMemo(() => {
@@ -130,6 +144,15 @@ export default function SalesDashboard() {
     }
   };
 
+  const getPeriodName = () => {
+    switch (period) {
+      case "week": return "أسبوع";
+      case "month": return "شهر";
+      case "quarter": return "ربع سنة";
+      case "year": return "سنة";
+    }
+  };
+
   const getSelectedBranchName = () => {
     if (selectedBranch === "all") return "جميع الفروع";
     return branches?.find(b => b.id.toString() === selectedBranch)?.name || "";
@@ -140,6 +163,412 @@ export default function SalesDashboard() {
     if (!chartData || chartData.length === 0) return null;
     return chartData.reduce((best, day) => day.total > best.total ? day : best, chartData[0]);
   }, [chartData]);
+
+  // دالة تصدير PDF
+  const handleExportPDF = async () => {
+    if (!kpis) {
+      toast.error("لا توجد بيانات للتصدير");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const branchName = getSelectedBranchName();
+      const periodName = getPeriodName();
+      const startDateStr = dateRange.start.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+      const endDateStr = dateRange.end.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+
+      // إنشاء محتوى HTML للتقرير
+      const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير لوحة الإيرادات - ${branchName}</title>
+  <style>
+    ${PDF_BASE_STYLES}
+    
+    .revenue-summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+    
+    .summary-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    .summary-card.total { border-top: 4px solid #22c55e; }
+    .summary-card.profit { border-top: 4px solid #3b82f6; }
+    .summary-card.average { border-top: 4px solid #8b5cf6; }
+    .summary-card.best { border-top: 4px solid #f59e0b; }
+    
+    .summary-label {
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    
+    .summary-value {
+      font-size: 22px;
+      font-weight: 700;
+    }
+    
+    .summary-value.green { color: #22c55e; }
+    .summary-value.blue { color: #3b82f6; }
+    .summary-value.purple { color: #8b5cf6; }
+    .summary-value.amber { color: #f59e0b; }
+    .summary-value.red { color: #ef4444; }
+    
+    .summary-change {
+      font-size: 11px;
+      margin-top: 8px;
+      padding: 4px 8px;
+      border-radius: 20px;
+      display: inline-block;
+    }
+    
+    .summary-change.up { background: #dcfce7; color: #166534; }
+    .summary-change.down { background: #fee2e2; color: #991b1b; }
+    
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 25px 0 15px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #6366f1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .payment-methods {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+    
+    .payment-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    .payment-card .icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 10px;
+      font-size: 18px;
+    }
+    
+    .payment-card.cash .icon { background: #dcfce7; color: #22c55e; }
+    .payment-card.network .icon { background: #dbeafe; color: #3b82f6; }
+    .payment-card.balance .icon { background: #f3e8ff; color: #8b5cf6; }
+    
+    .payment-card .label { font-size: 11px; color: #64748b; }
+    .payment-card .value { font-size: 20px; font-weight: 700; margin: 8px 0; }
+    .payment-card .percent { font-size: 12px; color: #64748b; }
+    
+    .payment-card.cash .value { color: #22c55e; }
+    .payment-card.network .value { color: #3b82f6; }
+    .payment-card.balance .value { color: #8b5cf6; }
+    
+    .progress-bar {
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    
+    .progress-bar .fill {
+      height: 100%;
+      border-radius: 4px;
+    }
+    
+    .progress-bar .fill.green { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .progress-bar .fill.blue { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .progress-bar .fill.purple { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+    
+    .employee-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .employee-table th {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: white;
+      padding: 12px 15px;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+    }
+    
+    .employee-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #e2e8f0;
+      text-align: center;
+      font-size: 12px;
+    }
+    
+    .employee-table tr:last-child td { border-bottom: none; }
+    .employee-table tr:nth-child(even) { background: #f8fafc; }
+    
+    .rank-badge {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    
+    .rank-1 { background: #fef08a; color: #854d0e; }
+    .rank-2 { background: #e2e8f0; color: #475569; }
+    .rank-3 { background: #fed7aa; color: #9a3412; }
+    .rank-other { background: #f1f5f9; color: #64748b; }
+    
+    .revenue-value { font-weight: 700; color: #22c55e; }
+    .average-value { color: #6366f1; }
+    
+    .daily-chart {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 25px;
+    }
+    
+    .chart-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 150px;
+      padding: 10px 0;
+    }
+    
+    .chart-bar {
+      flex: 1;
+      background: linear-gradient(to top, #22c55e, #4ade80);
+      border-radius: 4px 4px 0 0;
+      min-height: 4px;
+    }
+    
+    .comparison-box {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 25px;
+    }
+    
+    .comparison-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 15px;
+      opacity: 0.9;
+    }
+    
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    
+    .comparison-item { text-align: center; }
+    .comparison-label { font-size: 11px; opacity: 0.8; }
+    .comparison-value { font-size: 18px; font-weight: 700; margin-top: 5px; }
+    
+    @media print {
+      .revenue-summary { grid-template-columns: repeat(2, 1fr); }
+      .payment-methods { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  ${getPDFHeader('تقرير لوحة الإيرادات', `RPT-REV-${Date.now()}`)}
+  
+  ${getPDFInfoSection([
+    { label: 'الفرع', value: branchName },
+    { label: 'الفترة', value: periodName },
+    { label: 'من تاريخ', value: startDateStr },
+    { label: 'إلى تاريخ', value: endDateStr },
+    { label: 'أيام العمل', value: kpis.daysCount || 0 },
+  ])}
+  
+  <!-- ملخص الإيرادات -->
+  <div class="section-title">📊 ملخص الإيرادات</div>
+  <div class="revenue-summary">
+    <div class="summary-card total">
+      <div class="summary-label">إجمالي الإيرادات</div>
+      <div class="summary-value green">${pdfFormatCurrency(kpis.totalRevenue || 0)}</div>
+      ${comparison ? `<div class="summary-change ${comparison.changes.revenueChange >= 0 ? 'up' : 'down'}">
+        ${comparison.changes.revenueChange >= 0 ? '↑' : '↓'} ${Math.abs(comparison.changes.revenueChange).toFixed(1)}%
+      </div>` : ''}
+    </div>
+    
+    <div class="summary-card profit">
+      <div class="summary-label">صافي الربح</div>
+      <div class="summary-value ${(kpis.netProfit || 0) >= 0 ? 'blue' : 'red'}">${pdfFormatCurrency(kpis.netProfit || 0)}</div>
+      ${comparison ? `<div class="summary-change ${comparison.changes.profitChange >= 0 ? 'up' : 'down'}">
+        ${comparison.changes.profitChange >= 0 ? '↑' : '↓'} ${Math.abs(comparison.changes.profitChange).toFixed(1)}%
+      </div>` : ''}
+    </div>
+    
+    <div class="summary-card average">
+      <div class="summary-label">متوسط الإيراد اليومي</div>
+      <div class="summary-value purple">${pdfFormatCurrency(kpis.averageDailyRevenue || 0)}</div>
+      <div style="font-size: 11px; color: #64748b; margin-top: 5px;">من ${kpis.daysCount || 0} يوم عمل</div>
+    </div>
+    
+    <div class="summary-card best">
+      <div class="summary-label">أفضل يوم مبيعات</div>
+      <div class="summary-value amber">${bestDay ? pdfFormatCurrency(bestDay.total) : '-'}</div>
+      ${bestDay ? `<div style="font-size: 11px; color: #64748b; margin-top: 5px;">${new Date(bestDay.date).toLocaleDateString('ar-SA', { weekday: 'long', day: 'numeric', month: 'short' })}</div>` : ''}
+    </div>
+  </div>
+  
+  <!-- طرق الدفع -->
+  <div class="section-title">💳 تفاصيل طرق الدفع</div>
+  <div class="payment-methods">
+    <div class="payment-card cash">
+      <div class="icon">💵</div>
+      <div class="label">إجمالي النقدي</div>
+      <div class="value">${pdfFormatCurrency(kpis.totalCash || 0)}</div>
+      <div class="percent">${(kpis.cashPercentage || 0).toFixed(1)}% من الإجمالي</div>
+      <div class="progress-bar">
+        <div class="fill green" style="width: ${kpis.cashPercentage || 0}%"></div>
+      </div>
+    </div>
+    
+    <div class="payment-card network">
+      <div class="icon">💳</div>
+      <div class="label">إجمالي الشبكة</div>
+      <div class="value">${pdfFormatCurrency(kpis.totalNetwork || 0)}</div>
+      <div class="percent">${(kpis.networkPercentage || 0).toFixed(1)}% من الإجمالي</div>
+      <div class="progress-bar">
+        <div class="fill blue" style="width: ${kpis.networkPercentage || 0}%"></div>
+      </div>
+    </div>
+    
+    <div class="payment-card balance">
+      <div class="icon">💰</div>
+      <div class="label">إجمالي الرصيد</div>
+      <div class="value">${pdfFormatCurrency(kpis.totalBalance || 0)}</div>
+      <div class="percent">هامش الربح: ${(kpis.profitMargin || 0).toFixed(1)}%</div>
+      <div class="progress-bar">
+        <div class="fill purple" style="width: ${Math.min(100, kpis.profitMargin || 0)}%"></div>
+      </div>
+    </div>
+  </div>
+  
+  ${comparison ? `
+  <!-- مقارنة مع الفترة السابقة -->
+  <div class="comparison-box">
+    <div class="comparison-title">📈 مقارنة مع ${getPeriodLabel()}</div>
+    <div class="comparison-grid">
+      <div class="comparison-item">
+        <div class="comparison-label">تغير الإيرادات</div>
+        <div class="comparison-value">${comparison.changes.revenueChange >= 0 ? '+' : ''}${comparison.changes.revenueChange.toFixed(1)}%</div>
+      </div>
+      <div class="comparison-item">
+        <div class="comparison-label">تغير الأرباح</div>
+        <div class="comparison-value">${comparison.changes.profitChange >= 0 ? '+' : ''}${comparison.changes.profitChange.toFixed(1)}%</div>
+      </div>
+      <div class="comparison-item">
+        <div class="comparison-label">تغير المصاريف</div>
+        <div class="comparison-value">${comparison.changes.expensesChange >= 0 ? '+' : ''}${comparison.changes.expensesChange.toFixed(1)}%</div>
+      </div>
+    </div>
+  </div>
+  ` : ''}
+  
+  ${chartData && chartData.length > 0 ? `
+  <!-- الرسم البياني للإيرادات اليومية -->
+  <div class="section-title">📈 الإيرادات اليومية</div>
+  <div class="daily-chart">
+    <div class="chart-bars">
+      ${chartData.map(day => {
+        const maxTotal = Math.max(...chartData.map(d => d.total));
+        const height = maxTotal > 0 ? (day.total / maxTotal) * 100 : 0;
+        return `<div class="chart-bar" style="height: ${Math.max(height, 2)}%;" title="${day.date}: ${pdfFormatCurrency(day.total)}"></div>`;
+      }).join('')}
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 10px; color: #64748b; margin-top: 10px;">
+      <span>${chartData.length > 0 ? new Date(chartData[0].date).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' }) : ''}</span>
+      <span>${chartData.length > 0 ? new Date(chartData[chartData.length - 1].date).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' }) : ''}</span>
+    </div>
+  </div>
+  ` : ''}
+  
+  ${employeesPerformance && employeesPerformance.length > 0 ? `
+  <!-- أداء الموظفين -->
+  <div class="section-title">👥 أداء الموظفين (أفضل 10)</div>
+  <table class="employee-table">
+    <thead>
+      <tr>
+        <th style="width: 60px;">الترتيب</th>
+        <th>الموظف</th>
+        <th>الكود</th>
+        ${selectedBranch === "all" ? '<th>الفرع</th>' : ''}
+        <th>إجمالي الإيرادات</th>
+        <th>أيام العمل</th>
+        <th>المتوسط اليومي</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${employeesPerformance.slice(0, 10).map((emp, index) => {
+        const branch = branches?.find(b => b.id === emp.branchId);
+        return `
+        <tr>
+          <td><span class="rank-badge ${index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : 'rank-other'}">${index + 1}</span></td>
+          <td style="font-weight: 600;">${emp.employeeName}</td>
+          <td>${emp.employeeCode}</td>
+          ${selectedBranch === "all" ? `<td>${branch?.name || '-'}</td>` : ''}
+          <td class="revenue-value">${pdfFormatCurrency(emp.totalRevenue)}</td>
+          <td>${emp.daysWorked} يوم</td>
+          <td class="average-value">${pdfFormatCurrency(emp.averageDaily)}</td>
+        </tr>
+        `;
+      }).join('')}
+    </tbody>
+  </table>
+  ` : ''}
+  
+  ${getPDFFooter()}
+</body>
+</html>
+      `;
+
+      openPrintWindow(htmlContent);
+      toast.success("تم فتح التقرير للطباعة أو الحفظ كـ PDF");
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error("فشل تصدير التقرير");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -185,6 +614,21 @@ export default function SalesDashboard() {
           
           <Button variant="outline" size="icon" onClick={() => refetchKpis()}>
             <RefreshCw className="h-4 w-4" />
+          </Button>
+          
+          {/* زر تصدير PDF */}
+          <Button
+            variant="default"
+            onClick={handleExportPDF}
+            disabled={isExporting || kpisLoading || !kpis}
+            className="gap-2"
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            طباعة التقرير
           </Button>
         </div>
       </div>
