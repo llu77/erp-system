@@ -48,6 +48,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { PDF_COLORS, SIGNATURES, PDF_BASE_STYLES } from "@/utils/pdfTemplates";
 
 // أسماء الأشهر بالعربية
 const arabicMonths = [
@@ -514,6 +515,7 @@ export default function Payrolls() {
     const monthName = arabicMonths[payroll.month - 1];
     const grossSalary = parseFloat(detail.baseSalary) + parseFloat(detail.overtimeAmount || '0') + parseFloat(detail.incentiveAmount || '0');
     const totalDeductions = parseFloat(detail.absentDeduction || '0') + parseFloat(detail.deductionAmount || '0') + parseFloat(detail.advanceDeduction || '0');
+    const isApproved = payroll.status === 'approved';
 
     const html = `
 <!DOCTYPE html>
@@ -522,57 +524,86 @@ export default function Payrolls() {
   <meta charset="UTF-8">
   <title>قسيمة راتب - ${detail.employeeName}</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-      font-size: 12px;
-      line-height: 1.6;
+      font-family: 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.7;
       color: #333;
       background: #fff;
       padding: 20px;
     }
     .payslip {
-      max-width: 600px;
+      max-width: 650px;
       margin: 0 auto;
-      border: 2px solid #1e40af;
+      border: 2px solid ${PDF_COLORS.primary};
       border-radius: 12px;
       overflow: hidden;
+      position: relative;
     }
+    .status-badge {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 6px 25px;
+      border-radius: 0 0 12px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      z-index: 10;
+    }
+    .status-approved { background: #276749; color: white; }
+    .status-pending { background: #c05621; color: white; }
     .header {
-      background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+      background: ${PDF_COLORS.primary};
       color: white;
-      padding: 20px;
-      text-align: center;
+      padding: 25px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-    .header h1 { font-size: 24px; margin-bottom: 5px; }
-    .header p { opacity: 0.9; font-size: 14px; }
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo img { height: 50px; }
+    .header-logo h1 { font-size: 22px; font-weight: 800; }
+    .header-logo p { font-size: 11px; opacity: 0.9; }
+    .header-info { text-align: left; }
+    .header-info .doc-title { font-size: 16px; font-weight: 700; margin-bottom: 5px; }
     .period-badge {
       display: inline-block;
       background: rgba(255,255,255,0.2);
       padding: 5px 15px;
       border-radius: 20px;
-      margin-top: 10px;
-      font-size: 12px;
+      font-size: 11px;
     }
     .employee-info {
-      background: #f8fafc;
-      padding: 20px;
+      background: #f7fafc;
+      padding: 18px;
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 15px;
-      border-bottom: 1px solid #e2e8f0;
+      gap: 12px;
+      border-bottom: 1px solid #cbd5e0;
     }
-    .info-item { }
-    .info-item label { display: block; font-size: 11px; color: #666; margin-bottom: 3px; }
-    .info-item span { font-size: 14px; font-weight: bold; color: #1e40af; }
-    .salary-details { padding: 20px; }
+    .info-item {
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e0;
+    }
+    .info-item label { display: block; font-size: 10px; color: #718096; margin-bottom: 4px; font-weight: 500; }
+    .info-item span { font-size: 13px; font-weight: 700; color: ${PDF_COLORS.primary}; }
+    .salary-details { padding: 18px; }
     .section-title {
-      font-size: 14px;
-      font-weight: bold;
-      color: #1e40af;
-      margin-bottom: 15px;
+      font-size: 13px;
+      font-weight: 700;
+      color: ${PDF_COLORS.primary};
+      margin-bottom: 12px;
       padding-bottom: 8px;
-      border-bottom: 2px solid #e2e8f0;
+      border-bottom: 2px solid ${PDF_COLORS.primary};
     }
     .salary-row {
       display: flex;
@@ -581,44 +612,105 @@ export default function Payrolls() {
       border-bottom: 1px solid #f1f5f9;
     }
     .salary-row:last-child { border-bottom: none; }
-    .salary-row .label { color: #666; }
-    .salary-row .value { font-weight: bold; }
-    .salary-row .value.positive { color: #16a34a; }
-    .salary-row .value.negative { color: #dc2626; }
-    .earnings { background: #f0fdf4; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
-    .deductions { background: #fef2f2; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+    .salary-row .label { color: #4a5568; font-size: 12px; }
+    .salary-row .value { font-weight: 700; font-size: 12px; }
+    .salary-row .value.positive { color: #276749; }
+    .salary-row .value.negative { color: #c53030; }
+    .earnings { background: #f0fff4; padding: 15px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #c6f6d5; }
+    .deductions { background: #fff5f5; padding: 15px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #fed7d7; }
     .net-salary {
-      background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+      background: ${PDF_COLORS.primary};
       color: white;
       padding: 20px;
       text-align: center;
-      margin: 20px 0;
+      margin: 15px 0;
       border-radius: 8px;
     }
-    .net-salary .label { font-size: 14px; opacity: 0.9; margin-bottom: 5px; }
-    .net-salary .amount { font-size: 32px; font-weight: bold; }
-    .footer {
-      background: #f8fafc;
+    .net-salary .label { font-size: 12px; opacity: 0.9; margin-bottom: 5px; }
+    .net-salary .amount { font-size: 28px; font-weight: 800; }
+    .approval-section {
       padding: 20px;
+      border-top: 2px solid #cbd5e0;
+      background: #f7fafc;
+    }
+    .approval-title {
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: ${PDF_COLORS.primary};
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed #cbd5e0;
+    }
+    .signatures-container {
       display: flex;
       justify-content: space-between;
-      border-top: 1px solid #e2e8f0;
+      align-items: flex-start;
+      gap: 15px;
     }
-    .signature-box { text-align: center; width: 45%; }
-    .signature-box .line { border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; font-size: 11px; color: #666; }
-    .print-date { text-align: center; padding: 10px; font-size: 10px; color: #999; }
+    .signature-box {
+      flex: 1;
+      text-align: center;
+      padding: 12px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #cbd5e0;
+    }
+    .signature-title { font-size: 10px; color: #718096; margin-bottom: 8px; }
+    .signature-image { height: 40px; max-width: 100px; object-fit: contain; margin: 8px auto; }
+    .signature-name { font-size: 11px; font-weight: 700; color: ${PDF_COLORS.primary}; margin-top: 8px; padding-top: 8px; border-top: 1px solid #cbd5e0; }
+    .signature-role { font-size: 9px; color: #718096; }
+    .stamp-box { flex: 0 0 100px; text-align: center; }
+    .stamp-image { width: 90px; height: 90px; object-fit: contain; opacity: 0.9; }
+    .stamp-label { font-size: 9px; color: #718096; margin-top: 3px; }
+    .pending-approval {
+      text-align: center;
+      padding: 20px;
+      color: #718096;
+      font-size: 12px;
+    }
+    .footer {
+      padding: 12px 18px;
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid #cbd5e0;
+      font-size: 9px;
+      color: #718096;
+    }
+    .approved-watermark {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-30deg);
+      font-size: 60px;
+      font-weight: 800;
+      color: rgba(39, 103, 73, 0.06);
+      pointer-events: none;
+      z-index: 0;
+    }
     @media print {
-      body { padding: 0; }
-      .payslip { border: none; }
+      body { padding: 10px; }
+      .payslip { border: 1px solid #cbd5e0; }
+      .approved-watermark { position: absolute; }
     }
   </style>
 </head>
 <body>
+  ${isApproved ? '<div class="approved-watermark">معتمد</div>' : ''}
   <div class="payslip">
+    ${isApproved ? '<div class="status-badge status-approved">✓ معتمد</div>' : '<div class="status-badge status-pending">⏳ قيد المراجعة</div>'}
     <div class="header">
-      <h1>Symbol AI</h1>
-      <p>قسيمة راتب</p>
-      <div class="period-badge">${monthName} ${payroll.year}</div>
+      <div class="header-logo">
+        <img src="/symbol-ai-logo.png" alt="Symbol AI" onerror="this.style.display='none'" />
+        <div>
+          <h1>Symbol AI</h1>
+          <p>نظام إدارة الأعمال المتكامل</p>
+        </div>
+      </div>
+      <div class="header-info">
+        <div class="doc-title">قسيمة راتب</div>
+        <div class="period-badge">${monthName} ${payroll.year}</div>
+      </div>
     </div>
 
     <div class="employee-info">
@@ -657,7 +749,7 @@ export default function Payrolls() {
           <span class="label">حوافز</span>
           <span class="value positive">${parseFloat(detail.incentiveAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
         </div>` : ''}
-        <div class="salary-row" style="border-top: 2px solid #16a34a; margin-top: 10px; padding-top: 10px;">
+        <div class="salary-row" style="border-top: 2px solid #276749; margin-top: 10px; padding-top: 10px;">
           <span class="label" style="font-weight: bold;">إجمالي المستحقات</span>
           <span class="value positive">${grossSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
         </div>
@@ -682,10 +774,10 @@ export default function Payrolls() {
         </div>` : ''}
         ${totalDeductions === 0 ? `
         <div class="salary-row">
-          <span class="label" style="color: #16a34a;">لا توجد استقطاعات</span>
+          <span class="label" style="color: #276749;">لا توجد استقطاعات</span>
           <span class="value">0.00 ر.س.</span>
         </div>` : `
-        <div class="salary-row" style="border-top: 2px solid #dc2626; margin-top: 10px; padding-top: 10px;">
+        <div class="salary-row" style="border-top: 2px solid #c53030; margin-top: 10px; padding-top: 10px;">
           <span class="label" style="font-weight: bold;">إجمالي الاستقطاعات</span>
           <span class="value negative">-${totalDeductions.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
         </div>`}
@@ -697,17 +789,40 @@ export default function Payrolls() {
       </div>
     </div>
 
-    <div class="footer">
-      <div class="signature-box">
-        <div class="line">توقيع الموظف</div>
+    <div class="approval-section">
+      ${isApproved ? `
+      <div class="approval-title">✓ تم الاعتماد</div>
+      <div class="signatures-container">
+        <div class="signature-box">
+          <div class="signature-title">توقيع المشرف العام</div>
+          <img src="${SIGNATURES.supervisor.image}" alt="توقيع" class="signature-image" onerror="this.style.display='none'" />
+          <div class="signature-name">${SIGNATURES.supervisor.name}</div>
+          <div class="signature-role">${SIGNATURES.supervisor.title}</div>
+        </div>
+        <div class="stamp-box">
+          <img src="${SIGNATURES.stamp}" alt="ختم" class="stamp-image" onerror="this.style.display='none'" />
+          <div class="stamp-label">ختم الإدارة</div>
+        </div>
+        <div class="signature-box">
+          <div class="signature-title">توقيع المدير</div>
+          <img src="${SIGNATURES.manager.image}" alt="توقيع" class="signature-image" onerror="this.style.display='none'" />
+          <div class="signature-name">${SIGNATURES.manager.name}</div>
+          <div class="signature-role">${SIGNATURES.manager.title}</div>
+        </div>
       </div>
-      <div class="signature-box">
-        <div class="line">توقيع المحاسب</div>
+      ` : `
+      <div class="pending-approval">
+        <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
+        <div>هذا المستند قيد المراجعة</div>
+        <div style="font-size: 10px; margin-top: 5px;">سيتم إضافة التوقيعات والختم بعد الاعتماد</div>
       </div>
+      `}
     </div>
 
-    <div class="print-date">
-      تم الطباعة في: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}
+    <div class="footer">
+      <span>تم إنشاء هذا المستند بواسطة Symbol AI</span>
+      <span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}</span>
+      <span>جميع الحقوق محفوظة © ${new Date().getFullYear()}</span>
     </div>
   </div>
 </body>

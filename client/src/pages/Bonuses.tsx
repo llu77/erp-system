@@ -160,7 +160,7 @@ export default function Bonuses() {
   </style>
 </head>
 <body>
-  ${getPDFHeader('تقرير البونص الأسبوعي', `الأسبوع ${currentBonus.weekNumber}`)}
+  ${getPDFHeader('تقرير البونص الأسبوعي', { reportNumber: `الأسبوع ${currentBonus.weekNumber}` })}
   
   ${getPDFInfoSection([
     { label: 'الفرع', value: branchName },

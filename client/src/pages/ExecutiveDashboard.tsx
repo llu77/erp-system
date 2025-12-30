@@ -326,7 +326,7 @@ export default function ExecutiveDashboard() {
   </style>
 </head>
 <body>
-  ${getPDFHeader('تقرير لوحة التحكم التنفيذية', `RPT-EXEC-${Date.now()}`)}
+  ${getPDFHeader('تقرير لوحة التحكم التنفيذية', { reportNumber: `RPT-EXEC-${Date.now()}` })}
   
   ${getPDFInfoSection([
     { label: 'الفرع', value: branchName },

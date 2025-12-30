@@ -165,7 +165,7 @@ export default function InventoryVarianceReport() {
   </style>
 </head>
 <body>
-  ${getPDFHeader('تقرير فروقات الجرد', varianceReport.count?.countNumber)}
+  ${getPDFHeader('تقرير فروقات الجرد', { reportNumber: varianceReport.count?.countNumber })}
   
   ${getPDFInfoSection([
     { label: 'رقم الجرد', value: varianceReport.count?.countNumber || '-' },

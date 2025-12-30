@@ -406,7 +406,7 @@ export default function SalesDashboard() {
   </style>
 </head>
 <body>
-  ${getPDFHeader('تقرير لوحة الإيرادات', `RPT-REV-${Date.now()}`)}
+  ${getPDFHeader('تقرير لوحة الإيرادات', { reportNumber: `RPT-REV-${Date.now()}` })}
   
   ${getPDFInfoSection([
     { label: 'الفرع', value: branchName },

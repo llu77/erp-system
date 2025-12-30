@@ -742,7 +742,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
   </style>
 </head>
 <body>
-  ${getPDFHeader(`سجل إيرادات شهر ${monthName}`)}
+  ${getPDFHeader(`سجل إيرادات شهر ${monthName}`, { reportNumber: `REV-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` })}
   
   ${getPDFInfoSection([
     { label: 'من تاريخ', value: format(monthStart, "d MMMM", { locale: ar }) },
