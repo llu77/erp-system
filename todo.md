@@ -1397,3 +1397,12 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إصلاح الأرقام والإحصائيات في لوحة المبيعات
 - [x] إضافة تصدير PDF احترافي مع الختم والتوقيعات
 - [x] استبعاد "النظام" من قائمة أداء الموظفين
+
+
+## التحقق من صحة الإحصائيات (طلب جديد)
+- [x] فحص الإيرادات في قاعدة البيانات
+- [x] مقارنة حقل total مع cash + network
+- [x] إصلاح حساب الإيرادات ليستخدم cash + network
+- [x] إصلاح getDashboardStats
+- [x] إصلاح getActualRevenues
+- [x] إصلاح getDailyRevenuesByDateRange

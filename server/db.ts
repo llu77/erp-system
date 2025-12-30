@@ -536,8 +536,9 @@ export async function getDashboardStats(branchId?: number) {
   if (!db) return null;
 
   const today = new Date();
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const startOfYear = new Date(today.getFullYear(), 0, 1);
+  // إصلاح timezone - استخدام التاريخ بدون وقت لتجنب مشاكل المنطقة الزمنية
+  const startOfMonth = new Date(Date.UTC(today.getFullYear(), today.getMonth(), 1, 0, 0, 0));
+  const startOfYear = new Date(Date.UTC(today.getFullYear(), 0, 1, 0, 0, 0));
 
   // إجمالي المنتجات
   const totalProducts = await db.select({ count: sql<number>`COUNT(*)` }).from(products);
@@ -563,7 +564,7 @@ export async function getDashboardStats(branchId?: number) {
   if (revenueBranchCondition) monthlyRevenueConditions.push(revenueBranchCondition);
   
   const monthlyRevenue = await db.select({ 
-    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.total}), 0)`,
+    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
     count: sql<number>`COUNT(*)`
   }).from(dailyRevenues)
     .where(and(...monthlyRevenueConditions));
@@ -577,7 +578,7 @@ export async function getDashboardStats(branchId?: number) {
   if (revenueBranchCondition) yearlyRevenueConditions.push(revenueBranchCondition);
   
   const yearlyRevenue = await db.select({ 
-    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.total}), 0)`
+    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`
   }).from(dailyRevenues)
     .where(and(...yearlyRevenueConditions));
 
@@ -3459,7 +3460,7 @@ export async function getActualRevenues(startDate: Date, endDate: Date, branchId
     totalCash: sql<string>`COALESCE(SUM(${dailyRevenues.cash}), 0)`,
     totalNetwork: sql<string>`COALESCE(SUM(${dailyRevenues.network}), 0)`,
     totalBalance: sql<string>`COALESCE(SUM(${dailyRevenues.balance}), 0)`,
-    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.total}), 0)`,
+    totalRevenue: sql<string>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
     daysCount: sql<number>`COUNT(DISTINCT DATE(${dailyRevenues.date}))`,
   }).from(dailyRevenues).where(and(...conditions));
   
@@ -3599,7 +3600,7 @@ export async function getDailyRevenuesForChart(startDate: Date, endDate: Date, b
       DATE(${dailyRevenues.date}) as date,
       COALESCE(SUM(${dailyRevenues.cash}), 0) as totalCash,
       COALESCE(SUM(${dailyRevenues.network}), 0) as totalNetwork,
-      COALESCE(SUM(${dailyRevenues.total}), 0) as totalRevenue
+      COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0) as totalRevenue
     FROM ${dailyRevenues}
     WHERE ${and(...conditions)}
     GROUP BY DATE(${dailyRevenues.date})

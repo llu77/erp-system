@@ -1,0 +1,17 @@
+{
+  "query": "SELECT \n  COUNT(*) as total_records,\n  COALESCE(SUM(cash), 0) as total_cash,\n  COALESCE(SUM(network), 0) as total_network,\n  COALESCE(SUM(balance), 0) as total_balance,\n  COALESCE(SUM(cash + network), 0) as total_revenue\nFROM dailyRevenues",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  COUNT(*) as total_records,\n  COALESCE(SUM(cash), 0) as total_cash,\n  COALESCE(SUM(network), 0) as total_network,\n  COALESCE(SUM(balance), 0) as total_balance,\n  COALESCE(SUM(cash + network), 0) as total_revenue\nFROM dailyRevenues",
+  "rows": [
+    {
+      "total_records": "19",
+      "total_cash": "5570.00",
+      "total_network": "49730.00",
+      "total_balance": "49720.00",
+      "total_revenue": "55300.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "total_records\ttotal_cash\ttotal_network\ttotal_balance\ttotal_revenue\n19\t5570.00\t49730.00\t49720.00\t55300.00\n",
+  "stderr": "",
+  "execution_time_ms": 1560
+}

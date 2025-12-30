@@ -1,0 +1,73 @@
+{
+  "query": "SELECT id, DATE_FORMAT(date, '%Y-%m-%d') as date_str, cash, network, total FROM dailyRevenues WHERE branchId = 1 ORDER BY date DESC",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, DATE_FORMAT(date, '%Y-%m-%d') as date_str, cash, network, total FROM dailyRevenues WHERE branchId = 1 ORDER BY date DESC",
+  "rows": [
+    {
+      "id": "600002",
+      "date_str": "2025-12-30",
+      "cash": "1490.00",
+      "network": "21840.00",
+      "total": "23330.00"
+    },
+    {
+      "id": "570002",
+      "date_str": "2025-12-29",
+      "cash": "55.00",
+      "network": "760.00",
+      "total": "815.00"
+    },
+    {
+      "id": "510001",
+      "date_str": "2025-12-28",
+      "cash": "120.00",
+      "network": "1110.00",
+      "total": "1230.00"
+    },
+    {
+      "id": "480002",
+      "date_str": "2025-12-27",
+      "cash": "255.00",
+      "network": "1095.00",
+      "total": "1350.00"
+    },
+    {
+      "id": "420001",
+      "date_str": "2025-12-26",
+      "cash": "120.00",
+      "network": "810.00",
+      "total": "930.00"
+    },
+    {
+      "id": "390002",
+      "date_str": "2025-12-25",
+      "cash": "70.00",
+      "network": "1425.00",
+      "total": "1495.00"
+    },
+    {
+      "id": "360001",
+      "date_str": "2025-12-24",
+      "cash": "205.00",
+      "network": "1250.00",
+      "total": "1455.00"
+    },
+    {
+      "id": "270001",
+      "date_str": "2025-12-23",
+      "cash": "80.00",
+      "network": "680.00",
+      "total": "760.00"
+    },
+    {
+      "id": "210001",
+      "date_str": "2025-12-22",
+      "cash": "25.00",
+      "network": "850.00",
+      "total": "875.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tdate_str\tcash\tnetwork\ttotal\n600002\t2025-12-30\t1490.00\t21840.00\t23330.00\n570002\t2025-12-29\t55.00\t760.00\t815.00\n510001\t2025-12-28\t120.00\t1110.00\t1230.00\n480002\t2025-12-27\t255.00\t1095.00\t1350.00\n420001\t2025-12-26\t120.00\t810.00\t930.00\n390002\t2025-12-25\t70.00\t1425.00\t1495.00\n360001\t2025-12-24\t205.00\t1250.00\t1455.00\n270001\t2025-12-23\t80.00\t680.00\t760.00\n210001\t2025-12-22\t25.00\t850.00\t875.00\n",
+  "stderr": "",
+  "execution_time_ms": 1532
+}
