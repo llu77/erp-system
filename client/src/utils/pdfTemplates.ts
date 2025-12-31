@@ -8,30 +8,30 @@
 // الألوان الرسمية الموحدة
 // =====================================================
 export const PDF_COLORS = {
-  // الألوان الأساسية - أزرق داكن رسمي
-  primary: '#0f2744',      // أزرق داكن جداً - اللون الرئيسي
-  primaryDark: '#0a1929',  // أزرق أغمق للتدرجات
-  primaryLight: '#1a3a5c', // أزرق متوسط
+  // الألوان الأساسية - أسود رسمي موحد
+  primary: '#1a1a1a',      // أسود داكن - اللون الرئيسي
+  primaryDark: '#000000',  // أسود للتدرجات
+  primaryLight: '#333333', // رمادي داكن
   
-  // ألوان الحالات
-  success: '#1b5e20',      // أخضر داكن للموافقة
-  successLight: '#e8f5e9', // أخضر فاتح للخلفيات
-  warning: '#e65100',      // برتقالي للانتظار
-  warningLight: '#fff3e0', // برتقالي فاتح
-  danger: '#b71c1c',       // أحمر للرفض
-  dangerLight: '#ffebee',  // أحمر فاتح
+  // ألوان الحالات - محايدة
+  success: '#1a1a1a',      // أسود للموافقة
+  successLight: '#f5f5f5', // رمادي فاتح للخلفيات
+  warning: '#666666',      // رمادي للانتظار
+  warningLight: '#fafafa', // رمادي فاتح
+  danger: '#1a1a1a',       // أسود
+  dangerLight: '#f5f5f5',  // رمادي فاتح
   
   // ألوان محايدة
-  dark: '#1a1a2e',         // أسود مزرق
-  text: '#2c3e50',         // لون النص الرئيسي
-  textLight: '#607d8b',    // لون النص الثانوي
-  border: '#e0e0e0',       // لون الحدود
-  light: '#f8f9fa',        // خلفية فاتحة
+  dark: '#000000',         // أسود
+  text: '#000000',         // لون النص الرئيسي - أسود
+  textLight: '#333333',    // لون النص الثانوي - رمادي داكن
+  border: '#cccccc',       // لون الحدود
+  light: '#f8f8f8',        // خلفية فاتحة
   white: '#ffffff',        // أبيض
   
   // ألوان خاصة
-  gold: '#c9a227',         // ذهبي للختم
-  goldDark: '#8b6914',     // ذهبي داكن
+  gold: '#1a1a1a',         // أسود للختم
+  goldDark: '#000000',     // أسود
 };
 
 // =====================================================
@@ -88,13 +88,14 @@ export const PDF_BASE_STYLES = `
   
   body { 
     font-family: 'Tajawal', 'Cairo', 'Segoe UI', sans-serif;
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${PDF_COLORS.text};
+    font-size: 14px;
+    line-height: 1.7;
+    color: #000000;
     background: ${PDF_COLORS.white};
     padding: 20px 30px;
     direction: rtl;
     min-height: 100vh;
+    font-weight: 500;
   }
   
   /* ===== الهيدر الرسمي ===== */
@@ -235,9 +236,9 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-info-value {
-    font-size: 14px;
-    font-weight: 700;
-    color: ${PDF_COLORS.primary};
+    font-size: 16px;
+    font-weight: 800;
+    color: #000000;
   }
   
   /* ===== الجداول ===== */
@@ -254,20 +255,22 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-table th {
-    background: ${PDF_COLORS.primary};
+    background: #1a1a1a;
     color: ${PDF_COLORS.white};
-    padding: 12px 10px;
-    font-size: 11px;
+    padding: 14px 12px;
+    font-size: 13px;
     font-weight: 700;
     text-align: center;
-    border-bottom: 2px solid ${PDF_COLORS.primaryDark};
+    border-bottom: 2px solid #000000;
   }
   
   .pdf-table td {
-    padding: 10px 8px;
+    padding: 12px 10px;
     border-bottom: 1px solid ${PDF_COLORS.border};
     text-align: center;
-    font-size: 11px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #000000;
     background: ${PDF_COLORS.white};
   }
   
@@ -316,7 +319,7 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-total-value {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 800;
   }
   
@@ -343,14 +346,14 @@ export const PDF_BASE_STYLES = `
   
   .pdf-summary-label {
     display: block;
-    font-size: 9px;
-    color: rgba(255,255,255,0.8);
+    font-size: 11px;
+    color: rgba(255,255,255,0.9);
     margin-bottom: 5px;
-    font-weight: 500;
+    font-weight: 600;
   }
   
   .pdf-summary-value {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 800;
     color: ${PDF_COLORS.white};
   }
@@ -368,28 +371,28 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-approval-title {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
-    color: ${PDF_COLORS.primary};
+    color: #000000;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 20px;
-    background: ${PDF_COLORS.light};
+    padding: 10px 25px;
+    background: #f5f5f5;
     border-radius: 20px;
-    border: 1px solid ${PDF_COLORS.border};
+    border: 2px solid #000000;
   }
   
   .pdf-approval-title.approved {
-    background: ${PDF_COLORS.successLight};
-    border-color: ${PDF_COLORS.success};
-    color: ${PDF_COLORS.success};
+    background: #f5f5f5;
+    border-color: #000000;
+    color: #000000;
   }
   
   .pdf-approval-title.pending {
-    background: ${PDF_COLORS.warningLight};
-    border-color: ${PDF_COLORS.warning};
-    color: ${PDF_COLORS.warning};
+    background: #fafafa;
+    border-color: #666666;
+    color: #333333;
   }
   
   .pdf-signatures-row {
@@ -403,11 +406,11 @@ export const PDF_BASE_STYLES = `
   .pdf-signature-box {
     flex: 1;
     text-align: center;
-    padding: 20px;
+    padding: 25px;
     background: ${PDF_COLORS.white};
-    border: 2px solid ${PDF_COLORS.border};
+    border: 2px solid #000000;
     border-radius: 10px;
-    min-height: 180px;
+    min-height: 220px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -428,16 +431,16 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-signature-image-container {
-    height: 90px;
+    height: 120px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 10px 0;
+    margin: 15px 0;
   }
   
   .pdf-signature-image {
-    max-height: 90px;
-    max-width: 160px;
+    max-height: 120px;
+    max-width: 200px;
     object-fit: contain;
   }
   
@@ -449,27 +452,28 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-signature-name {
-    font-size: 12px;
-    font-weight: 700;
-    color: ${PDF_COLORS.primary};
-    margin-top: 5px;
+    font-size: 14px;
+    font-weight: 800;
+    color: #000000;
+    margin-top: 8px;
   }
   
   .pdf-signature-role {
-    font-size: 9px;
-    color: ${PDF_COLORS.textLight};
-    margin-top: 2px;
+    font-size: 11px;
+    color: #333333;
+    margin-top: 4px;
+    font-weight: 600;
   }
   
   .pdf-stamp-box {
-    flex: 0 0 160px;
+    flex: 0 0 180px;
     text-align: center;
-    padding: 15px;
+    padding: 20px;
   }
   
   .pdf-stamp-image {
-    width: 140px;
-    height: 140px;
+    width: 160px;
+    height: 160px;
     object-fit: contain;
   }
   
