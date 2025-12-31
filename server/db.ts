@@ -3538,13 +3538,123 @@ export async function getEmployeesPerformance(startDate: Date, endDate: Date, br
   }));
 }
 
+// جلب آخر مسيرة رواتب للفترة المحددة
+export async function getLatestPayrollForPeriod(startDate: Date, endDate: Date, branchId?: number) {
+  const db = await getDb();
+  if (!db) return {
+    totalSalaries: 0,
+    month: 0,
+    year: 0,
+    branchName: '',
+    employeeCount: 0,
+    status: 'none'
+  };
+  
+  // استخراج الشهر والسنة من تاريخ النهاية
+  const targetMonth = endDate.getMonth() + 1;
+  const targetYear = endDate.getFullYear();
+  
+  try {
+    // إذا كان هناك فرع محدد، نجلب مسيرة هذا الفرع
+    if (branchId) {
+      const result = await db.select()
+        .from(payrolls)
+        .where(and(
+          eq(payrolls.branchId, branchId),
+          eq(payrolls.month, targetMonth),
+          eq(payrolls.year, targetYear)
+        ))
+        .limit(1);
+      
+      if (result.length > 0) {
+        const payroll = result[0];
+        return {
+          totalSalaries: parseFloat(payroll.totalNetSalary || '0'),
+          month: payroll.month,
+          year: payroll.year,
+          branchName: payroll.branchName || '',
+          employeeCount: payroll.employeeCount || 0,
+          status: payroll.status || 'none'
+        };
+      }
+    } else {
+      // إذا لم يكن هناك فرع محدد، نجلب إجمالي كل المسيرات لهذا الشهر
+      const result = await db.select({
+        totalSalaries: sql<string>`SUM(${payrolls.totalNetSalary})`,
+        employeeCount: sql<number>`SUM(${payrolls.employeeCount})`,
+        count: sql<number>`COUNT(*)`
+      })
+        .from(payrolls)
+        .where(and(
+          eq(payrolls.month, targetMonth),
+          eq(payrolls.year, targetYear)
+        ));
+      
+      if (result.length > 0 && result[0].count > 0) {
+        return {
+          totalSalaries: parseFloat(result[0].totalSalaries || '0'),
+          month: targetMonth,
+          year: targetYear,
+          branchName: 'جميع الفروع',
+          employeeCount: result[0].employeeCount || 0,
+          status: 'combined'
+        };
+      }
+    }
+    
+    // إذا لم توجد مسيرة للشهر الحالي، نجلب آخر مسيرة متاحة
+    const conditions = branchId ? [eq(payrolls.branchId, branchId)] : [];
+    const lastPayroll = await db.select()
+      .from(payrolls)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(payrolls.year), desc(payrolls.month))
+      .limit(1);
+    
+    if (lastPayroll.length > 0) {
+      const payroll = lastPayroll[0];
+      return {
+        totalSalaries: parseFloat(payroll.totalNetSalary || '0'),
+        month: payroll.month,
+        year: payroll.year,
+        branchName: payroll.branchName || '',
+        employeeCount: payroll.employeeCount || 0,
+        status: payroll.status || 'none'
+      };
+    }
+    
+    return {
+      totalSalaries: 0,
+      month: 0,
+      year: 0,
+      branchName: '',
+      employeeCount: 0,
+      status: 'none'
+    };
+  } catch (error) {
+    console.error('Error fetching payroll data:', error);
+    return {
+      totalSalaries: 0,
+      month: 0,
+      year: 0,
+      branchName: '',
+      employeeCount: 0,
+      status: 'none'
+    };
+  }
+}
+
 // حساب مؤشرات الأداء الفعلية للوحة التنفيذية
 export async function calculateExecutiveKPIs(startDate: Date, endDate: Date, branchId?: number) {
   const revenues = await getActualRevenues(startDate, endDate, branchId);
   const expensesData = await getActualExpenses(startDate, endDate, branchId);
   const employeesPerformance = await getEmployeesPerformance(startDate, endDate, branchId);
   
-  const netProfit = revenues.totalRevenue - expensesData.totalExpenses;
+  // جلب بيانات آخر مسيرة رواتب للفترة المحددة
+  const payrollData = await getLatestPayrollForPeriod(startDate, endDate, branchId);
+  
+  // إجمالي المصاريف يشمل المصاريف العادية + الرواتب
+  const totalExpensesWithPayroll = expensesData.totalExpenses + payrollData.totalSalaries;
+  const netProfit = revenues.totalRevenue - totalExpensesWithPayroll;
   const profitMargin = revenues.totalRevenue > 0 ? (netProfit / revenues.totalRevenue) * 100 : 0;
   const averageDailyRevenue = revenues.daysCount > 0 ? revenues.totalRevenue / revenues.daysCount : 0;
   
@@ -3566,6 +3676,19 @@ export async function calculateExecutiveKPIs(startDate: Date, endDate: Date, bra
     // المصاريف والأرباح
     totalExpenses: expensesData.totalExpenses,
     expensesCount: expensesData.expensesCount,
+    
+    // بيانات الرواتب
+    totalSalaries: payrollData.totalSalaries,
+    payrollMonth: payrollData.month,
+    payrollYear: payrollData.year,
+    payrollBranchName: payrollData.branchName,
+    payrollEmployeeCount: payrollData.employeeCount,
+    payrollStatus: payrollData.status,
+    
+    // إجمالي الالتزامات (مصاريف + رواتب)
+    totalObligations: totalExpensesWithPayroll,
+    
+    // الربح الحقيقي بعد الرواتب
     netProfit,
     profitMargin,
     

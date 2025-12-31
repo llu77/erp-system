@@ -363,11 +363,11 @@ export default function ExecutiveDashboard() {
     </div>
     
     <div class="kpi-card expenses">
-      <div class="kpi-label">إجمالي المصاريف</div>
-      <div class="kpi-value neutral">${pdfFormatCurrency(kpis.totalExpenses || 0)}</div>
-      ${comparison ? `<div class="kpi-change ${comparison.changes.expensesChange <= 0 ? 'up' : 'down'}">
-        ${comparison.changes.expensesChange <= 0 ? '↓' : '↑'} ${Math.abs(comparison.changes.expensesChange).toFixed(1)}% عن ${getPeriodLabel()}
-      </div>` : ''}
+      <div class="kpi-label">إجمالي الالتزامات</div>
+      <div class="kpi-value neutral">${pdfFormatCurrency(kpis.totalObligations || 0)}</div>
+      <div class="kpi-change" style="font-size: 10px; background: #f5f5f5; padding: 4px 8px;">
+        مصاريف: ${pdfFormatCurrency(kpis.totalExpenses || 0)} | رواتب: ${pdfFormatCurrency(kpis.totalSalaries || 0)}
+      </div>
     </div>
     
     <div class="kpi-card margin">
@@ -582,10 +582,10 @@ export default function ExecutiveDashboard() {
           </CardContent>
         </Card>
 
-        {/* إجمالي المصاريف */}
+        {/* إجمالي الالتزامات (مصاريف + رواتب) */}
         <Card className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي المصاريف</CardTitle>
+            <CardTitle className="text-sm font-medium">إجمالي الالتزامات</CardTitle>
             <Wallet className="h-4 w-4 text-amber-600" />
           </CardHeader>
           <CardContent>
@@ -594,17 +594,23 @@ export default function ExecutiveDashboard() {
             ) : (
               <>
                 <div className="text-2xl font-bold text-amber-600">
-                  {formatCurrency(kpis?.totalExpenses || 0)}
+                  {formatCurrency(kpis?.totalObligations || 0)}
                 </div>
-                {comparison && (
-                  <p className={`text-xs flex items-center gap-1 mt-1 ${comparison.changes.expensesChange <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {comparison.changes.expensesChange <= 0 ? <ArrowDownRight className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
-                    {formatPercent(comparison.changes.expensesChange)} عن {getPeriodLabel()}
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  {kpis?.expensesCount || 0} مصروف
-                </p>
+                <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                  <div className="flex justify-between">
+                    <span>مصاريف:</span>
+                    <span className="font-medium">{formatCurrency(kpis?.totalExpenses || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>رواتب:</span>
+                    <span className="font-medium">{formatCurrency(kpis?.totalSalaries || 0)}</span>
+                  </div>
+                  {kpis?.payrollMonth && kpis?.payrollYear && (
+                    <div className="text-[10px] text-muted-foreground/70 mt-1">
+                      مسيرة {kpis.payrollMonth}/{kpis.payrollYear} - {kpis.payrollEmployeeCount || 0} موظف
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </CardContent>
