@@ -128,6 +128,15 @@ export default function ProductsPage() {
   );
 
   const handleCreate = (data: ProductFormData) => {
+    // التحقق من سعر البيع
+    if (!data.sellingPrice || data.sellingPrice === '' || parseFloat(data.sellingPrice) <= 0) {
+      toast.error('يجب إدخال سعر البيع');
+      return;
+    }
+    // التحقق من سعر التكلفة
+    if (!data.costPrice || data.costPrice === '') {
+      data.costPrice = '0';
+    }
     createMutation.mutate({
       ...data,
       categoryId: data.categoryId ? parseInt(data.categoryId) : undefined,
