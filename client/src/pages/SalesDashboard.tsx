@@ -218,9 +218,9 @@ export default function SalesDashboard() {
     }
     
     .summary-value {
-      font-size: 26px;
+      font-size: 32px;
       font-weight: 900;
-      color: #000;
+      color: #000000;
     }
     
     .summary-value.green { color: #000; }
@@ -283,7 +283,7 @@ export default function SalesDashboard() {
     .payment-card.balance .icon { background: #f3e8ff; color: #8b5cf6; }
     
     .payment-card .label { font-size: 12px; color: #333; font-weight: 600; }
-    .payment-card .value { font-size: 24px; font-weight: 800; margin: 8px 0; color: #000; }
+    .payment-card .value { font-size: 28px; font-weight: 900; margin: 8px 0; color: #000000; }
     .payment-card .percent { font-size: 12px; color: #333; }
     
     .payment-card.cash .value { color: #000; }
@@ -329,9 +329,9 @@ export default function SalesDashboard() {
       padding: 12px 15px;
       border-bottom: 1px solid #e2e8f0;
       text-align: center;
-      font-size: 14px;
-      font-weight: 600;
-      color: #000;
+      font-size: 16px;
+      font-weight: 700;
+      color: #000000;
     }
     
     .employee-table tr:last-child td { border-bottom: none; }

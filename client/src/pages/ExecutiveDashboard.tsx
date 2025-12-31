@@ -215,14 +215,15 @@ export default function ExecutiveDashboard() {
     }
     
     .kpi-value {
-      font-size: 26px;
+      font-size: 32px;
       font-weight: 900;
-      color: #000;
+      color: #000000;
+      letter-spacing: -0.5px;
     }
     
-    .kpi-value.positive { color: #000; }
+    .kpi-value.positive { color: #000000; }
     .kpi-value.negative { color: #cc0000; }
-    .kpi-value.neutral { color: #000; }
+    .kpi-value.neutral { color: #000000; }
     
     .kpi-change {
       font-size: 11px;
@@ -260,12 +261,12 @@ export default function ExecutiveDashboard() {
     }
     
     .payment-card .label { font-size: 11px; color: #64748b; }
-    .payment-card .value { font-size: 22px; font-weight: 800; margin: 8px 0; color: #000; }
+    .payment-card .value { font-size: 28px; font-weight: 900; margin: 8px 0; color: #000000; }
     .payment-card .percent { font-size: 12px; color: #64748b; }
     
-    .payment-card.cash .value { color: #000; }
-    .payment-card.network .value { color: #000; }
-    .payment-card.balance .value { color: #000; }
+    .payment-card.cash .value { color: #000000; }
+    .payment-card.network .value { color: #000000; }
+    .payment-card.balance .value { color: #000000; }
     
     .employee-row {
       display: flex;
@@ -296,7 +297,7 @@ export default function ExecutiveDashboard() {
     .employee-info { flex: 1; }
     .employee-name { font-weight: 700; color: #000; font-size: 14px; }
     .employee-branch { font-size: 11px; color: #333; }
-    .employee-revenue { font-weight: 800; color: #000; font-size: 16px; }
+    .employee-revenue { font-weight: 900; color: #000000; font-size: 20px; }
     .employee-stats { font-size: 11px; color: #333; }
     
     .comparison-section {
@@ -323,7 +324,7 @@ export default function ExecutiveDashboard() {
     
     .comparison-item { text-align: center; }
     .comparison-label { font-size: 11px; opacity: 0.8; }
-    .comparison-value { font-size: 22px; font-weight: 800; margin-top: 5px; }
+    .comparison-value { font-size: 28px; font-weight: 900; margin-top: 5px; }
     
     @media print {
       .kpi-grid { grid-template-columns: repeat(2, 1fr); }

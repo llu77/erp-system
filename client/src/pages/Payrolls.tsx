@@ -357,10 +357,10 @@ export default function Payrolls() {
     }
     .info-item { text-align: center; }
     .info-item label { display: block; font-size: 10px; color: #666; margin-bottom: 3px; }
-    .info-item span { font-size: 18px; font-weight: 800; color: #000; }
+    .info-item span { font-size: 22px; font-weight: 900; color: #000000; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
     th { background: #1a1a1a; color: white; padding: 12px 8px; font-size: 13px; font-weight: 700; text-align: center; }
-    td { padding: 10px 8px; border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 14px; font-weight: 600; color: #000; }
+    td { padding: 10px 8px; border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 16px; font-weight: 700; color: #000000; }
     tr:nth-child(even) { background: #f8fafc; }
     .summary-section {
       display: grid;
@@ -375,7 +375,7 @@ export default function Payrolls() {
     }
     .summary-item { text-align: center; }
     .summary-item label { display: block; font-size: 10px; opacity: 0.9; margin-bottom: 5px; }
-    .summary-item span { font-size: 20px; font-weight: 800; }
+    .summary-item span { font-size: 24px; font-weight: 900; }
     .footer { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 30px; padding-top: 20px; border-top: 2px dashed #e2e8f0; gap: 20px; }
     .signature-box { text-align: center; flex: 1; padding: 15px; background: #f8f9fa; border: 2px solid #e0e0e0; border-radius: 8px; min-height: 160px; }
     .signature-box.has-signature { border-color: #1b5e20; background: #e8f5e9; }
@@ -711,9 +711,9 @@ export default function Payrolls() {
     }
     
     .info-value {
-      font-size: 16px;
-      font-weight: 800;
-      color: #000;
+      font-size: 20px;
+      font-weight: 900;
+      color: #000000;
     }
     
     /* تفاصيل الراتب */
@@ -769,8 +769,8 @@ export default function Payrolls() {
     .salary-row:last-child { border-bottom: none; }
     
     .salary-row .label { color: #000; font-weight: 600; }
-    .salary-row .value { font-weight: 800; color: #000; font-size: 15px; }
-    .salary-row .value.positive { color: #000; }
+    .salary-row .value { font-weight: 900; color: #000000; font-size: 18px; }
+    .salary-row .value.positive { color: #000000; }
     .salary-row .value.negative { color: #cc0000; }
     
     .total-row {
@@ -801,8 +801,9 @@ export default function Payrolls() {
     }
     
     .net-salary .amount {
-      font-size: 32px;
+      font-size: 38px;
       font-weight: 900;
+      letter-spacing: -0.5px;
     }
     
     /* قسم التوقيعات */
