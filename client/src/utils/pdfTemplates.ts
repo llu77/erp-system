@@ -236,8 +236,8 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-info-value {
-    font-size: 16px;
-    font-weight: 800;
+    font-size: 20px;
+    font-weight: 900;
     color: #000000;
   }
   
@@ -268,8 +268,8 @@ export const PDF_BASE_STYLES = `
     padding: 12px 10px;
     border-bottom: 1px solid ${PDF_COLORS.border};
     text-align: center;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     color: #000000;
     background: ${PDF_COLORS.white};
   }
@@ -319,8 +319,8 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-total-value {
-    font-size: 32px;
-    font-weight: 800;
+    font-size: 36px;
+    font-weight: 900;
   }
   
   /* ===== قسم الملخص ===== */
@@ -353,8 +353,8 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-summary-value {
-    font-size: 18px;
-    font-weight: 800;
+    font-size: 22px;
+    font-weight: 900;
     color: ${PDF_COLORS.white};
   }
   
@@ -591,9 +591,9 @@ export const PDF_BASE_STYLES = `
   }
   
   .pdf-card-value {
-    font-size: 11px;
-    font-weight: 700;
-    color: ${PDF_COLORS.text};
+    font-size: 14px;
+    font-weight: 800;
+    color: #000000;
   }
   
   /* ===== الشارات ===== */

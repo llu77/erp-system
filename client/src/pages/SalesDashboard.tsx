@@ -197,35 +197,37 @@ export default function SalesDashboard() {
     }
     
     .summary-card {
-      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-      border: 1px solid #e2e8f0;
+      background: #f5f5f5;
+      border: 2px solid #000;
       border-radius: 12px;
       padding: 20px;
       text-align: center;
     }
     
-    .summary-card.total { border-top: 4px solid #22c55e; }
-    .summary-card.profit { border-top: 4px solid #3b82f6; }
-    .summary-card.average { border-top: 4px solid #8b5cf6; }
-    .summary-card.best { border-top: 4px solid #f59e0b; }
+    .summary-card.total { border-top: 4px solid #000; }
+    .summary-card.profit { border-top: 4px solid #000; }
+    .summary-card.average { border-top: 4px solid #000; }
+    .summary-card.best { border-top: 4px solid #000; }
     
     .summary-label {
-      font-size: 11px;
-      color: #64748b;
+      font-size: 12px;
+      color: #333;
       margin-bottom: 8px;
       text-transform: uppercase;
+      font-weight: 600;
     }
     
     .summary-value {
-      font-size: 22px;
-      font-weight: 700;
+      font-size: 26px;
+      font-weight: 900;
+      color: #000;
     }
     
-    .summary-value.green { color: #22c55e; }
-    .summary-value.blue { color: #3b82f6; }
-    .summary-value.purple { color: #8b5cf6; }
-    .summary-value.amber { color: #f59e0b; }
-    .summary-value.red { color: #ef4444; }
+    .summary-value.green { color: #000; }
+    .summary-value.blue { color: #000; }
+    .summary-value.purple { color: #000; }
+    .summary-value.amber { color: #000; }
+    .summary-value.red { color: #cc0000; }
     
     .summary-change {
       font-size: 11px;
@@ -240,11 +242,11 @@ export default function SalesDashboard() {
     
     .section-title {
       font-size: 16px;
-      font-weight: 700;
-      color: #1e293b;
+      font-weight: 800;
+      color: #000;
       margin: 25px 0 15px;
       padding-bottom: 8px;
-      border-bottom: 2px solid #6366f1;
+      border-bottom: 2px solid #000;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -259,7 +261,7 @@ export default function SalesDashboard() {
     
     .payment-card {
       background: #fff;
-      border: 1px solid #e2e8f0;
+      border: 2px solid #000;
       border-radius: 10px;
       padding: 20px;
       text-align: center;
@@ -280,13 +282,13 @@ export default function SalesDashboard() {
     .payment-card.network .icon { background: #dbeafe; color: #3b82f6; }
     .payment-card.balance .icon { background: #f3e8ff; color: #8b5cf6; }
     
-    .payment-card .label { font-size: 11px; color: #64748b; }
-    .payment-card .value { font-size: 20px; font-weight: 700; margin: 8px 0; }
-    .payment-card .percent { font-size: 12px; color: #64748b; }
+    .payment-card .label { font-size: 12px; color: #333; font-weight: 600; }
+    .payment-card .value { font-size: 24px; font-weight: 800; margin: 8px 0; color: #000; }
+    .payment-card .percent { font-size: 12px; color: #333; }
     
-    .payment-card.cash .value { color: #22c55e; }
-    .payment-card.network .value { color: #3b82f6; }
-    .payment-card.balance .value { color: #8b5cf6; }
+    .payment-card.cash .value { color: #000; }
+    .payment-card.network .value { color: #000; }
+    .payment-card.balance .value { color: #000; }
     
     .progress-bar {
       height: 8px;
@@ -315,11 +317,11 @@ export default function SalesDashboard() {
     }
     
     .employee-table th {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      background: #1a1a1a;
       color: white;
       padding: 12px 15px;
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 13px;
+      font-weight: 700;
       text-align: center;
     }
     
@@ -327,7 +329,9 @@ export default function SalesDashboard() {
       padding: 12px 15px;
       border-bottom: 1px solid #e2e8f0;
       text-align: center;
-      font-size: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #000;
     }
     
     .employee-table tr:last-child td { border-bottom: none; }

@@ -151,9 +151,9 @@ export default function Bonuses() {
   <style>
     ${PDF_BASE_STYLES}
     .tier-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; color: white; }
-    .bonus-amount { font-weight: 700; color: #22c55e; }
-    .levels-info { margin-top: 25px; background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; }
-    .levels-info h3 { color: #6366f1; margin-bottom: 15px; font-size: 14px; font-weight: 600; }
+    .bonus-amount { font-weight: 800; color: #000; font-size: 15px; }
+    .levels-info { margin-top: 25px; background: #f5f5f5; border-radius: 12px; padding: 20px; border: 2px solid #000; }
+    .levels-info h3 { color: #000; margin-bottom: 15px; font-size: 14px; font-weight: 700; }
     .levels-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
     .level-item { display: flex; align-items: center; gap: 8px; font-size: 11px; }
     .level-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
@@ -198,7 +198,7 @@ export default function Bonuses() {
           <td class="bonus-amount font-bold">${formatCurrency(detail.bonusAmount)}</td>
         </tr>
       `).join('')}
-      <tr style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; font-weight: 700;">
+      <tr style="background: #1a1a1a; color: white; font-weight: 800;">
         <td colspan="5" style="border: none; text-align: right;">الإجمالي</td>
         <td style="border: none;">${formatCurrency(currentBonus.totalAmount)}</td>
       </tr>

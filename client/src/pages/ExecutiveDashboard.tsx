@@ -194,33 +194,35 @@ export default function ExecutiveDashboard() {
     }
     
     .kpi-card {
-      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-      border: 1px solid #e2e8f0;
+      background: #f5f5f5;
+      border: 2px solid #000;
       border-radius: 12px;
       padding: 20px;
       text-align: center;
     }
     
-    .kpi-card.revenue { border-top: 4px solid #22c55e; }
-    .kpi-card.profit { border-top: 4px solid #3b82f6; }
-    .kpi-card.expenses { border-top: 4px solid #f59e0b; }
-    .kpi-card.margin { border-top: 4px solid #8b5cf6; }
+    .kpi-card.revenue { border-top: 4px solid #000; }
+    .kpi-card.profit { border-top: 4px solid #000; }
+    .kpi-card.expenses { border-top: 4px solid #000; }
+    .kpi-card.margin { border-top: 4px solid #000; }
     
     .kpi-label {
-      font-size: 11px;
-      color: #64748b;
+      font-size: 12px;
+      color: #333;
       margin-bottom: 8px;
       text-transform: uppercase;
+      font-weight: 600;
     }
     
     .kpi-value {
-      font-size: 22px;
-      font-weight: 700;
+      font-size: 26px;
+      font-weight: 900;
+      color: #000;
     }
     
-    .kpi-value.positive { color: #22c55e; }
-    .kpi-value.negative { color: #ef4444; }
-    .kpi-value.neutral { color: #6366f1; }
+    .kpi-value.positive { color: #000; }
+    .kpi-value.negative { color: #cc0000; }
+    .kpi-value.neutral { color: #000; }
     
     .kpi-change {
       font-size: 11px;
@@ -235,11 +237,11 @@ export default function ExecutiveDashboard() {
     
     .section-title {
       font-size: 16px;
-      font-weight: 700;
-      color: #1e293b;
+      font-weight: 800;
+      color: #000;
       margin: 25px 0 15px;
       padding-bottom: 8px;
-      border-bottom: 2px solid #6366f1;
+      border-bottom: 2px solid #000;
     }
     
     .payment-grid {
@@ -258,12 +260,12 @@ export default function ExecutiveDashboard() {
     }
     
     .payment-card .label { font-size: 11px; color: #64748b; }
-    .payment-card .value { font-size: 18px; font-weight: 700; margin: 8px 0; }
+    .payment-card .value { font-size: 22px; font-weight: 800; margin: 8px 0; color: #000; }
     .payment-card .percent { font-size: 12px; color: #64748b; }
     
-    .payment-card.cash .value { color: #22c55e; }
-    .payment-card.network .value { color: #3b82f6; }
-    .payment-card.balance .value { color: #8b5cf6; }
+    .payment-card.cash .value { color: #000; }
+    .payment-card.network .value { color: #000; }
+    .payment-card.balance .value { color: #000; }
     
     .employee-row {
       display: flex;
@@ -292,17 +294,18 @@ export default function ExecutiveDashboard() {
     .rank-other { background: #f1f5f9; color: #64748b; }
     
     .employee-info { flex: 1; }
-    .employee-name { font-weight: 600; color: #1e293b; }
-    .employee-branch { font-size: 11px; color: #64748b; }
-    .employee-revenue { font-weight: 700; color: #22c55e; font-size: 14px; }
-    .employee-stats { font-size: 11px; color: #64748b; }
+    .employee-name { font-weight: 700; color: #000; font-size: 14px; }
+    .employee-branch { font-size: 11px; color: #333; }
+    .employee-revenue { font-weight: 800; color: #000; font-size: 16px; }
+    .employee-stats { font-size: 11px; color: #333; }
     
     .comparison-section {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      background: #1a1a1a;
       color: white;
       padding: 20px;
       border-radius: 12px;
       margin-bottom: 25px;
+      border: 2px solid #000;
     }
     
     .comparison-title {
@@ -320,7 +323,7 @@ export default function ExecutiveDashboard() {
     
     .comparison-item { text-align: center; }
     .comparison-label { font-size: 11px; opacity: 0.8; }
-    .comparison-value { font-size: 18px; font-weight: 700; margin-top: 5px; }
+    .comparison-value { font-size: 22px; font-weight: 800; margin-top: 5px; }
     
     @media print {
       .kpi-grid { grid-template-columns: repeat(2, 1fr); }

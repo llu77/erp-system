@@ -159,9 +159,9 @@ export default function InventoryVarianceReport() {
   <title>تقرير فروقات الجرد - ${varianceReport.count?.countNumber || ''}</title>
   <style>
     ${PDF_BASE_STYLES}
-    .variance-positive { color: #22c55e; font-weight: 600; }
-    .variance-negative { color: #ef4444; font-weight: 600; }
-    .variance-zero { color: #64748b; }
+    .variance-positive { color: #000; font-weight: 700; }
+    .variance-negative { color: #cc0000; font-weight: 700; }
+    .variance-zero { color: #333; font-weight: 600; }
   </style>
 </head>
 <body>

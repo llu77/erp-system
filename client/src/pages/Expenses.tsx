@@ -309,21 +309,22 @@ export default function Expenses() {
         <title>تقرير المصاريف - ${monthName} ${year}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
+          @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800;900&display=swap');
           body { 
-            font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
+            font-family: 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif; 
             padding: 20px; 
             background: #fff;
-            color: #333;
-            font-size: 12px;
+            color: #000;
+            font-size: 14px;
           }
           .header { 
             text-align: center; 
             margin-bottom: 30px; 
             padding-bottom: 20px;
-            border-bottom: 3px solid #1e40af;
+            border-bottom: 3px solid #000;
           }
-          .logo { font-size: 28px; font-weight: bold; color: #1e40af; margin-bottom: 5px; }
-          .report-title { font-size: 20px; color: #374151; margin: 10px 0; }
+          .logo { font-size: 28px; font-weight: 800; color: #000; margin-bottom: 5px; }
+          .report-title { font-size: 20px; color: #000; margin: 10px 0; font-weight: 700; }
           .report-info { color: #6b7280; font-size: 14px; }
           .summary-cards {
             display: grid;
@@ -332,20 +333,20 @@ export default function Expenses() {
             margin-bottom: 25px;
           }
           .summary-card {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: #f5f5f5;
+            border: 2px solid #000;
             border-radius: 8px;
             padding: 15px;
             text-align: center;
           }
-          .summary-card .label { color: #64748b; font-size: 12px; margin-bottom: 5px; }
-          .summary-card .value { font-size: 20px; font-weight: bold; color: #1e40af; }
+          .summary-card .label { color: #333; font-size: 12px; margin-bottom: 5px; font-weight: 600; }
+          .summary-card .value { font-size: 22px; font-weight: 800; color: #000; }
           .category-section {
             margin-bottom: 25px;
             page-break-inside: avoid;
           }
           .category-header {
-            background: #1e40af;
+            background: #1a1a1a;
             color: white;
             padding: 10px 15px;
             border-radius: 8px 8px 0 0;
@@ -353,8 +354,8 @@ export default function Expenses() {
             justify-content: space-between;
             align-items: center;
           }
-          .category-name { font-weight: bold; font-size: 14px; }
-          .category-total { font-size: 14px; }
+          .category-name { font-weight: 700; font-size: 14px; }
+          .category-total { font-size: 16px; font-weight: 800; }
           table { 
             width: 100%; 
             border-collapse: collapse; 
@@ -362,20 +363,22 @@ export default function Expenses() {
             background: white;
           }
           th { 
-            background: #f1f5f9; 
+            background: #f5f5f5; 
             padding: 10px 8px; 
             text-align: right; 
-            font-weight: 600;
-            color: #475569;
-            border: 1px solid #e2e8f0;
+            font-weight: 700;
+            color: #000;
+            border: 1px solid #ccc;
           }
           td { 
-            padding: 8px; 
-            border: 1px solid #e2e8f0; 
+            padding: 10px 8px; 
+            border: 1px solid #ccc; 
             text-align: right;
+            font-weight: 600;
+            color: #000;
           }
           tr:nth-child(even) { background: #f8fafc; }
-          .amount { color: #dc2626; font-weight: 600; }
+          .amount { color: #cc0000; font-weight: 800; font-size: 15px; }
           .status-badge {
             display: inline-block;
             padding: 2px 8px;
@@ -388,15 +391,17 @@ export default function Expenses() {
           .status-paid { background: #dbeafe; color: #1e40af; }
           .status-rejected { background: #fee2e2; color: #991b1b; }
           .grand-total {
-            background: #1e40af;
+            background: #1a1a1a;
             color: white;
             padding: 15px 20px;
             border-radius: 8px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 18px;
+            font-size: 20px;
+            font-weight: 800;
             margin-top: 20px;
+            border: 2px solid #000;
           }
           .footer {
             margin-top: 30px;

@@ -737,8 +737,8 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
   <title>سجل إيرادات شهر ${monthName}</title>
   <style>
     ${PDF_BASE_STYLES}
-    .status-matched { color: #22c55e; font-weight: 600; }
-    .status-unmatched { color: #ef4444; font-weight: 600; }
+    .status-matched { color: #000; font-weight: 700; }
+    .status-unmatched { color: #cc0000; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -787,7 +787,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
           </tr>
         `;
       }).join('')}
-      <tr style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; font-weight: 700;">
+      <tr style="background: #1a1a1a; color: white; font-weight: 800;">
         <td colspan="2" style="border: none;">الإجمالي</td>
         <td style="border: none;">${totals.cash.toLocaleString()}</td>
         <td style="border: none;">${totals.network.toLocaleString()}</td>

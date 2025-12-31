@@ -323,11 +323,12 @@ export default function Payrolls() {
   <title>مسيرة رواتب - ${payroll.branchName} - ${monthName} ${payroll.year}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800;900&display=swap');
     body {
-      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-      font-size: 12px;
+      font-family: 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif;
+      font-size: 14px;
       line-height: 1.6;
-      color: #333;
+      color: #000;
       background: #fff;
       padding: 20px;
     }
@@ -341,9 +342,9 @@ export default function Payrolls() {
     }
     .company-info { display: flex; align-items: center; gap: 15px; }
     .company-info img { height: 50px; width: auto; }
-    .company-info h1 { font-size: 24px; color: #1e40af; }
+    .company-info h1 { font-size: 24px; color: #000; font-weight: 800; }
     .report-title { text-align: left; }
-    .report-title h2 { font-size: 18px; color: #1e40af; }
+    .report-title h2 { font-size: 18px; color: #000; font-weight: 700; }
     .report-title p { color: #666; font-size: 11px; }
     .info-section {
       display: grid;
@@ -356,27 +357,37 @@ export default function Payrolls() {
     }
     .info-item { text-align: center; }
     .info-item label { display: block; font-size: 10px; color: #666; margin-bottom: 3px; }
-    .info-item span { font-size: 14px; font-weight: bold; color: #1e40af; }
+    .info-item span { font-size: 18px; font-weight: 800; color: #000; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th { background: #1e40af; color: white; padding: 10px 8px; font-size: 11px; text-align: center; }
-    td { padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 11px; }
+    th { background: #1a1a1a; color: white; padding: 12px 8px; font-size: 13px; font-weight: 700; text-align: center; }
+    td { padding: 10px 8px; border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 14px; font-weight: 600; color: #000; }
     tr:nth-child(even) { background: #f8fafc; }
     .summary-section {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       gap: 15px;
-      background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+      background: #1a1a1a;
       padding: 20px;
       border-radius: 8px;
       color: white;
       margin-bottom: 20px;
+      border: 2px solid #000;
     }
     .summary-item { text-align: center; }
     .summary-item label { display: block; font-size: 10px; opacity: 0.9; margin-bottom: 5px; }
-    .summary-item span { font-size: 16px; font-weight: bold; }
-    .footer { display: flex; justify-content: space-between; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
-    .signature-box { text-align: center; width: 200px; }
-    .signature-box .line { border-top: 1px solid #333; margin-top: 40px; padding-top: 5px; }
+    .summary-item span { font-size: 20px; font-weight: 800; }
+    .footer { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 30px; padding-top: 20px; border-top: 2px dashed #e2e8f0; gap: 20px; }
+    .signature-box { text-align: center; flex: 1; padding: 15px; background: #f8f9fa; border: 2px solid #e0e0e0; border-radius: 8px; min-height: 160px; }
+    .signature-box.has-signature { border-color: #1b5e20; background: #e8f5e9; }
+    .signature-box .title { font-size: 10px; color: #607d8b; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; }
+    .signature-box .sig-image { height: 80px; display: flex; align-items: center; justify-content: center; }
+    .signature-box .sig-image img { max-height: 80px; max-width: 140px; object-fit: contain; }
+    .signature-box .line { border-top: 1px solid #333; margin-top: 10px; padding-top: 8px; }
+    .signature-box .name { font-size: 12px; font-weight: 700; color: #0f2744; }
+    .signature-box .role { font-size: 9px; color: #607d8b; margin-top: 2px; }
+    .stamp-box { flex: 0 0 140px; text-align: center; padding: 10px; }
+    .stamp-box img { width: 130px; height: 130px; object-fit: contain; }
+    .stamp-box .label { font-size: 9px; color: #607d8b; margin-top: 5px; }
     .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; }
     .status-approved { background: #dcfce7; color: #166534; }
     .status-pending { background: #fef3c7; color: #92400e; }
@@ -479,14 +490,29 @@ export default function Payrolls() {
   </div>
 
   <div class="footer">
-    <div class="signature-box">
-      <div class="line">توقيع المحاسب</div>
+    <div class="signature-box ${payroll.status === 'approved' || payroll.status === 'paid' ? 'has-signature' : ''}">
+      <div class="title">توقيع المشرف العام</div>
+      <div class="sig-image">
+        ${payroll.status === 'approved' || payroll.status === 'paid' ? '<img src="/signatures/supervisor_signature.png" alt="توقيع المشرف" onerror="this.parentElement.innerHTML=\'<span style=color:#1b5e20>✓ موقّع</span>\'" />' : '<span style="color: #607d8b; font-size: 9px;">في انتظار التوقيع</span>'}
+      </div>
+      <div class="line">
+        <div class="name">سالم الوادعي</div>
+        <div class="role">المشرف العام</div>
+      </div>
     </div>
-    <div class="signature-box">
-      <div class="line">توقيع المدير</div>
+    <div class="stamp-box">
+      ${payroll.status === 'approved' || payroll.status === 'paid' ? '<img src="/signatures/company_stamp.png" alt="ختم الإدارة" onerror="this.style.display=\'none\'" />' : ''}
+      <div class="label">ختم الإدارة</div>
     </div>
-    <div class="signature-box">
-      <div class="line">توقيع المدير العام</div>
+    <div class="signature-box ${payroll.status === 'approved' || payroll.status === 'paid' ? 'has-signature' : ''}">
+      <div class="title">توقيع المدير العام</div>
+      <div class="sig-image">
+        ${payroll.status === 'approved' || payroll.status === 'paid' ? '<img src="/signatures/manager_signature.png" alt="توقيع المدير" onerror="this.parentElement.innerHTML=\'<span style=color:#1b5e20>✓ موقّع</span>\'" />' : '<span style="color: #607d8b; font-size: 9px;">في انتظار التوقيع</span>'}
+      </div>
+      <div class="line">
+        <div class="name">عمر المطيري</div>
+        <div class="role">المدير العام</div>
+      </div>
     </div>
   </div>
 </body>
@@ -538,9 +564,9 @@ export default function Payrolls() {
     
     body {
       font-family: 'Tajawal', 'Cairo', 'Segoe UI', sans-serif;
-      font-size: 12px;
+      font-size: 14px;
       line-height: 1.6;
-      color: #2c3e50;
+      color: #000;
       background: #fff;
       padding: 15px;
     }
@@ -569,7 +595,7 @@ export default function Payrolls() {
     
     /* الهيدر */
     .header {
-      background: linear-gradient(135deg, #0f2744 0%, #0a1929 100%);
+      background: #1a1a1a;
       color: white;
       padding: 18px 20px;
       border-radius: 8px;
@@ -685,9 +711,9 @@ export default function Payrolls() {
     }
     
     .info-value {
-      font-size: 12px;
-      font-weight: 700;
-      color: #0f2744;
+      font-size: 16px;
+      font-weight: 800;
+      color: #000;
     }
     
     /* تفاصيل الراتب */
@@ -735,23 +761,23 @@ export default function Payrolls() {
     .salary-row {
       display: flex;
       justify-content: space-between;
-      padding: 6px 0;
+      padding: 8px 0;
       border-bottom: 1px dashed rgba(0,0,0,0.1);
-      font-size: 11px;
+      font-size: 14px;
     }
     
     .salary-row:last-child { border-bottom: none; }
     
-    .salary-row .label { color: #455a64; }
-    .salary-row .value { font-weight: 700; }
-    .salary-row .value.positive { color: #1b5e20; }
-    .salary-row .value.negative { color: #b71c1c; }
+    .salary-row .label { color: #000; font-weight: 600; }
+    .salary-row .value { font-weight: 800; color: #000; font-size: 15px; }
+    .salary-row .value.positive { color: #000; }
+    .salary-row .value.negative { color: #cc0000; }
     
     .total-row {
       margin-top: 8px;
       padding-top: 8px;
-      font-weight: 700;
-      font-size: 12px;
+      font-weight: 800;
+      font-size: 16px;
     }
     
     .earnings-box .total-row { border-top: 2px solid #1b5e20; }
@@ -759,12 +785,13 @@ export default function Payrolls() {
     
     /* صافي الراتب */
     .net-salary {
-      background: linear-gradient(135deg, #0f2744 0%, #0a1929 100%);
+      background: #1a1a1a;
       color: white;
-      padding: 18px;
+      padding: 20px;
       border-radius: 8px;
       text-align: center;
       margin-bottom: 15px;
+      border: 2px solid #000;
     }
     
     .net-salary .label {
@@ -774,8 +801,8 @@ export default function Payrolls() {
     }
     
     .net-salary .amount {
-      font-size: 26px;
-      font-weight: 800;
+      font-size: 32px;
+      font-weight: 900;
     }
     
     /* قسم التوقيعات */
@@ -822,11 +849,11 @@ export default function Payrolls() {
     .signature-box {
       flex: 1;
       text-align: center;
-      padding: 12px;
+      padding: 15px;
       background: white;
       border: 2px solid #e0e0e0;
       border-radius: 8px;
-      min-height: 120px;
+      min-height: 160px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -847,15 +874,15 @@ export default function Payrolls() {
     }
     
     .signature-image-container {
-      height: 45px;
+      height: 80px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     
     .signature-image {
-      max-height: 45px;
-      max-width: 90px;
+      max-height: 80px;
+      max-width: 140px;
       object-fit: contain;
     }
     
@@ -879,14 +906,14 @@ export default function Payrolls() {
     }
     
     .stamp-box {
-      flex: 0 0 110px;
+      flex: 0 0 140px;
       text-align: center;
       padding: 8px;
     }
     
     .stamp-image {
-      width: 95px;
-      height: 95px;
+      width: 130px;
+      height: 130px;
       object-fit: contain;
     }
     
