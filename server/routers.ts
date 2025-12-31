@@ -4361,6 +4361,184 @@ export const appRouter = router({
       }),
 
   }),
+
+  // ==================== نظام الولاء ====================
+  loyalty: router({
+    // تسجيل عميل جديد (عام - بدون تسجيل دخول)
+    register: publicProcedure
+      .input(z.object({
+        name: z.string().min(2, 'الاسم مطلوب'),
+        phone: z.string().min(10, 'رقم الجوال غير صحيح'),
+        serviceType: z.string().min(1, 'نوع الخدمة مطلوب'),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { registerLoyaltyCustomer, registerLoyaltyVisit, getAdminsAndSupervisors } = await import('./db');
+        const { sendEmail } = await import('./email/emailService');
+        
+        // تسجيل العميل
+        const result = await registerLoyaltyCustomer({
+          name: input.name,
+          phone: input.phone,
+          branchId: input.branchId,
+          branchName: input.branchName,
+        });
+        
+        if (!result.success || !result.customer) {
+          return { success: false, error: result.error };
+        }
+        
+        // تسجيل الزيارة الأولى
+        const visitResult = await registerLoyaltyVisit({
+          customerId: result.customer.id,
+          customerName: result.customer.name,
+          customerPhone: result.customer.phone,
+          serviceType: input.serviceType,
+          branchId: input.branchId,
+          branchName: input.branchName,
+        });
+        
+        return {
+          success: true,
+          customer: result.customer,
+          visit: visitResult.visit,
+          visitNumberInMonth: visitResult.visitNumberInMonth,
+          message: `مرحباً ${input.name}! تم تسجيلك في برنامج الولاء بنجاح.`,
+        };
+      }),
+
+    // تسجيل زيارة لعميل مسجل (عام - بدون تسجيل دخول)
+    recordVisit: publicProcedure
+      .input(z.object({
+        phone: z.string().min(10, 'رقم الجوال غير صحيح'),
+        serviceType: z.string().min(1, 'نوع الخدمة مطلوب'),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { getLoyaltyCustomerByPhone, registerLoyaltyVisit, getCustomerVisitsThisMonth, getAdminsAndSupervisors } = await import('./db');
+        const { sendEmail } = await import('./email/emailService');
+        
+        // البحث عن العميل
+        const customer = await getLoyaltyCustomerByPhone(input.phone);
+        if (!customer) {
+          return { success: false, error: 'رقم الجوال غير مسجل في برنامج الولاء' };
+        }
+        
+        // تسجيل الزيارة
+        const result = await registerLoyaltyVisit({
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          serviceType: input.serviceType,
+          branchId: input.branchId,
+          branchName: input.branchName,
+        });
+        
+        if (!result.success) {
+          return { success: false, error: result.error };
+        }
+        
+        // إذا كانت زيارة خصم، إرسال إشعار للمشرفين
+        if (result.isDiscountVisit) {
+          const admins = await getAdminsAndSupervisors();
+          const visits = await getCustomerVisitsThisMonth(customer.id);
+          
+          // إعداد تفاصيل الزيارات
+          const visitsDetails = visits.map((v, i) => 
+            `${i + 1}. ${new Date(v.visitDate).toLocaleDateString('ar-SA')} - ${v.serviceType}`
+          ).join('\n');
+          
+          // إرسال إيميل للمشرفين والأدمن
+          for (const admin of admins) {
+            if (admin.email) {
+              await sendEmail({
+                to: admin.email,
+                subject: `🎉 عميل حصل على خصم 50% - ${customer.name}`,
+                html: `
+                  <div dir="rtl" style="font-family: Arial, sans-serif;">
+                    <h2>🎉 تنبيه: عميل حصل على خصم برنامج الولاء</h2>
+                    <p><strong>اسم العميل:</strong> ${customer.name}</p>
+                    <p><strong>رقم الجوال:</strong> ${customer.phone}</p>
+                    <p><strong>نسبة الخصم:</strong> 50%</p>
+                    <p><strong>رقم الزيارة في الشهر:</strong> ${result.visitNumberInMonth}</p>
+                    <p><strong>الفرع:</strong> ${input.branchName || 'غير محدد'}</p>
+                    <hr/>
+                    <h3>📋 تفاصيل الزيارات هذا الشهر:</h3>
+                    <pre style="background: #f5f5f5; padding: 10px;">${visitsDetails}</pre>
+                  </div>
+                `,
+              });
+            }
+          }
+        }
+        
+        return {
+          success: true,
+          customer,
+          visit: result.visit,
+          isDiscountVisit: result.isDiscountVisit,
+          discountPercentage: result.discountPercentage,
+          visitNumberInMonth: result.visitNumberInMonth,
+          message: result.isDiscountVisit 
+            ? `🎉 لقد حصلت على خصم 50%! يومك سعيد ${customer.name}`
+            : `شكراً لزيارتك ${customer.name}! هذه زيارتك رقم ${result.visitNumberInMonth} هذا الشهر.`,
+        };
+      }),
+
+    // البحث عن عميل برقم الجوال (عام)
+    findByPhone: publicProcedure
+      .input(z.object({
+        phone: z.string().min(10),
+      }))
+      .query(async ({ input }) => {
+        const { getLoyaltyCustomerByPhone, getCustomerVisitsThisMonth } = await import('./db');
+        
+        const customer = await getLoyaltyCustomerByPhone(input.phone);
+        if (!customer) {
+          return { found: false };
+        }
+        
+        const visitsThisMonth = await getCustomerVisitsThisMonth(customer.id);
+        const nextDiscountAt = 4 - (visitsThisMonth.length % 3);
+        
+        return {
+          found: true,
+          customer,
+          visitsThisMonth: visitsThisMonth.length,
+          nextDiscountAt: nextDiscountAt > 3 ? 1 : nextDiscountAt,
+        };
+      }),
+
+    // قائمة جميع العملاء (للمشرفين)
+    list: supervisorInputProcedure.query(async () => {
+      const { getAllLoyaltyCustomers } = await import('./db');
+      return await getAllLoyaltyCustomers();
+    }),
+
+    // زيارات عميل معين (للمشرفين)
+    customerVisits: supervisorInputProcedure
+      .input(z.object({
+        customerId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const { getCustomerVisits } = await import('./db');
+        return await getCustomerVisits(input.customerId);
+      }),
+
+    // إحصائيات برنامج الولاء (للمشرفين)
+    stats: supervisorInputProcedure.query(async () => {
+      const { getLoyaltyStats } = await import('./db');
+      return await getLoyaltyStats();
+    }),
+
+    // الحصول على الفروع (عام)
+    branches: publicProcedure.query(async () => {
+      const { getBranches } = await import('./db');
+      return await getBranches();
+    }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

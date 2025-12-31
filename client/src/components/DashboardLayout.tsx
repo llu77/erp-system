@@ -59,6 +59,7 @@ import {
   FolderOpen,
   ListOrdered,
   ClipboardCheck,
+  Heart,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -170,6 +171,7 @@ const menuStructure: MenuItem[] = [
       { icon: UserCircle, label: "الموظفين", path: "/employees", roles: ["admin", "manager", "viewer"] },
       { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager", "viewer"] },
       { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee", "supervisor"] },
+      { icon: Heart, label: "برنامج الولاء", path: "/loyalty", roles: ["admin", "manager", "supervisor"] },
     ]
   },
   

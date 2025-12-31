@@ -27,6 +27,12 @@ import {
   taskLogs,
   InsertTask,
   InsertTaskLog,
+  loyaltyCustomers,
+  loyaltyVisits,
+  LoyaltyCustomer,
+  LoyaltyVisit,
+  InsertLoyaltyCustomer,
+  InsertLoyaltyVisit,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -4655,4 +4661,293 @@ export async function getTaskCreatorInfo(taskId: number) {
     name: task[0].createdByName || user[0].name,
     email: user[0].email,
   } : null;
+}
+
+
+// ==================== دوال نظام الولاء ====================
+
+// توليد معرف فريد للعميل
+export async function generateLoyaltyCustomerId(): Promise<string> {
+  const db = await getDb();
+  if (!db) return `LC-${Date.now()}`;
+  
+  const lastCustomer = await db.select({ customerId: loyaltyCustomers.customerId })
+    .from(loyaltyCustomers)
+    .orderBy(desc(loyaltyCustomers.id))
+    .limit(1);
+  
+  let nextNumber = 1;
+  if (lastCustomer.length > 0) {
+    const lastId = lastCustomer[0].customerId;
+    const match = lastId.match(/LC-(\d+)/);
+    if (match) {
+      nextNumber = parseInt(match[1]) + 1;
+    }
+  }
+  
+  return `LC-${nextNumber.toString().padStart(4, '0')}`;
+}
+
+// توليد معرف فريد للزيارة
+export async function generateLoyaltyVisitId(): Promise<string> {
+  const db = await getDb();
+  if (!db) return `LV-${Date.now()}`;
+  
+  const lastVisit = await db.select({ visitId: loyaltyVisits.visitId })
+    .from(loyaltyVisits)
+    .orderBy(desc(loyaltyVisits.id))
+    .limit(1);
+  
+  let nextNumber = 1;
+  if (lastVisit.length > 0) {
+    const lastId = lastVisit[0].visitId;
+    const match = lastId.match(/LV-(\d+)/);
+    if (match) {
+      nextNumber = parseInt(match[1]) + 1;
+    }
+  }
+  
+  return `LV-${nextNumber.toString().padStart(6, '0')}`;
+}
+
+// تسجيل عميل جديد في برنامج الولاء
+export async function registerLoyaltyCustomer(data: {
+  name: string;
+  phone: string;
+  email?: string;
+  branchId?: number;
+  branchName?: string;
+}): Promise<{ success: boolean; customer?: LoyaltyCustomer; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "خطأ في الاتصال بقاعدة البيانات" };
+  
+  // التحقق من عدم وجود العميل مسبقاً
+  const existing = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.phone, data.phone))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return { success: false, error: "رقم الجوال مسجل مسبقاً في برنامج الولاء" };
+  }
+  
+  const customerId = await generateLoyaltyCustomerId();
+  
+  await db.insert(loyaltyCustomers).values({
+    customerId,
+    name: data.name,
+    phone: data.phone,
+    email: data.email || null,
+    branchId: data.branchId || null,
+    branchName: data.branchName || null,
+    totalVisits: 0,
+    totalDiscountsUsed: 0,
+    isActive: true,
+  });
+  
+  const customer = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.customerId, customerId))
+    .limit(1);
+  
+  return { success: true, customer: customer[0] };
+}
+
+// البحث عن عميل برقم الجوال
+export async function getLoyaltyCustomerByPhone(phone: string): Promise<LoyaltyCustomer | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const customer = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.phone, phone))
+    .limit(1);
+  
+  return customer.length > 0 ? customer[0] : null;
+}
+
+// الحصول على عميل بالمعرف
+export async function getLoyaltyCustomerById(id: number): Promise<LoyaltyCustomer | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const customer = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.id, id))
+    .limit(1);
+  
+  return customer.length > 0 ? customer[0] : null;
+}
+
+// الحصول على زيارات العميل في الشهر الحالي
+export async function getCustomerVisitsThisMonth(customerId: number): Promise<LoyaltyVisit[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  
+  return await db.select()
+    .from(loyaltyVisits)
+    .where(and(
+      eq(loyaltyVisits.customerId, customerId),
+      gte(loyaltyVisits.visitDate, startOfMonth),
+      lte(loyaltyVisits.visitDate, endOfMonth)
+    ))
+    .orderBy(loyaltyVisits.visitDate);
+}
+
+// تسجيل زيارة جديدة
+export async function registerLoyaltyVisit(data: {
+  customerId: number;
+  customerName: string;
+  customerPhone: string;
+  serviceType: string;
+  branchId?: number;
+  branchName?: string;
+}): Promise<{ 
+  success: boolean; 
+  visit?: LoyaltyVisit; 
+  isDiscountVisit: boolean;
+  discountPercentage: number;
+  visitNumberInMonth: number;
+  error?: string;
+}> {
+  const db = await getDb();
+  if (!db) return { success: false, isDiscountVisit: false, discountPercentage: 0, visitNumberInMonth: 0, error: "خطأ في الاتصال بقاعدة البيانات" };
+  
+  // الحصول على زيارات الشهر الحالي
+  const visitsThisMonth = await getCustomerVisitsThisMonth(data.customerId);
+  const visitNumberInMonth = visitsThisMonth.length + 1;
+  
+  // التحقق من استحقاق الخصم (الزيارة الرابعة أو أكثر)
+  const isDiscountVisit = visitNumberInMonth >= 4 && (visitNumberInMonth - 1) % 3 === 0;
+  const discountPercentage = isDiscountVisit ? 50 : 0;
+  
+  const visitId = await generateLoyaltyVisitId();
+  
+  await db.insert(loyaltyVisits).values({
+    visitId,
+    customerId: data.customerId,
+    customerName: data.customerName,
+    customerPhone: data.customerPhone,
+    serviceType: data.serviceType,
+    visitDate: new Date(),
+    branchId: data.branchId || null,
+    branchName: data.branchName || null,
+    isDiscountVisit,
+    discountPercentage,
+    visitNumberInMonth,
+  });
+  
+  // تحديث عدد الزيارات للعميل
+  if (isDiscountVisit) {
+    await db.update(loyaltyCustomers)
+      .set({ 
+        totalVisits: sql`${loyaltyCustomers.totalVisits} + 1`,
+        totalDiscountsUsed: sql`${loyaltyCustomers.totalDiscountsUsed} + 1`
+      })
+      .where(eq(loyaltyCustomers.id, data.customerId));
+  } else {
+    await db.update(loyaltyCustomers)
+      .set({ 
+        totalVisits: sql`${loyaltyCustomers.totalVisits} + 1`
+      })
+      .where(eq(loyaltyCustomers.id, data.customerId));
+  }
+  
+  const visit = await db.select()
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.visitId, visitId))
+    .limit(1);
+  
+  return { 
+    success: true, 
+    visit: visit[0], 
+    isDiscountVisit, 
+    discountPercentage,
+    visitNumberInMonth
+  };
+}
+
+// الحصول على جميع عملاء الولاء
+export async function getAllLoyaltyCustomers(): Promise<LoyaltyCustomer[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(loyaltyCustomers)
+    .orderBy(desc(loyaltyCustomers.createdAt));
+}
+
+// الحصول على زيارات عميل معين
+export async function getCustomerVisits(customerId: number): Promise<LoyaltyVisit[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.customerId, customerId))
+    .orderBy(desc(loyaltyVisits.visitDate));
+}
+
+// الحصول على إحصائيات برنامج الولاء
+export async function getLoyaltyStats(): Promise<{
+  totalCustomers: number;
+  totalVisits: number;
+  totalDiscountsGiven: number;
+  customersThisMonth: number;
+  visitsThisMonth: number;
+}> {
+  const db = await getDb();
+  if (!db) return { totalCustomers: 0, totalVisits: 0, totalDiscountsGiven: 0, customersThisMonth: 0, visitsThisMonth: 0 };
+  
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  
+  const customers = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyCustomers);
+  
+  const visits = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits);
+  
+  const discounts = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.isDiscountVisit, true));
+  
+  const customersThisMonth = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyCustomers)
+    .where(gte(loyaltyCustomers.createdAt, startOfMonth));
+  
+  const visitsThisMonth = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(gte(loyaltyVisits.visitDate, startOfMonth));
+  
+  return {
+    totalCustomers: Number(customers[0]?.count || 0),
+    totalVisits: Number(visits[0]?.count || 0),
+    totalDiscountsGiven: Number(discounts[0]?.count || 0),
+    customersThisMonth: Number(customersThisMonth[0]?.count || 0),
+    visitsThisMonth: Number(visitsThisMonth[0]?.count || 0),
+  };
+}
+
+// الحصول على المشرفين والأدمن لإرسال الإشعارات
+export async function getAdminsAndSupervisors(): Promise<Array<{ id: number; name: string | null; email: string | null; role: string }>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    role: users.role,
+  })
+    .from(users)
+    .where(or(
+      eq(users.role, 'admin'),
+      eq(users.role, 'manager'),
+      eq(users.role, 'supervisor')
+    ));
 }

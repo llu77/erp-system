@@ -43,6 +43,9 @@ import InventoryCounting from "./pages/InventoryCounting";
 import InventoryVarianceReport from "./pages/InventoryVarianceReport";
 import TaskLookup from "./pages/TaskLookup";
 import TaskManagement from "./pages/TaskManagement";
+import Loyalty from "./pages/Loyalty";
+import LoyaltyRegister from "./pages/LoyaltyRegister";
+import LoyaltyVisit from "./pages/LoyaltyVisit";
 
 function Router() {
   return (
@@ -235,6 +238,16 @@ function Router() {
           <TaskManagement />
         </DashboardLayout>
       </Route>
+      {/* Loyalty Program */}
+      <Route path="/loyalty">
+        <DashboardLayout>
+          <Loyalty />
+        </DashboardLayout>
+      </Route>
+      {/* Loyalty Register - Public Page */}
+      <Route path="/loyalty/register" component={LoyaltyRegister} />
+      {/* Loyalty Visit - Public Page */}
+      <Route path="/loyalty/visit" component={LoyaltyVisit} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

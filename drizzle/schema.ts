@@ -1401,3 +1401,67 @@ export const taskLogs = mysqlTable("taskLogs", {
 
 export type TaskLog = typeof taskLogs.$inferSelect;
 export type InsertTaskLog = typeof taskLogs.$inferInsert;
+
+
+// ==================== جدول عملاء الولاء ====================
+/**
+ * LoyaltyCustomers - عملاء برنامج الولاء
+ */
+export const loyaltyCustomers = mysqlTable("loyaltyCustomers", {
+  id: int("id").autoincrement().primaryKey(),
+  customerId: varchar("customerId", { length: 50 }).notNull().unique(), // معرف فريد للعميل
+  name: varchar("name", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 20 }).notNull().unique(),
+  email: varchar("email", { length: 255 }),
+  
+  // إحصائيات
+  totalVisits: int("totalVisits").default(0).notNull(),
+  totalDiscountsUsed: int("totalDiscountsUsed").default(0).notNull(),
+  
+  // الفرع المسجل فيه
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // الحالة
+  isActive: boolean("isActive").default(true).notNull(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LoyaltyCustomer = typeof loyaltyCustomers.$inferSelect;
+export type InsertLoyaltyCustomer = typeof loyaltyCustomers.$inferInsert;
+
+// ==================== جدول زيارات الولاء ====================
+/**
+ * LoyaltyVisits - زيارات عملاء الولاء
+ */
+export const loyaltyVisits = mysqlTable("loyaltyVisits", {
+  id: int("id").autoincrement().primaryKey(),
+  visitId: varchar("visitId", { length: 50 }).notNull().unique(), // معرف فريد للزيارة
+  
+  // العميل
+  customerId: int("customerId").notNull(),
+  customerName: varchar("customerName", { length: 255 }).notNull(),
+  customerPhone: varchar("customerPhone", { length: 20 }).notNull(),
+  
+  // تفاصيل الزيارة
+  serviceType: varchar("serviceType", { length: 255 }).notNull(), // نوع الخدمة
+  visitDate: timestamp("visitDate").defaultNow().notNull(),
+  
+  // الفرع
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // الخصم
+  isDiscountVisit: boolean("isDiscountVisit").default(false).notNull(), // هل هذه زيارة خصم؟
+  discountPercentage: int("discountPercentage").default(0).notNull(), // نسبة الخصم
+  
+  // رقم الزيارة في الشهر (1, 2, 3, 4...)
+  visitNumberInMonth: int("visitNumberInMonth").default(1).notNull(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type LoyaltyVisit = typeof loyaltyVisits.$inferSelect;
+export type InsertLoyaltyVisit = typeof loyaltyVisits.$inferInsert;
