@@ -398,14 +398,14 @@ export default function PurchasesPage() {
         </CardContent>
       </Card>
 
-      {/* Create Order Dialog - Compact Layout */}
+      {/* Create Order Dialog - Compact Layout with Scroll */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-[550px] p-4">
-          <DialogHeader className="pb-2">
+        <DialogContent className="sm:max-w-[550px] p-0 flex flex-col max-h-[90vh]">
+          <DialogHeader className="p-4 pb-2 shrink-0">
             <DialogTitle className="text-base">إنشاء أمر شراء جديد</DialogTitle>
             <DialogDescription className="text-xs">أضف المنتجات لإنشاء أمر شراء جديد</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="flex-1 overflow-y-auto px-4 space-y-3">
             {/* Supplier Selection */}
             <div className="space-y-1">
               <Label className="text-xs">المورد *</Label>
@@ -514,7 +514,7 @@ export default function PurchasesPage() {
               </div>
             )}
           </div>
-          <DialogFooter className="pt-2 gap-2">
+          <DialogFooter className="p-4 pt-2 gap-2 shrink-0 border-t bg-background">
             <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(false)}>
               إلغاء
             </Button>
