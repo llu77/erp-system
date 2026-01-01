@@ -4734,6 +4734,30 @@ export const appRouter = router({
         
         return visit;
       }),
+
+    // رفع صورة الفاتورة (عام - بدون تسجيل دخول)
+    uploadInvoiceImage: publicProcedure
+      .input(z.object({
+        base64Data: z.string(),
+        fileName: z.string(),
+        contentType: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { storagePut } = await import('./storage');
+        
+        // تحويل base64 إلى Buffer
+        const base64Content = input.base64Data.replace(/^data:[^;]+;base64,/, '');
+        const buffer = Buffer.from(base64Content, 'base64');
+        
+        // إنشاء اسم ملف فريد
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const fileKey = `loyalty-invoices/${timestamp}-${randomSuffix}-${input.fileName}`;
+        
+        const { url, key } = await storagePut(fileKey, buffer, input.contentType);
+        
+        return { success: true, url, key };
+      }),
   }),
 });
 

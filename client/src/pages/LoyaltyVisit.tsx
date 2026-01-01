@@ -9,9 +9,6 @@ import { Gift, CheckCircle, Loader2, Calendar, PartyPopper, Camera, X } from 'lu
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 
-const FORGE_API_URL = import.meta.env.VITE_FRONTEND_FORGE_API_URL;
-const FORGE_API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
-
 export default function LoyaltyVisit() {
   const [phone, setPhone] = useState('');
   const [serviceType, setServiceType] = useState('');
@@ -37,6 +34,9 @@ export default function LoyaltyVisit() {
   
   // جلب إعدادات الولاء
   const { data: settings } = trpc.loyalty.getSettings.useQuery();
+
+  // رفع الصورة عبر tRPC
+  const uploadMutation = trpc.loyalty.uploadInvoiceImage.useMutation();
 
   // تسجيل الزيارة
   const visitMutation = trpc.loyalty.recordVisit.useMutation({
@@ -68,30 +68,14 @@ export default function LoyaltyVisit() {
     },
   });
 
-  // رفع الصورة إلى S3
-  const uploadImage = async (file: File): Promise<{ url: string; key: string } | null> => {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch(`${FORGE_API_URL}/storage/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${FORGE_API_KEY}`,
-        },
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error('فشل رفع الصورة');
-      }
-      
-      const data = await response.json();
-      return { url: data.url, key: data.key };
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      return null;
-    }
+  // تحويل الملف إلى base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -147,9 +131,17 @@ export default function LoyaltyVisit() {
     setIsUploading(true);
     
     try {
-      // رفع الصورة أولاً
-      const uploadResult = await uploadImage(invoiceImage);
-      if (!uploadResult) {
+      // تحويل الصورة إلى base64
+      const base64Data = await fileToBase64(invoiceImage);
+      
+      // رفع الصورة عبر tRPC
+      const uploadResult = await uploadMutation.mutateAsync({
+        base64Data,
+        fileName: invoiceImage.name,
+        contentType: invoiceImage.type,
+      });
+      
+      if (!uploadResult.success) {
         toast.error('فشل رفع صورة الفاتورة');
         setIsUploading(false);
         return;
@@ -165,7 +157,8 @@ export default function LoyaltyVisit() {
         invoiceImageKey: uploadResult.key,
       });
     } catch (error) {
-      toast.error('حدث خطأ أثناء التسجيل');
+      console.error('Upload error:', error);
+      toast.error('حدث خطأ أثناء رفع الصورة');
     } finally {
       setIsUploading(false);
     }
@@ -179,76 +172,60 @@ export default function LoyaltyVisit() {
     setResult(null);
   };
 
-  // القيم الافتراضية للإعدادات
-  const requiredVisits = settings?.requiredVisitsForDiscount || 4;
-  const discountPercent = settings?.discountPercentage || 50;
+  // عدد الزيارات المطلوبة للخصم
+  const visitsRequired = settings?.requiredVisitsForDiscount ?? 4;
+  const discountPercentage = settings?.discountPercentage ?? 50;
 
   if (result?.success) {
     return (
-      <div className={`min-h-screen flex items-center justify-center p-4 ${
-        result.isDiscountVisit 
-          ? 'bg-gradient-to-br from-yellow-50 to-amber-100' 
-          : 'bg-gradient-to-br from-green-50 to-emerald-100'
-      }`}>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
         <Card className="w-full max-w-md text-center">
-          <CardContent className="pt-10 pb-10">
+          <CardHeader className="pb-2">
             {result.isDiscountVisit ? (
               <>
-                <div className="mb-6">
-                  <div className="w-24 h-24 bg-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
-                    <PartyPopper className="h-14 w-14 text-white" />
-                  </div>
-                  <h1 className="text-3xl font-bold text-yellow-600 mb-2">🎉 مبروك!</h1>
-                  <p className="text-xl text-gray-700 mb-4">لقد حصلت على خصم {result.discountPercentage}%!</p>
-                  <p className="text-2xl font-bold text-yellow-700">يومك سعيد {result.customerName}!</p>
+                <div className="mx-auto w-20 h-20 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mb-4 animate-bounce">
+                  <PartyPopper className="w-10 h-10 text-white" />
                 </div>
-                
-                <div className="bg-yellow-100 rounded-lg p-4 mb-6 border-2 border-yellow-400">
-                  <p className="text-lg text-yellow-800 font-medium">
-                    🎁 هذه زيارتك رقم {result.visitNumberInMonth} هذا الشهر
-                  </p>
-                  <p className="text-yellow-700 mt-2">
-                    استمتع بخصم {discountPercent}% على فاتورتك اليوم!
-                  </p>
-                </div>
-
-                <div className="bg-yellow-50 rounded-lg p-4 mb-6">
-                  <p className="text-sm text-yellow-700">
-                    ⏳ سيتم مراجعة زيارتك والموافقة عليها من قبل المشرف
-                  </p>
-                </div>
+                <CardTitle className="text-2xl text-orange-600">🎉 مبروك!</CardTitle>
+                <CardDescription className="text-lg mt-2">
+                  حصلت على خصم {result.discountPercentage}%!
+                </CardDescription>
               </>
             ) : (
               <>
-                <div className="mb-6">
-                  <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="h-12 w-12 text-white" />
-                  </div>
-                  <h1 className="text-2xl font-bold text-green-600 mb-2">تم تسجيل زيارتك!</h1>
-                  <p className="text-gray-600">{result.message}</p>
+                <div className="mx-auto w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center mb-4">
+                  <CheckCircle className="w-10 h-10 text-white" />
                 </div>
-                
-                <div className="bg-green-50 rounded-lg p-4 mb-6">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <Calendar className="h-5 w-5 text-green-600" />
-                    <span className="font-medium text-green-700">زيارتك رقم {result.visitNumberInMonth} هذا الشهر</span>
-                  </div>
-                  {result.visitNumberInMonth && result.visitNumberInMonth < requiredVisits && (
-                    <p className="text-sm text-green-600">
-                      باقي {requiredVisits - result.visitNumberInMonth} زيارات للحصول على خصم {discountPercent}%!
-                    </p>
-                  )}
-                </div>
-
-                <div className="bg-yellow-50 rounded-lg p-4 mb-6">
-                  <p className="text-sm text-yellow-700">
-                    ⏳ سيتم مراجعة زيارتك والموافقة عليها من قبل المشرف
-                  </p>
-                </div>
+                <CardTitle className="text-2xl text-green-600">تم تسجيل الزيارة!</CardTitle>
               </>
             )}
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+              <p className="text-lg font-semibold">{result.customerName}</p>
+              <div className="flex items-center justify-center gap-2 mt-2 text-gray-600 dark:text-gray-400">
+                <Calendar className="w-4 h-4" />
+                <span>الزيارة رقم {result.visitNumberInMonth} هذا الشهر</span>
+              </div>
+            </div>
+            
+            {!result.isDiscountVisit && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                <p className="text-blue-700 dark:text-blue-300">
+                  {result.visitNumberInMonth && result.visitNumberInMonth < visitsRequired ? (
+                    <>باقي {visitsRequired - result.visitNumberInMonth} زيارات للحصول على خصم {discountPercentage}%</>
+                  ) : (
+                    'في انتظار الموافقة على الزيارة'
+                  )}
+                </p>
+              </div>
+            )}
 
-            <Button onClick={resetForm} variant="outline" className="w-full">
+            <p className="text-sm text-gray-500">
+              ⏳ الزيارة في انتظار موافقة المشرف
+            </p>
+            
+            <Button onClick={resetForm} className="w-full">
               تسجيل زيارة جديدة
             </Button>
           </CardContent>
@@ -258,15 +235,15 @@ export default function LoyaltyVisit() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Calendar className="h-8 w-8 text-white" />
+          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mb-4">
+            <Gift className="w-8 h-8 text-white" />
           </div>
           <CardTitle className="text-2xl">تسجيل زيارة</CardTitle>
           <CardDescription>
-            سجّل زيارتك واقترب من خصم {discountPercent}%!
+            سجّل زيارتك واحصل على خصم {discountPercentage}% في الزيارة رقم {visitsRequired}!
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -279,29 +256,40 @@ export default function LoyaltyVisit() {
                 placeholder="05xxxxxxxx"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                className="text-right"
                 dir="ltr"
-                required
               />
             </div>
 
             <div className="space-y-2">
-              <Label>نوع الخدمة *</Label>
+              <Label htmlFor="serviceType">نوع الخدمة *</Label>
               <Select value={serviceType} onValueChange={setServiceType}>
                 <SelectTrigger>
                   <SelectValue placeholder="اختر نوع الخدمة" />
                 </SelectTrigger>
                 <SelectContent>
-                  {serviceTypes?.filter(t => t.isActive).map((type) => (
-                    <SelectItem key={type.id} value={type.name}>
-                      {type.name}
-                    </SelectItem>
-                  ))}
+                  {serviceTypes && serviceTypes.length > 0 ? (
+                    serviceTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.name}>
+                        {type.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="حلاقة شعر">حلاقة شعر</SelectItem>
+                      <SelectItem value="حلاقة ذقن">حلاقة ذقن</SelectItem>
+                      <SelectItem value="حلاقة كاملة">حلاقة كاملة</SelectItem>
+                      <SelectItem value="حلاقة رأس + شعر">حلاقة رأس + شعر</SelectItem>
+                      <SelectItem value="صبغة">صبغة</SelectItem>
+                      <SelectItem value="علاج شعر">علاج شعر</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label>الفرع (اختياري)</Label>
+              <Label htmlFor="branch">الفرع (اختياري)</Label>
               <Select 
                 value={selectedBranch?.id?.toString() || ''} 
                 onValueChange={(value) => {
@@ -325,65 +313,67 @@ export default function LoyaltyVisit() {
             {/* رفع صورة الفاتورة */}
             <div className="space-y-2">
               <Label>صورة الفاتورة *</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+              <div 
+                className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-blue-500 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
                 {invoiceImagePreview ? (
                   <div className="relative">
                     <img 
                       src={invoiceImagePreview} 
                       alt="صورة الفاتورة" 
-                      className="w-full h-48 object-cover rounded-lg"
+                      className="max-h-48 mx-auto rounded-lg"
                     />
-                    <Button
+                    <button
                       type="button"
-                      variant="destructive"
-                      size="icon"
-                      className="absolute top-2 left-2"
-                      onClick={removeImage}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeImage();
+                      }}
+                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
                     >
-                      <X className="h-4 w-4" />
-                    </Button>
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 ) : (
-                  <div 
-                    className="flex flex-col items-center justify-center py-6 cursor-pointer"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                      <Camera className="h-8 w-8 text-gray-400" />
-                    </div>
-                    <p className="text-sm text-gray-600 mb-1">اضغط لرفع صورة الفاتورة</p>
-                    <p className="text-xs text-gray-400">PNG, JPG حتى 5MB</p>
+                  <div className="py-8">
+                    <Camera className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+                    <p className="text-gray-500">اضغط لرفع صورة الفاتورة</p>
+                    <p className="text-xs text-gray-400 mt-1">PNG, JPG حتى 5MB</p>
                   </div>
                 )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleImageSelect}
-                />
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
             </div>
 
-            <div className="bg-blue-50 rounded-lg p-3 text-sm">
-              <p className="font-medium text-blue-700 mb-1">💡 كيف يعمل برنامج الولاء؟</p>
-              <ul className="text-blue-600 space-y-1">
-                <li>• سجّل {requiredVisits - 1} زيارات في الشهر</li>
-                <li>• احصل على خصم {discountPercent}% في الزيارة رقم {requiredVisits}!</li>
-              </ul>
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 text-sm">
+              <p className="text-yellow-700 dark:text-yellow-300 flex items-start gap-2">
+                <span className="text-lg">💡</span>
+                <span>
+                  <strong>كيف يعمل برنامج الولاء؟</strong>
+                  <br />
+                  • سجّل {visitsRequired - 1} زيارات في الشهر
+                  <br />
+                  • احصل على خصم {discountPercentage}% في الزيارة رقم {visitsRequired}!
+                </span>
+              </p>
             </div>
 
             <Button 
               type="submit" 
               className="w-full" 
-              size="lg"
               disabled={visitMutation.isPending || isUploading}
             >
               {(visitMutation.isPending || isUploading) ? (
                 <>
-                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                  {isUploading ? 'جاري رفع الصورة...' : 'جاري التسجيل...'}
+                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  جاري التسجيل...
                 </>
               ) : (
                 'تسجيل الزيارة'
