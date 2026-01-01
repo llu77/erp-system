@@ -4817,6 +4817,32 @@ export async function registerLoyaltyVisit(data: {
   const db = await getDb();
   if (!db) return { success: false, isDiscountVisit: false, discountPercentage: 0, visitNumberInMonth: 0, error: "خطأ في الاتصال بقاعدة البيانات" };
   
+  // التحقق من عدم وجود زيارة سابقة في نفس اليوم
+  const today = new Date();
+  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  
+  const existingVisitToday = await db.select()
+    .from(loyaltyVisits)
+    .where(
+      and(
+        eq(loyaltyVisits.customerId, data.customerId),
+        gte(loyaltyVisits.visitDate, startOfDay),
+        lt(loyaltyVisits.visitDate, endOfDay)
+      )
+    )
+    .limit(1);
+  
+  if (existingVisitToday.length > 0) {
+    return { 
+      success: false, 
+      isDiscountVisit: false, 
+      discountPercentage: 0, 
+      visitNumberInMonth: 0, 
+      error: "لقد سجلت زيارة اليوم بالفعل. يمكنك تسجيل زيارة جديدة غداً." 
+    };
+  }
+  
   // الحصول على زيارات الشهر الحالي
   const visitsThisMonth = await getCustomerVisitsThisMonth(data.customerId);
   const visitNumberInMonth = visitsThisMonth.length + 1;
