@@ -78,12 +78,13 @@ export default function LoyaltyVisit() {
     });
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // التقاط صورة من الكاميرا مباشرة
+  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       // التحقق من نوع الملف
       if (!file.type.startsWith('image/')) {
-        toast.error('يرجى اختيار صورة فقط');
+        toast.error('يرجى التقاط صورة فقط');
         return;
       }
       
@@ -124,7 +125,7 @@ export default function LoyaltyVisit() {
       return;
     }
     if (!invoiceImage) {
-      toast.error('الرجاء رفع صورة الفاتورة');
+      toast.error('الرجاء التقاط صورة الفاتورة');
       return;
     }
 
@@ -137,8 +138,8 @@ export default function LoyaltyVisit() {
       // رفع الصورة عبر tRPC
       const uploadResult = await uploadMutation.mutateAsync({
         base64Data,
-        fileName: invoiceImage.name,
-        contentType: invoiceImage.type,
+        fileName: invoiceImage.name || `invoice_${Date.now()}.jpg`,
+        contentType: invoiceImage.type || 'image/jpeg',
       });
       
       if (!uploadResult.success) {
@@ -310,7 +311,7 @@ export default function LoyaltyVisit() {
               </Select>
             </div>
 
-            {/* رفع صورة الفاتورة */}
+            {/* التقاط صورة الفاتورة من الكاميرا مباشرة */}
             <div className="space-y-2">
               <Label>صورة الفاتورة *</Label>
               <div 
@@ -338,16 +339,18 @@ export default function LoyaltyVisit() {
                 ) : (
                   <div className="py-8">
                     <Camera className="w-12 h-12 mx-auto text-gray-400 mb-2" />
-                    <p className="text-gray-500">اضغط لرفع صورة الفاتورة</p>
-                    <p className="text-xs text-gray-400 mt-1">PNG, JPG حتى 5MB</p>
+                    <p className="text-gray-500 font-medium">اضغط لالتقاط صورة الفاتورة</p>
+                    <p className="text-xs text-gray-400 mt-1">سيتم فتح الكاميرا مباشرة</p>
                   </div>
                 )}
               </div>
+              {/* input مخفي للكاميرا فقط */}
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                onChange={handleImageSelect}
+                capture="environment"
+                onChange={handleCameraCapture}
                 className="hidden"
               />
             </div>
