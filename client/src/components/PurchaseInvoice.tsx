@@ -67,6 +67,7 @@ const PurchaseInvoice = forwardRef<HTMLDivElement, PurchaseInvoiceProps>(
   ({ order, companyInfo }, ref) => {
     const defaultCompany: CompanyInfo = {
       name: 'Symbol AI',
+      logo: '/symbol-ai-logo.png',
       address: 'المملكة العربية السعودية',
       phone: '+966 XX XXX XXXX',
       email: 'info@symbolai.com',
@@ -101,22 +102,35 @@ const PurchaseInvoice = forwardRef<HTMLDivElement, PurchaseInvoiceProps>(
           paddingBottom: '20px',
           borderBottom: '3px solid #2563eb',
         }}>
-          {/* Company Info */}
+          {/* Company Info with Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{
-              width: '70px',
-              height: '70px',
-              backgroundColor: '#2563eb',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              fontSize: '28px',
-              fontWeight: 'bold',
-            }}>
-              S
-            </div>
+            {company.logo ? (
+              <img 
+                src={company.logo} 
+                alt="شعار الشركة"
+                style={{
+                  width: '80px',
+                  height: '80px',
+                  objectFit: 'contain',
+                  borderRadius: '8px',
+                }}
+              />
+            ) : (
+              <div style={{
+                width: '70px',
+                height: '70px',
+                backgroundColor: '#2563eb',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ffffff',
+                fontSize: '28px',
+                fontWeight: 'bold',
+              }}>
+                S
+              </div>
+            )}
             <div>
               <h1 style={{
                 margin: '0 0 5px 0',
@@ -490,6 +504,99 @@ const PurchaseInvoice = forwardRef<HTMLDivElement, PurchaseInvoiceProps>(
             </p>
           </div>
         )}
+
+        {/* Signatures Section */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          gap: '30px',
+          marginBottom: '30px',
+          marginTop: '40px',
+        }}>
+          {/* توقيع سالم */}
+          <div style={{
+            textAlign: 'center',
+            padding: '20px',
+            borderTop: '2px solid #e2e8f0',
+          }}>
+            <img 
+              src="/signatures/manager_signature.png" 
+              alt="توقيع سالم"
+              style={{
+                height: '60px',
+                objectFit: 'contain',
+                marginBottom: '10px',
+              }}
+            />
+            <p style={{
+              margin: '0 0 5px 0',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              color: '#1a1a1a',
+            }}>
+              سالم
+            </p>
+            <p style={{
+              margin: 0,
+              fontSize: '12px',
+              color: '#64748b',
+            }}>
+              المدير العام
+            </p>
+          </div>
+
+          {/* الختم */}
+          <div style={{
+            textAlign: 'center',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <img 
+              src="/signatures/company_stamp.png" 
+              alt="ختم الشركة"
+              style={{
+                height: '90px',
+                objectFit: 'contain',
+                opacity: 0.9,
+              }}
+            />
+          </div>
+
+          {/* توقيع عمر */}
+          <div style={{
+            textAlign: 'center',
+            padding: '20px',
+            borderTop: '2px solid #e2e8f0',
+          }}>
+            <img 
+              src="/signatures/supervisor_signature.png" 
+              alt="توقيع عمر"
+              style={{
+                height: '60px',
+                objectFit: 'contain',
+                marginBottom: '10px',
+              }}
+            />
+            <p style={{
+              margin: '0 0 5px 0',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              color: '#1a1a1a',
+            }}>
+              عمر
+            </p>
+            <p style={{
+              margin: 0,
+              fontSize: '12px',
+              color: '#64748b',
+            }}>
+              مسؤول المشتريات
+            </p>
+          </div>
+        </div>
 
         {/* Footer */}
         <div style={{
