@@ -196,6 +196,7 @@ const menuStructure: MenuItem[] = [
       { icon: Mail, label: "مستلمي الإشعارات", path: "/notification-recipients", roles: ["admin"] },
       { icon: Calendar, label: "مراقب النظام", path: "/scheduler", roles: ["admin"] },
       { icon: Settings, label: "الإعدادات", path: "/settings", roles: ["admin"] },
+      { icon: Users, label: "إعدادات الولاء", path: "/loyalty/settings", roles: ["admin"] },
     ]
   },
 ];

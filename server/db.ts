@@ -4977,3 +4977,158 @@ export async function getAdminsAndSupervisors(): Promise<Array<{ id: number; nam
       eq(users.role, 'supervisor')
     ));
 }
+
+
+// ==================== دوال إعدادات نظام الولاء ====================
+
+// الحصول على إعدادات الولاء
+export async function getLoyaltySettings(): Promise<{
+  requiredVisitsForDiscount: number;
+  discountPercentage: number;
+}> {
+  const db = await getDb();
+  if (!db) return { requiredVisitsForDiscount: 4, discountPercentage: 50 };
+  
+  const { loyaltySettings } = await import('../drizzle/schema');
+  const settings = await db.select().from(loyaltySettings).limit(1);
+  
+  if (settings.length === 0) {
+    // إنشاء إعدادات افتراضية
+    await db.insert(loyaltySettings).values({
+      requiredVisitsForDiscount: 4,
+      discountPercentage: 50,
+    });
+    return { requiredVisitsForDiscount: 4, discountPercentage: 50 };
+  }
+  
+  return {
+    requiredVisitsForDiscount: settings[0].requiredVisitsForDiscount,
+    discountPercentage: settings[0].discountPercentage,
+  };
+}
+
+// تحديث إعدادات الولاء
+export async function updateLoyaltySettings(data: {
+  requiredVisitsForDiscount: number;
+  discountPercentage: number;
+}): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "خطأ في الاتصال بقاعدة البيانات" };
+  
+  const { loyaltySettings } = await import('../drizzle/schema');
+  const settings = await db.select().from(loyaltySettings).limit(1);
+  
+  if (settings.length === 0) {
+    // إنشاء إعدادات جديدة
+    await db.insert(loyaltySettings).values({
+      requiredVisitsForDiscount: data.requiredVisitsForDiscount,
+      discountPercentage: data.discountPercentage,
+    });
+  } else {
+    // تحديث الإعدادات الموجودة
+    await db.update(loyaltySettings)
+      .set({
+        requiredVisitsForDiscount: data.requiredVisitsForDiscount,
+        discountPercentage: data.discountPercentage,
+      })
+      .where(eq(loyaltySettings.id, settings[0].id));
+  }
+  
+  return { success: true };
+}
+
+// الحصول على أنواع الخدمات
+export async function getLoyaltyServiceTypes(): Promise<Array<{
+  id: number;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { loyaltyServiceTypes } = await import('../drizzle/schema');
+  const { asc } = await import('drizzle-orm');
+  
+  const types = await db.select().from(loyaltyServiceTypes).orderBy(asc(loyaltyServiceTypes.sortOrder));
+  
+  // إذا لم توجد خدمات، إنشاء الخدمات الافتراضية
+  if (types.length === 0) {
+    const defaultServices = [
+      { name: 'حلاقة شعر', sortOrder: 1 },
+      { name: 'حلاقة ذقن', sortOrder: 2 },
+      { name: 'قص + حلاقة', sortOrder: 3 },
+      { name: 'حلاقة رأس + شعر', sortOrder: 4 },
+      { name: 'صبغة شعر', sortOrder: 5 },
+      { name: 'علاج شعر', sortOrder: 6 },
+      { name: 'تنظيف بشرة', sortOrder: 7 },
+      { name: 'أخرى', sortOrder: 8 },
+    ];
+    
+    for (const service of defaultServices) {
+      await db.insert(loyaltyServiceTypes).values(service);
+    }
+    
+    return await db.select().from(loyaltyServiceTypes).orderBy(asc(loyaltyServiceTypes.sortOrder));
+  }
+  
+  return types;
+}
+
+// إضافة نوع خدمة جديد
+export async function addLoyaltyServiceType(data: {
+  name: string;
+  sortOrder?: number;
+}): Promise<{ success: boolean; id?: number; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "خطأ في الاتصال بقاعدة البيانات" };
+  
+  const { loyaltyServiceTypes } = await import('../drizzle/schema');
+  const { max } = await import('drizzle-orm');
+  
+  // الحصول على أعلى ترتيب
+  const maxOrder = await db.select({ max: max(loyaltyServiceTypes.sortOrder) }).from(loyaltyServiceTypes);
+  const sortOrder = data.sortOrder || (Number(maxOrder[0]?.max || 0) + 1);
+  
+  const result = await db.insert(loyaltyServiceTypes).values({
+    name: data.name,
+    sortOrder,
+  });
+  
+  return { success: true, id: Number(result[0].insertId) };
+}
+
+// تحديث نوع خدمة
+export async function updateLoyaltyServiceType(data: {
+  id: number;
+  name: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "خطأ في الاتصال بقاعدة البيانات" };
+  
+  const { loyaltyServiceTypes } = await import('../drizzle/schema');
+  
+  await db.update(loyaltyServiceTypes)
+    .set({
+      name: data.name,
+      isActive: data.isActive ?? true,
+      sortOrder: data.sortOrder,
+    })
+    .where(eq(loyaltyServiceTypes.id, data.id));
+  
+  return { success: true };
+}
+
+// حذف نوع خدمة
+export async function deleteLoyaltyServiceType(id: number): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "خطأ في الاتصال بقاعدة البيانات" };
+  
+  const { loyaltyServiceTypes } = await import('../drizzle/schema');
+  
+  await db.delete(loyaltyServiceTypes).where(eq(loyaltyServiceTypes.id, id));
+  
+  return { success: true };
+}

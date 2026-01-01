@@ -46,6 +46,7 @@ import TaskManagement from "./pages/TaskManagement";
 import Loyalty from "./pages/Loyalty";
 import LoyaltyRegister from "./pages/LoyaltyRegister";
 import LoyaltyVisit from "./pages/LoyaltyVisit";
+import LoyaltySettings from "./pages/LoyaltySettings";
 
 function Router() {
   return (
@@ -242,6 +243,12 @@ function Router() {
       <Route path="/loyalty">
         <DashboardLayout>
           <Loyalty />
+        </DashboardLayout>
+      </Route>
+      {/* Loyalty Settings - Admin Only */}
+      <Route path="/loyalty/settings">
+        <DashboardLayout>
+          <LoyaltySettings />
         </DashboardLayout>
       </Route>
       {/* Loyalty Register - Public Page */}

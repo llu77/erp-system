@@ -1465,3 +1465,41 @@ export const loyaltyVisits = mysqlTable("loyaltyVisits", {
 
 export type LoyaltyVisit = typeof loyaltyVisits.$inferSelect;
 export type InsertLoyaltyVisit = typeof loyaltyVisits.$inferInsert;
+
+
+// ==================== جدول إعدادات نظام الولاء ====================
+/**
+ * LoyaltySettings - إعدادات نظام الولاء
+ */
+export const loyaltySettings = mysqlTable("loyaltySettings", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // إعدادات الخصم
+  requiredVisitsForDiscount: int("requiredVisitsForDiscount").default(4).notNull(), // عدد الزيارات المطلوبة للخصم
+  discountPercentage: int("discountPercentage").default(50).notNull(), // نسبة الخصم
+  
+  // إعدادات أخرى
+  isActive: boolean("isActive").default(true).notNull(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LoyaltySettings = typeof loyaltySettings.$inferSelect;
+export type InsertLoyaltySettings = typeof loyaltySettings.$inferInsert;
+
+// ==================== جدول أنواع خدمات الولاء ====================
+/**
+ * LoyaltyServiceTypes - أنواع الخدمات في نظام الولاء
+ */
+export const loyaltyServiceTypes = mysqlTable("loyaltyServiceTypes", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(), // اسم الخدمة
+  isActive: boolean("isActive").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(), // ترتيب العرض
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LoyaltyServiceType = typeof loyaltyServiceTypes.$inferSelect;
+export type InsertLoyaltyServiceType = typeof loyaltyServiceTypes.$inferInsert;

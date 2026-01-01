@@ -4538,6 +4538,65 @@ export const appRouter = router({
       const { getBranches } = await import('./db');
       return await getBranches();
     }),
+
+    // ==================== إعدادات نظام الولاء ====================
+    
+    // الحصول على إعدادات الولاء
+    getSettings: publicProcedure.query(async () => {
+      const { getLoyaltySettings } = await import('./db');
+      return await getLoyaltySettings();
+    }),
+
+    // تحديث إعدادات الولاء (للأدمن فقط)
+    updateSettings: adminProcedure
+      .input(z.object({
+        requiredVisitsForDiscount: z.number().min(1).max(20),
+        discountPercentage: z.number().min(1).max(100),
+      }))
+      .mutation(async ({ input }) => {
+        const { updateLoyaltySettings } = await import('./db');
+        return await updateLoyaltySettings(input);
+      }),
+
+    // الحصول على أنواع الخدمات
+    getServiceTypes: publicProcedure.query(async () => {
+      const { getLoyaltyServiceTypes } = await import('./db');
+      return await getLoyaltyServiceTypes();
+    }),
+
+    // إضافة نوع خدمة جديد (للأدمن فقط)
+    addServiceType: adminProcedure
+      .input(z.object({
+        name: z.string().min(1, 'اسم الخدمة مطلوب'),
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { addLoyaltyServiceType } = await import('./db');
+        return await addLoyaltyServiceType(input);
+      }),
+
+    // تحديث نوع خدمة (للأدمن فقط)
+    updateServiceType: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().min(1, 'اسم الخدمة مطلوب'),
+        isActive: z.boolean().optional(),
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { updateLoyaltyServiceType } = await import('./db');
+        return await updateLoyaltyServiceType(input);
+      }),
+
+    // حذف نوع خدمة (للأدمن فقط)
+    deleteServiceType: adminProcedure
+      .input(z.object({
+        id: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        const { deleteLoyaltyServiceType } = await import('./db');
+        return await deleteLoyaltyServiceType(input.id);
+      }),
   }),
 });
 

@@ -9,19 +9,6 @@ import { Gift, CheckCircle, Loader2, Calendar, PartyPopper } from 'lucide-react'
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 
-// أنواع الخدمات
-const serviceTypes = [
-  'قص شعر',
-  'حلاقة ذقن',
-  'قص + حلاقة',
-  'حلاقة رأس + شعر',
-  'صبغة شعر',
-  'علاج شعر',
-  'تنظيف بشرة',
-  'مساج',
-  'خدمة أخرى',
-];
-
 export default function LoyaltyVisit() {
   const [phone, setPhone] = useState('');
   const [serviceType, setServiceType] = useState('');
@@ -37,6 +24,12 @@ export default function LoyaltyVisit() {
 
   // جلب الفروع
   const { data: branches } = trpc.loyalty.branches.useQuery();
+  
+  // جلب أنواع الخدمات من قاعدة البيانات
+  const { data: serviceTypes } = trpc.loyalty.getServiceTypes.useQuery();
+  
+  // جلب إعدادات الولاء
+  const { data: settings } = trpc.loyalty.getSettings.useQuery();
 
   // تسجيل الزيارة
   const visitMutation = trpc.loyalty.recordVisit.useMutation({
@@ -94,6 +87,10 @@ export default function LoyaltyVisit() {
     setResult(null);
   };
 
+  // القيم الافتراضية للإعدادات
+  const requiredVisits = settings?.requiredVisitsForDiscount || 4;
+  const discountPercent = settings?.discountPercentage || 50;
+
   if (result?.success) {
     return (
       <div className={`min-h-screen flex items-center justify-center p-4 ${
@@ -119,7 +116,7 @@ export default function LoyaltyVisit() {
                     🎁 هذه زيارتك رقم {result.visitNumberInMonth} هذا الشهر
                   </p>
                   <p className="text-yellow-700 mt-2">
-                    استمتع بخصم 50% على فاتورتك اليوم!
+                    استمتع بخصم {discountPercent}% على فاتورتك اليوم!
                   </p>
                 </div>
               </>
@@ -138,9 +135,9 @@ export default function LoyaltyVisit() {
                     <Calendar className="h-5 w-5 text-green-600" />
                     <span className="font-medium text-green-700">زيارتك رقم {result.visitNumberInMonth} هذا الشهر</span>
                   </div>
-                  {result.visitNumberInMonth && result.visitNumberInMonth < 4 && (
+                  {result.visitNumberInMonth && result.visitNumberInMonth < requiredVisits && (
                     <p className="text-sm text-green-600">
-                      باقي {4 - result.visitNumberInMonth} زيارات للحصول على خصم 50%!
+                      باقي {requiredVisits - result.visitNumberInMonth} زيارات للحصول على خصم {discountPercent}%!
                     </p>
                   )}
                 </div>
@@ -165,7 +162,7 @@ export default function LoyaltyVisit() {
           </div>
           <CardTitle className="text-2xl">تسجيل زيارة</CardTitle>
           <CardDescription>
-            سجّل زيارتك واقترب من خصم 50%!
+            سجّل زيارتك واقترب من خصم {discountPercent}%!
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -190,9 +187,9 @@ export default function LoyaltyVisit() {
                   <SelectValue placeholder="اختر نوع الخدمة" />
                 </SelectTrigger>
                 <SelectContent>
-                  {serviceTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
+                  {serviceTypes?.filter(t => t.isActive).map((type) => (
+                    <SelectItem key={type.id} value={type.name}>
+                      {type.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -224,8 +221,8 @@ export default function LoyaltyVisit() {
             <div className="bg-blue-50 rounded-lg p-3 text-sm">
               <p className="font-medium text-blue-700 mb-1">💡 كيف يعمل برنامج الولاء؟</p>
               <ul className="text-blue-600 space-y-1">
-                <li>• سجّل 3 زيارات في الشهر</li>
-                <li>• احصل على خصم 50% في الزيارة الرابعة!</li>
+                <li>• سجّل {requiredVisits - 1} زيارات في الشهر</li>
+                <li>• احصل على خصم {discountPercent}% في الزيارة رقم {requiredVisits}!</li>
               </ul>
             </div>
 

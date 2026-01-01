@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,19 +8,6 @@ import { trpc } from '@/lib/trpc';
 import { Gift, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
-
-// أنواع الخدمات
-const serviceTypes = [
-  'قص شعر',
-  'حلاقة ذقن',
-  'قص + حلاقة',
-  'حلاقة رأس + شعر',
-  'صبغة شعر',
-  'علاج شعر',
-  'تنظيف بشرة',
-  'مساج',
-  'خدمة أخرى',
-];
 
 export default function LoyaltyRegister() {
   const [name, setName] = useState('');
@@ -32,6 +19,12 @@ export default function LoyaltyRegister() {
 
   // جلب الفروع
   const { data: branches } = trpc.loyalty.branches.useQuery();
+  
+  // جلب أنواع الخدمات من قاعدة البيانات
+  const { data: serviceTypes } = trpc.loyalty.getServiceTypes.useQuery();
+  
+  // جلب إعدادات الولاء
+  const { data: settings } = trpc.loyalty.getSettings.useQuery();
 
   // تسجيل العميل
   const registerMutation = trpc.loyalty.register.useMutation({
@@ -79,6 +72,10 @@ export default function LoyaltyRegister() {
     });
   };
 
+  // القيم الافتراضية للإعدادات
+  const requiredVisits = settings?.requiredVisitsForDiscount || 4;
+  const discountPercent = settings?.discountPercentage || 50;
+
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
@@ -94,7 +91,7 @@ export default function LoyaltyRegister() {
             
             <div className="bg-green-50 rounded-lg p-4 mb-6">
               <p className="text-sm text-green-700">
-                🎁 مع كل 3 زيارات في الشهر، تحصل على خصم 50% في الزيارة الرابعة!
+                🎁 مع كل {requiredVisits - 1} زيارات في الشهر، تحصل على خصم {discountPercent}% في الزيارة رقم {requiredVisits}!
               </p>
             </div>
 
@@ -116,7 +113,7 @@ export default function LoyaltyRegister() {
           </div>
           <CardTitle className="text-2xl">برنامج الولاء</CardTitle>
           <CardDescription>
-            سجّل الآن واحصل على خصم 50% في زيارتك الرابعة كل شهر!
+            سجّل الآن واحصل على خصم {discountPercent}% في زيارتك رقم {requiredVisits} كل شهر!
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -152,9 +149,9 @@ export default function LoyaltyRegister() {
                   <SelectValue placeholder="اختر نوع الخدمة" />
                 </SelectTrigger>
                 <SelectContent>
-                  {serviceTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
+                  {serviceTypes?.filter(t => t.isActive).map((type) => (
+                    <SelectItem key={type.id} value={type.name}>
+                      {type.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
