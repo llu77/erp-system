@@ -513,35 +513,35 @@ const PurchaseInvoice = forwardRef<HTMLDivElement, PurchaseInvoiceProps>(
           marginBottom: '30px',
           marginTop: '40px',
         }}>
-          {/* توقيع سالم */}
+          {/* توقيع سالم الوادعي */}
           <div style={{
             textAlign: 'center',
             padding: '20px',
             borderTop: '2px solid #e2e8f0',
           }}>
             <img 
-              src="/signatures/manager_signature.png" 
-              alt="توقيع سالم"
+              src="/signatures/supervisor_signature.png" 
+              alt="توقيع سالم الوادعي"
               style={{
-                height: '60px',
+                height: '120px',
                 objectFit: 'contain',
-                marginBottom: '10px',
+                marginBottom: '15px',
               }}
             />
             <p style={{
               margin: '0 0 5px 0',
               fontWeight: 'bold',
-              fontSize: '14px',
+              fontSize: '16px',
               color: '#1a1a1a',
             }}>
-              سالم
+              سالم الوادعي
             </p>
             <p style={{
               margin: 0,
-              fontSize: '12px',
+              fontSize: '14px',
               color: '#64748b',
             }}>
-              المدير العام
+              المشرف العام
             </p>
           </div>
 
@@ -558,42 +558,42 @@ const PurchaseInvoice = forwardRef<HTMLDivElement, PurchaseInvoiceProps>(
               src="/signatures/company_stamp.png" 
               alt="ختم الشركة"
               style={{
-                height: '90px',
+                height: '140px',
                 objectFit: 'contain',
                 opacity: 0.9,
               }}
             />
           </div>
 
-          {/* توقيع عمر */}
+          {/* توقيع عمر المطيري */}
           <div style={{
             textAlign: 'center',
             padding: '20px',
             borderTop: '2px solid #e2e8f0',
           }}>
             <img 
-              src="/signatures/supervisor_signature.png" 
-              alt="توقيع عمر"
+              src="/signatures/manager_signature.png" 
+              alt="توقيع عمر المطيري"
               style={{
-                height: '60px',
+                height: '120px',
                 objectFit: 'contain',
-                marginBottom: '10px',
+                marginBottom: '15px',
               }}
             />
             <p style={{
               margin: '0 0 5px 0',
               fontWeight: 'bold',
-              fontSize: '14px',
+              fontSize: '16px',
               color: '#1a1a1a',
             }}>
-              عمر
+              عمر المطيري
             </p>
             <p style={{
               margin: 0,
-              fontSize: '12px',
+              fontSize: '14px',
               color: '#64748b',
             }}>
-              مسؤول المشتريات
+              المدير
             </p>
           </div>
         </div>
