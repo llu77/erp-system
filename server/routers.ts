@@ -346,7 +346,7 @@ export const appRouter = router({
         return { success: true, message: 'تم إنشاء المنتج بنجاح', sku };
       }),
 
-    update: managerProcedure
+    update: protectedProcedure
       .input(z.object({
         id: z.number(),
         name: z.string().optional(),
@@ -362,6 +362,28 @@ export const appRouter = router({
         isActive: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        // التحقق من الصلاحيات: admin/manager أو مستخدم لديه صلاحية تعديل المنتجات
+        const allowedRoles = ['admin', 'manager'];
+        let hasPermission = allowedRoles.includes(ctx.user.role);
+        
+        // التحقق من الصلاحيات المخصصة في حقل permissions
+        if (!hasPermission && ctx.user.permissions) {
+          try {
+            const userPermissions = typeof ctx.user.permissions === 'string' 
+              ? JSON.parse(ctx.user.permissions) 
+              : ctx.user.permissions;
+            if (userPermissions?.products?.edit === true) {
+              hasPermission = true;
+            }
+          } catch (e) {
+            // تجاهل أخطاء التحليل
+          }
+        }
+        
+        if (!hasPermission) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بتعديل المنتجات' });
+        }
+        
         const { id, ...data } = input;
         const product = await db.getProductById(id);
         
