@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,9 +30,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Plus, Trash2, ShoppingCart, Search, Eye, X } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, Search, Eye, X, FileText, Printer } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import PurchaseInvoice from "@/components/PurchaseInvoice";
 
 const formatCurrency = (value: string | number) => {
   const num = typeof value === "string" ? parseFloat(value) : value;
@@ -64,6 +65,8 @@ export default function PurchasesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingOrder, setViewingOrder] = useState<any>(null);
   const [deleteOrderId, setDeleteOrderId] = useState<number | null>(null);
+  const [printingOrder, setPrintingOrder] = useState<any>(null);
+  const invoiceRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
@@ -78,6 +81,12 @@ export default function PurchasesPage() {
   const { data: orders = [], isLoading } = trpc.purchaseOrders.list.useQuery();
   const { data: suppliers = [] } = trpc.suppliers.list.useQuery();
   const { data: products = [] } = trpc.products.list.useQuery();
+  
+  // جلب تفاصيل الطلب للطباعة
+  const { data: orderDetails } = trpc.purchaseOrders.getById.useQuery(
+    { id: printingOrder?.id || 0 },
+    { enabled: !!printingOrder }
+  );
 
   // تحديث السعر تلقائياً عند اختيار منتج
   useEffect(() => {
@@ -211,6 +220,56 @@ export default function PurchasesPage() {
     });
   };
 
+  // طباعة الفاتورة
+  const handlePrintInvoice = (order: any) => {
+    setPrintingOrder(order);
+  };
+
+  // تنفيذ الطباعة بعد تحميل البيانات
+  useEffect(() => {
+    if (orderDetails && printingOrder && invoiceRef.current) {
+      // انتظار قليل لضمان تحميل المحتوى
+      setTimeout(() => {
+        const printContent = invoiceRef.current?.innerHTML;
+        if (!printContent) return;
+
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(`
+            <!DOCTYPE html>
+            <html dir="rtl" lang="ar">
+            <head>
+              <meta charset="UTF-8">
+              <title>فاتورة مشتريات - ${orderDetails.orderNumber}</title>
+              <script src="https://cdn.tailwindcss.com"></script>
+              <style>
+                @media print {
+                  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                  @page { size: A4; margin: 10mm; }
+                }
+                body { font-family: 'Arial', sans-serif; }
+              </style>
+            </head>
+            <body>
+              ${printContent}
+              <script>
+                window.onload = function() {
+                  setTimeout(function() {
+                    window.print();
+                    window.close();
+                  }, 500);
+                }
+              </script>
+            </body>
+            </html>
+          `);
+          printWindow.document.close();
+        }
+        setPrintingOrder(null);
+      }, 100);
+    }
+  }, [orderDetails, printingOrder]);
+
   return (
     <div className="space-y-4">
       <Card>
@@ -253,7 +312,7 @@ export default function PurchasesPage() {
                     <TableHead className="text-xs py-2">التاريخ</TableHead>
                     <TableHead className="text-xs py-2">الإجمالي</TableHead>
                     <TableHead className="text-xs py-2">الحالة</TableHead>
-                    <TableHead className="text-xs py-2 w-[100px]">إجراءات</TableHead>
+                    <TableHead className="text-xs py-2 w-[130px]">إجراءات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -284,7 +343,7 @@ export default function PurchasesPage() {
                               onValueChange={(value) => handleStatusChange(order.id, value)}
                             >
                               <SelectTrigger className="w-24 h-7 text-xs">
-                                <Badge variant={status.variant} className="text-[10px] px-1.5 py-0">{status.label}</Badge>
+                                <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="draft" className="text-xs">مسودة</SelectItem>
@@ -302,8 +361,18 @@ export default function PurchasesPage() {
                                 size="icon"
                                 className="h-7 w-7"
                                 onClick={() => setViewingOrder(order)}
+                                title="عرض التفاصيل"
                               >
                                 <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-indigo-600 hover:text-indigo-700"
+                                onClick={() => handlePrintInvoice(order)}
+                                title="طباعة الفاتورة"
+                              >
+                                <FileText className="h-3.5 w-3.5" />
                               </Button>
                               {isAdmin && (
                                 <Button
@@ -311,6 +380,7 @@ export default function PurchasesPage() {
                                   size="icon"
                                   className="h-7 w-7 text-destructive hover:text-destructive"
                                   onClick={() => setDeleteOrderId(order.id)}
+                                  title="حذف"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -401,52 +471,48 @@ export default function PurchasesPage() {
                 <Plus className="h-3.5 w-3.5 ml-1" />
                 إضافة المنتج
               </Button>
-
-              {/* Items Table */}
-              {orderItems.length > 0 && (
-                <div className="rounded-md border bg-background">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs py-1.5">المنتج</TableHead>
-                        <TableHead className="text-xs py-1.5 w-16">الكمية</TableHead>
-                        <TableHead className="text-xs py-1.5 w-20">السعر</TableHead>
-                        <TableHead className="text-xs py-1.5 w-24">الإجمالي</TableHead>
-                        <TableHead className="w-8 py-1.5"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {orderItems.map((item, index) => (
-                        <TableRow key={index}>
-                          <TableCell className="text-xs py-1.5">{item.productName}</TableCell>
-                          <TableCell className="text-xs py-1.5">{item.quantity}</TableCell>
-                          <TableCell className="text-xs py-1.5">{formatCurrency(item.unitPrice)}</TableCell>
-                          <TableCell className="text-xs py-1.5 font-medium">{formatCurrency(item.total)}</TableCell>
-                          <TableCell className="py-1.5">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => removeItem(index)}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-
-              {/* Total */}
-              <div className="flex justify-between items-center pt-2 border-t">
-                <span className="font-medium text-sm">الإجمالي:</span>
-                <span className="font-bold text-base text-orange-600">
-                  {formatCurrency(calculateTotal())}
-                </span>
-              </div>
             </div>
+
+            {/* Items List */}
+            {orderItems.length > 0 && (
+              <div className="border rounded-md overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs py-1.5">المنتج</TableHead>
+                      <TableHead className="text-xs py-1.5 w-16">الكمية</TableHead>
+                      <TableHead className="text-xs py-1.5 w-20">السعر</TableHead>
+                      <TableHead className="text-xs py-1.5 w-24">الإجمالي</TableHead>
+                      <TableHead className="text-xs py-1.5 w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {orderItems.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="text-xs py-1.5 truncate max-w-[150px]">{item.productName}</TableCell>
+                        <TableCell className="text-xs py-1.5">{item.quantity}</TableCell>
+                        <TableCell className="text-xs py-1.5">{formatCurrency(item.unitPrice)}</TableCell>
+                        <TableCell className="text-xs py-1.5 font-medium">{formatCurrency(item.total)}</TableCell>
+                        <TableCell className="py-1.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-destructive"
+                            onClick={() => removeItem(index)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="bg-muted/50 px-3 py-2 flex justify-between items-center">
+                  <span className="text-xs font-medium">الإجمالي:</span>
+                  <span className="text-sm font-bold text-orange-600">{formatCurrency(calculateTotal())}</span>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter className="pt-2 gap-2">
             <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(false)}>
@@ -500,7 +566,19 @@ export default function PurchasesPage() {
               </div>
             </div>
           )}
-          <DialogFooter className="pt-2">
+          <DialogFooter className="pt-2 gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                handlePrintInvoice(viewingOrder);
+                setViewingOrder(null);
+              }}
+              className="gap-1"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              طباعة الفاتورة
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setViewingOrder(null)}>
               إغلاق
             </Button>
@@ -532,6 +610,37 @@ export default function PurchasesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Hidden Invoice for Printing */}
+      {orderDetails && printingOrder && (
+        <div className="fixed -left-[9999px] top-0">
+          <PurchaseInvoice
+            ref={invoiceRef}
+            order={{
+              id: orderDetails.id,
+              orderNumber: orderDetails.orderNumber,
+              supplierName: orderDetails.supplierName || undefined,
+              orderDate: orderDetails.orderDate,
+              expectedDate: orderDetails.expectedDate || undefined,
+              subtotal: orderDetails.subtotal,
+              taxRate: orderDetails.taxRate || undefined,
+              taxAmount: orderDetails.taxAmount || undefined,
+              shippingCost: orderDetails.shippingCost || undefined,
+              total: orderDetails.total,
+              status: orderDetails.status,
+              notes: orderDetails.notes || undefined,
+              items: orderDetails.items?.map((item: any) => ({
+                id: item.id,
+                productName: item.productName,
+                productSku: item.productSku,
+                quantity: item.quantity,
+                unitCost: item.unitCost,
+                total: item.total,
+              })) || [],
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
