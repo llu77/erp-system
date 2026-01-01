@@ -1,18 +1,25 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
-import { Gift, CheckCircle, Loader2, Calendar, PartyPopper } from 'lucide-react';
+import { Gift, CheckCircle, Loader2, Calendar, PartyPopper, Camera, X } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
+
+const FORGE_API_URL = import.meta.env.VITE_FRONTEND_FORGE_API_URL;
+const FORGE_API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
 
 export default function LoyaltyVisit() {
   const [phone, setPhone] = useState('');
   const [serviceType, setServiceType] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<{ id: number; name: string } | null>(null);
+  const [invoiceImage, setInvoiceImage] = useState<File | null>(null);
+  const [invoiceImagePreview, setInvoiceImagePreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<{
     success: boolean;
     customerName?: string;
@@ -61,7 +68,67 @@ export default function LoyaltyVisit() {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // رفع الصورة إلى S3
+  const uploadImage = async (file: File): Promise<{ url: string; key: string } | null> => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch(`${FORGE_API_URL}/storage/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${FORGE_API_KEY}`,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('فشل رفع الصورة');
+      }
+      
+      const data = await response.json();
+      return { url: data.url, key: data.key };
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      return null;
+    }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // التحقق من نوع الملف
+      if (!file.type.startsWith('image/')) {
+        toast.error('يرجى اختيار صورة فقط');
+        return;
+      }
+      
+      // التحقق من حجم الملف (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('حجم الصورة يجب أن يكون أقل من 5 ميجابايت');
+        return;
+      }
+      
+      setInvoiceImage(file);
+      
+      // إنشاء معاينة للصورة
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setInvoiceImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setInvoiceImage(null);
+    setInvoiceImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!phone.trim() || phone.length < 10) {
@@ -72,18 +139,43 @@ export default function LoyaltyVisit() {
       toast.error('الرجاء اختيار نوع الخدمة');
       return;
     }
+    if (!invoiceImage) {
+      toast.error('الرجاء رفع صورة الفاتورة');
+      return;
+    }
 
-    visitMutation.mutate({
-      phone: phone.trim(),
-      serviceType,
-      branchId: selectedBranch?.id,
-      branchName: selectedBranch?.name,
-    });
+    setIsUploading(true);
+    
+    try {
+      // رفع الصورة أولاً
+      const uploadResult = await uploadImage(invoiceImage);
+      if (!uploadResult) {
+        toast.error('فشل رفع صورة الفاتورة');
+        setIsUploading(false);
+        return;
+      }
+
+      // تسجيل الزيارة مع رابط الصورة
+      visitMutation.mutate({
+        phone: phone.trim(),
+        serviceType,
+        branchId: selectedBranch?.id,
+        branchName: selectedBranch?.name,
+        invoiceImageUrl: uploadResult.url,
+        invoiceImageKey: uploadResult.key,
+      });
+    } catch (error) {
+      toast.error('حدث خطأ أثناء التسجيل');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const resetForm = () => {
     setPhone('');
     setServiceType('');
+    setInvoiceImage(null);
+    setInvoiceImagePreview(null);
     setResult(null);
   };
 
@@ -119,6 +211,12 @@ export default function LoyaltyVisit() {
                     استمتع بخصم {discountPercent}% على فاتورتك اليوم!
                   </p>
                 </div>
+
+                <div className="bg-yellow-50 rounded-lg p-4 mb-6">
+                  <p className="text-sm text-yellow-700">
+                    ⏳ سيتم مراجعة زيارتك والموافقة عليها من قبل المشرف
+                  </p>
+                </div>
               </>
             ) : (
               <>
@@ -140,6 +238,12 @@ export default function LoyaltyVisit() {
                       باقي {requiredVisits - result.visitNumberInMonth} زيارات للحصول على خصم {discountPercent}%!
                     </p>
                   )}
+                </div>
+
+                <div className="bg-yellow-50 rounded-lg p-4 mb-6">
+                  <p className="text-sm text-yellow-700">
+                    ⏳ سيتم مراجعة زيارتك والموافقة عليها من قبل المشرف
+                  </p>
                 </div>
               </>
             )}
@@ -218,6 +322,50 @@ export default function LoyaltyVisit() {
               </Select>
             </div>
 
+            {/* رفع صورة الفاتورة */}
+            <div className="space-y-2">
+              <Label>صورة الفاتورة *</Label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                {invoiceImagePreview ? (
+                  <div className="relative">
+                    <img 
+                      src={invoiceImagePreview} 
+                      alt="صورة الفاتورة" 
+                      className="w-full h-48 object-cover rounded-lg"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 left-2"
+                      onClick={removeImage}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div 
+                    className="flex flex-col items-center justify-center py-6 cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                      <Camera className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <p className="text-sm text-gray-600 mb-1">اضغط لرفع صورة الفاتورة</p>
+                    <p className="text-xs text-gray-400">PNG, JPG حتى 5MB</p>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleImageSelect}
+                />
+              </div>
+            </div>
+
             <div className="bg-blue-50 rounded-lg p-3 text-sm">
               <p className="font-medium text-blue-700 mb-1">💡 كيف يعمل برنامج الولاء؟</p>
               <ul className="text-blue-600 space-y-1">
@@ -230,12 +378,12 @@ export default function LoyaltyVisit() {
               type="submit" 
               className="w-full" 
               size="lg"
-              disabled={visitMutation.isPending}
+              disabled={visitMutation.isPending || isUploading}
             >
-              {visitMutation.isPending ? (
+              {(visitMutation.isPending || isUploading) ? (
                 <>
                   <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                  جاري التسجيل...
+                  {isUploading ? 'جاري رفع الصورة...' : 'جاري التسجيل...'}
                 </>
               ) : (
                 'تسجيل الزيارة'

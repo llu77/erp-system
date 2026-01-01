@@ -4806,6 +4806,8 @@ export async function registerLoyaltyVisit(data: {
   serviceType: string;
   branchId?: number;
   branchName?: string;
+  invoiceImageUrl?: string;
+  invoiceImageKey?: string;
 }): Promise<{ 
   success: boolean; 
   visit?: LoyaltyVisit; 
@@ -4862,6 +4864,9 @@ export async function registerLoyaltyVisit(data: {
     visitDate: new Date(),
     branchId: data.branchId || null,
     branchName: data.branchName || null,
+    invoiceImageUrl: data.invoiceImageUrl || null,
+    invoiceImageKey: data.invoiceImageKey || null,
+    status: 'pending', // الزيارة تحتاج موافقة
     isDiscountVisit,
     discountPercentage,
     visitNumberInMonth,
@@ -5131,4 +5136,102 @@ export async function deleteLoyaltyServiceType(id: number): Promise<{ success: b
   await db.delete(loyaltyServiceTypes).where(eq(loyaltyServiceTypes.id, id));
   
   return { success: true };
+}
+
+
+// ==================== دوال إدارة زيارات الولاء ====================
+
+// الحصول على عملاء الولاء حسب الفرع (للمشرفين)
+export async function getLoyaltyCustomersByBranch(branchId: number): Promise<LoyaltyCustomer[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.branchId, branchId))
+    .orderBy(desc(loyaltyCustomers.createdAt));
+}
+
+// الحصول على زيارات الولاء حسب الفرع (للمشرفين)
+export async function getLoyaltyVisitsByBranch(branchId: number): Promise<LoyaltyVisit[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.branchId, branchId))
+    .orderBy(desc(loyaltyVisits.visitDate));
+}
+
+// الحصول على الزيارات المعلقة حسب الفرع
+export async function getPendingVisitsByBranch(branchId: number): Promise<LoyaltyVisit[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(loyaltyVisits)
+    .where(
+      and(
+        eq(loyaltyVisits.branchId, branchId),
+        eq(loyaltyVisits.status, 'pending')
+      )
+    )
+    .orderBy(desc(loyaltyVisits.visitDate));
+}
+
+// الحصول على جميع الزيارات المعلقة (للأدمن)
+export async function getAllPendingVisits(): Promise<LoyaltyVisit[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.status, 'pending'))
+    .orderBy(desc(loyaltyVisits.visitDate));
+}
+
+// الموافقة على زيارة
+export async function approveVisit(visitId: number, approvedBy: number): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "خطأ في الاتصال بقاعدة البيانات" };
+  
+  await db.update(loyaltyVisits)
+    .set({
+      status: 'approved',
+      approvedBy,
+      approvedAt: new Date(),
+    })
+    .where(eq(loyaltyVisits.id, visitId));
+  
+  return { success: true };
+}
+
+// رفض زيارة
+export async function rejectVisit(visitId: number, approvedBy: number, reason: string): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "خطأ في الاتصال بقاعدة البيانات" };
+  
+  await db.update(loyaltyVisits)
+    .set({
+      status: 'rejected',
+      approvedBy,
+      approvedAt: new Date(),
+      rejectionReason: reason,
+    })
+    .where(eq(loyaltyVisits.id, visitId));
+  
+  return { success: true };
+}
+
+// الحصول على تفاصيل زيارة
+export async function getVisitById(visitId: number): Promise<LoyaltyVisit | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const visit = await db.select()
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.id, visitId))
+    .limit(1);
+  
+  return visit[0] || null;
 }

@@ -1449,9 +1449,19 @@ export const loyaltyVisits = mysqlTable("loyaltyVisits", {
   serviceType: varchar("serviceType", { length: 255 }).notNull(), // نوع الخدمة
   visitDate: timestamp("visitDate").defaultNow().notNull(),
   
+  // صورة الفاتورة (إجباري)
+  invoiceImageUrl: text("invoiceImageUrl"), // رابط صورة الفاتورة
+  invoiceImageKey: varchar("invoiceImageKey", { length: 255 }), // مفتاح الصورة في S3
+  
   // الفرع
   branchId: int("branchId"),
   branchName: varchar("branchName", { length: 255 }),
+  
+  // حالة الموافقة
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(), // حالة الزيارة
+  approvedBy: int("approvedBy"), // من وافق على الزيارة
+  approvedAt: timestamp("approvedAt"), // تاريخ الموافقة
+  rejectionReason: text("rejectionReason"), // سبب الرفض
   
   // الخصم
   isDiscountVisit: boolean("isDiscountVisit").default(false).notNull(), // هل هذه زيارة خصم؟

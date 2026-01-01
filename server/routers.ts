@@ -4372,6 +4372,8 @@ export const appRouter = router({
         serviceType: z.string().min(1, 'نوع الخدمة مطلوب'),
         branchId: z.number().optional(),
         branchName: z.string().optional(),
+        invoiceImageUrl: z.string().min(1, 'صورة الفاتورة مطلوبة'),
+        invoiceImageKey: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const { registerLoyaltyCustomer, registerLoyaltyVisit, getAdminsAndSupervisors } = await import('./db');
@@ -4397,6 +4399,8 @@ export const appRouter = router({
           serviceType: input.serviceType,
           branchId: input.branchId,
           branchName: input.branchName,
+          invoiceImageUrl: input.invoiceImageUrl,
+          invoiceImageKey: input.invoiceImageKey,
         });
         
         return {
@@ -4404,7 +4408,7 @@ export const appRouter = router({
           customer: result.customer,
           visit: visitResult.visit,
           visitNumberInMonth: visitResult.visitNumberInMonth,
-          message: `مرحباً ${input.name}! تم تسجيلك في برنامج الولاء بنجاح.`,
+          message: `مرحباً ${input.name}! تم تسجيلك في برنامج الولاء بنجاح. سيتم مراجعة زيارتك والموافقة عليها.`,
         };
       }),
 
@@ -4415,6 +4419,8 @@ export const appRouter = router({
         serviceType: z.string().min(1, 'نوع الخدمة مطلوب'),
         branchId: z.number().optional(),
         branchName: z.string().optional(),
+        invoiceImageUrl: z.string().min(1, 'صورة الفاتورة مطلوبة'),
+        invoiceImageKey: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const { getLoyaltyCustomerByPhone, registerLoyaltyVisit, getCustomerVisitsThisMonth, getAdminsAndSupervisors } = await import('./db');
@@ -4434,6 +4440,8 @@ export const appRouter = router({
           serviceType: input.serviceType,
           branchId: input.branchId,
           branchName: input.branchName,
+          invoiceImageUrl: input.invoiceImageUrl,
+          invoiceImageKey: input.invoiceImageKey,
         });
         
         if (!result.success) {
@@ -4596,6 +4604,135 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const { deleteLoyaltyServiceType } = await import('./db');
         return await deleteLoyaltyServiceType(input.id);
+      }),
+
+    // ==================== إدارة الزيارات (للمشرفين) ====================
+    
+    // الحصول على عملاء الفرع (للمشرفين)
+    branchCustomers: supervisorInputProcedure.query(async ({ ctx }) => {
+      const { getLoyaltyCustomersByBranch, getAllLoyaltyCustomers } = await import('./db');
+      
+      // الأدمن يرى الكل
+      if (ctx.user.role === 'admin') {
+        return await getAllLoyaltyCustomers();
+      }
+      
+      // المشرف يرى فرعه فقط
+      if (!ctx.user.branchId) {
+        return [];
+      }
+      
+      return await getLoyaltyCustomersByBranch(ctx.user.branchId);
+    }),
+
+    // الحصول على الزيارات المعلقة (للمشرفين)
+    pendingVisits: supervisorInputProcedure.query(async ({ ctx }) => {
+      const { getPendingVisitsByBranch, getAllPendingVisits } = await import('./db');
+      
+      // الأدمن يرى الكل
+      if (ctx.user.role === 'admin') {
+        return await getAllPendingVisits();
+      }
+      
+      // المشرف يرى فرعه فقط
+      if (!ctx.user.branchId) {
+        return [];
+      }
+      
+      return await getPendingVisitsByBranch(ctx.user.branchId);
+    }),
+
+    // الحصول على زيارات الفرع (للمشرفين)
+    branchVisits: supervisorInputProcedure.query(async ({ ctx }) => {
+      const { getLoyaltyVisitsByBranch } = await import('./db');
+      const { getAllLoyaltyCustomers } = await import('./db');
+      
+      // الأدمن يرى الكل
+      if (ctx.user.role === 'admin') {
+        const db = await import('./db');
+        const { loyaltyVisits } = await import('../drizzle/schema');
+        const { desc } = await import('drizzle-orm');
+        const dbConn = await db.getDb();
+        if (!dbConn) return [];
+        return await dbConn.select().from(loyaltyVisits).orderBy(desc(loyaltyVisits.visitDate));
+      }
+      
+      // المشرف يرى فرعه فقط
+      if (!ctx.user.branchId) {
+        return [];
+      }
+      
+      return await getLoyaltyVisitsByBranch(ctx.user.branchId);
+    }),
+
+    // الموافقة على زيارة (للمشرفين)
+    approveVisit: supervisorInputProcedure
+      .input(z.object({
+        visitId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { approveVisit, getVisitById } = await import('./db');
+        
+        // التحقق من أن الزيارة تابعة لفرع المشرف
+        const visit = await getVisitById(input.visitId);
+        if (!visit) {
+          return { success: false, error: 'الزيارة غير موجودة' };
+        }
+        
+        // الأدمن يمكنه الموافقة على أي زيارة
+        if (ctx.user.role !== 'admin') {
+          if (visit.branchId !== ctx.user.branchId) {
+            return { success: false, error: 'لا يمكنك الموافقة على زيارات فروع أخرى' };
+          }
+        }
+        
+        return await approveVisit(input.visitId, ctx.user.id);
+      }),
+
+    // رفض زيارة (للمشرفين)
+    rejectVisit: supervisorInputProcedure
+      .input(z.object({
+        visitId: z.number(),
+        reason: z.string().min(1, 'سبب الرفض مطلوب'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { rejectVisit, getVisitById } = await import('./db');
+        
+        // التحقق من أن الزيارة تابعة لفرع المشرف
+        const visit = await getVisitById(input.visitId);
+        if (!visit) {
+          return { success: false, error: 'الزيارة غير موجودة' };
+        }
+        
+        // الأدمن يمكنه الرفض لأي زيارة
+        if (ctx.user.role !== 'admin') {
+          if (visit.branchId !== ctx.user.branchId) {
+            return { success: false, error: 'لا يمكنك رفض زيارات فروع أخرى' };
+          }
+        }
+        
+        return await rejectVisit(input.visitId, ctx.user.id, input.reason);
+      }),
+
+    // الحصول على تفاصيل زيارة
+    visitDetails: supervisorInputProcedure
+      .input(z.object({
+        visitId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { getVisitById } = await import('./db');
+        
+        const visit = await getVisitById(input.visitId);
+        if (!visit) {
+          return null;
+        }
+        
+        // التحقق من الصلاحية
+        if (ctx.user.role !== 'admin' && visit.branchId !== ctx.user.branchId) {
+          return null;
+        }
+        
+        return visit;
       }),
   }),
 });
