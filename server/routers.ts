@@ -4765,20 +4765,54 @@ export const appRouter = router({
         contentType: z.string(),
       }))
       .mutation(async ({ input }) => {
-        const { storagePut } = await import('./storage');
-        
-        // تحويل base64 إلى Buffer
-        const base64Content = input.base64Data.replace(/^data:[^;]+;base64,/, '');
-        const buffer = Buffer.from(base64Content, 'base64');
-        
-        // إنشاء اسم ملف فريد
-        const timestamp = Date.now();
-        const randomSuffix = Math.random().toString(36).substring(2, 8);
-        const fileKey = `loyalty-invoices/${timestamp}-${randomSuffix}-${input.fileName}`;
-        
-        const { url, key } = await storagePut(fileKey, buffer, input.contentType);
-        
-        return { success: true, url, key };
+        try {
+          const { storagePut } = await import('./storage');
+          
+          // التحقق من وجود بيانات الصورة
+          if (!input.base64Data || input.base64Data.length < 100) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'بيانات الصورة غير صالحة',
+            });
+          }
+          
+          // تحويل base64 إلى Buffer
+          const base64Content = input.base64Data.replace(/^data:[^;]+;base64,/, '');
+          const buffer = Buffer.from(base64Content, 'base64');
+          
+          // التحقق من حجم الملف (10MB max)
+          const maxSize = 10 * 1024 * 1024;
+          if (buffer.length > maxSize) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'حجم الصورة يجب أن يكون أقل من 10 ميجابايت',
+            });
+          }
+          
+          // إنشاء اسم ملف فريد
+          const timestamp = Date.now();
+          const randomSuffix = Math.random().toString(36).substring(2, 8);
+          const fileKey = `loyalty-invoices/${timestamp}-${randomSuffix}-${input.fileName}`;
+          
+          console.log(`Uploading invoice image: ${fileKey}, size: ${buffer.length} bytes`);
+          
+          const { url, key } = await storagePut(fileKey, buffer, input.contentType);
+          
+          console.log(`Upload successful: ${url}`);
+          
+          return { success: true, url, key };
+        } catch (error: any) {
+          console.error('Upload invoice image error:', error);
+          
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: error?.message || 'فشل رفع الصورة - يرجى المحاولة مرة أخرى',
+          });
+        }
       }),
   }),
 });

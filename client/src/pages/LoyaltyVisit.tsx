@@ -68,7 +68,47 @@ export default function LoyaltyVisit() {
     },
   });
 
-  // تحويل الملف إلى base64
+  // ضغط الصورة قبل الرفع
+  const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // تصغير الصورة إذا كانت كبيرة
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('فشل إنشاء canvas'));
+            return;
+          }
+          
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // تحويل إلى base64 مع ضغط
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        };
+        img.onerror = () => reject(new Error('فشل تحميل الصورة'));
+      };
+      reader.onerror = () => reject(new Error('فشل قراءة الملف'));
+    });
+  };
+
+  // تحويل الملف إلى base64 (بدون ضغط)
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -132,23 +172,44 @@ export default function LoyaltyVisit() {
     setIsUploading(true);
     
     try {
-      // تحويل الصورة إلى base64
-      const base64Data = await fileToBase64(invoiceImage);
+      // ضغط الصورة قبل الرفع لتقليل الحجم وتسريع العملية
+      let base64Data: string;
+      try {
+        base64Data = await compressImage(invoiceImage, 1200, 0.7);
+        console.log('Image compressed successfully');
+      } catch (compressError) {
+        console.warn('Compression failed, using original:', compressError);
+        base64Data = await fileToBase64(invoiceImage);
+      }
+      
+      // التحقق من حجم البيانات بعد الضغط
+      const sizeInMB = (base64Data.length * 0.75) / (1024 * 1024);
+      console.log(`Image size after compression: ${sizeInMB.toFixed(2)} MB`);
+      
+      if (sizeInMB > 10) {
+        toast.error('حجم الصورة كبير جداً، يرجى التقاط صورة أصغر');
+        setIsUploading(false);
+        return;
+      }
       
       // رفع الصورة عبر tRPC
+      console.log('Uploading image...');
       const uploadResult = await uploadMutation.mutateAsync({
         base64Data,
-        fileName: invoiceImage.name || `invoice_${Date.now()}.jpg`,
-        contentType: invoiceImage.type || 'image/jpeg',
+        fileName: `invoice_${Date.now()}.jpg`,
+        contentType: 'image/jpeg',
       });
       
-      if (!uploadResult.success) {
-        toast.error('فشل رفع صورة الفاتورة');
+      console.log('Upload result:', uploadResult);
+      
+      if (!uploadResult.success || !uploadResult.url) {
+        toast.error('فشل رفع صورة الفاتورة - يرجى المحاولة مرة أخرى');
         setIsUploading(false);
         return;
       }
 
       // تسجيل الزيارة مع رابط الصورة
+      console.log('Recording visit with image URL:', uploadResult.url);
       visitMutation.mutate({
         phone: phone.trim(),
         serviceType,
@@ -157,9 +218,10 @@ export default function LoyaltyVisit() {
         invoiceImageUrl: uploadResult.url,
         invoiceImageKey: uploadResult.key,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      toast.error('حدث خطأ أثناء رفع الصورة');
+      const errorMessage = error?.message || 'حدث خطأ أثناء رفع الصورة';
+      toast.error(errorMessage);
     } finally {
       setIsUploading(false);
     }
