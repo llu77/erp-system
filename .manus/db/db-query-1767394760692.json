@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO loyaltyCustomers (customerId, name, phone, email, totalVisits, totalDiscountsUsed, isActive, createdAt, updatedAt) VALUES ('LC-TEST001', 'عميل اختباري', '0512345678', 'test@example.com', 0, 0, 1, NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute INSERT INTO loyaltyCustomers (customerId, name, phone, email, totalVisits, totalDiscountsUsed, isActive, createdAt, updatedAt) VALUES ('LC-TEST001', 'عميل اختباري', '0512345678', 'test@example.com', 0, 0, 1, NOW(), NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1550
+}
