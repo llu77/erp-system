@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
-import { Gift, CheckCircle, Loader2, Calendar, PartyPopper, Camera, X } from 'lucide-react';
+import { Gift, CheckCircle, Loader2, Calendar, PartyPopper, Camera, X, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
+import { Progress } from '@/components/ui/progress';
 
 export default function LoyaltyVisit() {
   const [phone, setPhone] = useState('');
@@ -16,6 +17,8 @@ export default function LoyaltyVisit() {
   const [invoiceImage, setInvoiceImage] = useState<File | null>(null);
   const [invoiceImagePreview, setInvoiceImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<{
     success: boolean;
@@ -68,86 +71,92 @@ export default function LoyaltyVisit() {
     },
   });
 
-  // ضغط الصورة قبل الرفع
-  const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promise<string> => {
+  // ضغط الصورة بشكل محسن
+  const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.readAsDataURL(file);
       reader.onload = (e) => {
         const img = new Image();
-        img.src = e.target?.result as string;
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          
-          // تصغير الصورة إذا كانت كبيرة
-          if (width > maxWidth) {
-            height = (height * maxWidth) / width;
-            width = maxWidth;
+          try {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            // تصغير الصورة
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('فشل إنشاء canvas'));
+              return;
+            }
+            
+            // رسم الصورة مع خلفية بيضاء
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // تحويل إلى JPEG مضغوط
+            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressedBase64);
+          } catch (err) {
+            reject(err);
           }
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('فشل إنشاء canvas'));
-            return;
-          }
-          
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // تحويل إلى base64 مع ضغط
-          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-          resolve(compressedBase64);
         };
         img.onerror = () => reject(new Error('فشل تحميل الصورة'));
+        img.src = e.target?.result as string;
       };
       reader.onerror = () => reject(new Error('فشل قراءة الملف'));
-    });
-  };
-
-  // تحويل الملف إلى base64 (بدون ضغط)
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
     });
   };
 
-  // التقاط صورة من الكاميرا مباشرة
-  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // التقاط صورة من الكاميرا
+  const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // التحقق من نوع الملف
-      if (!file.type.startsWith('image/')) {
-        toast.error('يرجى التقاط صورة فقط');
-        return;
-      }
-      
-      // التحقق من حجم الملف (5MB max)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('حجم الصورة يجب أن يكون أقل من 5 ميجابايت');
-        return;
-      }
-      
-      setInvoiceImage(file);
-      
-      // إنشاء معاينة للصورة
+    if (!file) return;
+    
+    setUploadError(null);
+    
+    // التحقق من نوع الملف
+    if (!file.type.startsWith('image/')) {
+      setUploadError('يرجى اختيار صورة فقط');
+      toast.error('يرجى اختيار صورة فقط');
+      return;
+    }
+    
+    // التحقق من حجم الملف (10MB max للصور الأصلية)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('حجم الصورة كبير جداً (الحد الأقصى 10 ميجابايت)');
+      toast.error('حجم الصورة كبير جداً');
+      return;
+    }
+    
+    setInvoiceImage(file);
+    
+    // إنشاء معاينة للصورة
+    try {
       const reader = new FileReader();
       reader.onloadend = () => {
         setInvoiceImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Preview error:', err);
     }
   };
 
   const removeImage = () => {
     setInvoiceImage(null);
     setInvoiceImagePreview(null);
+    setUploadError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -155,7 +164,9 @@ export default function LoyaltyVisit() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setUploadError(null);
     
+    // التحقق من البيانات
     if (!phone.trim() || phone.length < 10) {
       toast.error('الرجاء إدخال رقم جوال صحيح');
       return;
@@ -170,27 +181,36 @@ export default function LoyaltyVisit() {
     }
 
     setIsUploading(true);
+    setUploadProgress(10);
     
     try {
-      // ضغط الصورة قبل الرفع لتقليل الحجم وتسريع العملية
+      // ضغط الصورة
+      setUploadProgress(20);
       let base64Data: string;
+      
       try {
-        base64Data = await compressImage(invoiceImage, 1200, 0.7);
+        base64Data = await compressImage(invoiceImage, 800, 0.6);
         console.log('Image compressed successfully');
       } catch (compressError) {
-        console.warn('Compression failed, using original:', compressError);
-        base64Data = await fileToBase64(invoiceImage);
+        console.warn('Compression failed, trying with lower quality:', compressError);
+        try {
+          base64Data = await compressImage(invoiceImage, 600, 0.4);
+        } catch (err) {
+          throw new Error('فشل ضغط الصورة - يرجى التقاط صورة أخرى');
+        }
       }
+      
+      setUploadProgress(40);
       
       // التحقق من حجم البيانات بعد الضغط
       const sizeInMB = (base64Data.length * 0.75) / (1024 * 1024);
       console.log(`Image size after compression: ${sizeInMB.toFixed(2)} MB`);
       
-      if (sizeInMB > 10) {
-        toast.error('حجم الصورة كبير جداً، يرجى التقاط صورة أصغر');
-        setIsUploading(false);
-        return;
+      if (sizeInMB > 5) {
+        throw new Error('حجم الصورة كبير جداً حتى بعد الضغط - يرجى التقاط صورة أقرب');
       }
+      
+      setUploadProgress(50);
       
       // رفع الصورة عبر tRPC
       console.log('Uploading image...');
@@ -200,17 +220,18 @@ export default function LoyaltyVisit() {
         contentType: 'image/jpeg',
       });
       
+      setUploadProgress(80);
       console.log('Upload result:', uploadResult);
       
       if (!uploadResult.success || !uploadResult.url) {
-        toast.error('فشل رفع صورة الفاتورة - يرجى المحاولة مرة أخرى');
-        setIsUploading(false);
-        return;
+        throw new Error('فشل رفع الصورة');
       }
 
+      setUploadProgress(90);
+      
       // تسجيل الزيارة مع رابط الصورة
       console.log('Recording visit with image URL:', uploadResult.url);
-      visitMutation.mutate({
+      await visitMutation.mutateAsync({
         phone: phone.trim(),
         serviceType,
         branchId: selectedBranch?.id,
@@ -218,20 +239,27 @@ export default function LoyaltyVisit() {
         invoiceImageUrl: uploadResult.url,
         invoiceImageKey: uploadResult.key,
       });
+      
+      setUploadProgress(100);
+      
     } catch (error: any) {
-      console.error('Upload error:', error);
-      const errorMessage = error?.message || 'حدث خطأ أثناء رفع الصورة';
+      console.error('Error:', error);
+      const errorMessage = error?.message || 'حدث خطأ - يرجى المحاولة مرة أخرى';
+      setUploadError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
   const resetForm = () => {
     setPhone('');
     setServiceType('');
+    setSelectedBranch(null);
     setInvoiceImage(null);
     setInvoiceImagePreview(null);
+    setUploadError(null);
     setResult(null);
   };
 
@@ -278,15 +306,11 @@ export default function LoyaltyVisit() {
                   {result.visitNumberInMonth && result.visitNumberInMonth < visitsRequired ? (
                     <>باقي {visitsRequired - result.visitNumberInMonth} زيارات للحصول على خصم {discountPercentage}%</>
                   ) : (
-                    'في انتظار الموافقة على الزيارة'
+                    <>استمر في الزيارات للحصول على المزيد من الخصومات!</>
                   )}
                 </p>
               </div>
             )}
-
-            <p className="text-sm text-gray-500">
-              ⏳ الزيارة في انتظار موافقة المشرف
-            </p>
             
             <Button onClick={resetForm} className="w-full">
               تسجيل زيارة جديدة
@@ -321,12 +345,13 @@ export default function LoyaltyVisit() {
                 onChange={(e) => setPhone(e.target.value)}
                 className="text-right"
                 dir="ltr"
+                disabled={isUploading}
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="serviceType">نوع الخدمة *</Label>
-              <Select value={serviceType} onValueChange={setServiceType}>
+              <Select value={serviceType} onValueChange={setServiceType} disabled={isUploading}>
                 <SelectTrigger>
                   <SelectValue placeholder="اختر نوع الخدمة" />
                 </SelectTrigger>
@@ -359,6 +384,7 @@ export default function LoyaltyVisit() {
                   const branch = branches?.find(b => b.id.toString() === value);
                   setSelectedBranch(branch ? { id: branch.id, name: branch.name } : null);
                 }}
+                disabled={isUploading}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="اختر الفرع" />
@@ -373,12 +399,16 @@ export default function LoyaltyVisit() {
               </Select>
             </div>
 
-            {/* التقاط صورة الفاتورة من الكاميرا مباشرة */}
+            {/* التقاط صورة الفاتورة */}
             <div className="space-y-2">
               <Label>صورة الفاتورة *</Label>
               <div 
-                className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-blue-500 transition-colors"
-                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
+                  uploadError 
+                    ? 'border-red-400 bg-red-50 dark:bg-red-900/20' 
+                    : 'border-gray-300 dark:border-gray-600 hover:border-blue-500'
+                } ${isUploading ? 'pointer-events-none opacity-60' : ''}`}
+                onClick={() => !isUploading && fileInputRef.current?.click()}
               >
                 {invoiceImagePreview ? (
                   <div className="relative">
@@ -387,26 +417,29 @@ export default function LoyaltyVisit() {
                       alt="صورة الفاتورة" 
                       className="max-h-48 mx-auto rounded-lg"
                     />
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeImage();
-                      }}
-                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    {!isUploading && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeImage();
+                        }}
+                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="py-8">
                     <Camera className="w-12 h-12 mx-auto text-gray-400 mb-2" />
                     <p className="text-gray-500 font-medium">اضغط لالتقاط صورة الفاتورة</p>
-                    <p className="text-xs text-gray-400 mt-1">سيتم فتح الكاميرا مباشرة</p>
+                    <p className="text-xs text-gray-400 mt-1">يمكنك التقاط صورة أو اختيار من المعرض</p>
                   </div>
                 )}
               </div>
-              {/* input مخفي للكاميرا فقط */}
+              
+              {/* input للكاميرا - يسمح بالاختيار من المعرض أيضاً */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -414,8 +447,35 @@ export default function LoyaltyVisit() {
                 capture="environment"
                 onChange={handleCameraCapture}
                 className="hidden"
+                disabled={isUploading}
               />
+              
+              {/* رسالة الخطأ */}
+              {uploadError && (
+                <div className="flex items-center gap-2 text-red-600 text-sm mt-2">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{uploadError}</span>
+                  <button
+                    type="button"
+                    onClick={removeImage}
+                    className="text-blue-600 hover:underline mr-auto"
+                  >
+                    إعادة المحاولة
+                  </button>
+                </div>
+              )}
             </div>
+
+            {/* شريط التقدم */}
+            {isUploading && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                  <span>جاري الرفع...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <Progress value={uploadProgress} className="h-2" />
+              </div>
+            )}
 
             <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 text-sm">
               <p className="text-yellow-700 dark:text-yellow-300 flex items-start gap-2">
@@ -435,7 +495,12 @@ export default function LoyaltyVisit() {
               className="w-full" 
               disabled={visitMutation.isPending || isUploading}
             >
-              {(visitMutation.isPending || isUploading) ? (
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  جاري رفع الصورة...
+                </>
+              ) : visitMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 ml-2 animate-spin" />
                   جاري التسجيل...

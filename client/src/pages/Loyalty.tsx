@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,6 @@ import { trpc } from '@/lib/trpc';
 import { QrCode, Users, Gift, Calendar, Search, Eye, Printer, CheckCircle, XCircle, Clock, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
-import { useEffect } from 'react';
 import { useAuth } from '@/_core/hooks/useAuth';
 
 export default function Loyalty() {
