@@ -222,9 +222,16 @@ export default function Loyalty() {
         {/* العنوان */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">برنامج الولاء</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">برنامج الولاء</h1>
+              {user?.role !== 'admin' && user?.branchId && (
+                <Badge variant="secondary" className="text-sm">
+                  فرعي
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground">
-              {user?.role === 'admin' ? 'إدارة جميع عملاء برنامج الولاء' : 'إدارة عملاء فرعك'}
+              {user?.role === 'admin' ? 'إدارة جميع عملاء برنامج الولاء' : 'إدارة عملاء فرعك - يمكنك قبول أو رفض الزيارات'}
             </p>
           </div>
           <div className="flex gap-2">

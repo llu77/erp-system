@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/_core/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -43,9 +44,21 @@ const periodPreviousLabels: Record<PeriodType, string> = {
 };
 
 export default function LoyaltyReport() {
+  const { user } = useAuth();
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('month');
   const reportRef = useRef<HTMLDivElement>(null);
+  
+  // المشرف يرى فرعه فقط
+  const isAdmin = user?.role === 'admin';
+  const userBranchId = user?.branchId;
+  
+  // تعيين الفرع تلقائياً للمشرفين
+  useEffect(() => {
+    if (!isAdmin && userBranchId) {
+      setSelectedBranch(userBranchId.toString());
+    }
+  }, [isAdmin, userBranchId]);
   
   const { data: stats, isLoading, refetch, isRefetching } = trpc.loyalty.detailedStats.useQuery({
     period: selectedPeriod,
@@ -252,20 +265,28 @@ export default function LoyaltyReport() {
                   <SelectItem value="all">الكل</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger className="w-[140px]">
-                  <Building2 className="h-4 w-4 ml-2" />
-                  <SelectValue placeholder="الفرع" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">جميع الفروع</SelectItem>
-                  {branches?.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id.toString()}>
-                      {branch.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* فلتر الفروع - يظهر للأدمن فقط */}
+              {isAdmin ? (
+                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                  <SelectTrigger className="w-[140px]">
+                    <Building2 className="h-4 w-4 ml-2" />
+                    <SelectValue placeholder="الفرع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الفروع</SelectItem>
+                    {branches?.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id.toString()}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Badge variant="outline" className="h-10 px-4 flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  {branches?.find(b => b.id === userBranchId)?.name || 'فرعي'}
+                </Badge>
+              )}
               <Button 
                 variant="outline" 
                 size="icon"
