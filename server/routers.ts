@@ -4563,6 +4563,28 @@ export const appRouter = router({
       return await getLoyaltyStats();
     }),
 
+    // تقرير إحصائي شامل (للمشرفين والأدمن)
+    detailedStats: supervisorInputProcedure
+      .input(z.object({
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+        branchId: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const { getLoyaltyDetailedStats } = await import('./db');
+        return await getLoyaltyDetailedStats(input);
+      }),
+
+    // إحصائيات فرع محدد
+    branchStats: supervisorInputProcedure
+      .input(z.object({
+        branchId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const { getBranchLoyaltyStats } = await import('./db');
+        return await getBranchLoyaltyStats(input.branchId);
+      }),
+
     // الحصول على الفروع (عام)
     branches: publicProcedure.query(async () => {
       const { getBranches } = await import('./db');

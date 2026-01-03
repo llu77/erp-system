@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { trpc } from '@/lib/trpc';
-import { QrCode, Users, Gift, Calendar, Search, Eye, Printer, CheckCircle, XCircle, Clock, Image as ImageIcon } from 'lucide-react';
+import { QrCode, Users, Gift, Calendar, Search, Eye, Printer, CheckCircle, XCircle, Clock, Image as ImageIcon, BarChart3, Settings } from 'lucide-react';
+import { Link } from 'wouter';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
 import { useAuth } from '@/_core/hooks/useAuth';
@@ -225,6 +226,22 @@ export default function Loyalty() {
             <p className="text-muted-foreground">
               {user?.role === 'admin' ? 'إدارة جميع عملاء برنامج الولاء' : 'إدارة عملاء فرعك'}
             </p>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/loyalty/report">
+              <Button variant="outline" className="gap-2">
+                <BarChart3 className="h-4 w-4" />
+                التقارير
+              </Button>
+            </Link>
+            {user?.role === 'admin' && (
+              <Link href="/loyalty/settings">
+                <Button variant="outline" className="gap-2">
+                  <Settings className="h-4 w-4" />
+                  الإعدادات
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
 

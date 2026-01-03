@@ -5235,3 +5235,371 @@ export async function getVisitById(visitId: number): Promise<LoyaltyVisit | null
   
   return visit[0] || null;
 }
+
+
+// ==================== تقارير برنامج الولاء المتقدمة ====================
+
+// إحصائيات برنامج الولاء الشاملة
+export async function getLoyaltyDetailedStats(filters?: {
+  startDate?: Date;
+  endDate?: Date;
+  branchId?: number;
+}): Promise<{
+  overview: {
+    totalCustomers: number;
+    totalVisits: number;
+    totalDiscounts: number;
+    discountValue: number;
+    customersThisMonth: number;
+    visitsThisMonth: number;
+    discountsThisMonth: number;
+  };
+  byBranch: Array<{
+    branchId: number;
+    branchName: string;
+    customers: number;
+    visits: number;
+    discounts: number;
+    pendingVisits: number;
+  }>;
+  byService: Array<{
+    serviceType: string;
+    visits: number;
+    percentage: number;
+  }>;
+  monthlyTrend: Array<{
+    month: string;
+    customers: number;
+    visits: number;
+    discounts: number;
+  }>;
+  recentActivity: Array<{
+    type: 'registration' | 'visit' | 'discount';
+    customerName: string;
+    branchName: string | null;
+    date: Date;
+    details: string;
+  }>;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      overview: { totalCustomers: 0, totalVisits: 0, totalDiscounts: 0, discountValue: 0, customersThisMonth: 0, visitsThisMonth: 0, discountsThisMonth: 0 },
+      byBranch: [],
+      byService: [],
+      monthlyTrend: [],
+      recentActivity: [],
+    };
+  }
+
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startDate = filters?.startDate || new Date(now.getFullYear(), 0, 1); // بداية السنة
+  const endDate = filters?.endDate || now;
+
+  // ============================================
+  // 1. الإحصائيات العامة
+  // ============================================
+  
+  // إجمالي العملاء
+  let customersQuery = db.select({ count: sql<number>`count(*)` }).from(loyaltyCustomers);
+  if (filters?.branchId) {
+    customersQuery = customersQuery.where(eq(loyaltyCustomers.branchId, filters.branchId)) as any;
+  }
+  const totalCustomersResult = await customersQuery;
+  const totalCustomers = Number(totalCustomersResult[0]?.count || 0);
+
+  // إجمالي الزيارات
+  let visitsQuery = db.select({ count: sql<number>`count(*)` }).from(loyaltyVisits);
+  if (filters?.branchId) {
+    visitsQuery = visitsQuery.where(eq(loyaltyVisits.branchId, filters.branchId)) as any;
+  }
+  const totalVisitsResult = await visitsQuery;
+  const totalVisits = Number(totalVisitsResult[0]?.count || 0);
+
+  // إجمالي الخصومات
+  const discountsConditions = filters?.branchId
+    ? and(
+        eq(loyaltyVisits.isDiscountVisit, true),
+        eq(loyaltyVisits.branchId, filters.branchId)
+      )
+    : eq(loyaltyVisits.isDiscountVisit, true);
+  
+  const totalDiscountsResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(discountsConditions);
+  const totalDiscounts = Number(totalDiscountsResult[0]?.count || 0);
+
+  // عملاء هذا الشهر
+  const customersThisMonthResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyCustomers)
+    .where(gte(loyaltyCustomers.createdAt, startOfMonth));
+  const customersThisMonth = Number(customersThisMonthResult[0]?.count || 0);
+
+  // زيارات هذا الشهر
+  const visitsThisMonthResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(gte(loyaltyVisits.visitDate, startOfMonth));
+  const visitsThisMonth = Number(visitsThisMonthResult[0]?.count || 0);
+
+  // خصومات هذا الشهر
+  const discountsThisMonthResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(
+      and(
+        eq(loyaltyVisits.isDiscountVisit, true),
+        gte(loyaltyVisits.visitDate, startOfMonth)
+      )
+    );
+  const discountsThisMonth = Number(discountsThisMonthResult[0]?.count || 0);
+
+  // ============================================
+  // 2. إحصائيات حسب الفرع
+  // ============================================
+  const { branches } = await import('../drizzle/schema');
+  const allBranches = await db.select().from(branches);
+  
+  const byBranch: Array<{
+    branchId: number;
+    branchName: string;
+    customers: number;
+    visits: number;
+    discounts: number;
+    pendingVisits: number;
+  }> = [];
+
+  for (const branch of allBranches) {
+    const branchCustomers = await db.select({ count: sql<number>`count(*)` })
+      .from(loyaltyCustomers)
+      .where(eq(loyaltyCustomers.branchId, branch.id));
+    
+    const branchVisits = await db.select({ count: sql<number>`count(*)` })
+      .from(loyaltyVisits)
+      .where(eq(loyaltyVisits.branchId, branch.id));
+    
+    const branchDiscounts = await db.select({ count: sql<number>`count(*)` })
+      .from(loyaltyVisits)
+      .where(
+        and(
+          eq(loyaltyVisits.branchId, branch.id),
+          eq(loyaltyVisits.isDiscountVisit, true)
+        )
+      );
+    
+    const branchPending = await db.select({ count: sql<number>`count(*)` })
+      .from(loyaltyVisits)
+      .where(
+        and(
+          eq(loyaltyVisits.branchId, branch.id),
+          eq(loyaltyVisits.status, 'pending')
+        )
+      );
+
+    byBranch.push({
+      branchId: branch.id,
+      branchName: branch.name,
+      customers: Number(branchCustomers[0]?.count || 0),
+      visits: Number(branchVisits[0]?.count || 0),
+      discounts: Number(branchDiscounts[0]?.count || 0),
+      pendingVisits: Number(branchPending[0]?.count || 0),
+    });
+  }
+
+  // ============================================
+  // 3. إحصائيات حسب نوع الخدمة
+  // ============================================
+  const serviceStats = await db.select({
+    serviceType: loyaltyVisits.serviceType,
+    count: sql<number>`count(*)`,
+  })
+    .from(loyaltyVisits)
+    .groupBy(loyaltyVisits.serviceType)
+    .orderBy(sql`count(*) DESC`);
+
+  const byService = serviceStats.map(s => ({
+    serviceType: s.serviceType,
+    visits: Number(s.count),
+    percentage: totalVisits > 0 ? Math.round((Number(s.count) / totalVisits) * 100) : 0,
+  }));
+
+  // ============================================
+  // 4. الاتجاه الشهري (آخر 6 أشهر)
+  // ============================================
+  const monthlyTrend: Array<{
+    month: string;
+    customers: number;
+    visits: number;
+    discounts: number;
+  }> = [];
+
+  for (let i = 5; i >= 0; i--) {
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+    
+    const monthCustomers = await db.select({ count: sql<number>`count(*)` })
+      .from(loyaltyCustomers)
+      .where(
+        and(
+          gte(loyaltyCustomers.createdAt, monthStart),
+          lte(loyaltyCustomers.createdAt, monthEnd)
+        )
+      );
+    
+    const monthVisits = await db.select({ count: sql<number>`count(*)` })
+      .from(loyaltyVisits)
+      .where(
+        and(
+          gte(loyaltyVisits.visitDate, monthStart),
+          lte(loyaltyVisits.visitDate, monthEnd)
+        )
+      );
+    
+    const monthDiscounts = await db.select({ count: sql<number>`count(*)` })
+      .from(loyaltyVisits)
+      .where(
+        and(
+          eq(loyaltyVisits.isDiscountVisit, true),
+          gte(loyaltyVisits.visitDate, monthStart),
+          lte(loyaltyVisits.visitDate, monthEnd)
+        )
+      );
+
+    const monthName = monthStart.toLocaleDateString('ar-SA', { month: 'short', year: 'numeric' });
+    
+    monthlyTrend.push({
+      month: monthName,
+      customers: Number(monthCustomers[0]?.count || 0),
+      visits: Number(monthVisits[0]?.count || 0),
+      discounts: Number(monthDiscounts[0]?.count || 0),
+    });
+  }
+
+  // ============================================
+  // 5. النشاط الأخير
+  // ============================================
+  const recentCustomers = await db.select()
+    .from(loyaltyCustomers)
+    .orderBy(desc(loyaltyCustomers.createdAt))
+    .limit(5);
+
+  const recentVisits = await db.select()
+    .from(loyaltyVisits)
+    .orderBy(desc(loyaltyVisits.visitDate))
+    .limit(10);
+
+  const recentActivity: Array<{
+    type: 'registration' | 'visit' | 'discount';
+    customerName: string;
+    branchName: string | null;
+    date: Date;
+    details: string;
+  }> = [];
+
+  for (const customer of recentCustomers) {
+    recentActivity.push({
+      type: 'registration',
+      customerName: customer.name,
+      branchName: customer.branchName,
+      date: customer.createdAt,
+      details: `تسجيل عميل جديد: ${customer.name}`,
+    });
+  }
+
+  for (const visit of recentVisits) {
+    recentActivity.push({
+      type: visit.isDiscountVisit ? 'discount' : 'visit',
+      customerName: visit.customerName,
+      branchName: visit.branchName,
+      date: visit.visitDate,
+      details: visit.isDiscountVisit 
+        ? `زيارة بخصم ${visit.discountPercentage}%` 
+        : `زيارة رقم ${visit.visitNumberInMonth}`,
+    });
+  }
+
+  // ترتيب حسب التاريخ
+  recentActivity.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  return {
+    overview: {
+      totalCustomers,
+      totalVisits,
+      totalDiscounts,
+      discountValue: totalDiscounts * 60, // قيمة تقريبية بناءً على نسبة الخصم
+      customersThisMonth,
+      visitsThisMonth,
+      discountsThisMonth,
+    },
+    byBranch,
+    byService,
+    monthlyTrend,
+    recentActivity: recentActivity.slice(0, 15),
+  };
+}
+
+// إحصائيات فرع محدد
+export async function getBranchLoyaltyStats(branchId: number): Promise<{
+  customers: number;
+  visits: number;
+  discounts: number;
+  pendingVisits: number;
+  topCustomers: Array<{
+    id: number;
+    name: string;
+    phone: string;
+    totalVisits: number;
+    totalDiscounts: number;
+  }>;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return { customers: 0, visits: 0, discounts: 0, pendingVisits: 0, topCustomers: [] };
+  }
+
+  const customersResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.branchId, branchId));
+
+  const visitsResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.branchId, branchId));
+
+  const discountsResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(
+      and(
+        eq(loyaltyVisits.branchId, branchId),
+        eq(loyaltyVisits.isDiscountVisit, true)
+      )
+    );
+
+  const pendingResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(
+      and(
+        eq(loyaltyVisits.branchId, branchId),
+        eq(loyaltyVisits.status, 'pending')
+      )
+    );
+
+  // أفضل العملاء
+  const topCustomers = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.branchId, branchId))
+    .orderBy(desc(loyaltyCustomers.totalVisits))
+    .limit(10);
+
+  return {
+    customers: Number(customersResult[0]?.count || 0),
+    visits: Number(visitsResult[0]?.count || 0),
+    discounts: Number(discountsResult[0]?.count || 0),
+    pendingVisits: Number(pendingResult[0]?.count || 0),
+    topCustomers: topCustomers.map(c => ({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      totalVisits: c.totalVisits,
+      totalDiscounts: c.totalDiscountsUsed,
+    })),
+  };
+}
