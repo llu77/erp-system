@@ -5241,8 +5241,7 @@ export async function getVisitById(visitId: number): Promise<LoyaltyVisit | null
 
 // إحصائيات برنامج الولاء الشاملة
 export async function getLoyaltyDetailedStats(filters?: {
-  startDate?: Date;
-  endDate?: Date;
+  period?: 'week' | 'month' | 'quarter' | 'year' | 'all';
   branchId?: number;
 }): Promise<{
   overview: {
@@ -5250,9 +5249,16 @@ export async function getLoyaltyDetailedStats(filters?: {
     totalVisits: number;
     totalDiscounts: number;
     discountValue: number;
-    customersThisMonth: number;
-    visitsThisMonth: number;
-    discountsThisMonth: number;
+    periodCustomers: number;
+    periodVisits: number;
+    periodDiscounts: number;
+    previousPeriodCustomers: number;
+    previousPeriodVisits: number;
+    previousPeriodDiscounts: number;
+    customersChange: number;
+    visitsChange: number;
+    discountsChange: number;
+    daysInPeriod: number;
   };
   byBranch: Array<{
     branchId: number;
@@ -5284,7 +5290,7 @@ export async function getLoyaltyDetailedStats(filters?: {
   const db = await getDb();
   if (!db) {
     return {
-      overview: { totalCustomers: 0, totalVisits: 0, totalDiscounts: 0, discountValue: 0, customersThisMonth: 0, visitsThisMonth: 0, discountsThisMonth: 0 },
+      overview: { totalCustomers: 0, totalVisits: 0, totalDiscounts: 0, discountValue: 0, periodCustomers: 0, periodVisits: 0, periodDiscounts: 0, previousPeriodCustomers: 0, previousPeriodVisits: 0, previousPeriodDiscounts: 0, customersChange: 0, visitsChange: 0, discountsChange: 0, daysInPeriod: 0 },
       byBranch: [],
       byService: [],
       monthlyTrend: [],
@@ -5293,9 +5299,43 @@ export async function getLoyaltyDetailedStats(filters?: {
   }
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startDate = filters?.startDate || new Date(now.getFullYear(), 0, 1); // بداية السنة
-  const endDate = filters?.endDate || now;
+  const period = filters?.period || 'month';
+  
+  // حساب بداية ونهاية الفترة الحالية
+  let periodStart: Date;
+  let periodEnd: Date = now;
+  let previousPeriodStart: Date;
+  let previousPeriodEnd: Date;
+  
+  switch (period) {
+    case 'week':
+      periodStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      previousPeriodStart = new Date(periodStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+      previousPeriodEnd = new Date(periodStart.getTime() - 1);
+      break;
+    case 'month':
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      previousPeriodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      previousPeriodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      break;
+    case 'quarter':
+      const currentQuarter = Math.floor(now.getMonth() / 3);
+      periodStart = new Date(now.getFullYear(), currentQuarter * 3, 1);
+      previousPeriodStart = new Date(now.getFullYear(), (currentQuarter - 1) * 3, 1);
+      previousPeriodEnd = new Date(now.getFullYear(), currentQuarter * 3, 0, 23, 59, 59);
+      break;
+    case 'year':
+      periodStart = new Date(now.getFullYear(), 0, 1);
+      previousPeriodStart = new Date(now.getFullYear() - 1, 0, 1);
+      previousPeriodEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
+      break;
+    default: // all
+      periodStart = new Date(2020, 0, 1);
+      previousPeriodStart = new Date(2020, 0, 1);
+      previousPeriodEnd = new Date(2020, 0, 1);
+  }
+  
+  const daysInPeriod = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
 
   // ============================================
   // 1. الإحصائيات العامة
@@ -5330,28 +5370,121 @@ export async function getLoyaltyDetailedStats(filters?: {
     .where(discountsConditions);
   const totalDiscounts = Number(totalDiscountsResult[0]?.count || 0);
 
-  // عملاء هذا الشهر
-  const customersThisMonthResult = await db.select({ count: sql<number>`count(*)` })
-    .from(loyaltyCustomers)
-    .where(gte(loyaltyCustomers.createdAt, startOfMonth));
-  const customersThisMonth = Number(customersThisMonthResult[0]?.count || 0);
-
-  // زيارات هذا الشهر
-  const visitsThisMonthResult = await db.select({ count: sql<number>`count(*)` })
-    .from(loyaltyVisits)
-    .where(gte(loyaltyVisits.visitDate, startOfMonth));
-  const visitsThisMonth = Number(visitsThisMonthResult[0]?.count || 0);
-
-  // خصومات هذا الشهر
-  const discountsThisMonthResult = await db.select({ count: sql<number>`count(*)` })
-    .from(loyaltyVisits)
-    .where(
-      and(
-        eq(loyaltyVisits.isDiscountVisit, true),
-        gte(loyaltyVisits.visitDate, startOfMonth)
+  // عملاء الفترة الحالية
+  const periodCustomersConditions = filters?.branchId
+    ? and(
+        gte(loyaltyCustomers.createdAt, periodStart),
+        lte(loyaltyCustomers.createdAt, periodEnd),
+        eq(loyaltyCustomers.branchId, filters.branchId)
       )
-    );
-  const discountsThisMonth = Number(discountsThisMonthResult[0]?.count || 0);
+    : and(
+        gte(loyaltyCustomers.createdAt, periodStart),
+        lte(loyaltyCustomers.createdAt, periodEnd)
+      );
+  
+  const periodCustomersResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyCustomers)
+    .where(periodCustomersConditions);
+  const periodCustomers = Number(periodCustomersResult[0]?.count || 0);
+
+  // زيارات الفترة الحالية
+  const periodVisitsConditions = filters?.branchId
+    ? and(
+        gte(loyaltyVisits.visitDate, periodStart),
+        lte(loyaltyVisits.visitDate, periodEnd),
+        eq(loyaltyVisits.branchId, filters.branchId)
+      )
+    : and(
+        gte(loyaltyVisits.visitDate, periodStart),
+        lte(loyaltyVisits.visitDate, periodEnd)
+      );
+  
+  const periodVisitsResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(periodVisitsConditions);
+  const periodVisits = Number(periodVisitsResult[0]?.count || 0);
+
+  // خصومات الفترة الحالية
+  const periodDiscountsConditions = filters?.branchId
+    ? and(
+        eq(loyaltyVisits.isDiscountVisit, true),
+        gte(loyaltyVisits.visitDate, periodStart),
+        lte(loyaltyVisits.visitDate, periodEnd),
+        eq(loyaltyVisits.branchId, filters.branchId)
+      )
+    : and(
+        eq(loyaltyVisits.isDiscountVisit, true),
+        gte(loyaltyVisits.visitDate, periodStart),
+        lte(loyaltyVisits.visitDate, periodEnd)
+      );
+  
+  const periodDiscountsResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(periodDiscountsConditions);
+  const periodDiscounts = Number(periodDiscountsResult[0]?.count || 0);
+
+  // عملاء الفترة السابقة
+  const prevPeriodCustomersConditions = filters?.branchId
+    ? and(
+        gte(loyaltyCustomers.createdAt, previousPeriodStart),
+        lte(loyaltyCustomers.createdAt, previousPeriodEnd),
+        eq(loyaltyCustomers.branchId, filters.branchId)
+      )
+    : and(
+        gte(loyaltyCustomers.createdAt, previousPeriodStart),
+        lte(loyaltyCustomers.createdAt, previousPeriodEnd)
+      );
+  
+  const prevPeriodCustomersResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyCustomers)
+    .where(prevPeriodCustomersConditions);
+  const previousPeriodCustomers = Number(prevPeriodCustomersResult[0]?.count || 0);
+
+  // زيارات الفترة السابقة
+  const prevPeriodVisitsConditions = filters?.branchId
+    ? and(
+        gte(loyaltyVisits.visitDate, previousPeriodStart),
+        lte(loyaltyVisits.visitDate, previousPeriodEnd),
+        eq(loyaltyVisits.branchId, filters.branchId)
+      )
+    : and(
+        gte(loyaltyVisits.visitDate, previousPeriodStart),
+        lte(loyaltyVisits.visitDate, previousPeriodEnd)
+      );
+  
+  const prevPeriodVisitsResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(prevPeriodVisitsConditions);
+  const previousPeriodVisits = Number(prevPeriodVisitsResult[0]?.count || 0);
+
+  // خصومات الفترة السابقة
+  const prevPeriodDiscountsConditions = filters?.branchId
+    ? and(
+        eq(loyaltyVisits.isDiscountVisit, true),
+        gte(loyaltyVisits.visitDate, previousPeriodStart),
+        lte(loyaltyVisits.visitDate, previousPeriodEnd),
+        eq(loyaltyVisits.branchId, filters.branchId)
+      )
+    : and(
+        eq(loyaltyVisits.isDiscountVisit, true),
+        gte(loyaltyVisits.visitDate, previousPeriodStart),
+        lte(loyaltyVisits.visitDate, previousPeriodEnd)
+      );
+  
+  const prevPeriodDiscountsResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(prevPeriodDiscountsConditions);
+  const previousPeriodDiscounts = Number(prevPeriodDiscountsResult[0]?.count || 0);
+
+  // حساب نسبة التغيير
+  const calculateChange = (current: number, previous: number): number => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return Math.round(((current - previous) / previous) * 100 * 10) / 10;
+  };
+
+  const customersChange = calculateChange(periodCustomers, previousPeriodCustomers);
+  const visitsChange = calculateChange(periodVisits, previousPeriodVisits);
+  const discountsChange = calculateChange(periodDiscounts, previousPeriodDiscounts);
 
   // ============================================
   // 2. إحصائيات حسب الفرع
@@ -5526,9 +5659,16 @@ export async function getLoyaltyDetailedStats(filters?: {
       totalVisits,
       totalDiscounts,
       discountValue: totalDiscounts * 60, // قيمة تقريبية بناءً على نسبة الخصم
-      customersThisMonth,
-      visitsThisMonth,
-      discountsThisMonth,
+      periodCustomers,
+      periodVisits,
+      periodDiscounts,
+      previousPeriodCustomers,
+      previousPeriodVisits,
+      previousPeriodDiscounts,
+      customersChange,
+      visitsChange,
+      discountsChange,
+      daysInPeriod,
     },
     byBranch,
     byService,

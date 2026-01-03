@@ -4566,8 +4566,7 @@ export const appRouter = router({
     // تقرير إحصائي شامل (للمشرفين والأدمن)
     detailedStats: supervisorInputProcedure
       .input(z.object({
-        startDate: z.date().optional(),
-        endDate: z.date().optional(),
+        period: z.enum(['week', 'month', 'quarter', 'year', 'all']).optional(),
         branchId: z.number().optional(),
       }).optional())
       .query(async ({ input }) => {

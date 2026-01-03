@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import {
   Calendar, 
   Gift, 
   TrendingUp, 
+  TrendingDown,
   Building2, 
   Scissors,
   RefreshCw,
@@ -17,18 +18,169 @@ import {
   UserPlus,
   CheckCircle,
   Percent,
-  Clock
+  Clock,
+  Printer,
+  CalendarDays
 } from 'lucide-react';
 import { Link } from 'wouter';
 
+type PeriodType = 'week' | 'month' | 'quarter' | 'year' | 'all';
+
+const periodLabels: Record<PeriodType, string> = {
+  week: 'أسبوع',
+  month: 'شهر',
+  quarter: 'ربع سنة',
+  year: 'سنة',
+  all: 'الكل',
+};
+
+const periodPreviousLabels: Record<PeriodType, string> = {
+  week: 'الأسبوع الماضي',
+  month: 'الشهر الماضي',
+  quarter: 'الربع الماضي',
+  year: 'السنة الماضية',
+  all: '',
+};
+
 export default function LoyaltyReport() {
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('month');
+  const reportRef = useRef<HTMLDivElement>(null);
   
-  const { data: stats, isLoading, refetch, isRefetching } = trpc.loyalty.detailedStats.useQuery(
-    selectedBranch !== 'all' ? { branchId: parseInt(selectedBranch) } : undefined
-  );
+  const { data: stats, isLoading, refetch, isRefetching } = trpc.loyalty.detailedStats.useQuery({
+    period: selectedPeriod,
+    branchId: selectedBranch !== 'all' ? parseInt(selectedBranch) : undefined,
+  });
   
   const { data: branches } = trpc.loyalty.branches.useQuery();
+
+  const handlePrint = () => {
+    const printContent = reportRef.current;
+    if (!printContent) return;
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="rtl">
+      <head>
+        <title>تقرير برنامج الولاء</title>
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; direction: rtl; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+          .header h1 { font-size: 24px; margin-bottom: 5px; }
+          .header p { color: #666; }
+          .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+          .stat-card { border: 1px solid #ddd; border-radius: 8px; padding: 15px; text-align: center; }
+          .stat-value { font-size: 28px; font-weight: bold; color: #333; }
+          .stat-label { font-size: 12px; color: #666; margin-top: 5px; }
+          .stat-change { font-size: 11px; margin-top: 5px; }
+          .stat-change.positive { color: #22c55e; }
+          .stat-change.negative { color: #ef4444; }
+          .section { margin-bottom: 25px; }
+          .section-title { font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+          th { background: #f5f5f5; }
+          .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #999; }
+          @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>تقرير برنامج الولاء</h1>
+          <p>الفترة: ${periodLabels[selectedPeriod]} | ${selectedBranch === 'all' ? 'جميع الفروع' : branches?.find(b => b.id.toString() === selectedBranch)?.name}</p>
+          <p>تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</p>
+        </div>
+        
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">${stats?.overview.totalCustomers || 0}</div>
+            <div class="stat-label">إجمالي العملاء</div>
+            <div class="stat-change ${(stats?.overview.customersChange || 0) >= 0 ? 'positive' : 'negative'}">
+              ${stats?.overview.customersChange || 0}% عن ${periodPreviousLabels[selectedPeriod]}
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${stats?.overview.totalVisits || 0}</div>
+            <div class="stat-label">إجمالي الزيارات</div>
+            <div class="stat-change ${(stats?.overview.visitsChange || 0) >= 0 ? 'positive' : 'negative'}">
+              ${stats?.overview.visitsChange || 0}% عن ${periodPreviousLabels[selectedPeriod]}
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${stats?.overview.totalDiscounts || 0}</div>
+            <div class="stat-label">الخصومات المستخدمة</div>
+            <div class="stat-change ${(stats?.overview.discountsChange || 0) >= 0 ? 'positive' : 'negative'}">
+              ${stats?.overview.discountsChange || 0}% عن ${periodPreviousLabels[selectedPeriod]}
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${stats?.overview.daysInPeriod || 0}</div>
+            <div class="stat-label">أيام الفترة</div>
+          </div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">إحصائيات الفروع</div>
+          <table>
+            <thead>
+              <tr>
+                <th>الفرع</th>
+                <th>العملاء</th>
+                <th>الزيارات</th>
+                <th>الخصومات</th>
+                <th>معلقة</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${stats?.byBranch.map(b => `
+                <tr>
+                  <td>${b.branchName}</td>
+                  <td>${b.customers}</td>
+                  <td>${b.visits}</td>
+                  <td>${b.discounts}</td>
+                  <td>${b.pendingVisits}</td>
+                </tr>
+              `).join('') || ''}
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">الخدمات الأكثر طلباً</div>
+          <table>
+            <thead>
+              <tr>
+                <th>الخدمة</th>
+                <th>الزيارات</th>
+                <th>النسبة</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${stats?.byService.map(s => `
+                <tr>
+                  <td>${s.serviceType}</td>
+                  <td>${s.visits}</td>
+                  <td>${s.percentage}%</td>
+                </tr>
+              `).join('') || ''}
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="footer">
+          <p>Symbol AI - نظام إدارة برنامج الولاء</p>
+        </div>
+        
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   if (isLoading) {
     return (
@@ -50,17 +202,31 @@ export default function LoyaltyReport() {
     totalCustomers: 0,
     totalVisits: 0,
     totalDiscounts: 0,
-    customersThisMonth: 0,
-    visitsThisMonth: 0,
-    discountsThisMonth: 0,
+    periodCustomers: 0,
+    periodVisits: 0,
+    periodDiscounts: 0,
+    customersChange: 0,
+    visitsChange: 0,
+    discountsChange: 0,
+    daysInPeriod: 0,
+  };
+
+  const ChangeIndicator = ({ value, label }: { value: number; label: string }) => {
+    const isPositive = value >= 0;
+    return (
+      <div className={`flex items-center gap-1 text-xs ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+        {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+        <span>{Math.abs(value)}% عن {label}</span>
+      </div>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" ref={reportRef}>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <Link href="/loyalty">
                 <Button variant="ghost" size="icon" className="shrink-0">
@@ -72,10 +238,24 @@ export default function LoyaltyReport() {
                 <p className="text-sm text-muted-foreground">إحصائيات شاملة للعملاء والزيارات</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={selectedPeriod} onValueChange={(v) => setSelectedPeriod(v as PeriodType)}>
+                <SelectTrigger className="w-[120px]">
+                  <CalendarDays className="h-4 w-4 ml-2" />
+                  <SelectValue placeholder="الفترة" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">أسبوع</SelectItem>
+                  <SelectItem value="month">شهر</SelectItem>
+                  <SelectItem value="quarter">ربع سنة</SelectItem>
+                  <SelectItem value="year">سنة</SelectItem>
+                  <SelectItem value="all">الكل</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger className="w-[140px] md:w-[180px]">
-                  <SelectValue placeholder="جميع الفروع" />
+                <SelectTrigger className="w-[140px]">
+                  <Building2 className="h-4 w-4 ml-2" />
+                  <SelectValue placeholder="الفرع" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">جميع الفروع</SelectItem>
@@ -94,6 +274,10 @@ export default function LoyaltyReport() {
               >
                 <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
               </Button>
+              <Button variant="default" className="gap-2" onClick={handlePrint}>
+                <Printer className="h-4 w-4" />
+                طباعة التقرير
+              </Button>
             </div>
           </div>
         </div>
@@ -109,8 +293,11 @@ export default function LoyaltyReport() {
                   <p className="text-sm text-muted-foreground">إجمالي العملاء</p>
                   <p className="text-2xl md:text-3xl font-bold text-blue-600">{overview.totalCustomers}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    +{overview.customersThisMonth} هذا الشهر
+                    +{overview.periodCustomers} في الفترة
                   </p>
+                  {selectedPeriod !== 'all' && (
+                    <ChangeIndicator value={overview.customersChange} label={periodPreviousLabels[selectedPeriod]} />
+                  )}
                 </div>
                 <div className="p-3 bg-blue-500/10 rounded-full">
                   <Users className="h-6 w-6 text-blue-600" />
@@ -126,8 +313,11 @@ export default function LoyaltyReport() {
                   <p className="text-sm text-muted-foreground">إجمالي الزيارات</p>
                   <p className="text-2xl md:text-3xl font-bold text-green-600">{overview.totalVisits}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    +{overview.visitsThisMonth} هذا الشهر
+                    +{overview.periodVisits} في الفترة
                   </p>
+                  {selectedPeriod !== 'all' && (
+                    <ChangeIndicator value={overview.visitsChange} label={periodPreviousLabels[selectedPeriod]} />
+                  )}
                 </div>
                 <div className="p-3 bg-green-500/10 rounded-full">
                   <Calendar className="h-6 w-6 text-green-600" />
@@ -143,8 +333,11 @@ export default function LoyaltyReport() {
                   <p className="text-sm text-muted-foreground">الخصومات المستخدمة</p>
                   <p className="text-2xl md:text-3xl font-bold text-amber-600">{overview.totalDiscounts}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    +{overview.discountsThisMonth} هذا الشهر
+                    +{overview.periodDiscounts} في الفترة
                   </p>
+                  {selectedPeriod !== 'all' && (
+                    <ChangeIndicator value={overview.discountsChange} label={periodPreviousLabels[selectedPeriod]} />
+                  )}
                 </div>
                 <div className="p-3 bg-amber-500/10 rounded-full">
                   <Gift className="h-6 w-6 text-amber-600" />
@@ -157,18 +350,17 @@ export default function LoyaltyReport() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">معدل التحويل</p>
-                  <p className="text-2xl md:text-3xl font-bold text-purple-600">
-                    {overview.totalVisits > 0 
-                      ? Math.round((overview.totalDiscounts / overview.totalVisits) * 100) 
-                      : 0}%
-                  </p>
+                  <p className="text-sm text-muted-foreground">أيام الفترة</p>
+                  <p className="text-2xl md:text-3xl font-bold text-purple-600">{overview.daysInPeriod}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    زيارات → خصومات
+                    يوم مسجل
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    معدل: {overview.daysInPeriod > 0 ? (overview.periodVisits / overview.daysInPeriod).toFixed(1) : 0} زيارة/يوم
                   </p>
                 </div>
                 <div className="p-3 bg-purple-500/10 rounded-full">
-                  <TrendingUp className="h-6 w-6 text-purple-600" />
+                  <CalendarDays className="h-6 w-6 text-purple-600" />
                 </div>
               </div>
             </CardContent>
