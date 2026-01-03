@@ -1,0 +1,142 @@
+{
+  "query": "SELECT wb.id, wb.branchId, b.nameAr as branchName, wb.weekNumber, wb.month, wb.year, \n       wb.weekStart, wb.weekEnd, wb.totalAmount, wb.status\nFROM weeklyBonuses wb\nLEFT JOIN branches b ON wb.branchId = b.id\nORDER BY wb.year DESC, wb.month DESC, wb.weekNumber DESC\nLIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT wb.id, wb.branchId, b.nameAr as branchName, wb.weekNumber, wb.month, wb.year, \n       wb.weekStart, wb.weekEnd, wb.totalAmount, wb.status\nFROM weeklyBonuses wb\nLEFT JOIN branches b ON wb.branchId = b.id\nORDER BY wb.year DESC, wb.month DESC, wb.weekNumber DESC\nLIMIT 20;",
+  "rows": [
+    {
+      "id": "180001",
+      "branchId": "30001",
+      "branchName": "طويق- الرياض",
+      "weekNumber": "1",
+      "month": "1",
+      "year": "2026",
+      "weekStart": "2026-01-01 00:00:00",
+      "weekEnd": "2026-01-07 23:59:59",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "210001",
+      "branchId": "1",
+      "branchName": "لبن ",
+      "weekNumber": "1",
+      "month": "1",
+      "year": "2026",
+      "weekStart": "2026-01-01 00:00:00",
+      "weekEnd": "2026-01-07 23:59:59",
+      "totalAmount": "35.00",
+      "status": "pending"
+    },
+    {
+      "id": "120001",
+      "branchId": "30001",
+      "branchName": "طويق- الرياض",
+      "weekNumber": "5",
+      "month": "12",
+      "year": "2025",
+      "weekStart": "2025-12-30 00:00:00",
+      "weekEnd": "2025-12-31 23:59:59",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "120002",
+      "branchId": "1",
+      "branchName": "لبن ",
+      "weekNumber": "5",
+      "month": "12",
+      "year": "2025",
+      "weekStart": "2025-12-30 00:00:00",
+      "weekEnd": "2025-12-31 23:59:59",
+      "totalAmount": "180.00",
+      "status": "pending"
+    },
+    {
+      "id": "90001",
+      "branchId": "1",
+      "branchName": "لبن ",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025",
+      "weekStart": "2025-12-23 00:00:00",
+      "weekEnd": "2025-12-29 23:59:59",
+      "totalAmount": "420.00",
+      "status": "pending"
+    },
+    {
+      "id": "90002",
+      "branchId": "30001",
+      "branchName": "طويق- الرياض",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025",
+      "weekStart": "2025-12-23 00:00:00",
+      "weekEnd": "2025-12-29 23:59:59",
+      "totalAmount": "225.00",
+      "status": "pending"
+    },
+    {
+      "id": "30001",
+      "branchId": "30003",
+      "branchName": "NULL",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "weekStart": "2025-12-16 00:00:00",
+      "weekEnd": "2025-12-22 23:59:59",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "1",
+      "branchId": "1",
+      "branchName": "لبن ",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "weekStart": "2025-12-16 05:00:00",
+      "weekEnd": "2025-12-23 04:59:59",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "60001",
+      "branchId": "30001",
+      "branchName": "طويق- الرياض",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "weekStart": "2025-12-16 00:00:00",
+      "weekEnd": "2025-12-22 23:59:59",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "150002",
+      "branchId": "1",
+      "branchName": "لبن ",
+      "weekNumber": "1",
+      "month": "12",
+      "year": "2025",
+      "weekStart": "2025-12-01 00:00:00",
+      "weekEnd": "2025-12-07 23:59:59",
+      "totalAmount": "1080.00",
+      "status": "pending"
+    },
+    {
+      "id": "150001",
+      "branchId": "30001",
+      "branchName": "طويق- الرياض",
+      "weekNumber": "1",
+      "month": "12",
+      "year": "2025",
+      "weekStart": "2025-12-01 00:00:00",
+      "weekEnd": "2025-12-07 23:59:59",
+      "totalAmount": "720.00",
+      "status": "pending"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tbranchId\tbranchName\tweekNumber\tmonth\tyear\tweekStart\tweekEnd\ttotalAmount\tstatus\n180001\t30001\tطويق- الرياض\t1\t1\t2026\t2026-01-01 00:00:00\t2026-01-07 23:59:59\t0.00\tpending\n210001\t1\tلبن \t1\t1\t2026\t2026-01-01 00:00:00\t2026-01-07 23:59:59\t35.00\tpending\n120001\t30001\tطويق- الرياض\t5\t12\t2025\t2025-12-30 00:00:00\t2025-12-31 23:59:59\t0.00\tpending\n120002\t1\tلبن \t5\t12\t2025\t2025-12-30 00:00:00\t2025-12-31 23:59:59\t180.00\tpending\n90001\t1\tلبن \t4\t12\t2025\t2025-12-23 00:00:00\t2025-12-29 23:59:59\t420.00\tpending\n90002\t30001\tطويق- الرياض\t4\t12\t2025\t2025-12-23 00:00:00\t2025-12-29 23:59:59\t225.00\tpending\n30001\t30003\tNULL\t3\t12\t2025\t2025-12-16 00:00:00\t2025-12-22 23:59:59\t0.00\tpending\n1\t1\tلبن \t3\t12\t2025\t2025-12-16 05:00:00\t2025-12-23 04:59:59\t0.00\tpending\n60001\t30001\tطويق- الرياض\t3\t12\t2025\t2025-12-16 00:00:00\t2025-12-22 23:59:59\t0.00\tpending\n150002\t1\tلبن \t1\t12\t2025\t2025-12-01 00:00:00\t2025-12-07 23:59:59\t1080.00\tpending\n150001\t30001\tطويق- الرياض\t1\t12\t2025\t2025-12-01 00:00:00\t2025-12-07 23:59:59\t720.00\tpending\n",
+  "stderr": "",
+  "execution_time_ms": 1611
+}

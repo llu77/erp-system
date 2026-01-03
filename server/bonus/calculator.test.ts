@@ -72,60 +72,101 @@ describe("Bonus Calculator", () => {
     });
   });
 
-  describe("getWeekNumber", () => {
+  describe("getWeekNumber - كل أسبوع 7 أيام بالضبط", () => {
     it("returns week 1 for days 1-7", () => {
       expect(getWeekNumber(1)).toBe(1);
       expect(getWeekNumber(7)).toBe(1);
     });
 
-    it("returns week 2 for days 8-15", () => {
+    it("returns week 2 for days 8-14", () => {
       expect(getWeekNumber(8)).toBe(2);
-      expect(getWeekNumber(15)).toBe(2);
+      expect(getWeekNumber(14)).toBe(2);
     });
 
-    it("returns week 3 for days 16-22", () => {
-      expect(getWeekNumber(16)).toBe(3);
-      expect(getWeekNumber(22)).toBe(3);
+    it("returns week 3 for days 15-21", () => {
+      expect(getWeekNumber(15)).toBe(3);
+      expect(getWeekNumber(21)).toBe(3);
     });
 
-    it("returns week 4 for days 23-29", () => {
-      expect(getWeekNumber(23)).toBe(4);
-      expect(getWeekNumber(29)).toBe(4);
+    it("returns week 4 for days 22-28", () => {
+      expect(getWeekNumber(22)).toBe(4);
+      expect(getWeekNumber(28)).toBe(4);
     });
 
-    it("returns week 5 for days 30-31", () => {
+    it("returns week 5 for days 29-31", () => {
+      expect(getWeekNumber(29)).toBe(5);
       expect(getWeekNumber(30)).toBe(5);
       expect(getWeekNumber(31)).toBe(5);
     });
   });
 
-  describe("getWeekDateRange", () => {
-    it("returns correct range for week 1", () => {
-      const { start, end } = getWeekDateRange(1, 1, 2024);
-      expect(start.getDate()).toBe(1);
-      expect(end.getDate()).toBe(7);
+  describe("getWeekDateRange - كل أسبوع 7 أيام بالضبط", () => {
+    it("returns correct range for week 1 (1-7)", () => {
+      const { start, end } = getWeekDateRange(1, 1, 2026);
+      expect(start.getUTCDate()).toBe(1);
+      expect(end.getUTCDate()).toBe(7);
     });
 
-    it("returns correct range for week 5 in a 31-day month", () => {
-      const { start, end } = getWeekDateRange(5, 1, 2024); // January
-      expect(start.getDate()).toBe(30);
-      expect(end.getDate()).toBe(31);
+    it("returns correct range for week 2 (8-14)", () => {
+      const { start, end } = getWeekDateRange(2, 1, 2026);
+      expect(start.getUTCDate()).toBe(8);
+      expect(end.getUTCDate()).toBe(14);
     });
 
-    it("returns correct range for week 5 in a 30-day month", () => {
-      const { start, end } = getWeekDateRange(5, 4, 2024); // April
-      expect(start.getDate()).toBe(30);
-      expect(end.getDate()).toBe(30);
+    it("returns correct range for week 3 (15-21)", () => {
+      const { start, end } = getWeekDateRange(3, 1, 2026);
+      expect(start.getUTCDate()).toBe(15);
+      expect(end.getUTCDate()).toBe(21);
+    });
+
+    it("returns correct range for week 4 (22-28)", () => {
+      const { start, end } = getWeekDateRange(4, 1, 2026);
+      expect(start.getUTCDate()).toBe(22);
+      expect(end.getUTCDate()).toBe(28);
+    });
+
+    it("returns correct range for week 5 in a 31-day month (29-31)", () => {
+      const { start, end } = getWeekDateRange(5, 1, 2026); // January
+      expect(start.getUTCDate()).toBe(29);
+      expect(end.getUTCDate()).toBe(31);
+    });
+
+    it("returns correct range for week 5 in a 30-day month (29-30)", () => {
+      const { start, end } = getWeekDateRange(5, 4, 2026); // April
+      expect(start.getUTCDate()).toBe(29);
+      expect(end.getUTCDate()).toBe(30);
+    });
+
+    it("returns correct range for week 5 in February (29 only for leap year)", () => {
+      const { start, end } = getWeekDateRange(5, 2, 2024); // February 2024 (leap year)
+      expect(start.getUTCDate()).toBe(29);
+      expect(end.getUTCDate()).toBe(29);
     });
   });
 
-  describe("getWeekInfo", () => {
-    it("returns correct week info for a date", () => {
-      const date = new Date(2024, 0, 15); // January 15, 2024
+  describe("getWeekInfo - كل أسبوع 7 أيام بالضبط", () => {
+    it("returns week 3 for January 15 (day 15 is in week 3: 15-21)", () => {
+      const date = new Date(2026, 0, 15); // January 15, 2026
+      const info = getWeekInfo(date);
+      expect(info.weekNumber).toBe(3);
+      expect(info.month).toBe(1);
+      expect(info.year).toBe(2026);
+    });
+
+    it("returns week 2 for January 14 (day 14 is in week 2: 8-14)", () => {
+      const date = new Date(2026, 0, 14); // January 14, 2026
       const info = getWeekInfo(date);
       expect(info.weekNumber).toBe(2);
       expect(info.month).toBe(1);
-      expect(info.year).toBe(2024);
+      expect(info.year).toBe(2026);
+    });
+
+    it("returns week 5 for January 29 (day 29 is in week 5: 29-31)", () => {
+      const date = new Date(2026, 0, 29); // January 29, 2026
+      const info = getWeekInfo(date);
+      expect(info.weekNumber).toBe(5);
+      expect(info.month).toBe(1);
+      expect(info.year).toBe(2026);
     });
   });
 

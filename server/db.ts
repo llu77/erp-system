@@ -5743,3 +5743,123 @@ export async function getBranchLoyaltyStats(branchId: number): Promise<{
     })),
   };
 }
+
+
+// ==================== دوال حساب الإيرادات الأسبوعية (من sync2.ts) ====================
+
+/**
+ * الحصول على إيرادات الفرع للأسبوع بشكل تفصيلي
+ */
+export async function getBranchWeeklyRevenue(
+  branchId: number,
+  weekStart: Date,
+  weekEnd: Date
+): Promise<{ total: number; enteredDates: Date[]; dailyBreakdown: Array<{ date: Date; revenue: number }> }> {
+  const db = await getDb();
+  if (!db) return { total: 0, enteredDates: [], dailyBreakdown: [] };
+
+  const result = await db
+    .select({
+      date: dailyRevenues.date,
+      revenue: dailyRevenues.total,
+    })
+    .from(dailyRevenues)
+    .where(
+      and(
+        eq(dailyRevenues.branchId, branchId),
+        gte(dailyRevenues.date, weekStart),
+        lte(dailyRevenues.date, weekEnd)
+      )
+    )
+    .orderBy(dailyRevenues.date);
+
+  const dailyBreakdown = result.map((r) => ({
+    date: new Date(r.date),
+    revenue: Number(r.revenue || 0),
+  }));
+
+  const total = dailyBreakdown.reduce((sum, d) => sum + d.revenue, 0);
+  const enteredDates = dailyBreakdown.map((d) => d.date);
+
+  return { total, enteredDates, dailyBreakdown };
+}
+
+/**
+ * الحصول على إيرادات جميع الموظفين للأسبوع (Batch Query)
+ */
+export async function getAllEmployeesWeeklyRevenues(
+  branchId: number,
+  weekStart: Date,
+  weekEnd: Date
+): Promise<Map<number, { revenue: number; enteredDates: Date[] }>> {
+  const db = await getDb();
+  if (!db) return new Map();
+
+  const result = await db
+    .select({
+      employeeId: employeeRevenues.employeeId,
+      total: employeeRevenues.total,
+      date: dailyRevenues.date,
+    })
+    .from(employeeRevenues)
+    .innerJoin(
+      dailyRevenues,
+      eq(employeeRevenues.dailyRevenueId, dailyRevenues.id)
+    )
+    .where(
+      and(
+        eq(dailyRevenues.branchId, branchId),
+        gte(dailyRevenues.date, weekStart),
+        lte(dailyRevenues.date, weekEnd)
+      )
+    );
+
+  // تجميع البيانات حسب الموظف
+  const employeeMap = new Map<
+    number,
+    { revenue: number; enteredDates: Date[] }
+  >();
+
+  for (const row of result) {
+    const existing = employeeMap.get(row.employeeId) || {
+      revenue: 0,
+      enteredDates: [],
+    };
+    existing.revenue += Number(row.total || 0);
+    existing.enteredDates.push(new Date(row.date));
+    employeeMap.set(row.employeeId, existing);
+  }
+
+  return employeeMap;
+}
+
+/**
+ * الحصول على مجموع إيرادات جميع الموظفين
+ */
+export async function getTotalEmployeesRevenue(
+  branchId: number,
+  weekStart: Date,
+  weekEnd: Date
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const result = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(${employeeRevenues.total}), 0)`,
+    })
+    .from(employeeRevenues)
+    .innerJoin(
+      dailyRevenues,
+      eq(employeeRevenues.dailyRevenueId, dailyRevenues.id)
+    )
+    .where(
+      and(
+        eq(dailyRevenues.branchId, branchId),
+        gte(dailyRevenues.date, weekStart),
+        lte(dailyRevenues.date, weekEnd)
+      )
+    );
+
+  return Number(result[0]?.total || 0);
+}
