@@ -219,6 +219,10 @@ export default function LoyaltyRegister() {
       toast.error('الرجاء اختيار نوع الخدمة');
       return;
     }
+    if (!selectedBranch) {
+      toast.error('الرجاء اختيار الفرع');
+      return;
+    }
     if (!invoiceImage) {
       toast.error('الرجاء رفع صورة الفاتورة');
       return;
@@ -352,7 +356,7 @@ export default function LoyaltyRegister() {
             
             <div className="bg-green-50 rounded-lg p-4 mb-6">
               <p className="text-sm text-green-700">
-                🎁 مع كل {requiredVisits - 1} زيارات في الشهر، تحصل على خصم {discountPercent}% في الزيارة رقم {requiredVisits}!
+                🎁 في كل {requiredVisits} زيارات، الزيارة رقم {requiredVisits} بخصم {discountPercent}%!
               </p>
             </div>
 
@@ -380,7 +384,7 @@ export default function LoyaltyRegister() {
           </div>
           <CardTitle className="text-2xl">برنامج الولاء</CardTitle>
           <CardDescription>
-            سجّل الآن واحصل على خصم {discountPercent}% في زيارتك رقم {requiredVisits} كل شهر!
+            سجّل الآن واحصل على خصم {discountPercent}% في زيارتك الثالثة كل شهر!
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -426,7 +430,7 @@ export default function LoyaltyRegister() {
             </div>
 
             <div className="space-y-2">
-              <Label>الفرع (اختياري)</Label>
+              <Label>الفرع *</Label>
               <Select 
                 value={selectedBranch?.id?.toString() || ''} 
                 onValueChange={(value) => {

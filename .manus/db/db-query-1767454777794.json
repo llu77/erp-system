@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, requiredVisitsForDiscount, discountPercentage, isActive FROM loyaltySettings;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, requiredVisitsForDiscount, discountPercentage, isActive FROM loyaltySettings;",
+  "rows": [
+    {
+      "id": "1",
+      "requiredVisitsForDiscount": "3",
+      "discountPercentage": "60",
+      "isActive": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trequiredVisitsForDiscount\tdiscountPercentage\tisActive\n1\t3\t60\t1\n",
+  "stderr": "",
+  "execution_time_ms": 1514
+}

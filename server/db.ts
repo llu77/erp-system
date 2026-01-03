@@ -4849,9 +4849,9 @@ export async function registerLoyaltyVisit(data: {
   const visitsThisMonth = await getCustomerVisitsThisMonth(data.customerId);
   const visitNumberInMonth = visitsThisMonth.length + 1;
   
-  // التحقق من استحقاق الخصم (الزيارة الرابعة أو أكثر)
-  const isDiscountVisit = visitNumberInMonth >= 4 && (visitNumberInMonth - 1) % 3 === 0;
-  const discountPercentage = isDiscountVisit ? 50 : 0;
+  // التحقق من استحقاق الخصم (الزيارة الثالثة وكل زيارة ثالثة بعدها)
+  const isDiscountVisit = visitNumberInMonth % 3 === 0;
+  const discountPercentage = isDiscountVisit ? 60 : 0;
   
   const visitId = await generateLoyaltyVisitId();
   

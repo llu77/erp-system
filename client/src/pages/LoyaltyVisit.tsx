@@ -251,6 +251,10 @@ export default function LoyaltyVisit() {
       toast.error('الرجاء اختيار نوع الخدمة');
       return;
     }
+    if (!selectedBranch) {
+      toast.error('الرجاء اختيار الفرع');
+      return;
+    }
     if (!invoiceImage) {
       toast.error('الرجاء التقاط صورة الفاتورة');
       return;
@@ -503,7 +507,7 @@ export default function LoyaltyVisit() {
 
             {/* الفرع */}
             <div className="space-y-2">
-              <Label htmlFor="branch">الفرع (اختياري)</Label>
+              <Label htmlFor="branch">الفرع *</Label>
               <Select 
                 value={selectedBranch?.id?.toString() || ''} 
                 onValueChange={(value) => {

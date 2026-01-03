@@ -169,7 +169,7 @@ export default function Loyalty() {
             <div class="instructions">
               ${type === 'register' 
                 ? 'امسح الباركود للتسجيل في برنامج الولاء والحصول على خصومات حصرية!'
-                : 'امسح الباركود لتسجيل زيارتك والحصول على خصم 50% في الزيارة الرابعة!'
+                : 'امسح الباركود لتسجيل زيارتك والحصول على خصم 60% في الزيارة الثالثة!'
               }
             </div>
           </div>
@@ -661,7 +661,7 @@ export default function Loyalty() {
                         <TableCell>{visit.branchName || '-'}</TableCell>
                         <TableCell>
                           {visit.isDiscountVisit ? (
-                            <Badge className="bg-green-500">خصم 50%</Badge>
+                            <Badge className="bg-green-500">خصم 60%</Badge>
                           ) : (
                             <Badge variant="outline">زيارة {visit.visitNumberInMonth}</Badge>
                           )}
