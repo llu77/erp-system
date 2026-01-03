@@ -1,0 +1,24 @@
+{
+  "query": "SELECT * FROM loyaltyCustomers WHERE customerId = 'LC-0001';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT * FROM loyaltyCustomers WHERE customerId = 'LC-0001';",
+  "rows": [
+    {
+      "id": "1",
+      "customerId": "LC-0001",
+      "name": "Omar",
+      "phone": "0598441020",
+      "email": "NULL",
+      "totalVisits": "3",
+      "totalDiscountsUsed": "0",
+      "branchId": "1",
+      "branchName": "Laban",
+      "isActive": "1",
+      "createdAt": "2026-01-01 07:36:25",
+      "updatedAt": "2026-01-03 15:16:09"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcustomerId\tname\tphone\temail\ttotalVisits\ttotalDiscountsUsed\tbranchId\tbranchName\tisActive\tcreatedAt\tupdatedAt\n1\tLC-0001\tOmar\t0598441020\tNULL\t3\t0\t1\tLaban\t1\t2026-01-01 07:36:25\t2026-01-03 15:16:09\n",
+  "stderr": "",
+  "execution_time_ms": 1561
+}

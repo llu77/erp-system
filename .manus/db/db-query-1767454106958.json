@@ -1,0 +1,22 @@
+{
+  "query": "SELECT id, customerId, name, phone FROM loyaltyCustomers ORDER BY id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, customerId, name, phone FROM loyaltyCustomers ORDER BY id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "60009",
+      "customerId": "LC-0001",
+      "name": "عميل اختبار API",
+      "phone": "0599333444"
+    },
+    {
+      "id": "30001",
+      "customerId": "LC-TEST001",
+      "name": "عميل اختباري",
+      "phone": "0512345678"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcustomerId\tname\tphone\n60009\tLC-0001\tعميل اختبار API\t0599333444\n30001\tLC-TEST001\tعميل اختباري\t0512345678\n",
+  "stderr": "",
+  "execution_time_ms": 1522
+}

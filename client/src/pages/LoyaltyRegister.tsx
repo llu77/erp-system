@@ -1,37 +1,140 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
-import { Gift, CheckCircle, Loader2, Camera, Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Gift, CheckCircle, Loader2, Camera, X, ImageIcon, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
+import { Progress } from '@/components/ui/progress';
 
-const FORGE_API_URL = import.meta.env.VITE_FRONTEND_FORGE_API_URL;
-const FORGE_API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
+// ============================================
+// ثوابت الضغط والتحقق
+// ============================================
+const COMPRESSION_CONFIG = {
+  maxWidth: 800,
+  quality: 0.6,
+  fallbackMaxWidth: 600,
+  fallbackQuality: 0.4,
+};
 
+const FILE_CONFIG = {
+  maxSizeMB: 10,
+  allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
+};
+
+// ============================================
+// دوال مساعدة
+// ============================================
+
+/**
+ * ضغط الصورة وتحويلها إلى base64
+ */
+const compressImage = (file: File, maxWidth: number, quality: number): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // تصغير الصورة إذا كانت أكبر من الحد الأقصى
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('فشل إنشاء canvas'));
+            return;
+          }
+          
+          // رسم خلفية بيضاء (للصور الشفافة)
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          const base64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(base64);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = () => reject(new Error('فشل تحميل الصورة'));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error('فشل قراءة الملف'));
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
+ * حساب حجم base64 بالميجابايت
+ */
+const getBase64SizeInMB = (base64: string): number => {
+  const base64Length = base64.length - (base64.indexOf(',') + 1);
+  const sizeInBytes = (base64Length * 3) / 4;
+  return sizeInBytes / (1024 * 1024);
+};
+
+/**
+ * التحقق من صحة الملف
+ */
+const validateFile = (file: File): { valid: boolean; error?: string } => {
+  // التحقق من نوع الملف
+  if (!file.type.startsWith('image/')) {
+    return { valid: false, error: 'يرجى اختيار صورة فقط' };
+  }
+  
+  // التحقق من الحجم
+  const sizeInMB = file.size / (1024 * 1024);
+  if (sizeInMB > FILE_CONFIG.maxSizeMB) {
+    return { valid: false, error: `حجم الصورة كبير جداً (${sizeInMB.toFixed(1)}MB). الحد الأقصى ${FILE_CONFIG.maxSizeMB}MB` };
+  }
+  
+  return { valid: true };
+};
+
+// ============================================
+// المكون الرئيسي
+// ============================================
 export default function LoyaltyRegister() {
+  // حالة النموذج
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [serviceType, setServiceType] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<{ id: number; name: string } | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  
+  // حالة الصورة
   const [invoiceImage, setInvoiceImage] = useState<File | null>(null);
   const [invoiceImagePreview, setInvoiceImagePreview] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // حالة الرفع
+  const [uploadState, setUploadState] = useState({
+    isUploading: false,
+    progress: 0,
+    error: null as string | null,
+  });
 
-  // جلب الفروع
+  // جلب البيانات
   const { data: branches } = trpc.loyalty.branches.useQuery();
-  
-  // جلب أنواع الخدمات من قاعدة البيانات
   const { data: serviceTypes } = trpc.loyalty.getServiceTypes.useQuery();
-  
-  // جلب إعدادات الولاء
   const { data: settings } = trpc.loyalty.getSettings.useQuery();
+
+  // رفع الصورة - استخدام نفس API الناجح في صفحة الزيارة
+  const uploadMutation = trpc.loyalty.uploadInvoiceImage.useMutation();
 
   // تسجيل العميل
   const registerMutation = trpc.loyalty.register.useMutation({
@@ -39,7 +142,6 @@ export default function LoyaltyRegister() {
       if (data.success) {
         setIsSuccess(true);
         setSuccessMessage(data.message || 'تم التسجيل بنجاح!');
-        // إطلاق الكونفيتي
         confetti({
           particleCount: 100,
           spread: 70,
@@ -54,69 +156,57 @@ export default function LoyaltyRegister() {
     },
   });
 
-  // رفع الصورة إلى S3
-  const uploadImage = async (file: File): Promise<{ url: string; key: string } | null> => {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch(`${FORGE_API_URL}/storage/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${FORGE_API_KEY}`,
-        },
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error('فشل رفع الصورة');
-      }
-      
-      const data = await response.json();
-      return { url: data.url, key: data.key };
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      return null;
-    }
-  };
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * معالجة اختيار/التقاط الصورة
+   */
+  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // التحقق من نوع الملف
-      if (!file.type.startsWith('image/')) {
-        toast.error('يرجى اختيار صورة فقط');
-        return;
-      }
-      
-      // التحقق من حجم الملف (5MB max)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('حجم الصورة يجب أن يكون أقل من 5 ميجابايت');
-        return;
-      }
-      
-      setInvoiceImage(file);
-      
-      // إنشاء معاينة للصورة
+    if (!file) return;
+    
+    // إعادة تعيين حالة الخطأ
+    setUploadState(prev => ({ ...prev, error: null }));
+    
+    // التحقق من صحة الملف
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      setUploadState(prev => ({ ...prev, error: validation.error || null }));
+      toast.error(validation.error);
+      return;
+    }
+    
+    setInvoiceImage(file);
+    
+    // إنشاء معاينة
+    try {
       const reader = new FileReader();
       reader.onloadend = () => {
         setInvoiceImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Preview error:', err);
     }
-  };
+  }, []);
 
-  const removeImage = () => {
+  /**
+   * إزالة الصورة المحددة
+   */
+  const removeImage = useCallback(() => {
     setInvoiceImage(null);
     setInvoiceImagePreview(null);
+    setUploadState(prev => ({ ...prev, error: null }));
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
+  }, []);
 
+  /**
+   * معالجة إرسال النموذج
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // التحقق من البيانات
     if (!name.trim()) {
       toast.error('الرجاء إدخال الاسم');
       return;
@@ -134,19 +224,77 @@ export default function LoyaltyRegister() {
       return;
     }
 
-    setIsUploading(true);
+    // بدء عملية الرفع
+    setUploadState({ isUploading: true, progress: 10, error: null });
     
     try {
-      // رفع الصورة أولاً
-      const uploadResult = await uploadImage(invoiceImage);
-      if (!uploadResult) {
-        toast.error('فشل رفع صورة الفاتورة');
-        setIsUploading(false);
-        return;
+      // ============================================
+      // الخطوة 1: ضغط الصورة
+      // ============================================
+      setUploadState(prev => ({ ...prev, progress: 20 }));
+      console.log('🔄 Compressing image...');
+      
+      let base64Data: string;
+      
+      try {
+        base64Data = await compressImage(
+          invoiceImage, 
+          COMPRESSION_CONFIG.maxWidth, 
+          COMPRESSION_CONFIG.quality
+        );
+        console.log('✓ Image compressed successfully');
+      } catch (compressError) {
+        console.warn('⚠ Primary compression failed, trying fallback:', compressError);
+        try {
+          base64Data = await compressImage(
+            invoiceImage, 
+            COMPRESSION_CONFIG.fallbackMaxWidth, 
+            COMPRESSION_CONFIG.fallbackQuality
+          );
+          console.log('✓ Image compressed with fallback settings');
+        } catch (fallbackError) {
+          throw new Error('فشل ضغط الصورة - يرجى اختيار صورة أخرى');
+        }
+      }
+      
+      // ============================================
+      // الخطوة 2: التحقق من الحجم بعد الضغط
+      // ============================================
+      setUploadState(prev => ({ ...prev, progress: 40 }));
+      
+      const sizeInMB = getBase64SizeInMB(base64Data);
+      console.log(`📊 Image size after compression: ${sizeInMB.toFixed(2)} MB`);
+      
+      if (sizeInMB > 5) {
+        throw new Error('حجم الصورة كبير جداً حتى بعد الضغط - يرجى اختيار صورة أصغر');
+      }
+      
+      // ============================================
+      // الخطوة 3: رفع الصورة إلى السيرفر
+      // ============================================
+      setUploadState(prev => ({ ...prev, progress: 50 }));
+      console.log('📤 Uploading image to server...');
+      
+      const uploadResult = await uploadMutation.mutateAsync({
+        base64Data,
+        fileName: `register_${Date.now()}.jpg`,
+        contentType: 'image/jpeg',
+      });
+      
+      setUploadState(prev => ({ ...prev, progress: 80 }));
+      console.log('✓ Upload result:', uploadResult);
+      
+      if (!uploadResult.success || !uploadResult.url) {
+        throw new Error('فشل رفع صورة الفاتورة');
       }
 
-      // تسجيل العميل مع رابط الصورة
-      registerMutation.mutate({
+      // ============================================
+      // الخطوة 4: تسجيل العميل
+      // ============================================
+      setUploadState(prev => ({ ...prev, progress: 90 }));
+      console.log('📝 Registering customer with image URL:', uploadResult.url);
+      
+      await registerMutation.mutateAsync({
         name: name.trim(),
         phone: phone.trim(),
         serviceType,
@@ -155,10 +303,32 @@ export default function LoyaltyRegister() {
         invoiceImageUrl: uploadResult.url,
         invoiceImageKey: uploadResult.key,
       });
-    } catch (error) {
-      toast.error('حدث خطأ أثناء التسجيل');
+      
+      setUploadState(prev => ({ ...prev, progress: 100 }));
+      console.log('✓ Customer registered successfully');
+      
+    } catch (error: any) {
+      console.error('❌ Error:', error);
+      
+      let errorMessage = 'حدث خطأ - يرجى المحاولة مرة أخرى';
+      
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.data?.message) {
+        errorMessage = error.data.message;
+      }
+      
+      // تحسين رسائل الخطأ
+      if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        errorMessage = 'مشكلة في الاتصال - تأكد من اتصالك بالإنترنت وحاول مرة أخرى';
+      } else if (errorMessage.includes('timeout')) {
+        errorMessage = 'انتهت مهلة الاتصال - يرجى المحاولة مرة أخرى';
+      }
+      
+      setUploadState(prev => ({ ...prev, error: errorMessage }));
+      toast.error(errorMessage);
     } finally {
-      setIsUploading(false);
+      setUploadState(prev => ({ ...prev, isUploading: false, progress: 0 }));
     }
   };
 
@@ -166,6 +336,7 @@ export default function LoyaltyRegister() {
   const requiredVisits = settings?.requiredVisitsForDiscount || 4;
   const discountPercent = settings?.discountPercentage || 50;
 
+  // شاشة النجاح
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
@@ -293,6 +464,7 @@ export default function LoyaltyRegister() {
                       size="icon"
                       className="absolute top-2 left-2"
                       onClick={removeImage}
+                      disabled={uploadState.isUploading}
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -306,7 +478,7 @@ export default function LoyaltyRegister() {
                       <Camera className="h-8 w-8 text-gray-400" />
                     </div>
                     <p className="text-sm text-gray-600 mb-1">اضغط لرفع صورة الفاتورة</p>
-                    <p className="text-xs text-gray-400">PNG, JPG حتى 5MB</p>
+                    <p className="text-xs text-gray-400">PNG, JPG حتى 10MB</p>
                   </div>
                 )}
                 <input
@@ -318,6 +490,34 @@ export default function LoyaltyRegister() {
                   onChange={handleImageSelect}
                 />
               </div>
+              
+              {/* شريط التقدم */}
+              {uploadState.isUploading && (
+                <div className="space-y-2">
+                  <Progress value={uploadState.progress} className="h-2" />
+                  <p className="text-xs text-center text-muted-foreground">
+                    {uploadState.progress < 40 ? 'جاري ضغط الصورة...' :
+                     uploadState.progress < 80 ? 'جاري رفع الصورة...' :
+                     'جاري التسجيل...'}
+                  </p>
+                </div>
+              )}
+              
+              {/* رسالة الخطأ */}
+              {uploadState.error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                  <span className="text-red-500 text-sm">{uploadState.error}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto p-1 text-red-600 hover:text-red-700"
+                    onClick={() => setUploadState(prev => ({ ...prev, error: null }))}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
@@ -334,12 +534,12 @@ export default function LoyaltyRegister() {
               type="submit" 
               className="w-full" 
               size="lg"
-              disabled={registerMutation.isPending || isUploading}
+              disabled={registerMutation.isPending || uploadState.isUploading}
             >
-              {(registerMutation.isPending || isUploading) ? (
+              {(registerMutation.isPending || uploadState.isUploading) ? (
                 <>
                   <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                  {isUploading ? 'جاري رفع الصورة...' : 'جاري التسجيل...'}
+                  {uploadState.progress < 80 ? 'جاري رفع الصورة...' : 'جاري التسجيل...'}
                 </>
               ) : (
                 'تسجيل في برنامج الولاء'
