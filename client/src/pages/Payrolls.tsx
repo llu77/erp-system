@@ -1219,13 +1219,16 @@ export default function Payrolls() {
   });
 
   const stats = {
-    total: payrolls?.length || 0,
-    draft: payrolls?.filter(p => p.status === 'draft').length || 0,
-    pending: payrolls?.filter(p => p.status === 'pending').length || 0,
-    approved: payrolls?.filter(p => p.status === 'approved').length || 0,
-    paid: payrolls?.filter(p => p.status === 'paid').length || 0,
-    totalAmount: payrolls?.reduce((sum, p) => sum + parseFloat(p.totalNetSalary), 0) || 0,
+    total: filteredPayrolls?.length || 0,
+    draft: filteredPayrolls?.filter(p => p.status === 'draft').length || 0,
+    pending: filteredPayrolls?.filter(p => p.status === 'pending').length || 0,
+    approved: filteredPayrolls?.filter(p => p.status === 'approved').length || 0,
+    paid: filteredPayrolls?.filter(p => p.status === 'paid').length || 0,
+    totalAmount: filteredPayrolls?.reduce((sum, p) => sum + parseFloat(p.totalNetSalary), 0) || 0,
   };
+
+  // هل الفلتر مفعل؟
+  const isFiltered = filterDateFrom || filterDateTo;
 
   // حساب إجماليات النموذج
   const formTotals = employeesData.reduce((acc, emp) => ({
@@ -1530,6 +1533,27 @@ export default function Payrolls() {
         </div>
 
         {/* الإحصائيات */}
+        {isFiltered && (
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-blue-400" />
+              <span className="text-sm text-blue-400">
+                الإحصائيات للفترة: {filterDateFrom || 'البداية'} - {filterDateTo || 'النهاية'}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFilterDateFrom('');
+                setFilterDateTo('');
+              }}
+              className="text-xs text-blue-400 hover:text-blue-300"
+            >
+              عرض الكل
+            </Button>
+          </div>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <Card className="bg-card/50">
             <CardContent className="p-3">
