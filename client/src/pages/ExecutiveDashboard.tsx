@@ -42,11 +42,21 @@ import {
 
 export default function ExecutiveDashboard() {
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
-  const [period, setPeriod] = useState<"week" | "month" | "quarter" | "year">("month");
+  const [period, setPeriod] = useState<"week" | "month" | "quarter" | "year" | "custom">("month");
   const [isExporting, setIsExporting] = useState(false);
+  const [customDateFrom, setCustomDateFrom] = useState<string>("");
+  const [customDateTo, setCustomDateTo] = useState<string>("");
   
   // حساب نطاق التاريخ بناءً على الفترة المختارة
   const dateRange = useMemo(() => {
+    // إذا كانت فترة مخصصة
+    if (period === "custom" && customDateFrom && customDateTo) {
+      return {
+        start: new Date(customDateFrom),
+        end: new Date(customDateTo + "T23:59:59")
+      };
+    }
+    
     const end = new Date();
     const start = new Date();
     
@@ -66,7 +76,7 @@ export default function ExecutiveDashboard() {
     }
     
     return { start, end };
-  }, [period]);
+  }, [period, customDateFrom, customDateTo]);
 
   // حساب نطاق الفترة السابقة للمقارنة
   const previousDateRange = useMemo(() => {
@@ -139,21 +149,25 @@ export default function ExecutiveDashboard() {
     return `${sign}${value.toFixed(1)}%`;
   };
 
-  const getPeriodLabel = () => {
+  const getPeriodLabel = (): string => {
     switch (period) {
       case "week": return "الأسبوع الماضي";
       case "month": return "الشهر الماضي";
       case "quarter": return "الربع الماضي";
       case "year": return "السنة الماضية";
+      case "custom": return "الفترة السابقة";
+      default: return "الشهر الماضي";
     }
   };
 
-  const getPeriodName = () => {
+  const getPeriodName = (): string => {
     switch (period) {
       case "week": return "أسبوع";
       case "month": return "شهر";
       case "quarter": return "ربع سنة";
       case "year": return "سنة";
+      case "custom": return "فترة مخصصة";
+      default: return "شهر";
     }
   };
 
@@ -503,8 +517,29 @@ export default function ExecutiveDashboard() {
               <SelectItem value="month">شهر</SelectItem>
               <SelectItem value="quarter">ربع سنة</SelectItem>
               <SelectItem value="year">سنة</SelectItem>
+              <SelectItem value="custom">فترة مخصصة</SelectItem>
             </SelectContent>
           </Select>
+          
+          {/* حقول التاريخ المخصص */}
+          {period === "custom" && (
+            <>
+              <input
+                type="date"
+                value={customDateFrom}
+                onChange={(e) => setCustomDateFrom(e.target.value)}
+                className="px-3 py-2 text-sm rounded-md border border-input bg-background"
+                placeholder="من"
+              />
+              <input
+                type="date"
+                value={customDateTo}
+                onChange={(e) => setCustomDateTo(e.target.value)}
+                className="px-3 py-2 text-sm rounded-md border border-input bg-background"
+                placeholder="إلى"
+              />
+            </>
+          )}
           
           <Button variant="outline" size="icon" onClick={() => refetchKpis()}>
             <RefreshCw className="h-4 w-4" />
@@ -526,6 +561,30 @@ export default function ExecutiveDashboard() {
           </Button>
         </div>
       </div>
+
+      {/* شريط الفترة المحددة */}
+      {period === "custom" && customDateFrom && customDateTo && (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-blue-400" />
+            <span className="text-sm text-blue-400">
+              الإحصائيات للفترة: {new Date(customDateFrom).toLocaleDateString('ar-SA')} - {new Date(customDateTo).toLocaleDateString('ar-SA')}
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setPeriod("month");
+              setCustomDateFrom("");
+              setCustomDateTo("");
+            }}
+            className="text-xs text-blue-400 hover:text-blue-300"
+          >
+            إعادة تعيين
+          </Button>
+        </div>
+      )}
 
       {/* مؤشرات الأداء الرئيسية */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
