@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -83,16 +83,16 @@ export default function LoyaltySettings() {
     },
   });
 
-  const [requiredVisits, setRequiredVisits] = useState<number>(settings?.requiredVisitsForDiscount || 4);
-  const [discountPercent, setDiscountPercent] = useState<number>(settings?.discountPercentage || 50);
+  const [requiredVisits, setRequiredVisits] = useState<number>(4);
+  const [discountPercent, setDiscountPercent] = useState<number>(50);
 
   // تحديث القيم عند تحميل الإعدادات
-  if (settings && requiredVisits !== settings.requiredVisitsForDiscount) {
-    setRequiredVisits(settings.requiredVisitsForDiscount);
-  }
-  if (settings && discountPercent !== settings.discountPercentage) {
-    setDiscountPercent(settings.discountPercentage);
-  }
+  useEffect(() => {
+    if (settings) {
+      setRequiredVisits(settings.requiredVisitsForDiscount);
+      setDiscountPercent(settings.discountPercentage);
+    }
+  }, [settings]);
 
   const handleSaveSettings = () => {
     updateSettingsMutation.mutate({
