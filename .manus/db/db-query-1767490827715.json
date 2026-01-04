@@ -1,0 +1,40 @@
+{
+  "query": "SELECT \n  e.name as employeeName,\n  (SELECT SUM(er.total) FROM employeeRevenues er \n   JOIN dailyRevenues dr ON er.dailyRevenueId = dr.id \n   WHERE er.employeeId = e.id AND dr.date >= '2026-01-01' AND dr.date <= '2026-01-07') as actualRevenue,\n  bd.weeklyRevenue as storedRevenue,\n  bd.bonusAmount\nFROM bonusDetails bd\nJOIN employees e ON bd.employeeId = e.id\nJOIN weeklyBonuses wb ON bd.weeklyBonusId = wb.id\nWHERE wb.year = 2026 AND wb.month = 1 AND wb.weekNumber = 1 AND wb.branchId = 1\nORDER BY e.name;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  e.name as employeeName,\n  (SELECT SUM(er.total) FROM employeeRevenues er \n   JOIN dailyRevenues dr ON er.dailyRevenueId = dr.id \n   WHERE er.employeeId = e.id AND dr.date >= '2026-01-01' AND dr.date <= '2026-01-07') as actualRevenue,\n  bd.weeklyRevenue as storedRevenue,\n  bd.bonusAmount\nFROM bonusDetails bd\nJOIN employees e ON bd.employeeId = e.id\nJOIN weeklyBonuses wb ON bd.weeklyBonusId = wb.id\nWHERE wb.year = 2026 AND wb.month = 1 AND wb.weekNumber = 1 AND wb.branchId = 1\nORDER BY e.name;",
+  "rows": [
+    {
+      "employeeName": "السيد محمد",
+      "actualRevenue": "1000.00",
+      "storedRevenue": "8365.00",
+      "bonusAmount": "180.00"
+    },
+    {
+      "employeeName": "عبدالحي جلال",
+      "actualRevenue": "1023.00",
+      "storedRevenue": "8893.00",
+      "bonusAmount": "180.00"
+    },
+    {
+      "employeeName": "علاء ناصر",
+      "actualRevenue": "1230.00",
+      "storedRevenue": "9155.00",
+      "bonusAmount": "180.00"
+    },
+    {
+      "employeeName": "عمرو",
+      "actualRevenue": "NULL",
+      "storedRevenue": "3320.00",
+      "bonusAmount": "180.00"
+    },
+    {
+      "employeeName": "محمود عماره ",
+      "actualRevenue": "960.00",
+      "storedRevenue": "9320.00",
+      "bonusAmount": "180.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "employeeName\tactualRevenue\tstoredRevenue\tbonusAmount\nالسيد محمد\t1000.00\t8365.00\t180.00\nعبدالحي جلال\t1023.00\t8893.00\t180.00\nعلاء ناصر\t1230.00\t9155.00\t180.00\nعمرو\tNULL\t3320.00\t180.00\nمحمود عماره \t960.00\t9320.00\t180.00\n",
+  "stderr": "",
+  "execution_time_ms": 1539
+}

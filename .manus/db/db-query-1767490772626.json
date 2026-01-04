@@ -1,0 +1,91 @@
+{
+  "query": "SELECT bd.id, bd.weeklyBonusId, e.name as employeeName, bd.weeklyRevenue, bd.bonusAmount, bd.bonusTier, bd.isEligible\nFROM bonusDetails bd\nLEFT JOIN employees e ON bd.employeeId = e.id\nLEFT JOIN weeklyBonuses wb ON bd.weeklyBonusId = wb.id\nWHERE wb.year = 2026 AND wb.month = 1 AND wb.weekNumber = 1\nORDER BY bd.weeklyRevenue DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT bd.id, bd.weeklyBonusId, e.name as employeeName, bd.weeklyRevenue, bd.bonusAmount, bd.bonusTier, bd.isEligible\nFROM bonusDetails bd\nLEFT JOIN employees e ON bd.employeeId = e.id\nLEFT JOIN weeklyBonuses wb ON bd.weeklyBonusId = wb.id\nWHERE wb.year = 2026 AND wb.month = 1 AND wb.weekNumber = 1\nORDER BY bd.weeklyRevenue DESC;",
+  "rows": [
+    {
+      "id": "450015",
+      "weeklyBonusId": "240004",
+      "employeeName": "محمد ناصر",
+      "weeklyRevenue": "9375.00",
+      "bonusAmount": "180.00",
+      "bonusTier": "tier_5",
+      "isEligible": "1"
+    },
+    {
+      "id": "450010",
+      "weeklyBonusId": "240003",
+      "employeeName": "محمود عماره ",
+      "weeklyRevenue": "9320.00",
+      "bonusAmount": "180.00",
+      "bonusTier": "tier_5",
+      "isEligible": "1"
+    },
+    {
+      "id": "450011",
+      "weeklyBonusId": "240003",
+      "employeeName": "علاء ناصر",
+      "weeklyRevenue": "9155.00",
+      "bonusAmount": "180.00",
+      "bonusTier": "tier_5",
+      "isEligible": "1"
+    },
+    {
+      "id": "450012",
+      "weeklyBonusId": "240003",
+      "employeeName": "عبدالحي جلال",
+      "weeklyRevenue": "8893.00",
+      "bonusAmount": "180.00",
+      "bonusTier": "tier_5",
+      "isEligible": "1"
+    },
+    {
+      "id": "450016",
+      "weeklyBonusId": "240004",
+      "employeeName": "محمد اسماعيل",
+      "weeklyRevenue": "8690.00",
+      "bonusAmount": "180.00",
+      "bonusTier": "tier_5",
+      "isEligible": "1"
+    },
+    {
+      "id": "450013",
+      "weeklyBonusId": "240003",
+      "employeeName": "السيد محمد",
+      "weeklyRevenue": "8365.00",
+      "bonusAmount": "180.00",
+      "bonusTier": "tier_5",
+      "isEligible": "1"
+    },
+    {
+      "id": "450017",
+      "weeklyBonusId": "240004",
+      "employeeName": "فارس محمد ",
+      "weeklyRevenue": "6520.00",
+      "bonusAmount": "180.00",
+      "bonusTier": "tier_5",
+      "isEligible": "1"
+    },
+    {
+      "id": "450014",
+      "weeklyBonusId": "240003",
+      "employeeName": "عمرو",
+      "weeklyRevenue": "3320.00",
+      "bonusAmount": "180.00",
+      "bonusTier": "tier_5",
+      "isEligible": "1"
+    },
+    {
+      "id": "450018",
+      "weeklyBonusId": "240004",
+      "employeeName": "عمرو",
+      "weeklyRevenue": "1715.00",
+      "bonusAmount": "60.00",
+      "bonusTier": "tier_2",
+      "isEligible": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tweeklyBonusId\temployeeName\tweeklyRevenue\tbonusAmount\tbonusTier\tisEligible\n450015\t240004\tمحمد ناصر\t9375.00\t180.00\ttier_5\t1\n450010\t240003\tمحمود عماره \t9320.00\t180.00\ttier_5\t1\n450011\t240003\tعلاء ناصر\t9155.00\t180.00\ttier_5\t1\n450012\t240003\tعبدالحي جلال\t8893.00\t180.00\ttier_5\t1\n450016\t240004\tمحمد اسماعيل\t8690.00\t180.00\ttier_5\t1\n450013\t240003\tالسيد محمد\t8365.00\t180.00\ttier_5\t1\n450017\t240004\tفارس محمد \t6520.00\t180.00\ttier_5\t1\n450014\t240003\tعمرو\t3320.00\t180.00\ttier_5\t1\n450018\t240004\tعمرو\t1715.00\t60.00\ttier_2\t1\n",
+  "stderr": "",
+  "execution_time_ms": 1517
+}

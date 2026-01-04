@@ -1,0 +1,45 @@
+{
+  "query": "SELECT \n  e.name,\n  e.code,\n  COALESCE((SELECT SUM(er2.total) FROM employeeRevenues er2 \n   JOIN dailyRevenues dr2 ON er2.dailyRevenueId = dr2.id \n   WHERE er2.employeeId = e.id \n     AND dr2.branchId = 1\n     AND dr2.date >= '2026-01-01' \n     AND dr2.date <= '2026-01-07'), 0) as actual_revenue,\n  bd.weeklyRevenue as stored_revenue,\n  (bd.weeklyRevenue - COALESCE((SELECT SUM(er2.total) FROM employeeRevenues er2 \n   JOIN dailyRevenues dr2 ON er2.dailyRevenueId = dr2.id \n   WHERE er2.employeeId = e.id \n     AND dr2.branchId = 1\n     AND dr2.date >= '2026-01-01' \n     AND dr2.date <= '2026-01-07'), 0)) as difference\nFROM bonusDetails bd\nJOIN employees e ON bd.employeeId = e.id\nJOIN weeklyBonuses wb ON bd.weeklyBonusId = wb.id\nWHERE wb.year = 2026 AND wb.month = 1 AND wb.weekNumber = 1 AND wb.branchId = 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  e.name,\n  e.code,\n  COALESCE((SELECT SUM(er2.total) FROM employeeRevenues er2 \n   JOIN dailyRevenues dr2 ON er2.dailyRevenueId = dr2.id \n   WHERE er2.employeeId = e.id \n     AND dr2.branchId = 1\n     AND dr2.date >= '2026-01-01' \n     AND dr2.date <= '2026-01-07'), 0) as actual_revenue,\n  bd.weeklyRevenue as stored_revenue,\n  (bd.weeklyRevenue - COALESCE((SELECT SUM(er2.total) FROM employeeRevenues er2 \n   JOIN dailyRevenues dr2 ON er2.dailyRevenueId = dr2.id \n   WHERE er2.employeeId = e.id \n     AND dr2.branchId = 1\n     AND dr2.date >= '2026-01-01' \n     AND dr2.date <= '2026-01-07'), 0)) as difference\nFROM bonusDetails bd\nJOIN employees e ON bd.employeeId = e.id\nJOIN weeklyBonuses wb ON bd.weeklyBonusId = wb.id\nWHERE wb.year = 2026 AND wb.month = 1 AND wb.weekNumber = 1 AND wb.branchId = 1;",
+  "rows": [
+    {
+      "name": "محمود عماره ",
+      "code": "EMP-012",
+      "actual_revenue": "960.00",
+      "stored_revenue": "9320.00",
+      "difference": "8360.00"
+    },
+    {
+      "name": "عبدالحي جلال",
+      "code": "EMP-004",
+      "actual_revenue": "1023.00",
+      "stored_revenue": "8893.00",
+      "difference": "7870.00"
+    },
+    {
+      "name": "علاء ناصر",
+      "code": "EMP-002",
+      "actual_revenue": "1230.00",
+      "stored_revenue": "9155.00",
+      "difference": "7925.00"
+    },
+    {
+      "name": "السيد محمد",
+      "code": "EMP-007",
+      "actual_revenue": "1000.00",
+      "stored_revenue": "8365.00",
+      "difference": "7365.00"
+    },
+    {
+      "name": "عمرو",
+      "code": "A2",
+      "actual_revenue": "0",
+      "stored_revenue": "3320.00",
+      "difference": "3320.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "name\tcode\tactual_revenue\tstored_revenue\tdifference\nمحمود عماره \tEMP-012\t960.00\t9320.00\t8360.00\nعبدالحي جلال\tEMP-004\t1023.00\t8893.00\t7870.00\nعلاء ناصر\tEMP-002\t1230.00\t9155.00\t7925.00\nالسيد محمد\tEMP-007\t1000.00\t8365.00\t7365.00\nعمرو\tA2\t0\t3320.00\t3320.00\n",
+  "stderr": "",
+  "execution_time_ms": 1565
+}

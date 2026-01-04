@@ -1,0 +1,46 @@
+{
+  "query": "SELECT dr.id, dr.branchId, DATE_FORMAT(dr.date, '%Y-%m-%d') as date, dr.total\nFROM dailyRevenues dr \nWHERE dr.date >= '2026-01-01' AND dr.date <= '2026-01-07'\nORDER BY dr.branchId, dr.date;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT dr.id, dr.branchId, DATE_FORMAT(dr.date, '%Y-%m-%d') as date, dr.total\nFROM dailyRevenues dr \nWHERE dr.date >= '2026-01-01' AND dr.date <= '2026-01-07'\nORDER BY dr.branchId, dr.date;",
+  "rows": [
+    {
+      "id": "810001",
+      "branchId": "1",
+      "date": "2026-01-01",
+      "total": "1200.00"
+    },
+    {
+      "id": "840001",
+      "branchId": "1",
+      "date": "2026-01-02",
+      "total": "1525.00"
+    },
+    {
+      "id": "900001",
+      "branchId": "1",
+      "date": "2026-01-03",
+      "total": "1488.00"
+    },
+    {
+      "id": "780001",
+      "branchId": "30001",
+      "date": "2026-01-01",
+      "total": "985.00"
+    },
+    {
+      "id": "840002",
+      "branchId": "30001",
+      "date": "2026-01-02",
+      "total": "835.00"
+    },
+    {
+      "id": "870001",
+      "branchId": "30001",
+      "date": "2026-01-03",
+      "total": "855.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tbranchId\tdate\ttotal\n810001\t1\t2026-01-01\t1200.00\n840001\t1\t2026-01-02\t1525.00\n900001\t1\t2026-01-03\t1488.00\n780001\t30001\t2026-01-01\t985.00\n840002\t30001\t2026-01-02\t835.00\n870001\t30001\t2026-01-03\t855.00\n",
+  "stderr": "",
+  "execution_time_ms": 1536
+}

@@ -1,0 +1,52 @@
+{
+  "query": "SELECT dr.id, dr.branchId, dr.date, dr.total, \n       (SELECT COUNT(*) FROM employeeRevenues er WHERE er.dailyRevenueId = dr.id) as employeeCount\nFROM dailyRevenues dr \nWHERE dr.date >= '2026-01-01' AND dr.date <= '2026-01-07'\nORDER BY dr.date DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT dr.id, dr.branchId, dr.date, dr.total, \n       (SELECT COUNT(*) FROM employeeRevenues er WHERE er.dailyRevenueId = dr.id) as employeeCount\nFROM dailyRevenues dr \nWHERE dr.date >= '2026-01-01' AND dr.date <= '2026-01-07'\nORDER BY dr.date DESC;",
+  "rows": [
+    {
+      "id": "900001",
+      "branchId": "1",
+      "date": "2026-01-03 00:00:00",
+      "total": "1488.00",
+      "employeeCount": "4"
+    },
+    {
+      "id": "870001",
+      "branchId": "30001",
+      "date": "2026-01-03 00:00:00",
+      "total": "855.00",
+      "employeeCount": "4"
+    },
+    {
+      "id": "840002",
+      "branchId": "30001",
+      "date": "2026-01-02 00:00:00",
+      "total": "835.00",
+      "employeeCount": "4"
+    },
+    {
+      "id": "840001",
+      "branchId": "1",
+      "date": "2026-01-02 00:00:00",
+      "total": "1525.00",
+      "employeeCount": "4"
+    },
+    {
+      "id": "810001",
+      "branchId": "1",
+      "date": "2026-01-01 00:00:00",
+      "total": "1200.00",
+      "employeeCount": "4"
+    },
+    {
+      "id": "780001",
+      "branchId": "30001",
+      "date": "2026-01-01 00:00:00",
+      "total": "985.00",
+      "employeeCount": "4"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tbranchId\tdate\ttotal\temployeeCount\n900001\t1\t2026-01-03 00:00:00\t1488.00\t4\n870001\t30001\t2026-01-03 00:00:00\t855.00\t4\n840002\t30001\t2026-01-02 00:00:00\t835.00\t4\n840001\t1\t2026-01-02 00:00:00\t1525.00\t4\n810001\t1\t2026-01-01 00:00:00\t1200.00\t4\n780001\t30001\t2026-01-01 00:00:00\t985.00\t4\n",
+  "stderr": "",
+  "execution_time_ms": 1497
+}
