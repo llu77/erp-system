@@ -8,6 +8,14 @@ import {
   checkMissingRevenues,
   sendWeeklyReports
 } from "../scheduler/taskScheduler";
+import {
+  getQueueStats,
+  getDeadLetterNotifications,
+  retryFailedNotification,
+  retryAllFailedNotifications,
+  startNotificationQueue,
+  stopNotificationQueue,
+} from "../notifications/notificationQueue";
 
 export const systemRouter = router({
   health: publicProcedure
@@ -76,5 +84,55 @@ export const systemRouter = router({
         ...result,
         message: `تم إرسال ${result.sent}/${result.total} تقرير أسبوعي`
       };
+    }),
+
+  // ==================== APIs Queue الإشعارات ====================
+
+  // الحصول على إحصائيات Queue
+  getNotificationQueueStats: adminProcedure
+    .query(() => {
+      return getQueueStats();
+    }),
+
+  // الحصول على الإشعارات الفاشلة (Dead Letter)
+  getDeadLetterNotifications: adminProcedure
+    .query(() => {
+      return getDeadLetterNotifications();
+    }),
+
+  // إعادة محاولة إشعار فاشل
+  retryFailedNotification: adminProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      const success = await retryFailedNotification(input.id);
+      return {
+        success,
+        message: success ? 'تم إعادة الإشعار إلى Queue' : 'لم يتم العثور على الإشعار'
+      };
+    }),
+
+  // إعادة محاولة جميع الإشعارات الفاشلة
+  retryAllFailedNotifications: adminProcedure
+    .mutation(async () => {
+      const count = await retryAllFailedNotifications();
+      return {
+        success: true,
+        count,
+        message: `تم إعادة ${count} إشعار إلى Queue`
+      };
+    }),
+
+  // تشغيل Queue الإشعارات
+  startNotificationQueue: adminProcedure
+    .mutation(() => {
+      startNotificationQueue();
+      return { success: true, message: 'تم تشغيل Queue الإشعارات' };
+    }),
+
+  // إيقاف Queue الإشعارات
+  stopNotificationQueue: adminProcedure
+    .mutation(() => {
+      stopNotificationQueue();
+      return { success: true, message: 'تم إيقاف Queue الإشعارات' };
     }),
 });

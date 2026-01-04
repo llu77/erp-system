@@ -77,6 +77,14 @@ async function startServer() {
         console.error('Failed to start scheduler:', err);
       });
     }
+    
+    // تشغيل Queue الإشعارات
+    import('../notifications/notificationQueue').then(({ startNotificationQueue }) => {
+      startNotificationQueue();
+      console.log('[Notification Queue] Started');
+    }).catch(err => {
+      console.error('Failed to start notification queue:', err);
+    });
   });
 }
 
