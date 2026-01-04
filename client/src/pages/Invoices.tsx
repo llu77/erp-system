@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useIsMobile } from "@/hooks/useMobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -76,6 +77,7 @@ const defaultCompanySettings = {
 };
 
 export default function InvoicesPage() {
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingInvoice, setViewingInvoice] = useState<any>(null);

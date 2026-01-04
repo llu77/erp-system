@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useIsMobile } from "@/hooks/useMobile";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -45,6 +46,7 @@ const initialFormData: EmployeeFormData = {
 
 export default function Employees() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [showDialog, setShowDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -258,77 +260,145 @@ export default function Employees() {
                 <Skeleton className="h-12 w-full" />
               </div>
             ) : filteredEmployees && filteredEmployees.length > 0 ? (
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-right">الكود</TableHead>
-                      <TableHead className="text-right">الاسم</TableHead>
-                      <TableHead className="text-right">الفرع</TableHead>
-                      <TableHead className="text-right">المنصب</TableHead>
-                      <TableHead className="text-right">التواصل</TableHead>
-                      <TableHead className="text-right">الحالة</TableHead>
-                      <TableHead className="text-right w-24">الإجراءات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredEmployees.map((employee) => (
-                      <TableRow key={employee.id}>
-                        <TableCell className="font-mono">{employee.code}</TableCell>
-                        <TableCell>
+              isMobile ? (
+                /* عرض البطاقات على الموبايل */
+                <div className="space-y-3">
+                  {filteredEmployees.map((employee) => (
+                    <Card key={employee.id} className="border-r-4 border-r-primary">
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <UserCircle className="h-5 w-5 text-muted-foreground" />
-                            <span className="font-medium">{employee.name}</span>
+                            <UserCircle className="h-8 w-8 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium">{employee.name}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{employee.code}</p>
+                            </div>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="flex items-center gap-1 text-muted-foreground">
-                            <Building2 className="h-3 w-3" />
-                            {getBranchName(employee.branchId)}
-                          </span>
-                        </TableCell>
-                        <TableCell>{employee.position || "-"}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1 text-sm text-muted-foreground">
-                            {employee.phone && (
-                              <span className="flex items-center gap-1">
+                          <div className="flex items-center gap-1">
+                            <Badge variant={employee.isActive ? "default" : "secondary"} className="text-xs">
+                              {employee.isActive ? "نشط" : "غير نشط"}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground">الفرع</p>
+                            <p className="font-medium flex items-center gap-1">
+                              <Building2 className="h-3 w-3" />
+                              {getBranchName(employee.branchId)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">المنصب</p>
+                            <p className="font-medium">{employee.position || "-"}</p>
+                          </div>
+                          {employee.phone && (
+                            <div className="col-span-2">
+                              <p className="text-xs text-muted-foreground">التواصل</p>
+                              <p className="font-medium flex items-center gap-1">
                                 <Phone className="h-3 w-3" />
                                 {employee.phone}
-                              </span>
-                            )}
-                            {!employee.phone && "-"}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={employee.isActive ? "default" : "secondary"}>
-                            {employee.isActive ? "نشط" : "غير نشط"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(employee)}
-                              className="h-8 w-8"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(employee.id)}
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-end gap-2 border-t pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(employee)}
+                          >
+                            <Pencil className="h-4 w-4 ml-1" />
+                            تعديل
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(employee.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 ml-1" />
+                            حذف
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                /* عرض الجدول على الشاشات الكبيرة */
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">الكود</TableHead>
+                        <TableHead className="text-right">الاسم</TableHead>
+                        <TableHead className="text-right">الفرع</TableHead>
+                        <TableHead className="text-right">المنصب</TableHead>
+                        <TableHead className="text-right">التواصل</TableHead>
+                        <TableHead className="text-right">الحالة</TableHead>
+                        <TableHead className="text-right w-24">الإجراءات</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredEmployees.map((employee) => (
+                        <TableRow key={employee.id}>
+                          <TableCell className="font-mono">{employee.code}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <UserCircle className="h-5 w-5 text-muted-foreground" />
+                              <span className="font-medium">{employee.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="flex items-center gap-1 text-muted-foreground">
+                              <Building2 className="h-3 w-3" />
+                              {getBranchName(employee.branchId)}
+                            </span>
+                          </TableCell>
+                          <TableCell>{employee.position || "-"}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+                              {employee.phone && (
+                                <span className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  {employee.phone}
+                                </span>
+                              )}
+                              {!employee.phone && "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={employee.isActive ? "default" : "secondary"}>
+                              {employee.isActive ? "نشط" : "غير نشط"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(employee)}
+                                className="h-8 w-8"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(employee.id)}
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )
             ) : (
               <div className="text-center py-12">
                 <Users className="h-16 w-16 mx-auto mb-4 text-muted-foreground/50" />

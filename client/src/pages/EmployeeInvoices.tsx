@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useIsMobile } from "@/hooks/useMobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -57,6 +58,7 @@ const formatCurrency = (value: string | number) => {
 
 export default function EmployeeInvoicesPage() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "negative" | "sales">("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -164,54 +166,54 @@ export default function EmployeeInvoicesPage() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-3'} gap-3`}>
         <Card className="bg-gradient-to-br from-red-500/10 to-red-600/5 border-red-500/20">
-          <CardContent className="pt-6">
+          <CardContent className={isMobile ? "p-3" : "pt-6"}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">فواتير السالب</p>
-                <p className="text-2xl font-bold text-red-500">
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-muted-foreground`}>فواتير السالب</p>
+                <p className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold text-red-500`}>
                   {formatCurrency(stats?.negativeTotal || 0)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {stats?.negativeCount || 0} فاتورة
                 </p>
               </div>
-              <MinusCircle className="h-10 w-10 text-red-500/50" />
+              <MinusCircle className={`${isMobile ? 'h-8 w-8' : 'h-10 w-10'} text-red-500/50`} />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
-          <CardContent className="pt-6">
+          <CardContent className={isMobile ? "p-3" : "pt-6"}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">فواتير المبيعات</p>
-                <p className="text-2xl font-bold text-green-500">
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-muted-foreground`}>فواتير المبيعات</p>
+                <p className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold text-green-500`}>
                   {formatCurrency(stats?.salesTotal || 0)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {stats?.salesCount || 0} فاتورة
                 </p>
               </div>
-              <ShoppingCart className="h-10 w-10 text-green-500/50" />
+              <ShoppingCart className={`${isMobile ? 'h-8 w-8' : 'h-10 w-10'} text-green-500/50`} />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
-          <CardContent className="pt-6">
+        <Card className={`bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20 ${isMobile ? 'col-span-2' : ''}`}>
+          <CardContent className={isMobile ? "p-3" : "pt-6"}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">صافي الفواتير</p>
-                <p className="text-2xl font-bold text-blue-500">
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-muted-foreground`}>صافي الفواتير</p>
+                <p className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold text-blue-500`}>
                   {formatCurrency((stats?.salesTotal || 0) - (stats?.negativeTotal || 0))}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {(stats?.salesCount || 0) + (stats?.negativeCount || 0)} فاتورة إجمالي
                 </p>
               </div>
-              <DollarSign className="h-10 w-10 text-blue-500/50" />
+              <DollarSign className={`${isMobile ? 'h-8 w-8' : 'h-10 w-10'} text-blue-500/50`} />
             </div>
           </CardContent>
         </Card>
@@ -219,27 +221,27 @@ export default function EmployeeInvoicesPage() {
 
       {/* Main Card */}
       <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              <CardTitle>فواتير الموظفين</CardTitle>
-              <Badge variant="secondary">{invoices.length}</Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="بحث برقم الفاتورة أو الموظف..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pr-9"
-                />
+        <CardHeader className={isMobile ? "p-3" : ""}>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                <CardTitle className={isMobile ? "text-lg" : ""}>فواتير الموظفين</CardTitle>
+                <Badge variant="secondary">{invoices.length}</Badge>
               </div>
-              <Button onClick={() => setIsCreateOpen(true)}>
-                <Plus className="h-4 w-4 ml-2" />
-                فاتورة جديدة
+              <Button onClick={() => setIsCreateOpen(true)} size={isMobile ? "sm" : "default"}>
+                <Plus className="h-4 w-4" />
+                {!isMobile && <span className="mr-2">فاتورة جديدة</span>}
               </Button>
+            </div>
+            <div className="relative w-full">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="بحث برقم الفاتورة أو الموظف..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pr-9"
+              />
             </div>
           </div>
         </CardHeader>
@@ -262,7 +264,70 @@ export default function EmployeeInvoicesPage() {
                 <div className="flex items-center justify-center h-64">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
+              ) : filteredInvoices.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  لا يوجد فواتير
+                </div>
+              ) : isMobile ? (
+                /* عرض البطاقات على الموبايل */
+                <div className="space-y-3">
+                  {filteredInvoices.map((invoice) => (
+                    <Card key={invoice.id} className={`border-r-4 ${invoice.type === 'negative' ? 'border-r-red-500' : 'border-r-green-500'}`}>
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="font-mono text-sm">{invoice.invoiceNumber}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {format(new Date(invoice.invoiceDate), "dd MMM yyyy", { locale: ar })}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={invoice.type === "negative" ? "destructive" : "default"} className="text-xs">
+                              {invoice.type === "negative" ? "سالب" : "مبيعات"}
+                            </Badge>
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setDeleteInvoiceId(invoice.id)}
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-muted-foreground">الموظف</p>
+                            <p className="font-medium">{invoice.employeeName}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">الفرع</p>
+                            <p className="font-medium">{invoice.branchName}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">المبلغ</p>
+                            <p className={`font-bold ${invoice.type === "negative" ? "text-red-500" : "text-green-500"}`}>
+                              {invoice.type === "negative" ? "-" : "+"}{formatCurrency(invoice.amount)}
+                            </p>
+                          </div>
+                          {invoice.customerPhone && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">رقم الجوال</p>
+                              <p className="font-medium flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {invoice.customerPhone}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               ) : (
+                /* عرض الجدول على الشاشات الكبيرة */
                 <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -278,56 +343,48 @@ export default function EmployeeInvoicesPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredInvoices.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-8 text-muted-foreground">
-                            لا يوجد فواتير
+                      {filteredInvoices.map((invoice) => (
+                        <TableRow key={invoice.id}>
+                          <TableCell className="font-mono">{invoice.invoiceNumber}</TableCell>
+                          <TableCell>
+                            <Badge variant={invoice.type === "negative" ? "destructive" : "default"}>
+                              {invoice.type === "negative" ? (
+                                <><MinusCircle className="h-3 w-3 ml-1" /> سالب</>
+                              ) : (
+                                <><ShoppingCart className="h-3 w-3 ml-1" /> مبيعات</>
+                              )}
+                            </Badge>
                           </TableCell>
+                          <TableCell>{invoice.employeeName}</TableCell>
+                          <TableCell>{invoice.branchName}</TableCell>
+                          <TableCell className={invoice.type === "negative" ? "text-red-500" : "text-green-500"}>
+                            {invoice.type === "negative" ? "-" : "+"}{formatCurrency(invoice.amount)}
+                          </TableCell>
+                          <TableCell>
+                            {invoice.customerPhone ? (
+                              <span className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {invoice.customerPhone}
+                              </span>
+                            ) : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {format(new Date(invoice.invoiceDate), "dd MMM yyyy", { locale: ar })}
+                          </TableCell>
+                          {isAdmin && (
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setDeleteInvoiceId(invoice.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          )}
                         </TableRow>
-                      ) : (
-                        filteredInvoices.map((invoice) => (
-                          <TableRow key={invoice.id}>
-                            <TableCell className="font-mono">{invoice.invoiceNumber}</TableCell>
-                            <TableCell>
-                              <Badge variant={invoice.type === "negative" ? "destructive" : "default"}>
-                                {invoice.type === "negative" ? (
-                                  <><MinusCircle className="h-3 w-3 ml-1" /> سالب</>
-                                ) : (
-                                  <><ShoppingCart className="h-3 w-3 ml-1" /> مبيعات</>
-                                )}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{invoice.employeeName}</TableCell>
-                            <TableCell>{invoice.branchName}</TableCell>
-                            <TableCell className={invoice.type === "negative" ? "text-red-500" : "text-green-500"}>
-                              {invoice.type === "negative" ? "-" : "+"}{formatCurrency(invoice.amount)}
-                            </TableCell>
-                            <TableCell>
-                              {invoice.customerPhone ? (
-                                <span className="flex items-center gap-1">
-                                  <Phone className="h-3 w-3" />
-                                  {invoice.customerPhone}
-                                </span>
-                              ) : "-"}
-                            </TableCell>
-                            <TableCell>
-                              {format(new Date(invoice.invoiceDate), "dd MMM yyyy", { locale: ar })}
-                            </TableCell>
-                            {isAdmin && (
-                              <TableCell>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setDeleteInvoiceId(invoice.id)}
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        ))
-                      )}
+                      ))}
                     </TableBody>
                   </Table>
                 </div>
@@ -339,7 +396,7 @@ export default function EmployeeInvoicesPage() {
 
       {/* Create Invoice Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className={`${isMobile ? 'w-[95vw] max-w-[95vw] p-4' : 'sm:max-w-[500px]'} max-h-[90vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle>إنشاء فاتورة جديدة</DialogTitle>
             <DialogDescription>
