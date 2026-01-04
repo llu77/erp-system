@@ -3372,6 +3372,24 @@ ${discrepancyRows}
       .query(async ({ input }) => {
         return await db.getExpenseLogs(input.expenseId);
       }),
+
+    // الحصول على جميع السلف المعتمدة
+    advances: protectedProcedure.query(async ({ ctx }) => {
+      // المشرف يرى سلف فرعه فقط
+      if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null) {
+        return await db.getAllApprovedAdvances(ctx.user.branchId);
+      }
+      return await db.getAllApprovedAdvances();
+    }),
+
+    // إحصائيات السلف
+    advancesStats: protectedProcedure.query(async ({ ctx }) => {
+      // المشرف يرى إحصائيات فرعه فقط
+      if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null) {
+        return await db.getAdvancesStats(ctx.user.branchId);
+      }
+      return await db.getAdvancesStats();
+    }),
   }),
 
   // ==================== إجراءات الإعدادات ====================

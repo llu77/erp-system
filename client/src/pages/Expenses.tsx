@@ -184,6 +184,11 @@ export default function Expenses() {
   const { data: expenses, isLoading, refetch } = trpc.expenses.list.useQuery();
   const { data: branches } = trpc.branches.list.useQuery();
   const { data: stats } = trpc.expenses.stats.useQuery();
+  const { data: advances } = trpc.expenses.advances.useQuery();
+  const { data: advancesStats } = trpc.expenses.advancesStats.useQuery();
+  
+  // حالة عرض قسم السلف
+  const [showAdvances, setShowAdvances] = useState(false);
 
   // Mutations
   const createMutation = trpc.expenses.create.useMutation({
@@ -1134,6 +1139,117 @@ export default function Expenses() {
               </div>
             )}
           </CardContent>
+        </Card>
+
+        {/* قسم السلف المأخوذة */}
+        <Card className="mt-6">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              السلف المأخوذة
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAdvances(!showAdvances)}
+            >
+              {showAdvances ? 'إخفاء' : 'عرض'}
+            </Button>
+          </CardHeader>
+          
+          {showAdvances && (
+            <CardContent>
+              {/* إحصائيات السلف */}
+              {advancesStats && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                    <p className="text-sm text-muted-foreground">إجمالي السلف</p>
+                    <p className="text-xl font-bold">{advancesStats.totalAdvances}</p>
+                    <p className="text-sm text-blue-600">{advancesStats.totalAmount.toLocaleString()} ر.س</p>
+                  </div>
+                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                    <p className="text-sm text-muted-foreground">المخصومة</p>
+                    <p className="text-xl font-bold">{advancesStats.deductedCount}</p>
+                    <p className="text-sm text-green-600">{advancesStats.deductedAmount.toLocaleString()} ر.س</p>
+                  </div>
+                  <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
+                    <p className="text-sm text-muted-foreground">غير مخصومة</p>
+                    <p className="text-xl font-bold">{advancesStats.pendingCount}</p>
+                    <p className="text-sm text-yellow-600">{advancesStats.pendingAmount.toLocaleString()} ر.س</p>
+                  </div>
+                  <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                    <p className="text-sm text-muted-foreground">نسبة الخصم</p>
+                    <p className="text-xl font-bold">
+                      {advancesStats.totalAdvances > 0 
+                        ? Math.round((advancesStats.deductedCount / advancesStats.totalAdvances) * 100) 
+                        : 0}%
+                    </p>
+                    <p className="text-sm text-purple-600">من إجمالي السلف</p>
+                  </div>
+                </div>
+              )}
+
+              {/* جدول السلف */}
+              {advances && advances.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>الموظف</TableHead>
+                        <TableHead>المبلغ</TableHead>
+                        <TableHead>السبب</TableHead>
+                        <TableHead>تاريخ الموافقة</TableHead>
+                        <TableHead>الموافق</TableHead>
+                        <TableHead>حالة الخصم</TableHead>
+                        <TableHead>تاريخ الخصم</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {advances.map((advance: any) => (
+                        <TableRow key={advance.id}>
+                          <TableCell className="font-medium">{advance.employeeName}</TableCell>
+                          <TableCell>
+                            <span className="font-bold text-red-600">
+                              {advance.amount.toLocaleString()} ر.س
+                            </span>
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate">
+                            {advance.reason || advance.title || '-'}
+                          </TableCell>
+                          <TableCell>
+                            {advance.approvedAt 
+                              ? new Date(advance.approvedAt).toLocaleDateString('ar-SA')
+                              : '-'
+                            }
+                          </TableCell>
+                          <TableCell>{advance.approvedBy || '-'}</TableCell>
+                          <TableCell>
+                            <Badge className={advance.isDeducted 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-yellow-100 text-yellow-800'
+                            }>
+                              {advance.isDeducted ? 'تم الخصم' : 'لم يخصم بعد'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {advance.deductedAt 
+                              ? new Date(advance.deductedAt).toLocaleDateString('ar-SA')
+                              : '-'
+                            }
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>لا توجد سلف معتمدة</p>
+                </div>
+              )}
+            </CardContent>
+          )}
         </Card>
 
         {/* نافذة التعديل */}

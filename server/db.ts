@@ -6542,3 +6542,121 @@ export async function getUndeductedAdvancesForBranch(branchId: number): Promise<
   
   return Array.from(employeeAdvances.values());
 }
+
+
+// ==================== دوال عرض السلف المأخوذة ====================
+
+// الحصول على جميع السلف المعتمدة (للعرض في صفحة المصاريف)
+export async function getAllApprovedAdvances(branchId?: number): Promise<Array<{
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  amount: number;
+  title: string;
+  reason: string | null;
+  repaymentMethod: string | null;
+  status: string;
+  approvedAt: Date | null;
+  approvedBy: string | null;
+  isDeducted: boolean;
+  deductedAt: Date | null;
+  createdAt: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [
+    eq(employeeRequests.requestType, 'advance'),
+    eq(employeeRequests.status, 'approved'),
+  ];
+  
+  if (branchId) {
+    conditions.push(eq(employeeRequests.branchId, branchId));
+  }
+  
+  const results = await db.select({
+    id: employeeRequests.id,
+    employeeId: employeeRequests.employeeId,
+    employeeName: employeeRequests.employeeName,
+    amount: employeeRequests.advanceAmount,
+    title: employeeRequests.title,
+    reason: employeeRequests.advanceReason,
+    repaymentMethod: employeeRequests.repaymentMethod,
+    status: employeeRequests.status,
+    approvedAt: employeeRequests.reviewedAt,
+    approvedBy: employeeRequests.reviewedByName,
+    isDeducted: employeeRequests.isDeductedFromSalary,
+    deductedAt: employeeRequests.deductedAt,
+    createdAt: employeeRequests.createdAt,
+  })
+    .from(employeeRequests)
+    .where(and(...conditions))
+    .orderBy(desc(employeeRequests.reviewedAt));
+  
+  return results.map(r => ({
+    ...r,
+    amount: r.amount ? parseFloat(r.amount) : 0,
+  }));
+}
+
+// الحصول على إحصائيات السلف
+export async function getAdvancesStats(branchId?: number): Promise<{
+  totalAdvances: number;
+  totalAmount: number;
+  deductedCount: number;
+  deductedAmount: number;
+  pendingCount: number;
+  pendingAmount: number;
+}> {
+  const db = await getDb();
+  if (!db) return {
+    totalAdvances: 0,
+    totalAmount: 0,
+    deductedCount: 0,
+    deductedAmount: 0,
+    pendingCount: 0,
+    pendingAmount: 0,
+  };
+  
+  const conditions = [
+    eq(employeeRequests.requestType, 'advance'),
+    eq(employeeRequests.status, 'approved'),
+  ];
+  
+  if (branchId) {
+    conditions.push(eq(employeeRequests.branchId, branchId));
+  }
+  
+  // إجمالي السلف
+  const totalResult = await db.select({
+    count: sql<number>`COUNT(*)`,
+    total: sql<string>`COALESCE(SUM(${employeeRequests.advanceAmount}), 0)`,
+  })
+    .from(employeeRequests)
+    .where(and(...conditions));
+  
+  // السلف المخصومة
+  const deductedResult = await db.select({
+    count: sql<number>`COUNT(*)`,
+    total: sql<string>`COALESCE(SUM(${employeeRequests.advanceAmount}), 0)`,
+  })
+    .from(employeeRequests)
+    .where(and(...conditions, eq(employeeRequests.isDeductedFromSalary, true)));
+  
+  // السلف غير المخصومة
+  const pendingResult = await db.select({
+    count: sql<number>`COUNT(*)`,
+    total: sql<string>`COALESCE(SUM(${employeeRequests.advanceAmount}), 0)`,
+  })
+    .from(employeeRequests)
+    .where(and(...conditions, eq(employeeRequests.isDeductedFromSalary, false)));
+  
+  return {
+    totalAdvances: Number(totalResult[0]?.count || 0),
+    totalAmount: parseFloat(totalResult[0]?.total || '0'),
+    deductedCount: Number(deductedResult[0]?.count || 0),
+    deductedAmount: parseFloat(deductedResult[0]?.total || '0'),
+    pendingCount: Number(pendingResult[0]?.count || 0),
+    pendingAmount: parseFloat(pendingResult[0]?.total || '0'),
+  };
+}
