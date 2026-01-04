@@ -5996,8 +5996,8 @@ export async function detectBonusDiscrepancies(branchId: number, weekNumber: num
     const revenueDiff = actualRevenue - registeredRevenue;
     const bonusDiff = expectedBonus - registeredBonus;
 
-    // إذا كان هناك فرق كبير (أكثر من 1 ريال)
-    if (Math.abs(revenueDiff) > 1 || Math.abs(bonusDiff) > 0) {
+    // إذا كان هناك فرق كبير (أكثر من 1 ريال في الإيراد أو أكثر من 0.5 ريال في البونص)
+    if (Math.abs(revenueDiff) > 1 && Math.abs(bonusDiff) > 0.5) {
       discrepancies.push({
         employeeId: detail.employeeId,
         employeeName: detail.employeeName || 'غير محدد',
