@@ -68,6 +68,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+import { ScrollToTop } from "./ScrollToTop";
 import { NotificationBell } from "./NotificationBell";
 import {
   Collapsible,
@@ -581,6 +582,7 @@ function DashboardLayoutContent({
           </div>
         </header>
         <main className={`flex-1 ${isMobile ? 'p-3' : 'p-4 md:p-6'}`}>{children}</main>
+        <ScrollToTop />
       </SidebarInset>
     </div>
   );

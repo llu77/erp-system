@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useIsMobile } from "@/hooks/useMobile";
+import { ResponsiveTable, Column } from "@/components/ResponsiveTable";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -795,131 +796,207 @@ export default function Expenses() {
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : filteredExpenses && filteredExpenses.length > 0 ? (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>رقم المصروف</TableHead>
-                      <TableHead>العنوان</TableHead>
-                      <TableHead>التصنيف</TableHead>
-                      <TableHead>المبلغ</TableHead>
-                      <TableHead>الفرع</TableHead>
-                      <TableHead>التاريخ</TableHead>
-                      <TableHead>طريقة الدفع</TableHead>
-                      <TableHead>الحالة</TableHead>
-                      <TableHead>الإجراءات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredExpenses.map((expense) => (
-                      <TableRow key={expense.id}>
-                        <TableCell className="font-medium">{expense.expenseNumber}</TableCell>
-                        <TableCell>{expense.title}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {categoryNames[expense.category]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-bold text-red-600">
-                          {formatAmount(expense.amount)} ر.س
-                        </TableCell>
-                        <TableCell>
-                          {expense.branchName ? (
-                            <div className="flex items-center gap-1">
-                              <Building2 className="h-4 w-4 text-muted-foreground" />
-                              {expense.branchName}
-                            </div>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            {formatDate(expense.expenseDate)}
+              isMobile ? (
+                // عرض البطاقات على الموبايل
+                <div className="space-y-3">
+                  {filteredExpenses.map((expense) => (
+                    <Card key={expense.id} className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="font-bold text-lg">{expense.title}</p>
+                          <p className="text-sm text-muted-foreground">{expense.expenseNumber}</p>
+                        </div>
+                        <Badge className={statusColors[expense.status]}>
+                          {statusNames[expense.status]}
+                        </Badge>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">المبلغ:</span>
+                          <span className="font-bold text-red-600">{formatAmount(expense.amount)} ر.س</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">التصنيف:</span>
+                          <Badge variant="outline">{categoryNames[expense.category]}</Badge>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">التاريخ:</span>
+                          <span>{formatDate(expense.expenseDate)}</span>
+                        </div>
+                        {expense.branchName && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">الفرع:</span>
+                            <span>{expense.branchName}</span>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <CreditCard className="h-4 w-4 text-muted-foreground" />
-                            {paymentMethods.find(m => m.value === expense.paymentMethod)?.label}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={statusColors[expense.status]}>
-                            {statusNames[expense.status]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {expense.status === 'pending' && (
+                        )}
+                      </div>
+                      <div className="flex items-center justify-end gap-1 mt-3 pt-3 border-t">
+                        {expense.status === 'pending' && (
+                          <>
+                            {canEdit && (
+                              <Button variant="ghost" size="sm" onClick={() => openEditDialog(expense)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canApprove && (
                               <>
-                                {canEdit && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => openEditDialog(expense)}
-                                    title="تعديل"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                )}
-                                {canApprove && (
-                                  <>
+                                <Button variant="ghost" size="sm" onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}>
+                                  <CheckCircle className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => {
+                                  const reason = prompt('سبب الرفض:');
+                                  if (reason) updateStatusMutation.mutate({ id: expense.id, status: 'rejected', rejectionReason: reason });
+                                }}>
+                                  <XCircle className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </>
+                            )}
+                            {canDelete && (
+                              <Button variant="ghost" size="sm" onClick={() => {
+                                if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) deleteMutation.mutate({ id: expense.id });
+                              }}>
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              </Button>
+                            )}
+                          </>
+                        )}
+                        {expense.status === 'approved' && canApprove && (
+                          <Button variant="ghost" size="sm" onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'paid' })}>
+                            <DollarSign className="h-4 w-4 text-blue-600" />
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                // عرض الجدول على الشاشات الكبيرة
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>رقم المصروف</TableHead>
+                        <TableHead>العنوان</TableHead>
+                        <TableHead>التصنيف</TableHead>
+                        <TableHead>المبلغ</TableHead>
+                        <TableHead>الفرع</TableHead>
+                        <TableHead>التاريخ</TableHead>
+                        <TableHead>طريقة الدفع</TableHead>
+                        <TableHead>الحالة</TableHead>
+                        <TableHead>الإجراءات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredExpenses.map((expense) => (
+                        <TableRow key={expense.id}>
+                          <TableCell className="font-medium">{expense.expenseNumber}</TableCell>
+                          <TableCell>{expense.title}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {categoryNames[expense.category]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-bold text-red-600">
+                            {formatAmount(expense.amount)} ر.س
+                          </TableCell>
+                          <TableCell>
+                            {expense.branchName ? (
+                              <div className="flex items-center gap-1">
+                                <Building2 className="h-4 w-4 text-muted-foreground" />
+                                {expense.branchName}
+                              </div>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              {formatDate(expense.expenseDate)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <CreditCard className="h-4 w-4 text-muted-foreground" />
+                              {paymentMethods.find(m => m.value === expense.paymentMethod)?.label}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={statusColors[expense.status]}>
+                              {statusNames[expense.status]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {expense.status === 'pending' && (
+                                <>
+                                  {canEdit && (
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}
-                                      title="اعتماد"
+                                      onClick={() => openEditDialog(expense)}
+                                      title="تعديل"
                                     >
-                                      <CheckCircle className="h-4 w-4 text-green-600" />
+                                      <Edit className="h-4 w-4" />
                                     </Button>
+                                  )}
+                                  {canApprove && (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}
+                                        title="اعتماد"
+                                      >
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          const reason = prompt('سبب الرفض:');
+                                          if (reason) {
+                                            updateStatusMutation.mutate({ id: expense.id, status: 'rejected', rejectionReason: reason });
+                                          }
+                                        }}
+                                        title="رفض"
+                                      >
+                                        <XCircle className="h-4 w-4 text-red-600" />
+                                      </Button>
+                                    </>
+                                  )}
+                                  {canDelete && (
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => {
-                                        const reason = prompt('سبب الرفض:');
-                                        if (reason) {
-                                          updateStatusMutation.mutate({ id: expense.id, status: 'rejected', rejectionReason: reason });
+                                        if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
+                                          deleteMutation.mutate({ id: expense.id });
                                         }
                                       }}
-                                      title="رفض"
+                                      title="حذف"
                                     >
-                                      <XCircle className="h-4 w-4 text-red-600" />
+                                      <Trash2 className="h-4 w-4 text-red-600" />
                                     </Button>
-                                  </>
-                                )}
-                                {canDelete && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                      if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
-                                        deleteMutation.mutate({ id: expense.id });
-                                      }
-                                    }}
-                                    title="حذف"
-                                  >
-                                    <Trash2 className="h-4 w-4 text-red-600" />
-                                  </Button>
-                                )}
-                              </>
-                            )}
-                            {expense.status === 'approved' && canApprove && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'paid' })}
-                                title="تأكيد الدفع"
-                              >
-                                <DollarSign className="h-4 w-4 text-blue-600" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                                  )}
+                                </>
+                              )}
+                              {expense.status === 'approved' && canApprove && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'paid' })}
+                                  title="تأكيد الدفع"
+                                >
+                                  <DollarSign className="h-4 w-4 text-blue-600" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
