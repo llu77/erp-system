@@ -104,6 +104,8 @@ export default function Payrolls() {
   const [selectedBranch, setSelectedBranch] = useState<number | null>(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [selectedPayroll, setSelectedPayroll] = useState<number | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -1201,6 +1203,21 @@ export default function Payrolls() {
   };
 
   // حساب الإحصائيات
+  // تصفية المسيرات حسب الفترة الزمنية
+  const filteredPayrolls = payrolls?.filter(p => {
+    if (!filterDateFrom && !filterDateTo) return true;
+    const payrollDate = new Date(p.year, p.month - 1, 1);
+    if (filterDateFrom) {
+      const fromDate = new Date(filterDateFrom);
+      if (payrollDate < fromDate) return false;
+    }
+    if (filterDateTo) {
+      const toDate = new Date(filterDateTo);
+      if (payrollDate > toDate) return false;
+    }
+    return true;
+  });
+
   const stats = {
     total: payrolls?.length || 0,
     draft: payrolls?.filter(p => p.status === 'draft').length || 0,
@@ -1594,12 +1611,60 @@ export default function Payrolls() {
           </Card>
         </div>
 
+        {/* فلتر الفترة الزمنية */}
+        <Card className="bg-card/50">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">الفترة الزمنية:</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">من:</span>
+                  <Input
+                    type="date"
+                    value={filterDateFrom}
+                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    className="w-[140px] h-8 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">إلى:</span>
+                  <Input
+                    type="date"
+                    value={filterDateTo}
+                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    className="w-[140px] h-8 text-sm"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFilterDateFrom('');
+                    setFilterDateTo('');
+                  }}
+                  className="h-8"
+                >
+                  إعادة تعيين
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* جدول المسيرات */}
         <Card>
           <CardHeader className="py-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="h-4 w-4" />
               قائمة مسيرات الرواتب
+              {(filterDateFrom || filterDateTo) && (
+                <span className="text-xs text-muted-foreground font-normal">
+                  ({filteredPayrolls?.length || 0} مسيرة)
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -1607,7 +1672,7 @@ export default function Payrolls() {
               <div className="flex justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : payrolls && payrolls.length > 0 ? (
+            ) : filteredPayrolls && filteredPayrolls.length > 0 ? (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -1623,7 +1688,7 @@ export default function Payrolls() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {payrolls.map((payroll) => (
+                    {filteredPayrolls?.map((payroll) => (
                       <TableRow key={payroll.id} className="text-sm">
                         <TableCell className="font-medium">{payroll.payrollNumber}</TableCell>
                         <TableCell>
