@@ -337,8 +337,8 @@ export default function LoyaltyRegister() {
   };
 
   // القيم الافتراضية للإعدادات
-  const requiredVisits = settings?.requiredVisitsForDiscount || 4;
-  const discountPercent = settings?.discountPercentage || 50;
+  const requiredVisits = settings?.requiredVisitsForDiscount || 3;
+  const discountPercent = settings?.discountPercentage || 60;
 
   // شاشة النجاح
   if (isSuccess) {

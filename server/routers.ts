@@ -5002,13 +5002,13 @@ ${discrepancyRows}
             if (admin.email) {
               await sendEmail({
                 to: admin.email,
-                subject: `🎉 عميل حصل على خصم 50% - ${customer.name}`,
+                subject: `🎉 عميل حصل على خصم 60% - ${customer.name}`,
                 html: `
                   <div dir="rtl" style="font-family: Arial, sans-serif;">
                     <h2>🎉 تنبيه: عميل حصل على خصم برنامج الولاء</h2>
                     <p><strong>اسم العميل:</strong> ${customer.name}</p>
                     <p><strong>رقم الجوال:</strong> ${customer.phone}</p>
-                    <p><strong>نسبة الخصم:</strong> 50%</p>
+                    <p><strong>نسبة الخصم:</strong> 60%</p>
                     <p><strong>رقم الزيارة في الشهر:</strong> ${result.visitNumberInMonth}</p>
                     <p><strong>الفرع:</strong> ${input.branchName || 'غير محدد'}</p>
                     <hr/>
@@ -5029,7 +5029,7 @@ ${discrepancyRows}
           discountPercentage: result.discountPercentage,
           visitNumberInMonth: result.visitNumberInMonth,
           message: result.isDiscountVisit 
-            ? `🎉 لقد حصلت على خصم 50%! يومك سعيد ${customer.name}`
+            ? `🎉 لقد حصلت على خصم 60%! يومك سعيد ${customer.name}`
             : `شكراً لزيارتك ${customer.name}! هذه زيارتك رقم ${result.visitNumberInMonth} هذا الشهر.`,
         };
       }),

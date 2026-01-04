@@ -388,8 +388,8 @@ export default function LoyaltyVisit() {
   // ============================================
   // القيم المحسوبة
   // ============================================
-  const visitsRequired = settings?.requiredVisitsForDiscount ?? 4;
-  const discountPercentage = settings?.discountPercentage ?? 50;
+  const visitsRequired = settings?.requiredVisitsForDiscount ?? 3;
+  const discountPercentage = settings?.discountPercentage ?? 60;
   const isSubmitting = uploadState.isUploading || visitMutation.isPending;
 
   // ============================================

@@ -4992,7 +4992,7 @@ export async function getLoyaltySettings(): Promise<{
   discountPercentage: number;
 }> {
   const db = await getDb();
-  if (!db) return { requiredVisitsForDiscount: 4, discountPercentage: 50 };
+  if (!db) return { requiredVisitsForDiscount: 3, discountPercentage: 60 };
   
   const { loyaltySettings } = await import('../drizzle/schema');
   const settings = await db.select().from(loyaltySettings).limit(1);
@@ -5000,10 +5000,10 @@ export async function getLoyaltySettings(): Promise<{
   if (settings.length === 0) {
     // إنشاء إعدادات افتراضية
     await db.insert(loyaltySettings).values({
-      requiredVisitsForDiscount: 4,
-      discountPercentage: 50,
+      requiredVisitsForDiscount: 3,
+      discountPercentage: 60,
     });
-    return { requiredVisitsForDiscount: 4, discountPercentage: 50 };
+    return { requiredVisitsForDiscount: 3, discountPercentage: 60 };
   }
   
   return {
