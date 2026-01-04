@@ -4836,9 +4836,39 @@ ${discrepancyRows}
         requiredVisitsForDiscount: z.number().min(1).max(20),
         discountPercentage: z.number().min(1).max(100),
       }))
-      .mutation(async ({ input }) => {
-        const { updateLoyaltySettings } = await import('./db');
-        return await updateLoyaltySettings(input);
+      .mutation(async ({ ctx, input }) => {
+        const { updateLoyaltySettings, getLoyaltySettings, addLoyaltySettingsAuditLog } = await import('./db');
+        
+        // جلب الإعدادات القديمة قبل التحديث
+        const oldSettings = await getLoyaltySettings();
+        
+        // تحديث الإعدادات
+        const result = await updateLoyaltySettings(input);
+        
+        // تسجيل التغيير في سجل التدقيق
+        await addLoyaltySettingsAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || ctx.user.username || 'مستخدم',
+          changeType: 'settings',
+          oldValues: JSON.stringify({
+            requiredVisitsForDiscount: oldSettings?.requiredVisitsForDiscount,
+            discountPercentage: oldSettings?.discountPercentage,
+          }),
+          newValues: JSON.stringify(input),
+          description: `تم تحديث إعدادات الولاء: عدد الزيارات من ${oldSettings?.requiredVisitsForDiscount} إلى ${input.requiredVisitsForDiscount}، نسبة الخصم من ${oldSettings?.discountPercentage}% إلى ${input.discountPercentage}%`,
+        });
+        
+        return result;
+      }),
+
+    // الحصول على سجل تغييرات الإعدادات (للأدمن فقط)
+    getAuditLog: adminProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(100).optional().default(50),
+      }).optional())
+      .query(async ({ input }) => {
+        const { getLoyaltySettingsAuditLog } = await import('./db');
+        return await getLoyaltySettingsAuditLog(input?.limit || 50);
       }),
 
     // الحصول على أنواع الخدمات
@@ -4853,9 +4883,22 @@ ${discrepancyRows}
         name: z.string().min(1, 'اسم الخدمة مطلوب'),
         sortOrder: z.number().optional(),
       }))
-      .mutation(async ({ input }) => {
-        const { addLoyaltyServiceType } = await import('./db');
-        return await addLoyaltyServiceType(input);
+      .mutation(async ({ ctx, input }) => {
+        const { addLoyaltyServiceType, addLoyaltySettingsAuditLog } = await import('./db');
+        const result = await addLoyaltyServiceType(input);
+        
+        // تسجيل التغيير في سجل التدقيق
+        await addLoyaltySettingsAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || ctx.user.username || 'مستخدم',
+          changeType: 'service_add',
+          newValues: JSON.stringify(input),
+          description: `تم إضافة خدمة جديدة: ${input.name}`,
+          serviceId: result.id,
+          serviceName: input.name,
+        });
+        
+        return result;
       }),
 
     // تحديث نوع خدمة (للأدمن فقط)
@@ -4866,9 +4909,27 @@ ${discrepancyRows}
         isActive: z.boolean().optional(),
         sortOrder: z.number().optional(),
       }))
-      .mutation(async ({ input }) => {
-        const { updateLoyaltyServiceType } = await import('./db');
-        return await updateLoyaltyServiceType(input);
+      .mutation(async ({ ctx, input }) => {
+        const { updateLoyaltyServiceType, getLoyaltyServiceTypeById, addLoyaltySettingsAuditLog } = await import('./db');
+        
+        // جلب الخدمة القديمة قبل التحديث
+        const oldService = await getLoyaltyServiceTypeById(input.id);
+        
+        const result = await updateLoyaltyServiceType(input);
+        
+        // تسجيل التغيير في سجل التدقيق
+        await addLoyaltySettingsAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || ctx.user.username || 'مستخدم',
+          changeType: 'service_update',
+          oldValues: oldService ? JSON.stringify({ name: oldService.name, isActive: oldService.isActive, sortOrder: oldService.sortOrder }) : null,
+          newValues: JSON.stringify(input),
+          description: `تم تحديث الخدمة: ${oldService?.name || ''} → ${input.name}`,
+          serviceId: input.id,
+          serviceName: input.name,
+        });
+        
+        return result;
       }),
 
     // حذف نوع خدمة (للأدمن فقط)
@@ -4876,9 +4937,28 @@ ${discrepancyRows}
       .input(z.object({
         id: z.number(),
       }))
-      .mutation(async ({ input }) => {
-        const { deleteLoyaltyServiceType } = await import('./db');
-        return await deleteLoyaltyServiceType(input.id);
+      .mutation(async ({ ctx, input }) => {
+        const { deleteLoyaltyServiceType, getLoyaltyServiceTypeById, addLoyaltySettingsAuditLog } = await import('./db');
+        
+        // جلب الخدمة قبل الحذف
+        const oldService = await getLoyaltyServiceTypeById(input.id);
+        
+        const result = await deleteLoyaltyServiceType(input.id);
+        
+        // تسجيل التغيير في سجل التدقيق
+        if (oldService) {
+          await addLoyaltySettingsAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name || ctx.user.username || 'مستخدم',
+            changeType: 'service_delete',
+            oldValues: JSON.stringify({ name: oldService.name, isActive: oldService.isActive }),
+            description: `تم حذف الخدمة: ${oldService.name}`,
+            serviceId: input.id,
+            serviceName: oldService.name,
+          });
+        }
+        
+        return result;
       }),
 
     // ==================== إدارة الزيارات (للمشرفين) ====================

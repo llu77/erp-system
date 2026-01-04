@@ -1513,3 +1513,34 @@ export const loyaltyServiceTypes = mysqlTable("loyaltyServiceTypes", {
 
 export type LoyaltyServiceType = typeof loyaltyServiceTypes.$inferSelect;
 export type InsertLoyaltyServiceType = typeof loyaltyServiceTypes.$inferInsert;
+
+// ==================== جدول سجل تغييرات إعدادات الولاء ====================
+/**
+ * LoyaltySettingsAuditLog - سجل تغييرات إعدادات نظام الولاء
+ */
+export const loyaltySettingsAuditLog = mysqlTable("loyaltySettingsAuditLog", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // المستخدم الذي قام بالتغيير
+  userId: int("userId").notNull(),
+  userName: varchar("userName", { length: 255 }).notNull(),
+  
+  // نوع التغيير
+  changeType: mysqlEnum("changeType", ["settings", "service_add", "service_update", "service_delete"]).notNull(),
+  
+  // القيم القديمة والجديدة (JSON)
+  oldValues: text("oldValues"), // القيم قبل التغيير
+  newValues: text("newValues"), // القيم بعد التغيير
+  
+  // وصف التغيير
+  description: text("description"),
+  
+  // معرف الخدمة (إذا كان التغيير على خدمة)
+  serviceId: int("serviceId"),
+  serviceName: varchar("serviceName", { length: 255 }),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type LoyaltySettingsAuditLog = typeof loyaltySettingsAuditLog.$inferSelect;
+export type InsertLoyaltySettingsAuditLog = typeof loyaltySettingsAuditLog.$inferInsert;

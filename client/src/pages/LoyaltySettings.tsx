@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
-import { Settings, Plus, Trash2, Edit2, Save, X, Percent, Users } from 'lucide-react';
+import { Settings, Plus, Trash2, Edit2, Save, X, Percent, Users, History, Clock, User } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -390,7 +390,101 @@ export default function LoyaltySettings() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* سجل التغييرات */}
+        <AuditLogSection />
       </div>
     </DashboardLayout>
+  );
+}
+
+// مكون سجل التغييرات
+function AuditLogSection() {
+  const { data: auditLog, isLoading } = trpc.loyalty.getAuditLog.useQuery({ limit: 20 });
+
+  const getChangeTypeLabel = (type: string) => {
+    switch (type) {
+      case 'settings': return 'تعديل الإعدادات';
+      case 'service_add': return 'إضافة خدمة';
+      case 'service_update': return 'تعديل خدمة';
+      case 'service_delete': return 'حذف خدمة';
+      default: return type;
+    }
+  };
+
+  const getChangeTypeColor = (type: string) => {
+    switch (type) {
+      case 'settings': return 'bg-blue-500/20 text-blue-600';
+      case 'service_add': return 'bg-green-500/20 text-green-600';
+      case 'service_update': return 'bg-yellow-500/20 text-yellow-600';
+      case 'service_delete': return 'bg-red-500/20 text-red-600';
+      default: return 'bg-gray-500/20 text-gray-600';
+    }
+  };
+
+  const formatDate = (date: Date) => {
+    return new Date(date).toLocaleString('ar-SA', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <History className="h-5 w-5" />
+          سجل التغييرات
+        </CardTitle>
+        <CardDescription>
+          تتبع جميع التغييرات التي تمت على إعدادات الولاء
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-center py-8 text-muted-foreground">
+            جاري التحميل...
+          </div>
+        ) : !auditLog || auditLog.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>لا توجد تغييرات مسجلة بعد</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {auditLog.map((log) => (
+              <div key={log.id} className="border rounded-lg p-4 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded-full text-xs ${getChangeTypeColor(log.changeType)}`}>
+                      {getChangeTypeLabel(log.changeType)}
+                    </span>
+                    {log.serviceName && (
+                      <span className="text-sm font-medium">{log.serviceName}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <User className="h-4 w-4" />
+                      {log.userName}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      {formatDate(log.createdAt)}
+                    </span>
+                  </div>
+                </div>
+                {log.description && (
+                  <p className="text-sm text-muted-foreground">{log.description}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

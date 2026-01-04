@@ -6051,3 +6051,77 @@ export async function detectBonusDiscrepancies(branchId: number, weekNumber: num
     summary,
   };
 }
+
+
+// ==================== دوال سجل تغييرات إعدادات الولاء ====================
+
+// الحصول على نوع خدمة بالمعرف
+export async function getLoyaltyServiceTypeById(id: number): Promise<{
+  id: number;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+} | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const { loyaltyServiceTypes } = await import('../drizzle/schema');
+  
+  const result = await db.select().from(loyaltyServiceTypes).where(eq(loyaltyServiceTypes.id, id)).limit(1);
+  
+  return result[0] || null;
+}
+
+// إضافة سجل تغيير في إعدادات الولاء
+export async function addLoyaltySettingsAuditLog(data: {
+  userId: number;
+  userName: string;
+  changeType: 'settings' | 'service_add' | 'service_update' | 'service_delete';
+  oldValues?: string | null;
+  newValues?: string | null;
+  description?: string | null;
+  serviceId?: number | null;
+  serviceName?: string | null;
+}): Promise<{ success: boolean; id?: number }> {
+  const db = await getDb();
+  if (!db) return { success: false };
+  
+  const { loyaltySettingsAuditLog } = await import('../drizzle/schema');
+  
+  const result = await db.insert(loyaltySettingsAuditLog).values({
+    userId: data.userId,
+    userName: data.userName,
+    changeType: data.changeType,
+    oldValues: data.oldValues,
+    newValues: data.newValues,
+    description: data.description,
+    serviceId: data.serviceId,
+    serviceName: data.serviceName,
+  });
+  
+  return { success: true, id: Number(result[0].insertId) };
+}
+
+// الحصول على سجل تغييرات إعدادات الولاء
+export async function getLoyaltySettingsAuditLog(limit: number = 50): Promise<Array<{
+  id: number;
+  userId: number;
+  userName: string;
+  changeType: 'settings' | 'service_add' | 'service_update' | 'service_delete';
+  oldValues: string | null;
+  newValues: string | null;
+  description: string | null;
+  serviceId: number | null;
+  serviceName: string | null;
+  createdAt: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { loyaltySettingsAuditLog } = await import('../drizzle/schema');
+  
+  return await db.select()
+    .from(loyaltySettingsAuditLog)
+    .orderBy(desc(loyaltySettingsAuditLog.createdAt))
+    .limit(limit);
+}
