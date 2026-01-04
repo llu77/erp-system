@@ -60,6 +60,7 @@ import {
   ListOrdered,
   ClipboardCheck,
   Heart,
+  Brain,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -107,6 +108,7 @@ const menuStructure: MenuItem[] = [
       { icon: BarChart3, label: "الأرباح والخسائر", path: "/profit-loss", roles: ["admin", "manager", "viewer"] },
       { icon: Store, label: "لوحة المبيعات", path: "/sales-dashboard", roles: ["admin", "manager", "viewer"] },
       { icon: BarChart3, label: "التقارير", path: "/reports", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: Brain, label: "التنبيهات الذكية", path: "/smart-alerts", roles: ["admin", "manager"] },
     ]
   },
   

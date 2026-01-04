@@ -565,6 +565,15 @@
 - [ ] متابعة طلبات المبررات
 
 
+## الدوال المتقدمة للاستعلام والمراقبة (طلب جديد)
+- [ ] إنشاء ملف advanced_queries.ts مع الإصلاحات
+- [ ] إضافة دوال مراقبة النظام (checkDatabaseHealth, checkDataIntegrity)
+- [ ] إضافة دوال المطابقة (reconcileBranchRevenues, reconcileBonusCalculations, reconcileMonth)
+- [ ] إضافة دوال التحليلات (analyzeEmployeePerformance, analyzeBranchPerformance, getDataGapsReport)
+- [ ] إضافة دوال الامتثال (getComplianceReport)
+- [ ] إضافة الـ endpoints في routers.ts
+- [ ] اختبار الدوال والتحقق من عملها
+
 ## تحسينات نظام الإيرادات (طلب جديد)
 
 ### الرصيد التلقائي
@@ -1730,3 +1739,64 @@ node scripts/scheduledTasks.mjs weekly-report
 - [ ] التحقق من بيانات الموظفين والإيرادات غير المنطقية
 - [ ] إصلاح سجلات الموظفين بدون أسماء
 - [ ] التحقق من تطابق الإيرادات بشكل كامل
+
+
+## الدوال الذكية المتقدمة (طلب جديد)
+
+### المرحلة 1: الأساسيات
+- [x] إنشاء ملف intelligent_functions.ts
+- [x] تنفيذ detectRevenueAnomalies()
+- [x] تنفيذ generateProactiveAlerts()
+- [x] إضافة endpoints في routers.ts للدوال الذكية
+- [ ] إضافة قسم "التنبيهات الذكية" في لوحة التحكم
+- [ ] ربط التنبيهات بجرس الإشعارات
+
+### المرحلة 2: التحليلات
+- [ ] تنفيذ detectFraudPatterns()
+- [ ] تنفيذ detectPerformancePatterns()
+- [ ] تنفيذ analyzeAndPredict()
+- [ ] إضافة صفحة "تقرير الامتثال"
+- [ ] إضافة عمود "نمط الأداء" في صفحة الموظفين
+- [ ] إضافة قسم "التوقعات" في لوحة التحكم
+
+### المرحلة 3: التوصيات
+- [ ] تنفيذ generateSmartRecommendations()
+- [ ] تنفيذ analyzeWorkflowBottlenecks()
+- [ ] تنفيذ optimizeStaffDistribution()
+- [ ] إضافة قسم "التوصيات الذكية" في لوحة التحكم
+- [ ] إضافة صفحة "تحليل الأداء"
+
+### المرحلة 4: الأتمتة
+- [ ] تنفيذ executeSmartRules()
+- [ ] تنفيذ executeAutoCorrection()
+- [ ] تنفيذ executeFullWorkflow()
+- [ ] إضافة صفحة "إعدادات القواعد الذكية"
+- [ ] ربط القواعد بطلبات البونص
+- [ ] إضافة سجل تنفيذ القواعد
+
+
+## الدوال الذكية المتقدمة (طلب جديد)
+
+### المرحلة الأولى: الأساسيات
+- [x] إنشاء ملف intelligent_functions.ts
+- [x] تنفيذ detectRevenueAnomalies() - كشف الشذوذ بـ Z-Score
+- [x] تنفيذ generateProactiveAlerts() - التنبيهات الاستباقية
+- [x] تنفيذ checkDataIntegrity() - فحص سلامة البيانات
+- [x] إضافة endpoints في routers.ts للدوال الذكية
+- [x] إضافة واجهة التنبيهات الذكية في لوحة التحكم
+- [x] إضافة رابط في القائمة الجانبية
+
+### المرحلة الثانية: التحليلات (قادم)
+- [ ] تنفيذ detectFraudPatterns() - كشف التلاعب
+- [ ] تنفيذ detectPerformancePatterns() - أنماط الأداء
+- [ ] تنفيذ analyzeAndPredict() - التنبؤ بالإيرادات
+
+### المرحلة الثالثة: التوصيات (قادم)
+- [x] تنفيذ generateSmartRecommendations() - التوصيات الذكية
+- [ ] تنفيذ analyzeWorkflowBottlenecks() - تحليل الاختناقات
+- [ ] تنفيذ optimizeStaffDistribution() - توزيع الموظفين
+
+### المرحلة الرابعة: الأتمتة (قادم)
+- [ ] تنفيذ executeSmartRules() - القواعد الذكية
+- [ ] تنفيذ executeAutoCorrection() - التصحيح التلقائي
+- [ ] تنفيذ executeFullWorkflow() - سير العمل الكامل

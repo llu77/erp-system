@@ -48,6 +48,7 @@ import LoyaltyRegister from "./pages/LoyaltyRegister";
 import LoyaltyVisit from "./pages/LoyaltyVisit";
 import LoyaltySettings from "./pages/LoyaltySettings";
 import LoyaltyReport from "./pages/LoyaltyReport";
+import SmartAlerts from "./pages/SmartAlerts";
 
 function Router() {
   return (
@@ -262,6 +263,12 @@ function Router() {
       <Route path="/loyalty/register" component={LoyaltyRegister} />
       {/* Loyalty Visit - Public Page */}
       <Route path="/loyalty/visit" component={LoyaltyVisit} />
+      {/* Smart Alerts - Admin Only */}
+      <Route path="/smart-alerts">
+        <DashboardLayout>
+          <SmartAlerts />
+        </DashboardLayout>
+      </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

@@ -4836,6 +4836,108 @@ export const appRouter = router({
         }
       }),
   }),
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 🧠 الدوال الذكية المتقدمة
+  // ═══════════════════════════════════════════════════════════════════════════════
+  intelligence: router({
+    // كشف الشذوذ في الإيرادات
+    detectAnomalies: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        analysisDate: z.date().optional(),
+        lookbackDays: z.number().optional(),
+        zScoreThreshold: z.number().optional(),
+        includeEmployeeLevel: z.boolean().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { detectRevenueAnomalies } = await import('./intelligent_functions');
+        return detectRevenueAnomalies(
+          input.branchId,
+          input.analysisDate || new Date(),
+          {
+            lookbackDays: input.lookbackDays,
+            zScoreThreshold: input.zScoreThreshold,
+            includeEmployeeLevel: input.includeEmployeeLevel,
+          }
+        );
+      }),
+
+    // كشف أنماط التلاعب
+    detectFraud: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        startDate: z.date(),
+        endDate: z.date(),
+      }))
+      .query(async ({ input }) => {
+        const { detectFraudPatterns } = await import('./intelligent_functions');
+        return detectFraudPatterns(input.branchId, input.startDate, input.endDate);
+      }),
+
+    // كشف أنماط أداء الموظفين
+    detectPerformancePatterns: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        analysisDate: z.date().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { detectPerformancePatterns } = await import('./intelligent_functions');
+        return detectPerformancePatterns(
+          input.branchId,
+          input.analysisDate || new Date()
+        );
+      }),
+
+    // التنبيهات الاستباقية
+    getProactiveAlerts: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        currentDate: z.date().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { generateProactiveAlerts } = await import('./intelligent_functions');
+        return generateProactiveAlerts(
+          input.branchId,
+          input.currentDate || new Date()
+        );
+      }),
+
+    // التوصيات الذكية
+    getSmartRecommendations: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        analysisDate: z.date().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { generateSmartRecommendations } = await import('./intelligent_functions');
+        return generateSmartRecommendations(
+          input.branchId,
+          input.analysisDate || new Date()
+        );
+      }),
+
+    // التصحيح التلقائي
+    executeAutoCorrection: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        correctionType: z.enum(['recalculate', 'fix_negatives', 'remove_duplicates', 'fix_orphans']),
+      }))
+      .mutation(async ({ input }) => {
+        const { executeAutoCorrection } = await import('./intelligent_functions');
+        return executeAutoCorrection(input.branchId, input.correctionType);
+      }),
+
+    // فحص سلامة البيانات
+    checkDataIntegrity: adminProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { checkDataIntegrity } = await import('./intelligent_functions');
+        return checkDataIntegrity(input.branchId);
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية
