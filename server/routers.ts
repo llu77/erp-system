@@ -2298,6 +2298,31 @@ ${discrepancyRows}
           return { success: false, message: 'فشل إرسال التنبيه' };
         }
       }),
+
+    // إرسال التقرير الأسبوعي للبونص (يدوياً)
+    sendWeeklyReport: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        // فقط للأدمن
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح' });
+        }
+
+        try {
+          const scheduledService = await import('./notifications/scheduledNotificationService');
+          const result = await scheduledService.sendWeeklyBonusReport();
+          
+          return {
+            success: result.success,
+            message: result.success 
+              ? `تم إرسال التقرير إلى ${result.sentCount} مستلم`
+              : result.reason || 'فشل إرسال التقرير',
+            sentCount: result.sentCount,
+          };
+        } catch (error) {
+          console.error('Failed to send weekly bonus report:', error);
+          return { success: false, message: 'فشل إرسال التقرير الأسبوعي' };
+        }
+      }),
   }),
 
   // ==================== طلبات الموظفين ====================

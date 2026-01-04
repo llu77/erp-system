@@ -26,8 +26,21 @@ import {
   AlertTriangle,
   History,
   Mail,
-  FileText
+  FileText,
+  BarChart3,
+  Building2
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  Cell
+} from "recharts";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { 
@@ -49,6 +62,7 @@ export default function Bonuses() {
   const [isExporting, setIsExporting] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [showDiscrepancies, setShowDiscrepancies] = useState(false);
+  const [showStatsPanel, setShowStatsPanel] = useState(false);
 
   // جلب الفروع
   const { data: branches, isLoading: branchesLoading } = trpc.branches.list.useQuery();
@@ -94,6 +108,12 @@ export default function Bonuses() {
     { enabled: !!effectiveBranchId && showDiscrepancies }
   );
 
+  // جلب الفروقات الشاملة لكل الفروع (للإحصائيات)
+  const { data: allDiscrepancies, isLoading: allDiscrepanciesLoading } = trpc.bonuses.getAllDiscrepancies.useQuery(
+    undefined,
+    { enabled: user?.role === 'admin' && showStatsPanel }
+  );
+
   // إرسال تنبيه الفروقات
   const sendAlertMutation = trpc.bonuses.sendDiscrepancyAlert.useMutation({
     onSuccess: (result) => {
@@ -118,6 +138,20 @@ export default function Bonuses() {
     },
     onError: (error) => {
       toast.error(error.message || "فشل إرسال الطلب");
+    },
+  });
+
+  // إرسال التقرير الأسبوعي
+  const sendWeeklyReportMutation = trpc.bonuses.sendWeeklyReport.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "فشل إرسال التقرير");
     },
   });
 
@@ -376,8 +410,160 @@ export default function Bonuses() {
                 تصدير PDF
               </Button>
             )}
+            
+            {user?.role === 'admin' && (
+              <>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowStatsPanel(!showStatsPanel)}
+                  className={showStatsPanel ? "bg-primary/10" : ""}
+                >
+                  <BarChart3 className="h-4 w-4 ml-2" />
+                  إحصائيات الفروقات
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  onClick={() => sendWeeklyReportMutation.mutate()}
+                  disabled={sendWeeklyReportMutation.isPending}
+                >
+                  {sendWeeklyReportMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                  ) : (
+                    <Mail className="h-4 w-4 ml-2" />
+                  )}
+                  إرسال تقرير أسبوعي
+                </Button>
+              </>
+            )}
           </div>
         </div>
+
+        {/* لوحة إحصائيات الفروقات */}
+        {showStatsPanel && user?.role === 'admin' && (
+          <Card className="border-blue-200 bg-blue-50/30">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
+                  <CardTitle className="text-blue-800">إحصائيات الفروقات</CardTitle>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowStatsPanel(false)}>
+                  إغلاق
+                </Button>
+              </div>
+              {allDiscrepancies && (
+                <CardDescription className="text-blue-700">
+                  الأسبوع {allDiscrepancies.weekNumber} - {allDiscrepancies.month}/{allDiscrepancies.year}
+                </CardDescription>
+              )}
+            </CardHeader>
+            <CardContent>
+              {allDiscrepanciesLoading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : allDiscrepancies && allDiscrepancies.branches.length > 0 ? (
+                <div className="space-y-6">
+                  {/* ملخص الإحصائيات */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-lg p-4 border border-blue-200">
+                      <div className="text-3xl font-bold text-blue-600">{allDiscrepancies.totalDiscrepancies}</div>
+                      <div className="text-sm text-muted-foreground">إجمالي الفروقات</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-blue-200">
+                      <div className="text-3xl font-bold text-orange-600">
+                        {allDiscrepancies.branches.filter(b => b.discrepancyCount > 0).length}
+                      </div>
+                      <div className="text-sm text-muted-foreground">فروع بها فروقات</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-blue-200">
+                      <div className="text-3xl font-bold text-green-600">
+                        {allDiscrepancies.branches.filter(b => b.discrepancyCount === 0).length}
+                      </div>
+                      <div className="text-sm text-muted-foreground">فروع متطابقة</div>
+                    </div>
+                  </div>
+
+                  {/* رسم بياني للفروقات حسب الفرع */}
+                  <div className="bg-white rounded-lg p-4 border border-blue-200">
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      الفروقات حسب الفرع
+                    </h4>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={allDiscrepancies.branches} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" />
+                          <YAxis dataKey="branchName" type="category" width={100} tick={{ fontSize: 12 }} />
+                          <Tooltip 
+                            formatter={(value: number) => [`${value} فرق`, 'عدد الفروقات']}
+                            labelFormatter={(label) => `فرع: ${label}`}
+                          />
+                          <Bar dataKey="discrepancyCount" name="عدد الفروقات">
+                            {allDiscrepancies.branches.map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={entry.discrepancyCount > 0 ? '#ef4444' : '#22c55e'} 
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* جدول تفصيلي */}
+                  <div className="bg-white rounded-lg border border-blue-200 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-blue-50">
+                          <TableHead className="text-right">الفرع</TableHead>
+                          <TableHead className="text-center">عدد الفروقات</TableHead>
+                          <TableHead className="text-center">إجمالي الفرق</TableHead>
+                          <TableHead className="text-center">الحالة</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {allDiscrepancies.branches.map((branch) => (
+                          <TableRow key={branch.branchId}>
+                            <TableCell className="font-medium">{branch.branchName}</TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant={branch.discrepancyCount > 0 ? "destructive" : "default"} className={branch.discrepancyCount === 0 ? "bg-green-500" : ""}>
+                                {branch.discrepancyCount}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {branch.totalDiff.toFixed(2)} ر.س
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {branch.discrepancyCount > 0 ? (
+                                <Badge variant="outline" className="text-red-600 border-red-300">
+                                  <AlertTriangle className="h-3 w-3 ml-1" />
+                                  يحتاج مراجعة
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-green-600 border-green-300">
+                                  <CheckCircle className="h-3 w-3 ml-1" />
+                                  متطابق
+                                </Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+                  <p className="text-lg font-medium text-green-700">جميع الفروع متطابقة</p>
+                  <p className="text-sm">لا توجد فروقات في البونص لهذا الأسبوع</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* بطاقة البونص الحالي */}
         {bonusLoading ? (

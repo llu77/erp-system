@@ -984,3 +984,141 @@ export async function sendBonusDiscrepancyAlert(
     return false;
   }
 }
+
+
+// ==================== تقرير البونص الأسبوعي ====================
+export interface WeeklyBonusReportData {
+  weekNumber: number;
+  month: number;
+  year: number;
+  totalDiscrepancies: number;
+  branchReports: Array<{
+    branchName: string;
+    hasDiscrepancy: boolean;
+    discrepancyCount: number;
+    totalDiff: number;
+  }>;
+}
+
+export async function sendWeeklyBonusReport(
+  data: WeeklyBonusReportData
+): Promise<{ success: boolean; sentCount: number }> {
+  try {
+    const recipients = await getRecipientsForNotification('bonus');
+    const adminRecipients = recipients.filter(r => r.role === 'admin' || r.role === 'general_supervisor');
+    
+    if (adminRecipients.length === 0) {
+      console.log('[Weekly Bonus Report] لا يوجد مستلمين');
+      return { success: true, sentCount: 0 };
+    }
+
+    const branchesWithIssues = data.branchReports.filter(b => b.hasDiscrepancy);
+    const branchesOK = data.branchReports.filter(b => !b.hasDiscrepancy);
+    
+    const statusColor = data.totalDiscrepancies > 0 ? '#dc2626' : '#16a34a';
+    const statusIcon = data.totalDiscrepancies > 0 ? '⚠️' : '✅';
+    const statusText = data.totalDiscrepancies > 0 
+      ? `${data.totalDiscrepancies} فروقات تحتاج مراجعة`
+      : 'جميع الفروع متطابقة';
+
+    const html = `
+      <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px; background: #f9fafb; max-width: 700px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #1f2937, #374151); padding: 25px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">📊 تقرير البونص الأسبوعي</h1>
+          <p style="color: #9ca3af; margin: 10px 0 0 0;">
+            الأسبوع ${data.weekNumber} - ${data.month}/${data.year}
+          </p>
+        </div>
+        
+        <div style="background: white; padding: 25px; border: 1px solid #e5e7eb; border-top: none;">
+          <!-- ملخص الحالة -->
+          <div style="background: ${statusColor}15; border: 1px solid ${statusColor}40; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 24px;">${statusIcon}</span>
+              <div>
+                <p style="margin: 0; font-weight: bold; color: ${statusColor}; font-size: 18px;">
+                  ${statusText}
+                </p>
+                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">
+                  ${data.branchReports.length} فرع تم فحصهم
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          ${branchesWithIssues.length > 0 ? `
+          <!-- الفروع التي بها فروقات -->
+          <h3 style="color: #dc2626; margin-bottom: 15px; border-bottom: 2px solid #dc2626; padding-bottom: 10px;">
+            ⚠️ فروع تحتاج مراجعة (${branchesWithIssues.length})
+          </h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+            <thead>
+              <tr style="background: #fef2f2;">
+                <th style="padding: 12px; text-align: right; border: 1px solid #fecaca;">الفرع</th>
+                <th style="padding: 12px; text-align: center; border: 1px solid #fecaca;">عدد الفروقات</th>
+                <th style="padding: 12px; text-align: center; border: 1px solid #fecaca;">إجمالي الفرق</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${branchesWithIssues.map((branch, i) => `
+                <tr style="background: ${i % 2 === 0 ? '#fff' : '#fef2f2'};">
+                  <td style="padding: 10px; border: 1px solid #fecaca; font-weight: bold;">${branch.branchName}</td>
+                  <td style="padding: 10px; border: 1px solid #fecaca; text-align: center; color: #dc2626;">${branch.discrepancyCount}</td>
+                  <td style="padding: 10px; border: 1px solid #fecaca; text-align: center; color: #dc2626;">${branch.totalDiff.toFixed(2)} ر.س</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          ` : ''}
+          
+          ${branchesOK.length > 0 ? `
+          <!-- الفروع المتطابقة -->
+          <h3 style="color: #16a34a; margin-bottom: 15px; border-bottom: 2px solid #16a34a; padding-bottom: 10px;">
+            ✅ فروع متطابقة (${branchesOK.length})
+          </h3>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">
+            ${branchesOK.map(branch => `
+              <span style="background: #dcfce7; color: #166534; padding: 8px 15px; border-radius: 20px; font-size: 14px;">
+                ${branch.branchName}
+              </span>
+            `).join('')}
+          </div>
+          ` : ''}
+          
+          <div style="margin-top: 25px; padding: 15px; background: #f3f4f6; border-radius: 8px;">
+            <p style="margin: 0; color: #6b7280; font-size: 14px;">
+              💡 لمراجعة التفاصيل وإصلاح الفروقات، يرجى زيارة صفحة البونص في لوحة التحكم.
+            </p>
+          </div>
+        </div>
+        
+        <div style="background: #1f2937; padding: 15px; border-radius: 0 0 12px 12px; text-align: center;">
+          <p style="color: #9ca3af; margin: 0; font-size: 12px;">
+            Symbol AI - نظام إدارة الأعمال | تقرير تلقائي أسبوعي
+          </p>
+        </div>
+      </div>
+    `;
+
+    let sentCount = 0;
+    for (const recipient of adminRecipients) {
+      try {
+        await resend.emails.send({
+          from: FROM_EMAIL,
+          to: recipient.email,
+          subject: `📊 تقرير البونص الأسبوعي - الأسبوع ${data.weekNumber} - ${data.month}/${data.year}`,
+          html,
+        });
+        sentCount++;
+        console.log(`✓ تم إرسال تقرير البونص الأسبوعي إلى: ${recipient.email}`);
+      } catch (error) {
+        console.error(`✗ فشل إرسال تقرير البونص إلى ${recipient.email}:`, error);
+      }
+    }
+
+    return { success: true, sentCount };
+  } catch (error) {
+    console.error('[Weekly Bonus Report] خطأ:', error);
+    return { success: false, sentCount: 0 };
+  }
+}

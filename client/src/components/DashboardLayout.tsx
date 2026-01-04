@@ -63,6 +63,8 @@ import {
   Brain,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
@@ -269,6 +271,36 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = flatMenuItems.find((item) => item.path === location);
   const isMobile = useIsMobile();
+  const [hasShownDiscrepancyToast, setHasShownDiscrepancyToast] = useState(false);
+
+  // استعلام فروقات البونص (للأدمن فقط)
+  const { data: bonusDiscrepancies } = trpc.bonuses.getAllDiscrepancies.useQuery(
+    undefined,
+    { enabled: user?.role === 'admin' }
+  );
+
+  // إشعار منبثق عند تسجيل الدخول إذا وجدت فروقات
+  useEffect(() => {
+    if (
+      user?.role === 'admin' && 
+      bonusDiscrepancies && 
+      bonusDiscrepancies.totalDiscrepancies > 0 && 
+      !hasShownDiscrepancyToast
+    ) {
+      setHasShownDiscrepancyToast(true);
+      toast.warning(
+        `⚠️ تنبيه: ${bonusDiscrepancies.totalDiscrepancies} فروقات في البونص`,
+        {
+          description: `في ${bonusDiscrepancies.branches.length} فرع - الأسبوع ${bonusDiscrepancies.weekNumber}`,
+          duration: 8000,
+          action: {
+            label: 'عرض التفاصيل',
+            onClick: () => setLocation('/bonuses'),
+          },
+        }
+      );
+    }
+  }, [bonusDiscrepancies, user, hasShownDiscrepancyToast, setLocation]);
   
   // حالة فتح/إغلاق القوائم الفرعية
   const [openMenus, setOpenMenus] = useState<string[]>(() => {

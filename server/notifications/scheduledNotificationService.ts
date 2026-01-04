@@ -523,3 +523,112 @@ export function getMemoryStatus(): { entries: number; keys: string[] } {
     keys: Array.from(memorySentToday.keys())
   };
 }
+
+
+// ==================== تقرير البونص الأسبوعي ====================
+
+/**
+ * إرسال تقرير أسبوعي بحالة البونص والفروقات
+ * يُرسل كل يوم أحد
+ */
+export async function sendWeeklyBonusReport(): Promise<SendResult> {
+  const type = 'weekly_bonus_report' as ScheduledNotificationType;
+  const timestamp = new Date().toISOString();
+  
+  console.log(`\n${'='.repeat(70)}`);
+  console.log(`[Bonus Report] 📊 طلب إرسال تقرير البونص الأسبوعي`);
+  console.log(`[Bonus Report] الوقت: ${timestamp}`);
+  console.log(`${'='.repeat(70)}`);
+  
+  // تنظيف الذاكرة من السجلات القديمة
+  cleanupMemory();
+  
+  try {
+    // جمع بيانات الفروع والفروقات
+    const branches = await db.getBranches();
+    const now = new Date();
+    const day = now.getDate();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    
+    // حساب رقم الأسبوع الحالي
+    let weekNumber: number;
+    if (day <= 7) weekNumber = 1;
+    else if (day <= 15) weekNumber = 2;
+    else if (day <= 22) weekNumber = 3;
+    else if (day <= 29) weekNumber = 4;
+    else weekNumber = 5;
+    
+    // جمع الفروقات من كل الفروع
+    const branchReports: Array<{
+      branchName: string;
+      hasDiscrepancy: boolean;
+      discrepancyCount: number;
+      totalDiff: number;
+    }> = [];
+    
+    let totalDiscrepancies = 0;
+    
+    for (const branch of branches.filter(b => b.isActive)) {
+      try {
+        const discrepancies = await db.detectBonusDiscrepancies(
+          branch.id,
+          weekNumber,
+          month,
+          year
+        );
+        
+        if (discrepancies.hasDiscrepancy) {
+          const totalDiff = discrepancies.discrepancies.reduce(
+            (sum, d) => sum + Math.abs(d.bonusDiff),
+            0
+          );
+          branchReports.push({
+            branchName: branch.nameAr || branch.name,
+            hasDiscrepancy: true,
+            discrepancyCount: discrepancies.discrepancies.length,
+            totalDiff,
+          });
+          totalDiscrepancies += discrepancies.discrepancies.length;
+        } else {
+          branchReports.push({
+            branchName: branch.nameAr || branch.name,
+            hasDiscrepancy: false,
+            discrepancyCount: 0,
+            totalDiff: 0,
+          });
+        }
+      } catch (error) {
+        console.error(`[Bonus Report] خطأ في فرع ${branch.name}:`, error);
+      }
+    }
+    
+    // إرسال التقرير بالبريد
+    const result = await emailNotifications.sendWeeklyBonusReport({
+      weekNumber,
+      month,
+      year,
+      totalDiscrepancies,
+      branchReports,
+    });
+    
+    console.log(`[Bonus Report] ✅ اكتمل الإرسال - ${result.sentCount} مستلم`);
+    console.log(`${'='.repeat(70)}\n`);
+    
+    return {
+      success: result.success,
+      sentCount: result.sentCount,
+      skipped: false,
+      timestamp,
+    };
+  } catch (error) {
+    console.error(`[Bonus Report] ❌ خطأ:`, error);
+    return {
+      success: false,
+      sentCount: 0,
+      skipped: false,
+      reason: `خطأ في إرسال التقرير: ${error}`,
+      timestamp,
+    };
+  }
+}
