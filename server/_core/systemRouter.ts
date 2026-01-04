@@ -6,8 +6,16 @@ import {
   stopScheduler, 
   getSchedulerStatus,
   checkMissingRevenues,
-  sendWeeklyReports
-} from "../scheduler/taskScheduler";
+  sendWeeklyReports,
+  getJobs,
+  getJob,
+  toggleJob,
+  runJobManually,
+  getExecutions,
+  getDeadLetterQueue as getSchedulerDeadLetter,
+  retryDeadLetter as retrySchedulerDeadLetter,
+  clearDeadLetterQueue,
+} from "../scheduler/cronScheduler";
 import {
   getQueueStats,
   getDeadLetterNotifications,
@@ -134,5 +142,75 @@ export const systemRouter = router({
     .mutation(() => {
       stopNotificationQueue();
       return { success: true, message: 'تم إيقاف Queue الإشعارات' };
+    }),
+
+  // ==================== APIs الجدولة المتقدمة ====================
+
+  // الحصول على قائمة المهام المجدولة
+  getScheduledJobs: adminProcedure
+    .query(() => {
+      return getJobs();
+    }),
+
+  // الحصول على مهمة بمعرفها
+  getScheduledJob: adminProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(({ input }) => {
+      return getJob(input.jobId);
+    }),
+
+  // تفعيل/تعطيل مهمة
+  toggleScheduledJob: adminProcedure
+    .input(z.object({ jobId: z.string(), isActive: z.boolean() }))
+    .mutation(({ input }) => {
+      const success = toggleJob(input.jobId, input.isActive);
+      return {
+        success,
+        message: success 
+          ? `تم ${input.isActive ? 'تفعيل' : 'تعطيل'} المهمة`
+          : 'المهمة غير موجودة'
+      };
+    }),
+
+  // تشغيل مهمة يدوياً
+  runScheduledJobManually: adminProcedure
+    .input(z.object({ jobId: z.string() }))
+    .mutation(async ({ input }) => {
+      return await runJobManually(input.jobId);
+    }),
+
+  // الحصول على سجل التنفيذات
+  getJobExecutions: adminProcedure
+    .input(z.object({ limit: z.number().optional() }).optional())
+    .query(({ input }) => {
+      return getExecutions(input?.limit || 20);
+    }),
+
+  // الحصول على Dead Letter Queue للجدولة
+  getSchedulerDeadLetter: adminProcedure
+    .query(() => {
+      return getSchedulerDeadLetter();
+    }),
+
+  // إعادة محاولة مهمة فاشلة
+  retrySchedulerDeadLetter: adminProcedure
+    .input(z.object({ jobId: z.string() }))
+    .mutation(async ({ input }) => {
+      const success = await retrySchedulerDeadLetter(input.jobId);
+      return {
+        success,
+        message: success ? 'تم إعادة تشغيل المهمة' : 'فشل إعادة التشغيل'
+      };
+    }),
+
+  // مسح Dead Letter Queue
+  clearSchedulerDeadLetter: adminProcedure
+    .mutation(() => {
+      const count = clearDeadLetterQueue();
+      return {
+        success: true,
+        count,
+        message: `تم مسح ${count} مهمة فاشلة`
+      };
     }),
 });

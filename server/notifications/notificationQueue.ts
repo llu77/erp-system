@@ -66,6 +66,7 @@ interface QueueStats {
   dead: number;
   totalProcessed: number;
   averageRetries: number;
+  isRunning: boolean;
 }
 
 // ==================== إعدادات Queue ====================
@@ -97,6 +98,7 @@ class NotificationQueue {
     dead: 0,
     totalProcessed: 0,
     averageRetries: 0,
+    isRunning: false,
   };
 
   /**
@@ -405,6 +407,7 @@ class NotificationQueue {
   getStats(): QueueStats & { queueSize: number; deadLetterSize: number } {
     return {
       ...this.stats,
+      isRunning: this.isRunning,
       queueSize: this.queue.size,
       deadLetterSize: this.deadLetterQueue.size,
     };

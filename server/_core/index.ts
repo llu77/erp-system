@@ -71,7 +71,7 @@ async function startServer() {
     
     // تشغيل نظام الجدولة في بيئة الإنتاج
     if (process.env.NODE_ENV === 'production') {
-      import('../scheduler/taskScheduler').then(({ startScheduler }) => {
+      import('../scheduler/cronScheduler').then(({ startScheduler }) => {
         startScheduler();
       }).catch(err => {
         console.error('Failed to start scheduler:', err);

@@ -200,6 +200,7 @@ const menuStructure: MenuItem[] = [
       { icon: Mail, label: "إعدادات التقارير", path: "/report-settings", roles: ["admin"] },
       { icon: Mail, label: "مستلمي الإشعارات", path: "/notification-recipients", roles: ["admin"] },
       { icon: Calendar, label: "مراقب النظام", path: "/scheduler", roles: ["admin"] },
+      { icon: Calendar, label: "لوحة الجدولة", path: "/scheduler-dashboard", roles: ["admin"] },
       { icon: Settings, label: "الإعدادات", path: "/settings", roles: ["admin"] },
       { icon: Users, label: "إعدادات الولاء", path: "/loyalty/settings", roles: ["admin"] },
     ]

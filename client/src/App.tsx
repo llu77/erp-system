@@ -49,6 +49,7 @@ import LoyaltyVisit from "./pages/LoyaltyVisit";
 import LoyaltySettings from "./pages/LoyaltySettings";
 import LoyaltyReport from "./pages/LoyaltyReport";
 import SmartAlerts from "./pages/SmartAlerts";
+import SchedulerDashboard from "./pages/SchedulerDashboard";
 
 function Router() {
   return (
@@ -223,6 +224,12 @@ function Router() {
       <Route path="/scheduler">
         <DashboardLayout>
           <SchedulerSettings />
+        </DashboardLayout>
+      </Route>
+      {/* Scheduler Dashboard - Advanced */}
+      <Route path="/scheduler-dashboard">
+        <DashboardLayout>
+          <SchedulerDashboard />
         </DashboardLayout>
       </Route>
       {/* Notification Recipients */}
