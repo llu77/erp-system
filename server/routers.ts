@@ -31,7 +31,7 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 // إجراء للمشرف - إدخال فقط بدون تعديل أو حذف
 const supervisorInputProcedure = protectedProcedure.use(({ ctx, next }) => {
   // المشرف والموظف يمكنهم الإدخال فقط
-  const allowedRoles = ['admin', 'manager', 'employee', 'supervisor'];
+  const allowedRoles = ['admin', 'manager', 'employee', 'supervisor', 'viewer'];
   if (!allowedRoles.includes(ctx.user.role)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بهذا الإجراء' });
   }
@@ -5305,7 +5305,7 @@ ${discrepancyRows}
       return await getLoyaltyVisitsByBranch(ctx.user.branchId);
     }),
 
-    // الموافقة على زيارة (للمشرفين)
+      // موافقة زيارة (للمشرفين والمشاهدين)
     approveVisit: supervisorInputProcedure
       .input(z.object({
         visitId: z.number(),
@@ -5329,7 +5329,7 @@ ${discrepancyRows}
         return await approveVisit(input.visitId, ctx.user.id);
       }),
 
-    // رفض زيارة (للمشرفين)
+    // رفض زيارة (للمشرفين والمشاهدين)
     rejectVisit: supervisorInputProcedure
       .input(z.object({
         visitId: z.number(),
