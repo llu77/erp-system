@@ -48,8 +48,9 @@ import LoyaltyRegister from "./pages/LoyaltyRegister";
 import LoyaltyVisit from "./pages/LoyaltyVisit";
 import LoyaltySettings from "./pages/LoyaltySettings";
 import LoyaltyReport from "./pages/LoyaltyReport";
-import SmartAlerts from "./pages/SmartAlerts";
+import MonitoringDashboard from "./pages/MonitoringDashboard";
 import SchedulerDashboard from "./pages/SchedulerDashboard";
+import SmartAlerts from "./pages/SmartAlerts";
 
 function Router() {
   return (
@@ -191,6 +192,10 @@ function Router() {
         <DashboardLayout>
           <PermissionsManagement />
         </DashboardLayout>
+      </Route>
+      {/* Monitoring Dashboard */}
+      <Route path="/monitoring">
+        <MonitoringDashboard />
       </Route>
       {/* Advanced Inventory */}
       <Route path="/advanced-inventory">
