@@ -54,6 +54,8 @@ import {
   Image,
   X,
   Eye,
+  Download,
+  FileSpreadsheet,
 } from "lucide-react";
 
 // تصنيفات المصاريف
@@ -189,6 +191,9 @@ export default function Expenses() {
   
   // حالة عرض قسم السلف
   const [showAdvances, setShowAdvances] = useState(false);
+  const [advancesDateFrom, setAdvancesDateFrom] = useState('');
+  const [advancesDateTo, setAdvancesDateTo] = useState('');
+  const [advancesStatusFilter, setAdvancesStatusFilter] = useState<'all' | 'deducted' | 'pending'>('all');
 
   // Mutations
   const createMutation = trpc.expenses.create.useMutation({
@@ -352,6 +357,199 @@ export default function Expenses() {
 
   // حساب إجمالي المصاريف المفلترة
   const filteredTotal = filteredExpenses?.reduce((sum, exp) => sum + parseFloat(exp.amount || '0'), 0) || 0;
+
+  // تصدير السلف إلى Excel
+  const exportAdvancesToExcel = () => {
+    if (!advances || advances.length === 0) {
+      toast.error('لا توجد بيانات للتصدير');
+      return;
+    }
+
+    // تطبيق الفلاتر
+    const filteredAdvances = advances.filter((advance: any) => {
+      if (advancesStatusFilter === 'deducted' && !advance.isDeducted) return false;
+      if (advancesStatusFilter === 'pending' && advance.isDeducted) return false;
+      if (advancesDateFrom && advance.approvedAt) {
+        const approvedDate = new Date(advance.approvedAt);
+        const fromDate = new Date(advancesDateFrom);
+        if (approvedDate < fromDate) return false;
+      }
+      if (advancesDateTo && advance.approvedAt) {
+        const approvedDate = new Date(advance.approvedAt);
+        const toDate = new Date(advancesDateTo);
+        toDate.setHours(23, 59, 59, 999);
+        if (approvedDate > toDate) return false;
+      }
+      return true;
+    });
+
+    // إنشاء محتوى CSV
+    const headers = ['الموظف', 'المبلغ', 'السبب', 'تاريخ الموافقة', 'الموافق', 'حالة الخصم', 'تاريخ الخصم'];
+    const rows = filteredAdvances.map((advance: any) => [
+      advance.employeeName,
+      advance.amount,
+      advance.reason || advance.title || '',
+      advance.approvedAt ? new Date(advance.approvedAt).toLocaleDateString('ar-SA') : '',
+      advance.approvedBy || '',
+      advance.isDeducted ? 'تم الخصم' : 'لم يخصم بعد',
+      advance.deductedAt ? new Date(advance.deductedAt).toLocaleDateString('ar-SA') : '',
+    ]);
+
+    // إضافة سطر الإجمالي
+    const totalAmount = filteredAdvances.reduce((sum: number, adv: any) => sum + adv.amount, 0);
+    rows.push(['', '', '', '', '', '', '']);
+    rows.push(['الإجمالي', totalAmount.toString(), '', '', '', '', '']);
+
+    // إنشاء CSV مع BOM لدعم العربية
+    const BOM = '\uFEFF';
+    const csvContent = BOM + [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `السلف_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('تم تصدير السلف بنجاح');
+  };
+
+  // تصدير السلف إلى PDF
+  const exportAdvancesToPDF = () => {
+    if (!advances || advances.length === 0) {
+      toast.error('لا توجد بيانات للتصدير');
+      return;
+    }
+
+    // تطبيق الفلاتر
+    const filteredAdvances = advances.filter((advance: any) => {
+      if (advancesStatusFilter === 'deducted' && !advance.isDeducted) return false;
+      if (advancesStatusFilter === 'pending' && advance.isDeducted) return false;
+      if (advancesDateFrom && advance.approvedAt) {
+        const approvedDate = new Date(advance.approvedAt);
+        const fromDate = new Date(advancesDateFrom);
+        if (approvedDate < fromDate) return false;
+      }
+      if (advancesDateTo && advance.approvedAt) {
+        const approvedDate = new Date(advance.approvedAt);
+        const toDate = new Date(advancesDateTo);
+        toDate.setHours(23, 59, 59, 999);
+        if (approvedDate > toDate) return false;
+      }
+      return true;
+    });
+
+    const totalAmount = filteredAdvances.reduce((sum: number, adv: any) => sum + adv.amount, 0);
+    const deductedAmount = filteredAdvances.filter((a: any) => a.isDeducted).reduce((sum: number, adv: any) => sum + adv.amount, 0);
+    const pendingAmount = filteredAdvances.filter((a: any) => !a.isDeducted).reduce((sum: number, adv: any) => sum + adv.amount, 0);
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('يرجى السماح بالنوافذ المنبثقة');
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>تقرير السلف</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap');
+          body { 
+            font-family: 'Tajawal', Arial, sans-serif; 
+            padding: 30px; 
+            background: #fff;
+            color: #000;
+          }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+          .header h1 { font-size: 24px; margin-bottom: 10px; }
+          .header p { color: #666; }
+          .stats { display: flex; justify-content: space-around; margin-bottom: 30px; }
+          .stat-box { text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 8px; min-width: 150px; }
+          .stat-box .value { font-size: 20px; font-weight: bold; color: #333; }
+          .stat-box .label { font-size: 12px; color: #666; margin-top: 5px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 10px; text-align: right; }
+          th { background: #f5f5f5; font-weight: 600; }
+          tr:nth-child(even) { background: #fafafa; }
+          .deducted { color: #16a34a; }
+          .pending { color: #ca8a04; }
+          .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
+          @media print { body { padding: 10px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>تقرير السلف المأخوذة</h1>
+          <p>تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</p>
+          ${advancesDateFrom || advancesDateTo ? `<p>الفترة: ${advancesDateFrom || 'البداية'} - ${advancesDateTo || 'النهاية'}</p>` : ''}
+        </div>
+        
+        <div class="stats">
+          <div class="stat-box">
+            <div class="value">${filteredAdvances.length}</div>
+            <div class="label">إجمالي السلف</div>
+          </div>
+          <div class="stat-box">
+            <div class="value">${totalAmount.toLocaleString()} ر.س</div>
+            <div class="label">إجمالي المبالغ</div>
+          </div>
+          <div class="stat-box">
+            <div class="value">${deductedAmount.toLocaleString()} ر.س</div>
+            <div class="label">المخصومة</div>
+          </div>
+          <div class="stat-box">
+            <div class="value">${pendingAmount.toLocaleString()} ر.س</div>
+            <div class="label">غير مخصومة</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>الموظف</th>
+              <th>المبلغ</th>
+              <th>السبب</th>
+              <th>تاريخ الموافقة</th>
+              <th>الموافق</th>
+              <th>الحالة</th>
+              <th>تاريخ الخصم</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredAdvances.map((advance: any, index: number) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${advance.employeeName}</td>
+                <td>${advance.amount.toLocaleString()} ر.س</td>
+                <td>${advance.reason || advance.title || '-'}</td>
+                <td>${advance.approvedAt ? new Date(advance.approvedAt).toLocaleDateString('ar-SA') : '-'}</td>
+                <td>${advance.approvedBy || '-'}</td>
+                <td class="${advance.isDeducted ? 'deducted' : 'pending'}">
+                  ${advance.isDeducted ? 'تم الخصم' : 'لم يخصم بعد'}
+                </td>
+                <td>${advance.deductedAt ? new Date(advance.deductedAt).toLocaleDateString('ar-SA') : '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <p>تم إنشاء هذا التقرير بواسطة نظام ERP</p>
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   // طباعة تقرير المصاريف
   const printExpensesReport = () => {
@@ -1189,6 +1387,81 @@ export default function Expenses() {
                 </div>
               )}
 
+              {/* فلاتر السلف */}
+              <div className="flex flex-wrap gap-4 mb-4 p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">من:</label>
+                  <Input
+                    type="date"
+                    value={advancesDateFrom}
+                    onChange={(e) => setAdvancesDateFrom(e.target.value)}
+                    className="w-40"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">إلى:</label>
+                  <Input
+                    type="date"
+                    value={advancesDateTo}
+                    onChange={(e) => setAdvancesDateTo(e.target.value)}
+                    className="w-40"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium">الحالة:</label>
+                  <Select
+                    value={advancesStatusFilter}
+                    onValueChange={(v) => setAdvancesStatusFilter(v as 'all' | 'deducted' | 'pending')}
+                  >
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      <SelectItem value="deducted">مخصومة</SelectItem>
+                      <SelectItem value="pending">غير مخصومة</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(advancesDateFrom || advancesDateTo || advancesStatusFilter !== 'all') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setAdvancesDateFrom('');
+                      setAdvancesDateTo('');
+                      setAdvancesStatusFilter('all');
+                    }}
+                  >
+                    <X className="h-4 w-4 ml-1" />
+                    مسح الفلاتر
+                  </Button>
+                )}
+                
+                {/* أزرار التصدير */}
+                <div className="flex-1" />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportAdvancesToExcel()}
+                    disabled={!advances || advances.length === 0}
+                  >
+                    <FileSpreadsheet className="h-4 w-4 ml-1" />
+                    Excel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportAdvancesToPDF()}
+                    disabled={!advances || advances.length === 0}
+                  >
+                    <Download className="h-4 w-4 ml-1" />
+                    PDF
+                  </Button>
+                </div>
+              </div>
+
               {/* جدول السلف */}
               {advances && advances.length > 0 ? (
                 <div className="overflow-x-auto">
@@ -1205,7 +1478,27 @@ export default function Expenses() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {advances.map((advance: any) => (
+                      {advances
+                        .filter((advance: any) => {
+                          // فلترة الحالة
+                          if (advancesStatusFilter === 'deducted' && !advance.isDeducted) return false;
+                          if (advancesStatusFilter === 'pending' && advance.isDeducted) return false;
+                          
+                          // فلترة التاريخ
+                          if (advancesDateFrom && advance.approvedAt) {
+                            const approvedDate = new Date(advance.approvedAt);
+                            const fromDate = new Date(advancesDateFrom);
+                            if (approvedDate < fromDate) return false;
+                          }
+                          if (advancesDateTo && advance.approvedAt) {
+                            const approvedDate = new Date(advance.approvedAt);
+                            const toDate = new Date(advancesDateTo);
+                            toDate.setHours(23, 59, 59, 999);
+                            if (approvedDate > toDate) return false;
+                          }
+                          return true;
+                        })
+                        .map((advance: any) => (
                         <TableRow key={advance.id}>
                           <TableCell className="font-medium">{advance.employeeName}</TableCell>
                           <TableCell>
