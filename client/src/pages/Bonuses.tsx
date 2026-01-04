@@ -369,22 +369,25 @@ export default function Bonuses() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* العنوان واختيار الفرع */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Gift className="h-6 w-6 text-primary" />
-              البونص الأسبوعي
-            </h1>
-            <p className="text-muted-foreground">إدارة ومتابعة البونص الأسبوعي للموظفين</p>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold flex items-center gap-2`}>
+                <Gift className="h-6 w-6 text-primary" />
+                البونص الأسبوعي
+              </h1>
+              <p className="text-muted-foreground text-sm">إدارة ومتابعة البونص الأسبوعي للموظفين</p>
+            </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          {/* الأزرار والفلاتر */}
+          <div className={`flex ${isMobile ? 'flex-col' : 'flex-row flex-wrap'} items-stretch gap-2`}>
             {user?.role === "admin" && branches && branches.length > 0 && (
               <Select
                 value={effectiveBranchId?.toString() || ""}
                 onValueChange={(v) => setSelectedBranchId(Number(v))}
               >
-                <SelectTrigger className="w-48">
+                <SelectTrigger className={isMobile ? "w-full" : "w-48"}>
                   <SelectValue placeholder="اختر الفرع" />
                 </SelectTrigger>
                 <SelectContent>
@@ -397,46 +400,59 @@ export default function Bonuses() {
               </Select>
             )}
             
-            <Button variant="outline" onClick={handleSync} disabled={syncMutation.isPending}>
-              <RefreshCw className={`h-4 w-4 ml-2 ${syncMutation.isPending ? "animate-spin" : ""}`} />
-              تزامن
-            </Button>
-            
-            {currentBonus && currentBonus.details && currentBonus.details.length > 0 && (
-              <Button variant="outline" onClick={handleExportPDF} disabled={isExporting}>
-                {isExporting ? (
-                  <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4 ml-2" />
-                )}
-                تصدير PDF
+            <div className={`flex ${isMobile ? 'w-full' : ''} gap-2`}>
+              <Button 
+                variant="outline" 
+                onClick={handleSync} 
+                disabled={syncMutation.isPending}
+                className={isMobile ? "flex-1" : ""}
+              >
+                <RefreshCw className={`h-4 w-4 ${isMobile ? '' : 'ml-2'} ${syncMutation.isPending ? "animate-spin" : ""}`} />
+                {!isMobile && "تزامن"}
               </Button>
-            )}
+              
+              {currentBonus && currentBonus.details && currentBonus.details.length > 0 && (
+                <Button 
+                  variant="outline" 
+                  onClick={handleExportPDF} 
+                  disabled={isExporting}
+                  className={isMobile ? "flex-1" : ""}
+                >
+                  {isExporting ? (
+                    <Loader2 className={`h-4 w-4 ${isMobile ? '' : 'ml-2'} animate-spin`} />
+                  ) : (
+                    <Download className={`h-4 w-4 ${isMobile ? '' : 'ml-2'}`} />
+                  )}
+                  {!isMobile && "تصدير PDF"}
+                </Button>
+              )}
+            </div>
             
             {user?.role === 'admin' && (
-              <>
+              <div className={`flex ${isMobile ? 'w-full' : ''} gap-2`}>
                 <Button 
                   variant="outline" 
                   onClick={() => setShowStatsPanel(!showStatsPanel)}
-                  className={showStatsPanel ? "bg-primary/10" : ""}
+                  className={`${showStatsPanel ? "bg-primary/10" : ""} ${isMobile ? "flex-1" : ""}`}
                 >
-                  <BarChart3 className="h-4 w-4 ml-2" />
-                  إحصائيات الفروقات
+                  <BarChart3 className={`h-4 w-4 ${isMobile ? '' : 'ml-2'}`} />
+                  {!isMobile && "إحصائيات الفروقات"}
                 </Button>
                 
                 <Button 
                   variant="outline" 
                   onClick={() => sendWeeklyReportMutation.mutate()}
                   disabled={sendWeeklyReportMutation.isPending}
+                  className={isMobile ? "flex-1" : ""}
                 >
                   {sendWeeklyReportMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                    <Loader2 className={`h-4 w-4 ${isMobile ? '' : 'ml-2'} animate-spin`} />
                   ) : (
-                    <Mail className="h-4 w-4 ml-2" />
+                    <Mail className={`h-4 w-4 ${isMobile ? '' : 'ml-2'}`} />
                   )}
-                  إرسال تقرير أسبوعي
+                  {!isMobile && "إرسال تقرير أسبوعي"}
                 </Button>
-              </>
+              </div>
             )}
           </div>
         </div>
