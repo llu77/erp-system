@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useIsMobile } from "@/hooks/useMobile";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -56,6 +57,7 @@ import {
 
 export default function Bonuses() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   const [showRequestDialog, setShowRequestDialog] = useState(false);
   const [selectedBonusId, setSelectedBonusId] = useState<number | null>(null);
@@ -464,7 +466,7 @@ export default function Bonuses() {
               ) : allDiscrepancies && allDiscrepancies.branches.length > 0 ? (
                 <div className="space-y-6">
                   {/* ملخص الإحصائيات */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className={`grid gap-3 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'}`}>
                     <div className="bg-white rounded-lg p-4 border border-blue-200">
                       <div className="text-3xl font-bold text-blue-600">{allDiscrepancies.totalDiscrepancies}</div>
                       <div className="text-sm text-muted-foreground">إجمالي الفروقات</div>
@@ -589,7 +591,7 @@ export default function Bonuses() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className={`grid gap-3 mb-6 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'}`}>
                 <div className="bg-primary/10 rounded-lg p-4 text-center">
                   <DollarSign className="h-8 w-8 mx-auto mb-2 text-primary" />
                   <div className="text-2xl font-bold text-primary">{Number(currentBonus.totalAmount).toFixed(2)}</div>

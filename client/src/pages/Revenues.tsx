@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useIsMobile } from "@/hooks/useMobile";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -56,6 +57,7 @@ interface EmployeeRevenueInput {
 
 export default function Revenues() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [unmatchReason, setUnmatchReason] = useState("");
@@ -307,7 +309,7 @@ export default function Revenues() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
               <div>
                 <Label>الفرع</Label>
                 <Select
@@ -349,7 +351,7 @@ export default function Revenues() {
             <CardDescription>إجمالي إيرادات الفرع لهذا اليوم</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'}`}>
               <div>
                 <Label>نقدي</Label>
                 <Input
@@ -661,6 +663,7 @@ export default function Revenues() {
 
 // مكون سجل الإيرادات الشهري
 function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: number | null; selectedDate: string; userRole?: string }) {
+  const isMobile = useIsMobile();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [revenueToDelete, setRevenueToDelete] = useState<number | null>(null);
   const utils = trpc.useUtils();
@@ -868,7 +871,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
         ) : monthlyRevenues && monthlyRevenues.length > 0 ? (
           <>
             {/* ملخص الشهر */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 p-4 bg-muted/30 rounded-lg">
+            <div className={`grid gap-3 mb-6 p-4 bg-muted/30 rounded-lg ${isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-5'}`}>
               <div className="text-center">
                 <div className="text-lg font-semibold text-green-600">{totals.cash.toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">إجمالي النقدي</div>

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useIsMobile } from "@/hooks/useMobile";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Building2 } from "lucide-react";
 import {
@@ -52,6 +53,7 @@ const formatDate = (date: Date) => {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
   const { data: lowStockProducts } = trpc.products.getLowStock.useQuery();
   const { data: branches } = trpc.branches.list.useQuery();
@@ -143,7 +145,7 @@ export default function Dashboard() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className={`grid gap-3 sm:gap-4 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'}`}>
         {statsCards.map((stat, index) => (
           <Card key={index} className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
@@ -239,8 +241,8 @@ export default function Dashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {lowStockProducts.slice(0, 4).map((product) => (
+            <div className={`grid gap-3 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
+              {lowStockProducts.slice(0, isMobile ? 4 : 4).map((product) => (
                 <div
                   key={product.id}
                   className="flex items-center justify-between p-3 bg-white rounded-lg border border-orange-200"
@@ -260,7 +262,7 @@ export default function Dashboard() {
       )}
 
       {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={`grid gap-4 sm:gap-6 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
         {/* Recent Invoices */}
         <Card>
           <CardHeader>
