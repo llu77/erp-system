@@ -891,3 +891,96 @@ export async function sendOverdueTasksReport(adminEmails: string[]): Promise<boo
     return false;
   }
 }
+
+
+// ==================== تنبيه فروقات البونص ====================
+export interface BonusDiscrepancyAlertData {
+  branchName: string;
+  weekNumber: number;
+  month: number;
+  year: number;
+  discrepancies: Array<{
+    employeeName: string;
+    registeredRevenue: number;
+    actualRevenue: number;
+    revenueDiff: number;
+    registeredBonus: number;
+    expectedBonus: number;
+    bonusDiff: number;
+  }>;
+}
+
+export async function sendBonusDiscrepancyAlert(
+  recipientEmail: string,
+  data: BonusDiscrepancyAlertData
+): Promise<boolean> {
+  try {
+    const html = `
+      <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px; background: #fff; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #dc2626, #b91c1c); padding: 20px; border-radius: 12px 12px 0 0;">
+          <h2 style="color: white; margin: 0;">⚠️ تنبيه: فروقات في حساب البونص</h2>
+        </div>
+        
+        <div style="padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
+          <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <p style="margin: 5px 0;"><strong>الفرع:</strong> ${data.branchName}</p>
+            <p style="margin: 5px 0;"><strong>الأسبوع:</strong> ${data.weekNumber}</p>
+            <p style="margin: 5px 0;"><strong>الفترة:</strong> ${data.month}/${data.year}</p>
+          </div>
+          
+          <h3 style="color: #dc2626; border-bottom: 2px solid #dc2626; padding-bottom: 10px;">
+            الفروقات المكتشفة (${data.discrepancies.length})
+          </h3>
+          
+          <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+            <thead>
+              <tr style="background: #1f2937; color: white;">
+                <th style="padding: 12px 8px; text-align: right; border: 1px solid #374151;">الموظف</th>
+                <th style="padding: 12px 8px; text-align: center; border: 1px solid #374151;">إيراد مسجل</th>
+                <th style="padding: 12px 8px; text-align: center; border: 1px solid #374151;">إيراد فعلي</th>
+                <th style="padding: 12px 8px; text-align: center; border: 1px solid #374151;">الفرق</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.discrepancies.map((d, i) => `
+                <tr style="background: ${i % 2 === 0 ? '#f9fafb' : '#ffffff'};">
+                  <td style="padding: 10px 8px; border: 1px solid #e5e7eb;">${d.employeeName}</td>
+                  <td style="padding: 10px 8px; border: 1px solid #e5e7eb; text-align: center;">${d.registeredRevenue.toFixed(2)} ر.س</td>
+                  <td style="padding: 10px 8px; border: 1px solid #e5e7eb; text-align: center;">${d.actualRevenue.toFixed(2)} ر.س</td>
+                  <td style="padding: 10px 8px; border: 1px solid #e5e7eb; text-align: center; color: ${d.revenueDiff > 0 ? '#16a34a' : '#dc2626'}; font-weight: bold;">
+                    ${d.revenueDiff > 0 ? '+' : ''}${d.revenueDiff.toFixed(2)} ر.س
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <div style="margin-top: 25px; padding: 15px; background: #fef3c7; border-radius: 8px; border-right: 4px solid #f59e0b;">
+            <p style="margin: 0; color: #92400e;">
+              <strong>⚡ إجراء مطلوب:</strong> يرجى مراجعة الإيرادات المدخلة وإعادة تزامن البونص من لوحة التحكم.
+            </p>
+          </div>
+        </div>
+        
+        <div style="background: #1f2937; padding: 15px; border-radius: 0 0 12px 12px; text-align: center;">
+          <p style="color: #9ca3af; margin: 0; font-size: 12px;">
+            Symbol AI - نظام إدارة الأعمال
+          </p>
+        </div>
+      </div>
+    `;
+
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: recipientEmail,
+      subject: `⚠️ تنبيه فروقات البونص - ${data.branchName} - الأسبوع ${data.weekNumber}`,
+      html,
+    });
+
+    console.log(`✓ تم إرسال تنبيه فروقات البونص إلى: ${recipientEmail}`);
+    return true;
+  } catch (error) {
+    console.error(`✗ فشل إرسال تنبيه فروقات البونص إلى ${recipientEmail}:`, error);
+    return false;
+  }
+}

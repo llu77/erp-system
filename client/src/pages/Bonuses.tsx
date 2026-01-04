@@ -22,7 +22,11 @@ import {
   Send,
   TrendingUp,
   Download,
-  Loader2
+  Loader2,
+  AlertTriangle,
+  History,
+  Mail,
+  FileText
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -43,6 +47,8 @@ export default function Bonuses() {
   const [showRequestDialog, setShowRequestDialog] = useState(false);
   const [selectedBonusId, setSelectedBonusId] = useState<number | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [showAuditLog, setShowAuditLog] = useState(false);
+  const [showDiscrepancies, setShowDiscrepancies] = useState(false);
 
   // جلب الفروع
   const { data: branches, isLoading: branchesLoading } = trpc.branches.list.useQuery();
@@ -61,6 +67,47 @@ export default function Bonuses() {
     { branchId: effectiveBranchId!, limit: 10 },
     { enabled: !!effectiveBranchId }
   );
+
+  // جلب سجل التدقيق
+  const { data: auditLogs, isLoading: auditLoading, refetch: refetchAudit } = trpc.bonuses.auditLogs.useQuery(
+    { branchId: effectiveBranchId!, limit: 20 },
+    { enabled: !!effectiveBranchId && showAuditLog }
+  );
+
+  // جلب الفروقات
+  const now = new Date();
+  const day = now.getDate();
+  let currentWeekNumber: 1 | 2 | 3 | 4 | 5 = 1;
+  if (day <= 7) currentWeekNumber = 1;
+  else if (day <= 15) currentWeekNumber = 2;
+  else if (day <= 22) currentWeekNumber = 3;
+  else if (day <= 29) currentWeekNumber = 4;
+  else currentWeekNumber = 5;
+
+  const { data: discrepancies, isLoading: discrepanciesLoading, refetch: refetchDiscrepancies } = trpc.bonuses.detectDiscrepancies.useQuery(
+    { 
+      branchId: effectiveBranchId!, 
+      weekNumber: currentWeekNumber,
+      month: now.getMonth() + 1,
+      year: now.getFullYear()
+    },
+    { enabled: !!effectiveBranchId && showDiscrepancies }
+  );
+
+  // إرسال تنبيه الفروقات
+  const sendAlertMutation = trpc.bonuses.sendDiscrepancyAlert.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success(result.message);
+        refetchAudit();
+      } else {
+        toast.error(result.message);
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "فشل إرسال التنبيه");
+    },
+  });
 
   // طلب صرف البونص
   const requestMutation = trpc.bonuses.request.useMutation({
@@ -442,6 +489,174 @@ export default function Bonuses() {
                 <RefreshCw className="h-4 w-4 ml-2" />
                 تزامن البونص
               </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* أزرار التدقيق والفروقات */}
+        {user?.role === 'admin' && (
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              variant={showDiscrepancies ? "default" : "outline"}
+              onClick={() => {
+                setShowDiscrepancies(!showDiscrepancies);
+                if (!showDiscrepancies) refetchDiscrepancies();
+              }}
+              className="gap-2"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              فحص الفروقات
+            </Button>
+            <Button 
+              variant={showAuditLog ? "default" : "outline"}
+              onClick={() => {
+                setShowAuditLog(!showAuditLog);
+                if (!showAuditLog) refetchAudit();
+              }}
+              className="gap-2"
+            >
+              <History className="h-4 w-4" />
+              سجل التدقيق
+            </Button>
+          </div>
+        )}
+
+        {/* بطاقة الفروقات */}
+        {showDiscrepancies && (
+          <Card className="border-amber-500/50">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-amber-600">
+                    <AlertTriangle className="h-5 w-5" />
+                    فحص الفروقات - الأسبوع {currentWeekNumber}
+                  </CardTitle>
+                  <CardDescription>
+                    مقارنة الإيرادات المسجلة مع البونص المحسوب
+                  </CardDescription>
+                </div>
+                {discrepancies?.hasDiscrepancy && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => sendAlertMutation.mutate({
+                      branchId: effectiveBranchId!,
+                      weekNumber: currentWeekNumber,
+                      month: now.getMonth() + 1,
+                      year: now.getFullYear()
+                    })}
+                    disabled={sendAlertMutation.isPending}
+                    className="gap-2"
+                  >
+                    <Mail className="h-4 w-4" />
+                    {sendAlertMutation.isPending ? "جاري الإرسال..." : "إرسال تنبيه"}
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {discrepanciesLoading ? (
+                <Skeleton className="h-32 w-full" />
+              ) : discrepancies?.hasDiscrepancy ? (
+                <div className="space-y-4">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <p className="text-amber-800 font-medium">
+                      ⚠️ تم اكتشاف {discrepancies.discrepancies.length} فروقات في البونص
+                    </p>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">الموظف</TableHead>
+                        <TableHead className="text-right">إيراد مسجل</TableHead>
+                        <TableHead className="text-right">إيراد فعلي</TableHead>
+                        <TableHead className="text-right">الفرق</TableHead>
+                        <TableHead className="text-right">بونص مسجل</TableHead>
+                        <TableHead className="text-right">بونص متوقع</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {discrepancies.discrepancies.map((d, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{d.employeeName}</TableCell>
+                          <TableCell>{d.registeredRevenue.toFixed(2)} ر.س</TableCell>
+                          <TableCell>{d.actualRevenue.toFixed(2)} ر.س</TableCell>
+                          <TableCell className={d.revenueDiff > 0 ? "text-green-600" : "text-red-600"}>
+                            {d.revenueDiff > 0 ? "+" : ""}{d.revenueDiff.toFixed(2)} ر.س
+                          </TableCell>
+                          <TableCell>{d.registeredBonus.toFixed(2)} ر.س</TableCell>
+                          <TableCell className="font-bold">{d.expectedBonus.toFixed(2)} ر.س</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+                  <p className="text-green-600 font-medium">✅ لا توجد فروقات - البيانات متطابقة</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* سجل التدقيق */}
+        {showAuditLog && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                سجل تدقيق البونص
+              </CardTitle>
+              <CardDescription>تتبع جميع التغييرات على البونص</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {auditLoading ? (
+                <Skeleton className="h-48 w-full" />
+              ) : auditLogs && auditLogs.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">التاريخ</TableHead>
+                      <TableHead className="text-right">الإجراء</TableHead>
+                      <TableHead className="text-right">الفرع</TableHead>
+                      <TableHead className="text-right">الأسبوع</TableHead>
+                      <TableHead className="text-right">بواسطة</TableHead>
+                      <TableHead className="text-right">التفاصيل</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {auditLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-sm">
+                          {format(new Date(log.performedAt), "d/M/yyyy HH:mm", { locale: ar })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={log.action.includes('alert') ? 'destructive' : log.action.includes('approve') ? 'default' : 'secondary'}>
+                            {log.action === 'sync' ? 'تزامن' :
+                             log.action === 'request' ? 'طلب صرف' :
+                             log.action === 'approve' ? 'موافقة' :
+                             log.action === 'reject' ? 'رفض' :
+                             log.action === 'discrepancy_alert_sent' ? 'تنبيه فروقات' :
+                             log.action}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{log.branchName || '-'}</TableCell>
+                        <TableCell>الأسبوع {log.weekNumber} - {log.month}/{log.year}</TableCell>
+                        <TableCell>{log.userName || '-'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                          {log.details || '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  لا يوجد سجل تدقيق
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

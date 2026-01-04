@@ -5863,3 +5863,191 @@ export async function getTotalEmployeesRevenue(
 
   return Number(result[0]?.total || 0);
 }
+
+
+// ==================== دوال سجل تدقيق البونص ====================
+
+/**
+ * الحصول على سجل تدقيق البونص
+ */
+export async function getBonusAuditLogs(filters?: {
+  weeklyBonusId?: number;
+  branchId?: number;
+  limit?: number;
+  offset?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  let query = db
+    .select({
+      id: bonusAuditLog.id,
+      weeklyBonusId: bonusAuditLog.weeklyBonusId,
+      action: bonusAuditLog.action,
+      oldStatus: bonusAuditLog.oldStatus,
+      newStatus: bonusAuditLog.newStatus,
+      performedBy: bonusAuditLog.performedBy,
+      performedAt: bonusAuditLog.performedAt,
+      details: bonusAuditLog.details,
+      userName: users.name,
+      weekNumber: weeklyBonuses.weekNumber,
+      month: weeklyBonuses.month,
+      year: weeklyBonuses.year,
+      branchName: branches.name,
+    })
+    .from(bonusAuditLog)
+    .leftJoin(users, eq(bonusAuditLog.performedBy, users.id))
+    .leftJoin(weeklyBonuses, eq(bonusAuditLog.weeklyBonusId, weeklyBonuses.id))
+    .leftJoin(branches, eq(weeklyBonuses.branchId, branches.id))
+    .orderBy(desc(bonusAuditLog.performedAt));
+
+  if (filters?.weeklyBonusId) {
+    query = query.where(eq(bonusAuditLog.weeklyBonusId, filters.weeklyBonusId)) as typeof query;
+  }
+
+  if (filters?.branchId) {
+    query = query.where(eq(weeklyBonuses.branchId, filters.branchId)) as typeof query;
+  }
+
+  if (filters?.limit) {
+    query = query.limit(filters.limit) as typeof query;
+  }
+
+  if (filters?.offset) {
+    query = query.offset(filters.offset) as typeof query;
+  }
+
+  return await query;
+}
+
+/**
+ * الكشف عن فروقات البونص - مقارنة الإيرادات المحسوبة مع البونص المسجل
+ */
+export async function detectBonusDiscrepancies(branchId: number, weekNumber: number, month: number, year: number) {
+  const db = await getDb();
+  if (!db) return { hasDiscrepancy: false, discrepancies: [], summary: null };
+
+  // الحصول على البونص المسجل
+  const weeklyBonus = await db
+    .select()
+    .from(weeklyBonuses)
+    .where(
+      and(
+        eq(weeklyBonuses.branchId, branchId),
+        eq(weeklyBonuses.weekNumber, weekNumber),
+        eq(weeklyBonuses.month, month),
+        eq(weeklyBonuses.year, year)
+      )
+    )
+    .limit(1);
+
+  if (weeklyBonus.length === 0) {
+    return { hasDiscrepancy: false, discrepancies: [], summary: null };
+  }
+
+  const bonusRecord = weeklyBonus[0];
+
+  // الحصول على تفاصيل البونص المسجلة
+  const registeredDetails = await db
+    .select({
+      employeeId: bonusDetails.employeeId,
+      employeeName: employees.name,
+      registeredRevenue: bonusDetails.weeklyRevenue,
+      registeredBonus: bonusDetails.bonusAmount,
+      bonusTier: bonusDetails.bonusTier,
+    })
+    .from(bonusDetails)
+    .leftJoin(employees, eq(bonusDetails.employeeId, employees.id))
+    .where(eq(bonusDetails.weeklyBonusId, bonusRecord.id));
+
+  // حساب تواريخ الأسبوع
+  const weekStart = new Date(year, month - 1, (weekNumber - 1) * 7 + 1);
+  weekStart.setUTCHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  weekEnd.setUTCHours(23, 59, 59, 999);
+
+  // الحصول على الإيرادات الفعلية من قاعدة البيانات
+  const actualRevenues = await getAllEmployeesWeeklyRevenues(branchId, weekStart, weekEnd);
+
+  const discrepancies: Array<{
+    employeeId: number;
+    employeeName: string;
+    registeredRevenue: number;
+    actualRevenue: number;
+    revenueDiff: number;
+    registeredBonus: number;
+    expectedBonus: number;
+    bonusDiff: number;
+  }> = [];
+
+  // مقارنة كل موظف
+  for (const detail of registeredDetails) {
+    const actualData = actualRevenues.get(detail.employeeId);
+    const actualRevenue = actualData?.revenue || 0;
+    const registeredRevenue = Number(detail.registeredRevenue || 0);
+    const registeredBonus = Number(detail.registeredBonus || 0);
+
+    // حساب البونص المتوقع بناءً على الإيراد الفعلي
+    const { calculateBonus } = await import('./bonus/calculator');
+    const expectedBonusCalc = calculateBonus(actualRevenue);
+    const expectedBonus = expectedBonusCalc.amount;
+
+    const revenueDiff = actualRevenue - registeredRevenue;
+    const bonusDiff = expectedBonus - registeredBonus;
+
+    // إذا كان هناك فرق كبير (أكثر من 1 ريال)
+    if (Math.abs(revenueDiff) > 1 || Math.abs(bonusDiff) > 0) {
+      discrepancies.push({
+        employeeId: detail.employeeId,
+        employeeName: detail.employeeName || 'غير محدد',
+        registeredRevenue,
+        actualRevenue,
+        revenueDiff,
+        registeredBonus,
+        expectedBonus,
+        bonusDiff,
+      });
+    }
+  }
+
+  // التحقق من موظفين لديهم إيرادات لكن غير مسجلين في البونص
+  for (const [employeeId, data] of Array.from(actualRevenues.entries())) {
+    const isRegistered = registeredDetails.some(d => d.employeeId === employeeId);
+    if (!isRegistered && data.revenue > 0) {
+      const emp = await db.select({ name: employees.name }).from(employees).where(eq(employees.id, employeeId)).limit(1);
+      const { calculateBonus } = await import('./bonus/calculator');
+      const expectedBonusCalc = calculateBonus(data.revenue);
+      
+      discrepancies.push({
+        employeeId,
+        employeeName: emp[0]?.name || 'غير محدد',
+        registeredRevenue: 0,
+        actualRevenue: data.revenue,
+        revenueDiff: data.revenue,
+        registeredBonus: 0,
+        expectedBonus: expectedBonusCalc.amount,
+        bonusDiff: expectedBonusCalc.amount,
+      });
+    }
+  }
+
+  const summary = {
+    weeklyBonusId: bonusRecord.id,
+    weekNumber,
+    month,
+    year,
+    branchId,
+    totalRegisteredBonus: Number(bonusRecord.totalAmount || 0),
+    totalExpectedBonus: discrepancies.reduce((sum, d) => sum + d.expectedBonus, 0) + 
+      registeredDetails.filter(d => !discrepancies.some(disc => disc.employeeId === d.employeeId))
+        .reduce((sum, d) => sum + Number(d.registeredBonus || 0), 0),
+    discrepancyCount: discrepancies.length,
+  };
+
+  return {
+    hasDiscrepancy: discrepancies.length > 0,
+    discrepancies,
+    summary,
+  };
+}

@@ -2124,6 +2124,116 @@ export const appRouter = router({
 
         return result;
       }),
+
+    // سجل تدقيق البونص
+    auditLogs: protectedProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+        weeklyBonusId: z.number().optional(),
+        limit: z.number().optional().default(50),
+        offset: z.number().optional().default(0),
+      }).optional())
+      .query(async ({ input }) => {
+        return await db.getBonusAuditLogs(input);
+      }),
+
+    // الكشف عن فروقات البونص
+    detectDiscrepancies: protectedProcedure
+      .input(z.object({
+        branchId: z.number(),
+        weekNumber: z.number().min(1).max(5),
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await db.detectBonusDiscrepancies(
+          input.branchId,
+          input.weekNumber,
+          input.month,
+          input.year
+        );
+      }),
+
+    // إرسال تنبيه بالفروقات عبر البريد
+    sendDiscrepancyAlert: protectedProcedure
+      .input(z.object({
+        branchId: z.number(),
+        weekNumber: z.number().min(1).max(5),
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const discrepancyResult = await db.detectBonusDiscrepancies(
+          input.branchId,
+          input.weekNumber,
+          input.month,
+          input.year
+        );
+
+        if (!discrepancyResult.hasDiscrepancy) {
+          return { success: true, message: 'لا توجد فروقات للإبلاغ عنها' };
+        }
+
+        // الحصول على اسم الفرع
+        const branch = await db.getBranchById(input.branchId);
+        const branchName = branch?.name || 'غير محدد';
+
+        // إنشاء محتوى التنبيه
+        const discrepancyRows = discrepancyResult.discrepancies.map(d => 
+          `- ${d.employeeName}: إيراد مسجل ${d.registeredRevenue.toFixed(2)} ر.س، إيراد فعلي ${d.actualRevenue.toFixed(2)} ر.س (فرق: ${d.revenueDiff.toFixed(2)} ر.س)`
+        ).join('\n');
+
+        const alertContent = `
+⚠️ تنبيه: تم اكتشاف فروقات في البونص
+
+الفرع: ${branchName}
+الأسبوع: ${input.weekNumber}
+الشهر: ${input.month}/${input.year}
+
+عدد الفروقات: ${discrepancyResult.discrepancies.length}
+
+التفاصيل:
+${discrepancyRows}
+
+يرجى مراجعة الإيرادات وإعادة تزامن البونص.
+        `.trim();
+
+        // إرسال إشعار للمسؤولين
+        try {
+          const emailService = await import('./notifications/emailNotificationService');
+          const recipients = await db.getNotificationRecipients();
+          const adminRecipients = recipients.filter(r => r.isActive && (r.role === 'admin' || r.role === 'general_supervisor'));
+          
+          for (const recipient of adminRecipients) {
+            if (recipient.email) {
+              await emailService.sendBonusDiscrepancyAlert(recipient.email, {
+                branchName,
+                weekNumber: input.weekNumber,
+                month: input.month,
+                year: input.year,
+                discrepancies: discrepancyResult.discrepancies,
+              });
+            }
+          }
+
+          // تسجيل في سجل التدقيق
+          await db.createBonusAuditLog({
+            weeklyBonusId: discrepancyResult.summary?.weeklyBonusId || 0,
+            action: 'discrepancy_alert_sent',
+            performedBy: ctx.user.id,
+            details: `تم إرسال تنبيه بـ ${discrepancyResult.discrepancies.length} فروقات`,
+          });
+
+          return { 
+            success: true, 
+            message: `تم إرسال التنبيه إلى ${adminRecipients.length} مستلم`,
+            discrepancies: discrepancyResult.discrepancies.length
+          };
+        } catch (error) {
+          console.error('Failed to send discrepancy alert:', error);
+          return { success: false, message: 'فشل إرسال التنبيه' };
+        }
+      }),
   }),
 
   // ==================== طلبات الموظفين ====================
