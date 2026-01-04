@@ -194,7 +194,7 @@ export default function Bonuses() {
           <td class="text-right">${detail.employeeName || 'غير محدد'}</td>
           <td>${detail.employeeCode || '-'}</td>
           <td>${formatCurrency(detail.weeklyRevenue)}</td>
-          <td><span class="tier-badge" style="background-color: ${tierColors[detail.bonusTier] || '#9ca3af'}">${tierNames[detail.bonusTier] || detail.bonusTier}</span></td>
+          <td><span class="tier-badge" style="background-color: ${detail.bonusTier ? tierColors[detail.bonusTier] || '#9ca3af' : '#9ca3af'}">${detail.bonusTier ? tierNames[detail.bonusTier] || detail.bonusTier : '-'}</span></td>
           <td class="bonus-amount font-bold">${formatCurrency(detail.bonusAmount)}</td>
         </tr>
       `).join('')}
@@ -402,7 +402,7 @@ export default function Bonuses() {
                           <TableCell className="font-medium">{detail.employeeName}</TableCell>
                           <TableCell>{detail.employeeCode}</TableCell>
                           <TableCell>{Number(detail.weeklyRevenue).toFixed(2)} ر.س</TableCell>
-                          <TableCell>{getTierBadge(detail.bonusTier)}</TableCell>
+                          <TableCell>{detail.bonusTier ? getTierBadge(detail.bonusTier) : <Badge variant="outline" className="bg-gray-100">-</Badge>}</TableCell>
                           <TableCell className="font-bold text-green-600">
                             {Number(detail.bonusAmount).toFixed(2)} ر.س
                           </TableCell>

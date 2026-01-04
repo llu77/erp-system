@@ -1856,7 +1856,7 @@ export const appRouter = router({
 
   // ==================== إدارة البونص الأسبوعي ====================
   bonuses: router({
-    // الحصول على بونص الأسبوع الحالي أو آخر أسبوع يحتوي على إيرادات (متاح للجميع)
+    // الحصول على بونص الأسبوع الحالي فقط (متاح للجميع)
     current: protectedProcedure
       .input(z.object({ branchId: z.number() }))
       .query(async ({ input }) => {
@@ -1873,33 +1873,64 @@ export const appRouter = router({
         else if (day <= 29) currentWeekNumber = 4;
         else currentWeekNumber = 5;
 
-        // البحث عن أسبوع يحتوي على إيرادات (الأسبوع الحالي أولاً، ثم الأسبوع السابق)
+        // البحث عن بونص الأسبوع الحالي فقط
         let weeklyBonus = await db.getCurrentWeekBonus(input.branchId, year, month, currentWeekNumber);
         let details = weeklyBonus ? await db.getBonusDetails(weeklyBonus.id) : [];
+        let isCurrentWeek = true;
+        let displayYear = year;
+        let displayMonth = month;
+        let displayWeekNumber = currentWeekNumber;
         
-        // إذا كان الأسبوع الحالي فارغاً أو كل الإيرادات 0، ابحث عن الأسبوع السابق
-        const hasRevenues = details.some(d => Number(d.weeklyRevenue) > 0);
+        // التحقق من وجود إيرادات في الأسبوع الحالي
+        const hasCurrentWeekRevenues = details.some(d => Number(d.weeklyRevenue) > 0);
         
-        if (!weeklyBonus || !hasRevenues) {
-          // جرب الأسبوع السابق
-          const prevWeekNumber = currentWeekNumber > 1 ? currentWeekNumber - 1 : 5;
-          const prevMonth = currentWeekNumber > 1 ? month : (month > 1 ? month - 1 : 12);
-          const prevYear = currentWeekNumber > 1 ? year : (month > 1 ? year : year - 1);
-          
-          const prevWeeklyBonus = await db.getCurrentWeekBonus(input.branchId, prevYear, prevMonth, prevWeekNumber);
-          if (prevWeeklyBonus) {
-            const prevDetails = await db.getBonusDetails(prevWeeklyBonus.id);
-            const prevHasRevenues = prevDetails.some(d => Number(d.weeklyRevenue) > 0);
-            
-            if (prevHasRevenues) {
-              weeklyBonus = prevWeeklyBonus;
-              details = prevDetails;
-            }
-          }
-        }
-        
+        // إذا لم يكن هناك بونص للأسبوع الحالي، أنشئ واحداً فارغاً
         if (!weeklyBonus) {
-          return null;
+          // جلب الموظفين النشطين للفرع
+          const branchEmployees = await db.getEmployeesByBranch(input.branchId);
+          const branch = await db.getBranchById(input.branchId);
+          
+          // حساب تواريخ الأسبوع
+          const lastDayOfMonth = new Date(year, month, 0).getDate();
+          const weekRanges: Record<number, { startDay: number; endDay: number }> = {
+            1: { startDay: 1, endDay: 7 },
+            2: { startDay: 8, endDay: 14 },
+            3: { startDay: 15, endDay: 21 },
+            4: { startDay: 22, endDay: 28 },
+            5: { startDay: 29, endDay: lastDayOfMonth },
+          };
+          const range = weekRanges[currentWeekNumber] || weekRanges[1];
+          const weekStart = new Date(year, month - 1, range.startDay);
+          const weekEnd = new Date(year, month - 1, Math.min(range.endDay, lastDayOfMonth));
+          
+          return {
+            id: 0,
+            branchId: input.branchId,
+            branchName: branch?.nameAr || 'غير محدد',
+            year,
+            month,
+            weekNumber: currentWeekNumber,
+            weekStart,
+            weekEnd,
+            totalRevenue: '0',
+            totalAmount: '0',
+            status: 'pending' as const,
+            details: branchEmployees.map(emp => ({
+              id: 0,
+              employeeId: emp.id,
+              employeeName: emp.name,
+              employeeCode: emp.code,
+              weeklyRevenue: '0',
+              bonusAmount: '0',
+              bonusTier: null,
+              isEligible: false,
+            })),
+            eligibleCount: 0,
+            totalEmployees: branchEmployees.length,
+            isCurrentWeek: true,
+            hasRevenues: false,
+            message: 'لم يتم إدخال إيرادات لهذا الأسبوع بعد',
+          };
         }
 
         const branch = await db.getBranchById(input.branchId);
@@ -1910,6 +1941,8 @@ export const appRouter = router({
           details,
           eligibleCount: details.filter(d => d.isEligible).length,
           totalEmployees: details.length,
+          isCurrentWeek,
+          hasRevenues: hasCurrentWeekRevenues,
         };
       }),
 
