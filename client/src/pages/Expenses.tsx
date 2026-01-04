@@ -50,6 +50,10 @@ import {
   Filter,
   Printer,
   FileText,
+  Upload,
+  Image,
+  X,
+  Eye,
 } from "lucide-react";
 
 // تصنيفات المصاريف
@@ -129,6 +133,13 @@ const categoryNames: Record<string, string> = {
   other: "أخرى",
 };
 
+interface ExpenseAttachment {
+  url: string;
+  key: string;
+  name: string;
+  uploadedAt: string;
+}
+
 interface ExpenseFormData {
   category: string;
   title: string;
@@ -139,6 +150,7 @@ interface ExpenseFormData {
   paymentMethod: string;
   paymentReference?: string;
   receiptNumber?: string;
+  attachments?: ExpenseAttachment[];
 }
 
 export default function Expenses() {
@@ -151,6 +163,9 @@ export default function Expenses() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterBranch, setFilterBranch] = useState<string>("all");
   const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [attachments, setAttachments] = useState<ExpenseAttachment[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [viewAttachment, setViewAttachment] = useState<string | null>(null);
 
   // التحقق من الصلاحيات
   const canAdd = user?.role !== 'viewer';
@@ -215,6 +230,54 @@ export default function Expenses() {
     },
   });
 
+  // رفع مرفق
+  const uploadAttachmentMutation = trpc.expenses.uploadAttachment.useMutation({
+    onSuccess: (data) => {
+      setAttachments(prev => [...prev, {
+        url: data.url,
+        key: data.key,
+        name: data.name,
+        uploadedAt: new Date().toISOString(),
+      }]);
+      toast.success("تم رفع المرفق بنجاح");
+      setIsUploading(false);
+    },
+    onError: (error) => {
+      toast.error(error.message || "فشل رفع المرفق");
+      setIsUploading(false);
+    },
+  });
+
+  // معالجة اختيار المرفق
+  const handleAttachmentSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // التحقق من حجم الملف (10MB كحد أقصى)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("حجم الملف يجب أن يكون أقل من 10 ميجابايت");
+      return;
+    }
+
+    setIsUploading(true);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64Data = event.target?.result as string;
+      uploadAttachmentMutation.mutate({
+        base64Data,
+        fileName: file.name,
+        contentType: file.type,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // حذف مرفق
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   // إضافة مصروف
   const onSubmitAdd = (data: ExpenseFormData) => {
     const branch = branches?.find(b => b.id === data.branchId);
@@ -223,6 +286,11 @@ export default function Expenses() {
       category: data.category as "shop_supplies" | "printing" | "carpet_cleaning" | "small_needs" | "residency" | "medical_exam" | "transportation" | "electricity" | "internet" | "license_renewal" | "visa" | "residency_renewal" | "health_cert_renewal" | "maintenance" | "health_cert" | "violation" | "emergency" | "shop_rent" | "housing_rent" | "improvements" | "bonus" | "other",
       paymentMethod: data.paymentMethod as "cash" | "bank_transfer" | "check" | "credit_card" | "other",
       branchName: branch?.nameAr || branch?.name,
+      attachments: attachments.length > 0 ? JSON.stringify(attachments) : undefined,
+    }, {
+      onSuccess: () => {
+        setAttachments([]);
+      }
     });
   };
 
@@ -626,7 +694,68 @@ export default function Expenses() {
                     {...register("paymentReference")}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={createMutation.isPending}>
+                
+                {/* قسم المرفقات */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">المرفقات (صور الفواتير/الإيصالات)</label>
+                  <div className="border-2 border-dashed rounded-lg p-4">
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={handleAttachmentSelect}
+                      className="hidden"
+                      id="attachment-upload"
+                      disabled={isUploading}
+                    />
+                    <label
+                      htmlFor="attachment-upload"
+                      className="flex flex-col items-center justify-center cursor-pointer"
+                    >
+                      {isUploading ? (
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Upload className="h-8 w-8 text-muted-foreground" />
+                      )}
+                      <span className="text-sm text-muted-foreground mt-2">
+                        {isUploading ? "جاري الرفع..." : "اضغط لرفع مرفق"}
+                      </span>
+                    </label>
+                  </div>
+                  
+                  {/* عرض المرفقات المرفوعة */}
+                  {attachments.length > 0 && (
+                    <div className="space-y-2 mt-2">
+                      {attachments.map((att, index) => (
+                        <div key={index} className="flex items-center justify-between bg-muted p-2 rounded">
+                          <div className="flex items-center gap-2">
+                            <Image className="h-4 w-4" />
+                            <span className="text-sm truncate max-w-[200px]">{att.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open(att.url, '_blank')}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeAttachment(index)}
+                            >
+                              <X className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                <Button type="submit" className="w-full" disabled={createMutation.isPending || isUploading}>
                   {createMutation.isPending ? (
                     <Loader2 className="ml-2 h-4 w-4 animate-spin" />
                   ) : (

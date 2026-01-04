@@ -6125,3 +6125,420 @@ export async function getLoyaltySettingsAuditLog(limit: number = 50): Promise<Ar
     .orderBy(desc(loyaltySettingsAuditLog.createdAt))
     .limit(limit);
 }
+
+
+// ==================== دوال إعدادات مستويات البونص ====================
+
+// الحصول على جميع مستويات البونص
+export async function getBonusTierSettings(): Promise<Array<{
+  id: number;
+  tierKey: string;
+  tierName: string;
+  minRevenue: string;
+  maxRevenue: string | null;
+  bonusAmount: string;
+  color: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { bonusTierSettings } = await import('../drizzle/schema');
+  
+  return await db.select()
+    .from(bonusTierSettings)
+    .orderBy(bonusTierSettings.sortOrder);
+}
+
+// الحصول على مستويات البونص النشطة فقط
+export async function getActiveBonusTiers(): Promise<Array<{
+  tierKey: string;
+  tierName: string;
+  minRevenue: number;
+  maxRevenue: number | null;
+  bonusAmount: number;
+  color: string;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { bonusTierSettings } = await import('../drizzle/schema');
+  
+  const tiers = await db.select()
+    .from(bonusTierSettings)
+    .where(eq(bonusTierSettings.isActive, true))
+    .orderBy(desc(bonusTierSettings.minRevenue));
+  
+  return tiers.map(t => ({
+    tierKey: t.tierKey,
+    tierName: t.tierName,
+    minRevenue: parseFloat(t.minRevenue),
+    maxRevenue: t.maxRevenue ? parseFloat(t.maxRevenue) : null,
+    bonusAmount: parseFloat(t.bonusAmount),
+    color: t.color,
+  }));
+}
+
+// إنشاء مستوى بونص جديد
+export async function createBonusTier(data: {
+  tierKey: string;
+  tierName: string;
+  minRevenue: string;
+  maxRevenue?: string;
+  bonusAmount: string;
+  color?: string;
+  sortOrder?: number;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const { bonusTierSettings } = await import('../drizzle/schema');
+  
+  const [result] = await db.insert(bonusTierSettings).values({
+    tierKey: data.tierKey,
+    tierName: data.tierName,
+    minRevenue: data.minRevenue,
+    maxRevenue: data.maxRevenue || null,
+    bonusAmount: data.bonusAmount,
+    color: data.color || 'gray',
+    sortOrder: data.sortOrder || 0,
+    isActive: true,
+  });
+  
+  return result;
+}
+
+// تحديث مستوى بونص
+export async function updateBonusTier(id: number, data: {
+  tierName?: string;
+  minRevenue?: string;
+  maxRevenue?: string | null;
+  bonusAmount?: string;
+  color?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const { bonusTierSettings } = await import('../drizzle/schema');
+  
+  return await db.update(bonusTierSettings)
+    .set(data as any)
+    .where(eq(bonusTierSettings.id, id));
+}
+
+// حذف مستوى بونص
+export async function deleteBonusTier(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const { bonusTierSettings } = await import('../drizzle/schema');
+  
+  return await db.delete(bonusTierSettings)
+    .where(eq(bonusTierSettings.id, id));
+}
+
+// تسجيل تغيير في مستويات البونص
+export async function logBonusTierChange(data: {
+  userId: number;
+  userName: string;
+  tierId?: number;
+  tierKey?: string;
+  changeType: 'create' | 'update' | 'delete';
+  oldValues?: object;
+  newValues?: object;
+  description?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const { bonusTierAuditLog } = await import('../drizzle/schema');
+  
+  return await db.insert(bonusTierAuditLog).values({
+    userId: data.userId,
+    userName: data.userName,
+    tierId: data.tierId || null,
+    tierKey: data.tierKey || null,
+    changeType: data.changeType,
+    oldValues: data.oldValues ? JSON.stringify(data.oldValues) : null,
+    newValues: data.newValues ? JSON.stringify(data.newValues) : null,
+    description: data.description || null,
+  });
+}
+
+// الحصول على سجل تغييرات مستويات البونص
+export async function getBonusTierAuditLogs(limit: number = 50): Promise<Array<{
+  id: number;
+  userId: number;
+  userName: string;
+  tierId: number | null;
+  tierKey: string | null;
+  changeType: 'create' | 'update' | 'delete';
+  oldValues: string | null;
+  newValues: string | null;
+  description: string | null;
+  createdAt: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { bonusTierAuditLog } = await import('../drizzle/schema');
+  
+  return await db.select()
+    .from(bonusTierAuditLog)
+    .orderBy(desc(bonusTierAuditLog.createdAt))
+    .limit(limit);
+}
+
+// تهيئة مستويات البونص الافتراضية
+export async function initializeDefaultBonusTiers() {
+  const db = await getDb();
+  if (!db) return;
+  
+  const { bonusTierSettings } = await import('../drizzle/schema');
+  
+  // التحقق من وجود مستويات
+  const existing = await db.select().from(bonusTierSettings).limit(1);
+  if (existing.length > 0) return; // المستويات موجودة بالفعل
+  
+  // إضافة المستويات الافتراضية
+  const defaultTiers = [
+    { tierKey: 'tier_5', tierName: 'المستوى 5', minRevenue: '2400', maxRevenue: null, bonusAmount: '180', color: 'purple', sortOrder: 5 },
+    { tierKey: 'tier_4', tierName: 'المستوى 4', minRevenue: '2100', maxRevenue: '2399.99', bonusAmount: '135', color: 'blue', sortOrder: 4 },
+    { tierKey: 'tier_3', tierName: 'المستوى 3', minRevenue: '1800', maxRevenue: '2099.99', bonusAmount: '95', color: 'green', sortOrder: 3 },
+    { tierKey: 'tier_2', tierName: 'المستوى 2', minRevenue: '1500', maxRevenue: '1799.99', bonusAmount: '60', color: 'yellow', sortOrder: 2 },
+    { tierKey: 'tier_1', tierName: 'المستوى 1', minRevenue: '1200', maxRevenue: '1499.99', bonusAmount: '35', color: 'orange', sortOrder: 1 },
+  ];
+  
+  for (const tier of defaultTiers) {
+    await db.insert(bonusTierSettings).values({
+      ...tier,
+      isActive: true,
+    });
+  }
+}
+
+
+// ==================== دوال تتبع صرف البونص ====================
+
+// الحصول على بونص أسبوعي بالمعرف
+export async function getWeeklyBonusById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const [result] = await db.select().from(weeklyBonuses)
+    .where(eq(weeklyBonuses.id, id))
+    .limit(1);
+  
+  return result || null;
+}
+
+// تسجيل صرف البونص
+export async function markBonusAsPaid(id: number, data: {
+  paidBy: number;
+  paymentMethod: 'cash' | 'bank_transfer' | 'check';
+  paymentReference?: string;
+  paymentNotes?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.update(weeklyBonuses)
+    .set({
+      status: 'paid',
+      paidAt: new Date(),
+      paidBy: data.paidBy,
+      paymentMethod: data.paymentMethod,
+      paymentReference: data.paymentReference || null,
+      paymentNotes: data.paymentNotes || null,
+    })
+    .where(eq(weeklyBonuses.id, id));
+}
+
+// الحصول على البونصات الموافق عليها للصرف
+export async function getApprovedBonusesForPayment() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(weeklyBonuses)
+    .where(eq(weeklyBonuses.status, 'approved'))
+    .orderBy(desc(weeklyBonuses.approvedAt));
+}
+
+// الحصول على سجل البونصات المصروفة
+export async function getPaidBonusHistory(filters?: {
+  branchId?: number;
+  month?: number;
+  year?: number;
+  limit?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [eq(weeklyBonuses.status, 'paid')];
+  
+  if (filters?.branchId) {
+    conditions.push(eq(weeklyBonuses.branchId, filters.branchId));
+  }
+  if (filters?.month) {
+    conditions.push(eq(weeklyBonuses.month, filters.month));
+  }
+  if (filters?.year) {
+    conditions.push(eq(weeklyBonuses.year, filters.year));
+  }
+  
+  return await db.select().from(weeklyBonuses)
+    .where(and(...conditions))
+    .orderBy(desc(weeklyBonuses.paidAt))
+    .limit(filters?.limit || 50);
+}
+
+
+// ==================== دوال خصم السلف من الرواتب ====================
+
+// الحصول على السلف المعتمدة غير المخصومة لموظف
+export async function getUndeductedAdvancesForEmployee(employeeId: number): Promise<Array<{
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  amount: number;
+  approvedAt: Date | null;
+  title: string;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const results = await db.select({
+    id: employeeRequests.id,
+    employeeId: employeeRequests.employeeId,
+    employeeName: employeeRequests.employeeName,
+    amount: employeeRequests.advanceAmount,
+    approvedAt: employeeRequests.reviewedAt,
+    title: employeeRequests.title,
+  })
+    .from(employeeRequests)
+    .where(and(
+      eq(employeeRequests.employeeId, employeeId),
+      eq(employeeRequests.requestType, 'advance'),
+      eq(employeeRequests.status, 'approved'),
+      eq(employeeRequests.isDeductedFromSalary, false)
+    ))
+    .orderBy(employeeRequests.reviewedAt);
+  
+  return results.map(r => ({
+    ...r,
+    amount: r.amount ? parseFloat(r.amount) : 0,
+  }));
+}
+
+// الحصول على إجمالي السلف غير المخصومة لموظف
+export async function getTotalUndeductedAdvances(employeeId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const result = await db.select({
+    total: sql<string>`COALESCE(SUM(${employeeRequests.advanceAmount}), 0)`
+  })
+    .from(employeeRequests)
+    .where(and(
+      eq(employeeRequests.employeeId, employeeId),
+      eq(employeeRequests.requestType, 'advance'),
+      eq(employeeRequests.status, 'approved'),
+      eq(employeeRequests.isDeductedFromSalary, false)
+    ));
+  
+  return parseFloat(result[0]?.total || '0');
+}
+
+// تحديث حالة السلفة كمخصومة
+export async function markAdvanceAsDeducted(advanceId: number, payrollId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  return await db.update(employeeRequests)
+    .set({
+      isDeductedFromSalary: true,
+      deductedInPayrollId: payrollId,
+      deductedAt: new Date(),
+    })
+    .where(eq(employeeRequests.id, advanceId));
+}
+
+// الحصول على السلف غير المخصومة لجميع موظفي فرع
+export async function getUndeductedAdvancesForBranch(branchId: number): Promise<Array<{
+  employeeId: number;
+  employeeName: string;
+  totalAdvances: number;
+  advanceCount: number;
+  advances: Array<{
+    id: number;
+    amount: number;
+    approvedAt: Date | null;
+    title: string;
+  }>;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // الحصول على جميع السلف المعتمدة غير المخصومة للفرع
+  const advances = await db.select({
+    id: employeeRequests.id,
+    employeeId: employeeRequests.employeeId,
+    employeeName: employeeRequests.employeeName,
+    amount: employeeRequests.advanceAmount,
+    approvedAt: employeeRequests.reviewedAt,
+    title: employeeRequests.title,
+  })
+    .from(employeeRequests)
+    .where(and(
+      eq(employeeRequests.branchId, branchId),
+      eq(employeeRequests.requestType, 'advance'),
+      eq(employeeRequests.status, 'approved'),
+      eq(employeeRequests.isDeductedFromSalary, false)
+    ))
+    .orderBy(employeeRequests.employeeId, employeeRequests.reviewedAt);
+  
+  // تجميع السلف حسب الموظف
+  const employeeAdvances = new Map<number, {
+    employeeId: number;
+    employeeName: string;
+    totalAdvances: number;
+    advanceCount: number;
+    advances: Array<{
+      id: number;
+      amount: number;
+      approvedAt: Date | null;
+      title: string;
+    }>;
+  }>();
+  
+  for (const adv of advances) {
+    const amount = adv.amount ? parseFloat(adv.amount) : 0;
+    
+    if (!employeeAdvances.has(adv.employeeId)) {
+      employeeAdvances.set(adv.employeeId, {
+        employeeId: adv.employeeId,
+        employeeName: adv.employeeName,
+        totalAdvances: 0,
+        advanceCount: 0,
+        advances: [],
+      });
+    }
+    
+    const empData = employeeAdvances.get(adv.employeeId)!;
+    empData.totalAdvances += amount;
+    empData.advanceCount += 1;
+    empData.advances.push({
+      id: adv.id,
+      amount,
+      approvedAt: adv.approvedAt,
+      title: adv.title,
+    });
+  }
+  
+  return Array.from(employeeAdvances.values());
+}

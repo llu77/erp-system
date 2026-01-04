@@ -354,7 +354,7 @@ export const weeklyBonuses = mysqlTable("weeklyBonuses", {
   weekEnd: timestamp("weekEnd").notNull(),
   month: int("month").notNull(), // 1-12
   year: int("year").notNull(),
-  status: mysqlEnum("status", ["pending", "requested", "approved", "rejected"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "requested", "approved", "rejected", "paid"]).default("pending").notNull(),
   requestedAt: timestamp("requestedAt"),
   requestedBy: int("requestedBy"),
   approvedAt: timestamp("approvedAt"),
@@ -363,6 +363,14 @@ export const weeklyBonuses = mysqlTable("weeklyBonuses", {
   rejectedBy: int("rejectedBy"),
   rejectionReason: text("rejectionReason"),
   totalAmount: decimal("totalAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  
+  // حقول تتبع الصرف
+  paidAt: timestamp("paidAt"), // تاريخ الصرف الفعلي
+  paidBy: int("paidBy"), // من قام بالصرف
+  paymentMethod: mysqlEnum("paymentMethod", ["cash", "bank_transfer", "check"]), // طريقة الدفع
+  paymentReference: varchar("paymentReference", { length: 255 }), // مرجع الدفع (رقم الحوالة/الشيك)
+  paymentNotes: text("paymentNotes"), // ملاحظات الصرف
+  
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -511,6 +519,11 @@ export const employeeRequests = mysqlTable("employeeRequests", {
   // حقول إضافية
   priority: mysqlEnum("priority", ["low", "normal", "high", "urgent"]).default("normal").notNull(),
   attachments: text("attachments"), // JSON array of attachment URLs
+  
+  // حقول تتبع خصم السلف من الراتب
+  isDeductedFromSalary: boolean("isDeductedFromSalary").default(false).notNull(), // هل تم خصمها من الراتب
+  deductedInPayrollId: int("deductedInPayrollId"), // معرف مسيرة الراتب التي تم الخصم فيها
+  deductedAt: timestamp("deductedAt"), // تاريخ الخصم
   
   // التتبع
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -1544,3 +1557,74 @@ export const loyaltySettingsAuditLog = mysqlTable("loyaltySettingsAuditLog", {
 
 export type LoyaltySettingsAuditLog = typeof loyaltySettingsAuditLog.$inferSelect;
 export type InsertLoyaltySettingsAuditLog = typeof loyaltySettingsAuditLog.$inferInsert;
+
+
+// ==================== جدول مستويات البونص ====================
+/**
+ * BonusTierSettings - إعدادات مستويات البونص
+ * يسمح للأدمن بتعديل حدود ومبالغ كل مستوى
+ */
+export const bonusTierSettings = mysqlTable("bonusTierSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // معرف المستوى
+  tierKey: varchar("tierKey", { length: 20 }).notNull().unique(), // tier_1, tier_2, tier_3, tier_4, tier_5
+  
+  // اسم المستوى
+  tierName: varchar("tierName", { length: 100 }).notNull(), // المستوى 1, المستوى 2, ...
+  
+  // الحد الأدنى للإيراد
+  minRevenue: decimal("minRevenue", { precision: 10, scale: 2 }).notNull(),
+  
+  // الحد الأقصى للإيراد (null للمستوى الأعلى)
+  maxRevenue: decimal("maxRevenue", { precision: 10, scale: 2 }),
+  
+  // مبلغ البونص
+  bonusAmount: decimal("bonusAmount", { precision: 10, scale: 2 }).notNull(),
+  
+  // لون المستوى للعرض
+  color: varchar("color", { length: 20 }).default("gray").notNull(),
+  
+  // ترتيب العرض
+  sortOrder: int("sortOrder").default(0).notNull(),
+  
+  // هل المستوى نشط
+  isActive: boolean("isActive").default(true).notNull(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BonusTierSetting = typeof bonusTierSettings.$inferSelect;
+export type InsertBonusTierSetting = typeof bonusTierSettings.$inferInsert;
+
+// ==================== سجل تغييرات مستويات البونص ====================
+/**
+ * BonusTierAuditLog - سجل تغييرات إعدادات مستويات البونص
+ */
+export const bonusTierAuditLog = mysqlTable("bonusTierAuditLog", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // المستخدم الذي قام بالتغيير
+  userId: int("userId").notNull(),
+  userName: varchar("userName", { length: 255 }).notNull(),
+  
+  // المستوى المتأثر
+  tierId: int("tierId"),
+  tierKey: varchar("tierKey", { length: 20 }),
+  
+  // نوع التغيير
+  changeType: mysqlEnum("changeType", ["create", "update", "delete"]).notNull(),
+  
+  // القيم القديمة والجديدة (JSON)
+  oldValues: text("oldValues"),
+  newValues: text("newValues"),
+  
+  // وصف التغيير
+  description: text("description"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type BonusTierAuditLog = typeof bonusTierAuditLog.$inferSelect;
+export type InsertBonusTierAuditLog = typeof bonusTierAuditLog.$inferInsert;

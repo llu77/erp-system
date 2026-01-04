@@ -183,6 +183,27 @@
       "when": 1767520001229,
       "tag": "0025_military_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1767529458014,
+      "tag": "0026_absurd_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1767529639676,
+      "tag": "0027_brown_terror",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1767529864473,
+      "tag": "0028_fresh_wrecking_crew",
+      "breakpoints": true
     }
   ]
 }

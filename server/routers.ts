@@ -2095,6 +2095,89 @@ export const appRouter = router({
         return { success: true, message: 'تم رفض البونص' };
       }),
 
+    // صرف البونص (تسجيل الصرف الفعلي)
+    markAsPaid: adminProcedure
+      .input(z.object({
+        weeklyBonusId: z.number(),
+        paymentMethod: z.enum(['cash', 'bank_transfer', 'check']),
+        paymentReference: z.string().optional(),
+        paymentNotes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // التحقق من أن البونص موافق عليه
+        const bonus = await db.getWeeklyBonusById(input.weeklyBonusId);
+        if (!bonus) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'البونص غير موجود' });
+        }
+        if (bonus.status !== 'approved') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'يجب الموافقة على البونص قبل الصرف' });
+        }
+
+        // تحديث حالة البونص إلى مصروف
+        await db.markBonusAsPaid(input.weeklyBonusId, {
+          paidBy: ctx.user.id,
+          paymentMethod: input.paymentMethod,
+          paymentReference: input.paymentReference,
+          paymentNotes: input.paymentNotes,
+        });
+        
+        await db.createBonusAuditLog({
+          weeklyBonusId: input.weeklyBonusId,
+          action: 'صرف',
+          oldStatus: 'approved',
+          newStatus: 'paid',
+          performedBy: ctx.user.id,
+          details: `تم صرف البونص - طريقة الدفع: ${input.paymentMethod}${input.paymentReference ? ` - المرجع: ${input.paymentReference}` : ''}`,
+        });
+
+        return { success: true, message: 'تم تسجيل صرف البونص بنجاح' };
+      }),
+
+    // الحصول على البونصات الموافق عليها (للصرف)
+    approvedForPayment: adminProcedure.query(async () => {
+      const approved = await db.getApprovedBonusesForPayment();
+      const result = [];
+      
+      for (const bonus of approved) {
+        const branch = await db.getBranchById(bonus.branchId);
+        const details = await db.getBonusDetails(bonus.id);
+        result.push({
+          ...bonus,
+          branchName: branch?.nameAr || 'غير محدد',
+          details,
+          eligibleCount: details.filter(d => d.isEligible).length,
+          totalEmployees: details.length,
+        });
+      }
+      
+      return result;
+    }),
+
+    // سجل البونصات المصروفة
+    paidHistory: adminProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+        month: z.number().optional(),
+        year: z.number().optional(),
+        limit: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const paid = await db.getPaidBonusHistory(input);
+        const result = [];
+        
+        for (const bonus of paid) {
+          const branch = await db.getBranchById(bonus.branchId);
+          const paidByUser = bonus.paidBy ? await db.getUserById(bonus.paidBy) : null;
+          result.push({
+            ...bonus,
+            branchName: branch?.nameAr || 'غير محدد',
+            paidByName: paidByUser?.name || 'غير محدد',
+          });
+        }
+        
+        return result;
+      }),
+
     // تزامن البونص يدوياً (متاح للجميع)
     sync: protectedProcedure
       .input(z.object({
@@ -2322,6 +2405,116 @@ ${discrepancyRows}
           console.error('Failed to send weekly bonus report:', error);
           return { success: false, message: 'فشل إرسال التقرير الأسبوعي' };
         }
+      }),
+
+    // ==================== إدارة مستويات البونص (للأدمن فقط) ====================
+    
+    // الحصول على جميع مستويات البونص
+    getTierSettings: protectedProcedure
+      .query(async () => {
+        // تهيئة المستويات الافتراضية إذا لم تكن موجودة
+        await db.initializeDefaultBonusTiers();
+        return await db.getBonusTierSettings();
+      }),
+
+    // تحديث مستوى بونص (للأدمن فقط)
+    updateTier: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        tierName: z.string().optional(),
+        minRevenue: z.string().optional(),
+        maxRevenue: z.string().nullable().optional(),
+        bonusAmount: z.string().optional(),
+        color: z.string().optional(),
+        sortOrder: z.number().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // الحصول على القيم القديمة
+        const tiers = await db.getBonusTierSettings();
+        const oldTier = tiers.find(t => t.id === input.id);
+        
+        if (!oldTier) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'المستوى غير موجود' });
+        }
+
+        const { id, ...updateData } = input;
+        await db.updateBonusTier(id, updateData);
+
+        // تسجيل التغيير
+        await db.logBonusTierChange({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مسؤول',
+          tierId: id,
+          tierKey: oldTier.tierKey,
+          changeType: 'update',
+          oldValues: oldTier,
+          newValues: { ...oldTier, ...updateData },
+          description: `تحديث مستوى ${oldTier.tierName}`,
+        });
+
+        return { success: true, message: 'تم تحديث المستوى بنجاح' };
+      }),
+
+    // إضافة مستوى جديد (للأدمن فقط)
+    createTier: adminProcedure
+      .input(z.object({
+        tierKey: z.string(),
+        tierName: z.string(),
+        minRevenue: z.string(),
+        maxRevenue: z.string().optional(),
+        bonusAmount: z.string(),
+        color: z.string().optional(),
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await db.createBonusTier(input);
+
+        // تسجيل التغيير
+        await db.logBonusTierChange({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مسؤول',
+          tierKey: input.tierKey,
+          changeType: 'create',
+          newValues: input,
+          description: `إضافة مستوى جديد: ${input.tierName}`,
+        });
+
+        return { success: true, message: 'تم إضافة المستوى بنجاح' };
+      }),
+
+    // حذف مستوى (للأدمن فقط)
+    deleteTier: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const tiers = await db.getBonusTierSettings();
+        const tier = tiers.find(t => t.id === input.id);
+        
+        if (!tier) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'المستوى غير موجود' });
+        }
+
+        await db.deleteBonusTier(input.id);
+
+        // تسجيل التغيير
+        await db.logBonusTierChange({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مسؤول',
+          tierId: input.id,
+          tierKey: tier.tierKey,
+          changeType: 'delete',
+          oldValues: tier,
+          description: `حذف مستوى: ${tier.tierName}`,
+        });
+
+        return { success: true, message: 'تم حذف المستوى بنجاح' };
+      }),
+
+    // سجل تغييرات مستويات البونص
+    getTierAuditLogs: adminProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        return await db.getBonusTierAuditLogs(input?.limit || 50);
       }),
   }),
 
@@ -2843,6 +3036,37 @@ ${discrepancyRows}
   }),
 
   // ==================== إعدادات رواتب الموظفين ====================
+  
+  // الحصول على السلف غير المخصومة لفرع
+  advancesForPayroll: router({
+    // الحصول على السلف غير المخصومة لفرع
+    getForBranch: supervisorInputProcedure
+      .input(z.object({ branchId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getUndeductedAdvancesForBranch(input.branchId);
+      }),
+
+    // الحصول على السلف غير المخصومة لموظف
+    getForEmployee: supervisorInputProcedure
+      .input(z.object({ employeeId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getUndeductedAdvancesForEmployee(input.employeeId);
+      }),
+
+    // تحديث حالة السلفة كمخصومة (عند اعتماد المسيرة)
+    markAsDeducted: adminProcedure
+      .input(z.object({
+        advanceIds: z.array(z.number()),
+        payrollId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        for (const advanceId of input.advanceIds) {
+          await db.markAdvanceAsDeducted(advanceId, input.payrollId);
+        }
+        return { success: true, message: `تم تحديث ${input.advanceIds.length} سلفة كمخصومة` };
+      }),
+  }),
+
   salarySettings: router({
     // الحصول على إعدادات موظف
     get: managerProcedure
@@ -2951,6 +3175,7 @@ ${discrepancyRows}
         supplierId: z.number().optional(),
         supplierName: z.string().optional(),
         receiptNumber: z.string().optional(),
+        attachments: z.string().optional(), // JSON string of attachments
       }))
       .mutation(async ({ input, ctx }) => {
         // التحقق من صلاحية الوصول للفرع للمشرفين
@@ -3097,6 +3322,48 @@ ${discrepancyRows}
       .mutation(async ({ input }) => {
         await db.deleteExpense(input.id);
         return { success: true, message: 'تم حذف المصروف بنجاح' };
+      }),
+
+    // رفع مرفق للمصروف
+    uploadAttachment: supervisorInputProcedure
+      .input(z.object({
+        base64Data: z.string(),
+        fileName: z.string(),
+        contentType: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { storagePut } = await import('./storage');
+        
+        // تحويل base64 إلى Buffer
+        const base64Content = input.base64Data.replace(/^data:[^;]+;base64,/, '');
+        const buffer = Buffer.from(base64Content, 'base64');
+        
+        // إنشاء مفتاح فريد للمرفق
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const fileKey = `expense-attachments/${ctx.user.id}/${timestamp}-${randomSuffix}-${input.fileName}`;
+        
+        const { url, key } = await storagePut(fileKey, buffer, input.contentType);
+        
+        return { success: true, url, key, name: input.fileName };
+      }),
+
+    // تحديث مرفقات المصروف
+    updateAttachments: supervisorInputProcedure
+      .input(z.object({
+        id: z.number(),
+        attachments: z.array(z.object({
+          url: z.string(),
+          key: z.string(),
+          name: z.string(),
+          uploadedAt: z.string(),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        await db.updateExpense(input.id, {
+          attachments: JSON.stringify(input.attachments),
+        });
+        return { success: true, message: 'تم تحديث المرفقات بنجاح' };
       }),
 
     // سجلات المصروف

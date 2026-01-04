@@ -123,8 +123,14 @@ export default function Payrolls() {
     { branchId: selectedBranch! },
     { enabled: !!selectedBranch && step === 'form' }
   );
+  
+  // جلب السلف غير المخصومة للفرع
+  const { data: branchAdvances } = trpc.advancesForPayroll.getForBranch.useQuery(
+    { branchId: selectedBranch! },
+    { enabled: !!selectedBranch && step === 'form' }
+  );
 
-  // تهيئة بيانات الموظفين عند تحميلهم
+  // تهيئة بيانات الموظفين عند تحميلهم مع السلف تلقائياً
   useEffect(() => {
     if (branchEmployees && branchEmployees.length > 0) {
       const initialData: EmployeePayrollData[] = branchEmployees.map((emp: any) => {
@@ -136,10 +142,14 @@ export default function Payrolls() {
         const absentDeduction = 0;
         const incentiveAmount = 0;
         const deductionAmount = 0;
-        const advanceDeduction = 0;
+        
+        // جلب السلف غير المخصومة للموظف تلقائياً
+        const employeeAdvances = branchAdvances?.find(a => a.employeeId === emp.id);
+        const advanceDeduction = employeeAdvances?.totalAdvances || 0;
+        
         const grossSalary = baseSalary;
-        const totalDeductions = 0;
-        const netSalary = baseSalary;
+        const totalDeductions = advanceDeduction;
+        const netSalary = baseSalary - totalDeductions;
 
         return {
           employeeId: emp.id,
@@ -162,7 +172,7 @@ export default function Payrolls() {
       });
       setEmployeesData(initialData);
     }
-  }, [branchEmployees]);
+  }, [branchEmployees, branchAdvances]);
 
   // حساب الراتب لموظف معين
   const calculateSalary = (data: EmployeePayrollData): EmployeePayrollData => {
