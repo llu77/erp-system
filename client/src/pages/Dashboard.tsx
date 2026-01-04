@@ -15,7 +15,10 @@ import {
   DollarSign,
   ArrowUpRight,
   ArrowDownRight,
+  Gift,
+  ExternalLink,
 } from "lucide-react";
+import { Link } from "wouter";
 import {
   AreaChart,
   Area,
@@ -52,6 +55,12 @@ export default function Dashboard() {
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
   const { data: lowStockProducts } = trpc.products.getLowStock.useQuery();
   const { data: branches } = trpc.branches.list.useQuery();
+  
+  // استعلام فروقات البونص (للأدمن فقط)
+  const { data: bonusDiscrepancies } = trpc.bonuses.getAllDiscrepancies.useQuery(
+    undefined,
+    { enabled: user?.role === 'admin' }
+  );
 
   // الحصول على اسم الفرع للمشرفين
   const branchName = user?.branchId && branches 
@@ -154,6 +163,66 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {/* تنبيه فروقات البونص */}
+      {user?.role === 'admin' && bonusDiscrepancies && bonusDiscrepancies.totalDiscrepancies > 0 && (
+        <Card className="border-red-300 bg-red-50/50">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Gift className="h-5 w-5 text-red-600" />
+                <CardTitle className="text-lg text-red-800">
+                  ⚠️ تنبيه: فروقات في البونص
+                </CardTitle>
+              </div>
+              <Link href="/bonuses">
+                <button className="flex items-center gap-1 text-sm text-red-600 hover:text-red-800 hover:underline">
+                  عرض التفاصيل
+                  <ExternalLink className="h-4 w-4" />
+                </button>
+              </Link>
+            </div>
+            <CardDescription className="text-red-700">
+              الأسبوع {bonusDiscrepancies.weekNumber} - {bonusDiscrepancies.month}/{bonusDiscrepancies.year}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="bg-white rounded-lg border border-red-200 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-red-800 font-medium">
+                    إجمالي الفروقات: {bonusDiscrepancies.totalDiscrepancies} فرق
+                  </span>
+                  <Badge variant="destructive">
+                    {bonusDiscrepancies.branches.length} فرع
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {bonusDiscrepancies.branches.map((branch) => (
+                    <div
+                      key={branch.branchId}
+                      className="flex items-center justify-between p-2 bg-red-50 rounded border border-red-100"
+                    >
+                      <span className="text-sm font-medium text-red-900">{branch.branchName}</span>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-red-600 border-red-300">
+                          {branch.discrepancyCount} فرق
+                        </Badge>
+                        <span className="text-xs text-red-600">
+                          {branch.totalDiff.toFixed(0)} ر.س
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <p className="text-sm text-red-600">
+                يرجى مراجعة الإيرادات وإعادة تزامن البونص لكل فرع من صفحة البونص.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Low Stock Alert */}
       {lowStockProducts && lowStockProducts.length > 0 && (

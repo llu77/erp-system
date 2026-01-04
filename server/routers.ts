@@ -2154,6 +2154,70 @@ export const appRouter = router({
         );
       }),
 
+    // الحصول على جميع الفروقات غير المعالجة (للوحة التحكم)
+    getAllDiscrepancies: protectedProcedure
+      .query(async ({ ctx }) => {
+        // فقط للأدمن
+        if (ctx.user.role !== 'admin') {
+          return { totalDiscrepancies: 0, branches: [] };
+        }
+
+        const now = new Date();
+        const day = now.getDate();
+        const month = now.getMonth() + 1;
+        const year = now.getFullYear();
+        
+        // حساب رقم الأسبوع الحالي
+        let weekNumber: number;
+        if (day <= 7) weekNumber = 1;
+        else if (day <= 15) weekNumber = 2;
+        else if (day <= 22) weekNumber = 3;
+        else if (day <= 29) weekNumber = 4;
+        else weekNumber = 5;
+
+        // الحصول على جميع الفروع
+        const branches = await db.getBranches();
+        const results: Array<{
+          branchId: number;
+          branchName: string;
+          discrepancyCount: number;
+          totalDiff: number;
+        }> = [];
+
+        let totalDiscrepancies = 0;
+
+        for (const branch of branches) {
+          const discrepancies = await db.detectBonusDiscrepancies(
+            branch.id,
+            weekNumber,
+            month,
+            year
+          );
+
+          if (discrepancies.hasDiscrepancy) {
+            const totalDiff = discrepancies.discrepancies.reduce(
+              (sum, d) => sum + Math.abs(d.bonusDiff),
+              0
+            );
+            results.push({
+              branchId: branch.id,
+              branchName: branch.nameAr || branch.name,
+              discrepancyCount: discrepancies.discrepancies.length,
+              totalDiff,
+            });
+            totalDiscrepancies += discrepancies.discrepancies.length;
+          }
+        }
+
+        return {
+          totalDiscrepancies,
+          weekNumber,
+          month,
+          year,
+          branches: results,
+        };
+      }),
+
     // إرسال تنبيه بالفروقات عبر البريد
     sendDiscrepancyAlert: protectedProcedure
       .input(z.object({
