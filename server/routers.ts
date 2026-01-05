@@ -5608,6 +5608,35 @@ ${discrepancyRows}
         const { deleteReceiptVoucher } = await import('./receiptVoucher');
         return deleteReceiptVoucher(input.voucherId);
       }),
+
+    sendEmail: supervisorInputProcedure
+      .input(z.object({
+        voucherId: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { getReceiptVoucher } = await import('./receiptVoucher');
+        const { sendReceiptVoucherEmail } = await import('./receiptVoucherEmail');
+        
+        const voucher = await getReceiptVoucher(input.voucherId);
+        if (!voucher) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'السند غير موجود' });
+        }
+
+        const result = await sendReceiptVoucherEmail({
+          voucherId: voucher.voucherId,
+          voucherNumber: voucher.voucherId,
+          voucherDate: voucher.voucherDate.toISOString(),
+          payeeName: voucher.payeeName,
+          payeeEmail: voucher.payeeEmail || undefined,
+          totalAmount: voucher.totalAmount,
+          branchId: voucher.branchId || undefined,
+          branchName: voucher.branchName || undefined,
+          items: voucher.items || [],
+          createdByName: voucher.createdByName,
+        });
+
+        return result;
+      }),
   }),
 });
 

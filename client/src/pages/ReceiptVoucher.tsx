@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
-import { Plus, Trash2, Printer, Save, Eye, Download, FileText } from 'lucide-react';
+import { Plus, Trash2, Printer, Save, Eye, Download, FileText, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/_core/hooks/useAuth';
 
@@ -36,6 +36,7 @@ export default function ReceiptVoucher() {
 
   // APIs
   const createVoucherMutation = trpc.receiptVoucher.create.useMutation();
+  const sendEmailMutation = trpc.receiptVoucher.sendEmail.useMutation();
   const getVouchersQuery = trpc.receiptVoucher.getAll.useQuery({ limit: 50, offset: 0 });
   const getVoucherQuery = trpc.receiptVoucher.get.useQuery(
     { voucherId: selectedVoucher?.voucherId || '' },
@@ -534,6 +535,23 @@ export default function ReceiptVoucher() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>
               إغلاق
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  await sendEmailMutation.mutateAsync({
+                    voucherId: getVoucherQuery.data?.voucherId || '',
+                  });
+                  toast.success('تم إرسال السند عبر البريد الإلكتروني بنجاح');
+                } catch (error) {
+                  toast.error('فشل في إرسال البريد الإلكتروني');
+                }
+              }}
+              disabled={sendEmailMutation.isPending}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Mail className="w-4 h-4 mr-2" />
+              {sendEmailMutation.isPending ? 'جاري الإرسال...' : 'إرسال عبر البريد'}
             </Button>
             <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700">
               <Printer className="w-4 h-4 mr-2" />
