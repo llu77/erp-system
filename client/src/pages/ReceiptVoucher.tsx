@@ -355,87 +355,87 @@ export default function ReceiptVoucher() {
 
       {/* معاينة السند - تصميم محسّن */}
       <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>معاينة السند</DialogTitle>
           </DialogHeader>
 
           {getVoucherQuery.data && (
-            <div className="space-y-0 print:space-y-0 bg-white p-8 print:p-0">
+            <div className="space-y-0 print:space-y-0 bg-white p-4 sm:p-8 print:p-0">
               {/* رأس السند */}
-              <div className="border-b-4 border-gray-800 pb-6 mb-6">
-                <div className="flex items-center justify-between mb-4">
+              <div className="border-b-4 border-gray-800 pb-4 sm:pb-6 mb-4 sm:mb-6">
+                <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
                   <div className="text-center flex-1">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-2">سند قبض</h1>
-                    <p className="text-gray-600 text-sm">Symbol AI</p>
+                    <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2">سند قبض</h1>
+                    <p className="text-gray-600 text-xs sm:text-sm">Symbol AI</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-gray-600">رقم السند</p>
-                    <p className="text-lg font-bold text-gray-900">{getVoucherQuery.data.voucherId}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">رقم السند</p>
+                    <p className="text-base sm:text-lg font-bold text-gray-900">{getVoucherQuery.data.voucherId}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-4 text-sm mt-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm mt-4">
                   <div>
                     <p className="text-gray-600 text-xs mb-1">التاريخ</p>
-                    <p className="font-semibold text-gray-900">
+                    <p className="font-semibold text-gray-900 text-xs sm:text-sm">
                       {new Date(getVoucherQuery.data.voucherDate).toLocaleDateString('ar-SA')}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-xs mb-1">فترة الاستحقاق (من)</p>
-                    <p className="font-semibold text-gray-900">
+                    <p className="text-gray-600 text-xs mb-1">الاستحقاق (من)</p>
+                    <p className="font-semibold text-gray-900 text-xs sm:text-sm">
                       {getVoucherQuery.data.dueDate ? new Date(getVoucherQuery.data.dueDate).toLocaleDateString('ar-SA') : 'غير محدد'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-xs mb-1">فترة الاستحقاق (إلى)</p>
-                    <p className="font-semibold text-gray-900">
+                    <p className="text-gray-600 text-xs mb-1">الاستحقاق (إلى)</p>
+                    <p className="font-semibold text-gray-900 text-xs sm:text-sm">
                       {getVoucherQuery.data.dueDate ? new Date(getVoucherQuery.data.dueDate).toLocaleDateString('ar-SA') : 'غير محدد'}
                     </p>
                   </div>
                   <div className="text-left">
                     <p className="text-gray-600 text-xs mb-1">الحالة</p>
-                    <p className="font-semibold text-gray-900">مسودة</p>
+                    <p className="font-semibold text-gray-900 text-xs sm:text-sm">مسودة</p>
                   </div>
                 </div>
               </div>
 
               {/* بيانات المستقبل */}
-              <div className="mb-6">
-                <div className="grid grid-cols-2 gap-8">
+              <div className="mb-4 sm:mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8">
                   <div>
                     <p className="text-xs text-gray-600 mb-1">المستقبل</p>
-                    <p className="text-lg font-bold text-gray-900">{getVoucherQuery.data.payeeName}</p>
+                    <p className="text-base sm:text-lg font-bold text-gray-900">{getVoucherQuery.data.payeeName}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">رقم الجوال</p>
-                    <p className="text-lg font-bold text-gray-900">{getVoucherQuery.data.payeePhone || 'غير محدد'}</p>
+                    <p className="text-base sm:text-lg font-bold text-gray-900">{getVoucherQuery.data.payeePhone || 'غير محدد'}</p>
                   </div>
                 </div>
               </div>
 
               {/* جدول البيانات */}
-              <div className="mb-8 border border-gray-300">
-                <table className="w-full">
+              <div className="mb-6 sm:mb-8 border border-gray-300 overflow-x-auto">
+                <table className="w-full text-xs sm:text-sm">
                   <thead>
                     <tr className="bg-gray-100 border-b border-gray-300">
-                      <th className="p-4 text-right text-sm font-semibold text-gray-900">الوصف</th>
-                      <th className="p-4 text-left text-sm font-semibold text-gray-900">المبلغ (ر.س)</th>
+                      <th className="p-2 sm:p-4 text-right font-semibold text-gray-900">الوصف</th>
+                      <th className="p-2 sm:p-4 text-left font-semibold text-gray-900">المبلغ (ر.س)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {getVoucherQuery.data.items?.map((item: any, index: number) => (
                       <tr key={index} className="border-b border-gray-300">
-                        <td className="p-4 text-right text-gray-900">{item.description}</td>
-                        <td className="p-4 text-left text-gray-900 font-semibold">
+                        <td className="p-2 sm:p-4 text-right text-gray-900">{item.description}</td>
+                        <td className="p-2 sm:p-4 text-left text-gray-900 font-semibold">
                           {parseFloat(item.amount).toLocaleString('ar-SA')}
                         </td>
                       </tr>
                     ))}
                     <tr className="bg-gray-50 font-bold">
-                      <td className="p-4 text-right text-gray-900">المجموع</td>
-                      <td className="p-4 text-left text-gray-900 text-lg">
+                      <td className="p-2 sm:p-4 text-right text-gray-900">المجموع</td>
+                      <td className="p-2 sm:p-4 text-left text-gray-900 text-base sm:text-lg">
                         {parseFloat(getVoucherQuery.data.totalAmount).toLocaleString('ar-SA')}
                       </td>
                     </tr>
@@ -444,41 +444,34 @@ export default function ReceiptVoucher() {
               </div>
 
               {/* التوقيعات والختم */}
-              <div className="border-t-4 border-gray-800 pt-8">
-                <div className="grid grid-cols-3 gap-6 text-center">
+              <div className="border-t-4 border-gray-800 pt-4 sm:pt-8">
+                <div className="grid grid-cols-3 gap-2 sm:gap-6 text-center text-xs sm:text-sm">
                   {/* التوقيع الأول */}
                   <div>
-                    <div className="h-24 border-b-2 border-gray-400 mb-2 flex items-end justify-center">
-                      <span className="text-xs text-gray-500">توقيع</span>
-                    </div>
-                    <p className="font-bold text-gray-900 text-sm">سالم الوادعي</p>
+                    <img src="/signature-salem.png" alt="توقيع سالم" className="h-12 sm:h-20 mx-auto mb-2 object-contain" />
+                    <div className="border-b-2 border-gray-400 mb-2"></div>
+                    <p className="font-bold text-gray-900 text-xs sm:text-sm">سالم الوادعي</p>
                     <p className="text-xs text-gray-600">مدير المالية</p>
                   </div>
 
                   {/* الختم */}
                   <div className="flex flex-col items-center justify-center">
-                    <div className="w-20 h-20 rounded-full border-4 border-blue-600 flex items-center justify-center mb-2">
-                      <div className="text-center">
-                        <p className="text-xs text-blue-600 font-bold">ختم</p>
-                        <p className="text-xs text-blue-600 font-bold">البرنامج</p>
-                      </div>
-                    </div>
+                    <img src="/seal-stamp.png" alt="ختم البرنامج" className="w-16 sm:w-24 h-16 sm:h-24 mb-2 object-contain" />
                     <p className="text-xs text-gray-600">Symbol AI</p>
                   </div>
 
                   {/* التوقيع الثاني */}
                   <div>
-                    <div className="h-24 border-b-2 border-gray-400 mb-2 flex items-end justify-center">
-                      <span className="text-xs text-gray-500">توقيع</span>
-                    </div>
-                    <p className="font-bold text-gray-900 text-sm">عمر المطيري</p>
+                    <img src="/signature-omar.png" alt="توقيع عمر" className="h-12 sm:h-20 mx-auto mb-2 object-contain" />
+                    <div className="border-b-2 border-gray-400 mb-2"></div>
+                    <p className="font-bold text-gray-900 text-xs sm:text-sm">عمر المطيري</p>
                     <p className="text-xs text-gray-600">المراجع المالي</p>
                   </div>
                 </div>
               </div>
 
               {/* معلومات الإنشاء */}
-              <div className="mt-8 pt-4 border-t border-gray-300 text-xs text-gray-500">
+              <div className="mt-6 sm:mt-8 pt-4 border-t border-gray-300 text-xs text-gray-500">
                 <p>تم الإنشاء بواسطة: <span className="font-semibold text-gray-700">{getVoucherQuery.data.createdByName}</span></p>
                 <p>التاريخ والوقت: <span className="font-semibold text-gray-700">{new Date(getVoucherQuery.data.createdAt).toLocaleString('ar-SA')}</span></p>
               </div>

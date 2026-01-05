@@ -137,6 +137,7 @@ const menuStructure: MenuItem[] = [
       { icon: Receipt, label: "المصاريف", path: "/expenses", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Gift, label: "البونص", path: "/bonuses", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
       { icon: Wallet, label: "مسيرات الرواتب", path: "/payrolls", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: FileText, label: "سند قبض", path: "/receipt-voucher", roles: ["admin", "manager", "supervisor"] },
     ]
   },
   
@@ -177,16 +178,6 @@ const menuStructure: MenuItem[] = [
       { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager", "viewer"] },
       { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee", "supervisor"] },
       { icon: Heart, label: "برنامج الولاء", path: "/loyalty", roles: ["admin", "manager", "supervisor", "viewer"] },
-    ]
-  },
-  
-  // المعاملات المالية
-  {
-    icon: FileText,
-    label: "المعاملات المالية",
-    roles: ["admin", "manager", "supervisor"],
-    children: [
-      { icon: FileText, label: "سند قبض", path: "/receipt-voucher", roles: ["admin", "manager", "supervisor"] },
     ]
   },
   
