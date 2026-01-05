@@ -180,6 +180,16 @@ const menuStructure: MenuItem[] = [
     ]
   },
   
+  // المعاملات المالية
+  {
+    icon: FileText,
+    label: "المعاملات المالية",
+    roles: ["admin", "manager", "supervisor"],
+    children: [
+      { icon: FileText, label: "سند قبض", path: "/receipt-voucher", roles: ["admin", "manager", "supervisor"] },
+    ]
+  },
+  
   // إدارة المهام
   {
     icon: ClipboardCheck,

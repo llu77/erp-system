@@ -5535,6 +5535,80 @@ ${discrepancyRows}
         return checkDataIntegrity(input.branchId);
       }),
   }),
+
+  receiptVoucher: router({
+    create: supervisorInputProcedure
+      .input(z.object({
+        voucherDate: z.date(),
+        dueDate: z.date().optional(),
+        payeeName: z.string().min(1),
+        payeeAddress: z.string().optional(),
+        payeePhone: z.string().optional(),
+        payeeEmail: z.string().optional(),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+        description: z.string().optional(),
+        notes: z.string().optional(),
+        items: z.array(z.object({
+          description: z.string().min(1),
+          amount: z.number().positive(),
+          notes: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { createReceiptVoucher } = await import('./receiptVoucher');
+        const createdByName = (ctx.user?.name as string) || (ctx.user?.username as string) || 'Unknown';
+        return createReceiptVoucher({
+          ...input,
+          createdBy: ctx.user.id,
+          createdByName,
+        });
+      }),
+
+    get: supervisorInputProcedure
+      .input(z.object({
+        voucherId: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const { getReceiptVoucher } = await import('./receiptVoucher');
+        return getReceiptVoucher(input.voucherId);
+      }),
+
+    getAll: supervisorInputProcedure
+      .input(z.object({
+        limit: z.number().default(50),
+        offset: z.number().default(0),
+      }))
+      .query(async ({ input }) => {
+        const { getAllReceiptVouchers } = await import('./receiptVoucher');
+        return getAllReceiptVouchers(input.limit, input.offset);
+      }),
+
+    updateStatus: supervisorInputProcedure
+      .input(z.object({
+        voucherId: z.string(),
+        status: z.enum(['draft', 'approved', 'paid', 'cancelled']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { updateReceiptVoucherStatus } = await import('./receiptVoucher');
+        const approvedByName = (ctx.user?.name as string | undefined) || (ctx.user?.username as string | undefined);
+        return updateReceiptVoucherStatus(
+          input.voucherId,
+          input.status,
+          ctx.user.id,
+          approvedByName
+        );
+      }),
+
+    delete: supervisorInputProcedure
+      .input(z.object({
+        voucherId: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { deleteReceiptVoucher } = await import('./receiptVoucher');
+        return deleteReceiptVoucher(input.voucherId);
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

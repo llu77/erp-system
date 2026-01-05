@@ -204,6 +204,20 @@
       "when": 1767529864473,
       "tag": "0028_fresh_wrecking_crew",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "5",
+      "when": 1767639063438,
+      "tag": "0029_noisy_gargoyle",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1767639105428,
+      "tag": "0030_woozy_masque",
+      "breakpoints": true
     }
   ]
 }

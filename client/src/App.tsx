@@ -51,6 +51,7 @@ import LoyaltyReport from "./pages/LoyaltyReport";
 import MonitoringDashboard from "./pages/MonitoringDashboard";
 import SchedulerDashboard from "./pages/SchedulerDashboard";
 import SmartAlerts from "./pages/SmartAlerts";
+import ReceiptVoucher from "./pages/ReceiptVoucher";
 
 function Router() {
   return (
@@ -275,6 +276,12 @@ function Router() {
       <Route path="/loyalty/register" component={LoyaltyRegister} />
       {/* Loyalty Visit - Public Page */}
       <Route path="/loyalty/visit" component={LoyaltyVisit} />
+      {/* Receipt Voucher - Financial Transactions */}
+      <Route path="/receipt-voucher">
+        <DashboardLayout>
+          <ReceiptVoucher />
+        </DashboardLayout>
+      </Route>
       {/* Smart Alerts - Admin Only */}
       <Route path="/smart-alerts">
         <DashboardLayout>

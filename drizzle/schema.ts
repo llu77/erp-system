@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, json } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, json, date } from "drizzle-orm/mysql-core";
 
 // ==================== جدول المستخدمين ====================
 export const users = mysqlTable("users", {
@@ -1628,3 +1628,94 @@ export const bonusTierAuditLog = mysqlTable("bonusTierAuditLog", {
 
 export type BonusTierAuditLog = typeof bonusTierAuditLog.$inferSelect;
 export type InsertBonusTierAuditLog = typeof bonusTierAuditLog.$inferInsert;
+
+
+// ==================== جدول سندات القبض ====================
+/**
+ * ReceiptVouchers - سندات القبض (وثائق مالية رسمية)
+ */
+export const receiptVouchers = mysqlTable("receiptVouchers", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // معرف السند
+  voucherId: varchar("voucherId", { length: 50 }).notNull().unique(), // RV-2026-001
+  
+  // بيانات المستند
+  voucherDate: date("voucherDate").notNull(),
+  dueDate: date("dueDate"),
+  
+  // بيانات المدفوع له
+  payeeName: varchar("payeeName", { length: 255 }).notNull(),
+  payeeAddress: text("payeeAddress"),
+  payeePhone: varchar("payeePhone", { length: 20 }),
+  payeeEmail: varchar("payeeEmail", { length: 320 }),
+  
+  // بيانات الفرع
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 100 }),
+  
+  // الوصف العام
+  description: text("description"),
+  
+  // الملاحظات
+  notes: text("notes"),
+  
+  // المجموع
+  totalAmount: decimal("totalAmount", { precision: 12, scale: 2 }).default('0').notNull(),
+  
+  // حالة السند
+  status: mysqlEnum("status", ["draft", "approved", "paid", "cancelled"]).default("draft").notNull(),
+  
+  // بيانات الموافقة
+  approvedBy: int("approvedBy"),
+  approvedByName: varchar("approvedByName", { length: 255 }),
+  approvedAt: timestamp("approvedAt"),
+  
+  // بيانات الدفع
+  paidBy: int("paidBy"),
+  paidByName: varchar("paidByName", { length: 255 }),
+  paidAt: timestamp("paidAt"),
+  
+  // معرفات التوقيع
+  signedBy1: varchar("signedBy1", { length: 255 }), // سالم الوادعي
+  signedBy2: varchar("signedBy2", { length: 255 }), // عمر المطيري
+  
+  // المستخدم الذي أنشأ السند
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }).notNull(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ReceiptVoucher = typeof receiptVouchers.$inferSelect;
+export type InsertReceiptVoucher = typeof receiptVouchers.$inferInsert;
+
+// ==================== جدول بنود سندات القبض ====================
+/**
+ * ReceiptVoucherItems - بنود سند القبض
+ */
+export const receiptVoucherItems = mysqlTable("receiptVoucherItems", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // معرف السند الأب
+  voucherId: int("voucherId").notNull(),
+  
+  // رقم البند
+  itemNumber: int("itemNumber").notNull(),
+  
+  // وصف البند
+  description: varchar("description", { length: 500 }).notNull(),
+  
+  // المبلغ
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  
+  // الملاحظات
+  notes: text("notes"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ReceiptVoucherItem = typeof receiptVoucherItems.$inferSelect;
+export type InsertReceiptVoucherItem = typeof receiptVoucherItems.$inferInsert;

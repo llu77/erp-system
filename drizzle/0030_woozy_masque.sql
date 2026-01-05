@@ -1,0 +1,1 @@
+ALTER TABLE `receiptVouchers` MODIFY COLUMN `totalAmount` decimal(12,2) NOT NULL DEFAULT '0';

@@ -1,0 +1,42 @@
+CREATE TABLE `receiptVoucherItems` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`voucherId` int NOT NULL,
+	`itemNumber` int NOT NULL,
+	`description` varchar(500) NOT NULL,
+	`amount` decimal(12,2) NOT NULL,
+	`notes` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `receiptVoucherItems_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `receiptVouchers` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`voucherId` varchar(50) NOT NULL,
+	`voucherDate` date NOT NULL,
+	`dueDate` date,
+	`payeeName` varchar(255) NOT NULL,
+	`payeeAddress` text,
+	`payeePhone` varchar(20),
+	`payeeEmail` varchar(320),
+	`branchId` int,
+	`branchName` varchar(100),
+	`description` text,
+	`notes` text,
+	`totalAmount` decimal(12,2) NOT NULL DEFAULT 0,
+	`status` enum('draft','approved','paid','cancelled') NOT NULL DEFAULT 'draft',
+	`approvedBy` int,
+	`approvedByName` varchar(255),
+	`approvedAt` timestamp,
+	`paidBy` int,
+	`paidByName` varchar(255),
+	`paidAt` timestamp,
+	`signedBy1` varchar(255),
+	`signedBy2` varchar(255),
+	`createdBy` int NOT NULL,
+	`createdByName` varchar(255) NOT NULL,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `receiptVouchers_id` PRIMARY KEY(`id`),
+	CONSTRAINT `receiptVouchers_voucherId_unique` UNIQUE(`voucherId`)
+);
