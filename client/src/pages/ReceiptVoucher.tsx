@@ -345,79 +345,83 @@ export default function ReceiptVoucher() {
         </DialogContent>
       </Dialog>
 
-      {/* معاينة السند */}
+      {/* معاينة السند - تصميم محسّن */}
       <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white">
           <DialogHeader>
             <DialogTitle>معاينة السند</DialogTitle>
           </DialogHeader>
 
           {getVoucherQuery.data && (
-            <div className="space-y-6 print:space-y-4">
+            <div className="space-y-0 print:space-y-0 bg-white p-8 print:p-0">
               {/* رأس السند */}
-              <div className="border-b-2 border-gray-300 pb-4 print:pb-2">
-                <div className="text-center mb-4">
-                  <h1 className="text-3xl font-bold text-gray-900">Symbol AI</h1>
-                  <p className="text-gray-600 text-lg font-semibold">سند قبض</p>
-                </div>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="font-semibold">رقم السند</p>
-                    <p className="text-gray-700">{getVoucherQuery.data.voucherId}</p>
+              <div className="border-b-4 border-gray-800 pb-6 mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-center flex-1">
+                    <h1 className="text-4xl font-bold text-gray-900 mb-2">سند قبض</h1>
+                    <p className="text-gray-600 text-sm">Symbol AI</p>
                   </div>
-                  <div className="text-center">
-                    <p className="font-semibold">التاريخ</p>
-                    <p className="text-gray-700">
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">رقم السند</p>
+                    <p className="text-lg font-bold text-gray-900">{getVoucherQuery.data.voucherId}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 text-sm mt-4">
+                  <div>
+                    <p className="text-gray-600 text-xs mb-1">التاريخ</p>
+                    <p className="font-semibold text-gray-900">
                       {new Date(getVoucherQuery.data.voucherDate).toLocaleDateString('ar-SA')}
                     </p>
                   </div>
+                  <div className="text-center">
+                    <p className="text-gray-600 text-xs mb-1">تاريخ الاستحقاق</p>
+                    <p className="font-semibold text-gray-900">
+                      {getVoucherQuery.data.dueDate ? new Date(getVoucherQuery.data.dueDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                    </p>
+                  </div>
                   <div className="text-left">
-                    <p className="font-semibold">مشرف الفرع</p>
-                    <p className="text-gray-700">{getVoucherQuery.data.branchName || 'غير محدد'}</p>
+                    <p className="text-gray-600 text-xs mb-1">الحالة</p>
+                    <p className="font-semibold text-gray-900">مسودة</p>
                   </div>
                 </div>
               </div>
 
-              {/* بيانات السند */}
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              {/* بيانات المستقبل */}
+              <div className="mb-6">
+                <div className="grid grid-cols-2 gap-8">
                   <div>
-                    <p className="font-semibold mb-1">المستقبل</p>
-                    <p className="text-gray-700">{getVoucherQuery.data.payeeName}</p>
+                    <p className="text-xs text-gray-600 mb-1">المستقبل</p>
+                    <p className="text-lg font-bold text-gray-900">{getVoucherQuery.data.payeeName}</p>
                   </div>
                   <div>
-                    <p className="font-semibold mb-1">البند</p>
-                    <p className="text-gray-700">تسليم مبالغ كاش</p>
+                    <p className="text-xs text-gray-600 mb-1">رقم الجوال</p>
+                    <p className="text-lg font-bold text-gray-900">{getVoucherQuery.data.payeePhone || 'غير محدد'}</p>
                   </div>
                 </div>
+              </div>
 
-                {/* جدول المبالغ */}
-                <table className="w-full border-collapse border border-gray-300">
+              {/* جدول البيانات */}
+              <div className="mb-8 border border-gray-300">
+                <table className="w-full">
                   <thead>
-                    <tr className="bg-gray-100">
-                      <th className="border border-gray-300 p-3 text-right">البيان</th>
-                      <th className="border border-gray-300 p-3 text-left">المبلغ (ر.س)</th>
+                    <tr className="bg-gray-100 border-b border-gray-300">
+                      <th className="p-4 text-right text-sm font-semibold text-gray-900">الوصف</th>
+                      <th className="p-4 text-left text-sm font-semibold text-gray-900">المبلغ (ر.س)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {getVoucherQuery.data.items?.map((item: any, index: number) => {
-                      const notes = item.notes || '';
-                      const match = notes.match(/المبلغ الكلي: ([\d.]+) ر\.س \| المصروف: ([\d.]+) ر\.س/);
-                      const totalAmount = match ? parseFloat(match[1]) : 0;
-                      const expenses = match ? parseFloat(match[2]) : 0;
-
-                      return (
-                        <tr key={index}>
-                          <td className="border border-gray-300 p-3">{item.description}</td>
-                          <td className="border border-gray-300 p-3 text-left">
-                            {parseFloat(item.amount).toLocaleString('ar-SA')}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    <tr className="bg-blue-50 font-bold">
-                      <td className="border border-gray-300 p-3">المجموع</td>
-                      <td className="border border-gray-300 p-3 text-left">
+                    {getVoucherQuery.data.items?.map((item: any, index: number) => (
+                      <tr key={index} className="border-b border-gray-300">
+                        <td className="p-4 text-right text-gray-900">{item.description}</td>
+                        <td className="p-4 text-left text-gray-900 font-semibold">
+                          {parseFloat(item.amount).toLocaleString('ar-SA')}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-gray-50 font-bold">
+                      <td className="p-4 text-right text-gray-900">المجموع</td>
+                      <td className="p-4 text-left text-gray-900 text-lg">
                         {parseFloat(getVoucherQuery.data.totalAmount).toLocaleString('ar-SA')}
                       </td>
                     </tr>
@@ -426,42 +430,48 @@ export default function ReceiptVoucher() {
               </div>
 
               {/* التوقيعات والختم */}
-              <div className="border-t-2 border-gray-300 pt-8 print:pt-4">
-                <div className="grid grid-cols-3 gap-6 text-center text-sm">
+              <div className="border-t-4 border-gray-800 pt-8">
+                <div className="grid grid-cols-3 gap-6 text-center">
+                  {/* التوقيع الأول */}
                   <div>
-                    <div className="border-t-2 border-gray-400 pt-4 h-20 flex items-end justify-center mb-2">
-                      <p className="text-gray-500">توقيع</p>
+                    <div className="h-24 border-b-2 border-gray-400 mb-2 flex items-end justify-center">
+                      <span className="text-xs text-gray-500">توقيع</span>
                     </div>
-                    <p className="font-semibold">سالم الوادعي</p>
-                    <p className="text-gray-600">مدير المالية</p>
+                    <p className="font-bold text-gray-900 text-sm">سالم الوادعي</p>
+                    <p className="text-xs text-gray-600">مدير المالية</p>
                   </div>
-                  <div>
-                    <div className="flex items-center justify-center h-20 mb-2">
+
+                  {/* الختم */}
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="w-20 h-20 rounded-full border-4 border-blue-600 flex items-center justify-center mb-2">
                       <div className="text-center">
-                        <div className="text-6xl font-bold text-blue-600 opacity-20">✓</div>
-                        <p className="text-xs text-gray-500 mt-1">ختم البرنامج</p>
+                        <p className="text-xs text-blue-600 font-bold">ختم</p>
+                        <p className="text-xs text-blue-600 font-bold">البرنامج</p>
                       </div>
                     </div>
+                    <p className="text-xs text-gray-600">Symbol AI</p>
                   </div>
+
+                  {/* التوقيع الثاني */}
                   <div>
-                    <div className="border-t-2 border-gray-400 pt-4 h-20 flex items-end justify-center mb-2">
-                      <p className="text-gray-500">توقيع</p>
+                    <div className="h-24 border-b-2 border-gray-400 mb-2 flex items-end justify-center">
+                      <span className="text-xs text-gray-500">توقيع</span>
                     </div>
-                    <p className="font-semibold">عمر المطيري</p>
-                    <p className="text-gray-600">المراجع المالي</p>
+                    <p className="font-bold text-gray-900 text-sm">عمر المطيري</p>
+                    <p className="text-xs text-gray-600">المراجع المالي</p>
                   </div>
                 </div>
               </div>
 
               {/* معلومات الإنشاء */}
-              <div className="text-xs text-gray-500 border-t pt-4 print:pt-2">
-                <p>تم الإنشاء بواسطة: {getVoucherQuery.data.createdByName}</p>
-                <p>التاريخ: {new Date(getVoucherQuery.data.createdAt).toLocaleString('ar-SA')}</p>
+              <div className="mt-8 pt-4 border-t border-gray-300 text-xs text-gray-500">
+                <p>تم الإنشاء بواسطة: <span className="font-semibold text-gray-700">{getVoucherQuery.data.createdByName}</span></p>
+                <p>التاريخ والوقت: <span className="font-semibold text-gray-700">{new Date(getVoucherQuery.data.createdAt).toLocaleString('ar-SA')}</span></p>
               </div>
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="mt-6">
             <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>
               إغلاق
             </Button>
