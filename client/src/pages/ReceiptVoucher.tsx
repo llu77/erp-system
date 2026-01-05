@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,19 @@ export default function ReceiptVoucher() {
   const [selectedVoucher, setSelectedVoucher] = useState<any>(null);
   const [voucherToDelete, setVoucherToDelete] = useState<string | null>(null);
 
+  // جلب قائمة الفروع
+  const branchesQuery = trpc.branches.list.useQuery();
+  const branches = branchesQuery.data || [];
+
+  // الحصول على اسم الفرع المرتبط بالمستخدم
+  const userBranch = useMemo(() => {
+    if (user?.branchId && branches.length > 0) {
+      const branch = branches.find(b => b.id === user.branchId);
+      return branch ? { id: branch.id, name: branch.name } : null;
+    }
+    return null;
+  }, [user?.branchId, branches]);
+
   // بيانات النموذج المبسطة
   const [formData, setFormData] = useState({
     voucherDate: new Date().toISOString().split('T')[0],
@@ -47,8 +60,20 @@ export default function ReceiptVoucher() {
     expensesAmount: 0,
     recipient: '',
     notes: '',
-    branchName: user?.name || user?.username || '',
+    branchId: user?.branchId || undefined,
+    branchName: '',
   });
+
+  // تحديث اسم الفرع عند تغير بيانات المستخدم أو الفروع
+  useEffect(() => {
+    if (userBranch) {
+      setFormData(prev => ({
+        ...prev,
+        branchId: userBranch.id,
+        branchName: userBranch.name,
+      }));
+    }
+  }, [userBranch]);
 
   // APIs
   const createVoucherMutation = trpc.receiptVoucher.create.useMutation();
@@ -85,7 +110,7 @@ export default function ReceiptVoucher() {
         payeeAddress: formData.notes,
         payeePhone: formData.payeePhone,
         payeeEmail: formData.payeeEmail,
-        branchId: undefined,
+        branchId: formData.branchId,
         branchName: formData.branchName,
         description: 'تسليم مبالغ كاش',
         notes: formData.notes,
@@ -114,7 +139,8 @@ export default function ReceiptVoucher() {
           expensesAmount: 0,
           recipient: '',
           notes: '',
-          branchName: user?.name || user?.username || '',
+          branchId: userBranch?.id || user?.branchId || undefined,
+          branchName: userBranch?.name || '',
         });
       } else {
         toast.error(result.error || 'فشل في إنشاء السند');
@@ -311,13 +337,13 @@ export default function ReceiptVoucher() {
               </div>
 
               <div>
-                <Label>مشرف الفرع</Label>
+                <Label>الفرع</Label>
                 <Input
-                  value={formData.branchName}
+                  value={formData.branchName || 'غير محدد'}
                   disabled
                   className="bg-gray-100"
                 />
-                <p className="text-xs text-gray-500 mt-1">تلقائي</p>
+                <p className="text-xs text-gray-500 mt-1">يتم تحديده تلقائياً حسب المشرف</p>
               </div>
             </div>
 

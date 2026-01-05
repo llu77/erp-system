@@ -39,7 +39,25 @@ export default function ReceiptVoucherReports() {
   // تصفية السندات حسب الفترة والبحث والفرع
   const filteredReceipts = useMemo(() => {
     return receipts.filter(receipt => {
-      const receiptDate = parseISO(receipt.voucherDate.toString());
+      // معالجة تنسيقات التاريخ المختلفة
+      let receiptDate: Date;
+      try {
+        const dateStr = receipt.voucherDate?.toString() || '';
+        // محاولة تحليل التاريخ بعدة طرق
+        if (dateStr.includes('T') || dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+          receiptDate = parseISO(dateStr);
+        } else {
+          receiptDate = new Date(dateStr);
+        }
+        // التحقق من صحة التاريخ
+        if (isNaN(receiptDate.getTime())) {
+          console.warn('تاريخ غير صالح:', dateStr);
+          return true; // إظهار السند إذا كان التاريخ غير صالح
+        }
+      } catch (e) {
+        console.warn('خطأ في تحليل التاريخ:', receipt.voucherDate);
+        return true; // إظهار السند إذا فشل تحليل التاريخ
+      }
       const inRange = isWithinInterval(receiptDate, dateRange);
       const matchesSearch = searchTerm === '' || 
         receipt.voucherId.toLowerCase().includes(searchTerm.toLowerCase()) ||
