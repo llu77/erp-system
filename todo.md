@@ -2036,3 +2036,4 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إضافة الفرع التلقائي عند اختيار المشرف
 - [ ] اختبار وحفظ checkpoint
 - [x] إصلاح خطأ Invalid time value في صفحة تقارير السندات
+- [x] إصلاح زر تصدير PDF في صفحة تقارير السندات

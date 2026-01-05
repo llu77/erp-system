@@ -8,9 +8,17 @@ import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO, isWithinInterval, isValid } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { Download, FileText, BarChart3 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { Download, FileText } from 'lucide-react';
+import { toast } from 'sonner';
+import { 
+  PDF_BASE_STYLES, 
+  getPDFHeader, 
+  getPDFFooter, 
+  getPDFInfoSection, 
+  getPDFSummarySection, 
+  openPrintWindow,
+  formatCurrency 
+} from '@/utils/pdfTemplates';
 
 type PeriodType = 'day' | 'week' | 'month';
 
@@ -143,56 +151,103 @@ export default function ReceiptVoucherReports() {
     link.href = URL.createObjectURL(blob);
     link.download = `تقرير_السندات_${format(new Date(), 'yyyy-MM-dd')}.csv`;
     link.click();
+    toast.success('تم تصدير التقرير بنجاح');
   };
 
-  // تصدير إلى PDF
+  // تصدير إلى PDF باستخدام نظام PDF الموحد
   const exportToPDF = () => {
-    const doc = new jsPDF({
-      orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4',
-    });
-
-    // إضافة العنوان
-    doc.setFontSize(16);
-    doc.text('تقرير سندات القبض', doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
-
-    // إضافة الإحصائيات
-    doc.setFontSize(10);
     const periodLabel = periodType === 'day' ? 'يومي' : periodType === 'week' ? 'أسبوعي' : 'شهري';
-    doc.text(`الفترة: ${periodLabel} - من ${format(dateRange.start, 'yyyy-MM-dd')} إلى ${format(dateRange.end, 'yyyy-MM-dd')}`, 15, 25);
-
-    // إضافة الإحصائيات
-    doc.text(`إجمالي السندات: ${statistics.count}`, 15, 32);
-    doc.text(`إجمالي المبالغ: ${statistics.totalAmount.toFixed(2)} ريال`, 15, 38);
-
-    // إضافة الجدول
-    const tableData = filteredReceipts.map(receipt => [
-      receipt.voucherId,
-      safeFormatDate(receipt.voucherDate),
-      receipt.payeeName || '',
-      parseFloat(receipt.totalAmount as any)?.toFixed(2) || '0',
-      receipt.status || '',
-      receipt.createdByName || '',
-    ]);
-
-    (doc as any).autoTable({
-      head: [['رقم السند', 'التاريخ', 'المدفوع له', 'المبلغ الكلي', 'الحالة', 'المشرف']],
-      body: tableData,
-      startY: 50,
-      styles: { font: 'Arial', fontSize: 9, halign: 'center' },
-      headStyles: { fillColor: [15, 39, 68], textColor: 255 },
-      columnStyles: {
-        0: { cellWidth: 25 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 25 },
-        4: { cellWidth: 25 },
-        5: { cellWidth: 30 },
-      },
-    });
-
-    doc.save(`تقرير_السندات_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    const startDateStr = format(dateRange.start, 'yyyy-MM-dd');
+    const endDateStr = format(dateRange.end, 'yyyy-MM-dd');
+    
+    const getStatusLabel = (status: string) => {
+      switch (status) {
+        case 'draft': return 'مسودة';
+        case 'approved': return 'معتمد';
+        case 'paid': return 'مدفوع';
+        case 'cancelled': return 'ملغي';
+        default: return status || '-';
+      }
+    };
+    
+    const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير سندات القبض - ${startDateStr}</title>
+  <style>
+    ${PDF_BASE_STYLES}
+    .status-draft { color: #666; }
+    .status-approved { color: #0066cc; }
+    .status-paid { color: #006600; }
+    .status-cancelled { color: #cc0000; text-decoration: line-through; }
+  </style>
+</head>
+<body>
+  ${getPDFHeader('تقرير سندات القبض', { reportNumber: `RVR-${format(new Date(), 'yyyyMMdd')}` })}
+  
+  ${getPDFInfoSection([
+    { label: 'نوع الفترة', value: periodLabel },
+    { label: 'من تاريخ', value: startDateStr },
+    { label: 'إلى تاريخ', value: endDateStr },
+    { label: 'الفرع', value: selectedBranch === 'all' ? 'جميع الفروع' : selectedBranch },
+  ])}
+  
+  ${getPDFSummarySection([
+    { label: 'عدد السندات', value: statistics.count.toString() },
+    { label: 'إجمالي المبالغ', value: formatCurrency(statistics.totalAmount) },
+    { label: 'المتوسط', value: formatCurrency(statistics.averageAmount) },
+  ])}
+  
+  <table class="pdf-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>رقم السند</th>
+        <th>التاريخ</th>
+        <th>المدفوع له</th>
+        <th>المبلغ الكلي</th>
+        <th>المشرف</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${filteredReceipts.length === 0 ? `
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 20px;">لا توجد سندات في الفترة المحددة</td>
+        </tr>
+      ` : filteredReceipts.map((receipt, index) => {
+        const statusClass = `status-${receipt.status || 'draft'}`;
+        return `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${receipt.voucherId}</td>
+            <td>${safeFormatDate(receipt.voucherDate)}</td>
+            <td class="text-right">${receipt.payeeName || '-'}</td>
+            <td>${formatCurrency(parseFloat(receipt.totalAmount as any) || 0)}</td>
+            <td>${receipt.createdByName || '-'}</td>
+            <td class="${statusClass}">${getStatusLabel(receipt.status)}</td>
+          </tr>
+        `;
+      }).join('')}
+    </tbody>
+    <tfoot>
+      <tr style="font-weight: bold; background: #f5f5f5;">
+        <td colspan="4" style="text-align: left;">الإجمالي</td>
+        <td>${formatCurrency(statistics.totalAmount)}</td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
+  </table>
+  
+  ${getPDFFooter()}
+</body>
+</html>
+    `;
+    
+    openPrintWindow(htmlContent);
+    toast.success('تم فتح تقرير سندات القبض للطباعة أو الحفظ كـ PDF');
   };
 
   return (
