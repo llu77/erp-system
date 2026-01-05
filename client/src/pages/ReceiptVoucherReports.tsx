@@ -6,13 +6,52 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO, isWithinInterval } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO, isWithinInterval, isValid } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Download, FileText, BarChart3 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
 type PeriodType = 'day' | 'week' | 'month';
+
+// دالة مساعدة لتحويل التاريخ بشكل آمن
+function safeParseDate(dateValue: any): Date | null {
+  if (!dateValue) return null;
+  
+  try {
+    // إذا كان التاريخ كائن Date
+    if (dateValue instanceof Date) {
+      return isValid(dateValue) ? dateValue : null;
+    }
+    
+    const dateStr = dateValue.toString();
+    
+    // محاولة تحليل التاريخ بعدة طرق
+    if (dateStr.includes('T') || dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+      const parsed = parseISO(dateStr);
+      return isValid(parsed) ? parsed : null;
+    }
+    
+    // محاولة تحليل التاريخ كـ Date عادي
+    const parsed = new Date(dateStr);
+    return isValid(parsed) ? parsed : null;
+  } catch (e) {
+    console.warn('خطأ في تحليل التاريخ:', dateValue);
+    return null;
+  }
+}
+
+// دالة مساعدة لتنسيق التاريخ بشكل آمن
+function safeFormatDate(dateValue: any, formatStr: string = 'yyyy-MM-dd'): string {
+  const date = safeParseDate(dateValue);
+  if (!date) return 'غير محدد';
+  
+  try {
+    return format(date, formatStr, { locale: ar });
+  } catch (e) {
+    return 'غير محدد';
+  }
+}
 
 export default function ReceiptVoucherReports() {
   const [periodType, setPeriodType] = useState<PeriodType>('month');
@@ -40,24 +79,22 @@ export default function ReceiptVoucherReports() {
   const filteredReceipts = useMemo(() => {
     return receipts.filter(receipt => {
       // معالجة تنسيقات التاريخ المختلفة
-      let receiptDate: Date;
-      try {
-        const dateStr = receipt.voucherDate?.toString() || '';
-        // محاولة تحليل التاريخ بعدة طرق
-        if (dateStr.includes('T') || dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
-          receiptDate = parseISO(dateStr);
-        } else {
-          receiptDate = new Date(dateStr);
-        }
-        // التحقق من صحة التاريخ
-        if (isNaN(receiptDate.getTime())) {
-          console.warn('تاريخ غير صالح:', dateStr);
-          return true; // إظهار السند إذا كان التاريخ غير صالح
-        }
-      } catch (e) {
-        console.warn('خطأ في تحليل التاريخ:', receipt.voucherDate);
-        return true; // إظهار السند إذا فشل تحليل التاريخ
+      const receiptDate = safeParseDate(receipt.voucherDate);
+      
+      // إذا كان التاريخ غير صالح، نعرض السند (لا نستبعده)
+      if (!receiptDate) {
+        console.warn('تاريخ غير صالح للسند:', receipt.voucherId, receipt.voucherDate);
+        // نعرض السند إذا كان التاريخ غير صالح لكي لا نخفي بيانات مهمة
+        const matchesSearch = searchTerm === '' || 
+          receipt.voucherId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          receipt.payeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          receipt.notes?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesBranch = selectedBranch === 'all' || 
+          receipt.branchName === selectedBranch ||
+          (receipt.branchId && receipt.branchId.toString() === selectedBranch);
+        return matchesSearch && matchesBranch;
       }
+      
       const inRange = isWithinInterval(receiptDate, dateRange);
       const matchesSearch = searchTerm === '' || 
         receipt.voucherId.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -87,7 +124,7 @@ export default function ReceiptVoucherReports() {
     const headers = ['رقم السند', 'التاريخ', 'المدفوع له', 'المبلغ الكلي', 'الحالة', 'المشرف', 'الملاحظات'];
     const data = filteredReceipts.map(receipt => [
       receipt.voucherId,
-      format(parseISO(receipt.voucherDate.toString()), 'yyyy-MM-dd', { locale: ar }),
+      safeFormatDate(receipt.voucherDate),
       receipt.payeeName || '',
       parseFloat(receipt.totalAmount as any)?.toFixed(2) || '0',
       receipt.status || '',
@@ -132,7 +169,7 @@ export default function ReceiptVoucherReports() {
     // إضافة الجدول
     const tableData = filteredReceipts.map(receipt => [
       receipt.voucherId,
-      format(parseISO(receipt.voucherDate.toString()), 'yyyy-MM-dd'),
+      safeFormatDate(receipt.voucherDate),
       receipt.payeeName || '',
       parseFloat(receipt.totalAmount as any)?.toFixed(2) || '0',
       receipt.status || '',
@@ -305,7 +342,7 @@ export default function ReceiptVoucherReports() {
                     <TableRow key={receipt.id}>
                       <TableCell className="font-medium">{receipt.voucherId}</TableCell>
                       <TableCell>
-                        {format(parseISO(receipt.voucherDate.toString()), 'yyyy-MM-dd', { locale: ar })}
+                        {safeFormatDate(receipt.voucherDate)}
                       </TableCell>
                       <TableCell>{receipt.payeeName}</TableCell>
                       <TableCell>{parseFloat(receipt.totalAmount as any)?.toFixed(2)} ر.س</TableCell>

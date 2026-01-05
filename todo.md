@@ -2035,3 +2035,4 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إصلاح عدم ظهور السندات في التقارير (فلتر التاريخ)
 - [x] إضافة الفرع التلقائي عند اختيار المشرف
 - [ ] اختبار وحفظ checkpoint
+- [x] إصلاح خطأ Invalid time value في صفحة تقارير السندات
