@@ -138,6 +138,7 @@ const menuStructure: MenuItem[] = [
       { icon: Gift, label: "البونص", path: "/bonuses", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
       { icon: Wallet, label: "مسيرات الرواتب", path: "/payrolls", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: FileText, label: "سند قبض", path: "/receipt-voucher", roles: ["admin", "manager", "supervisor"] },
+      { icon: BarChart3, label: "تقارير السندات", path: "/receipt-voucher-reports", roles: ["admin", "manager", "supervisor", "viewer"] },
     ]
   },
   

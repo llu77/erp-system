@@ -52,6 +52,7 @@ import MonitoringDashboard from "./pages/MonitoringDashboard";
 import SchedulerDashboard from "./pages/SchedulerDashboard";
 import SmartAlerts from "./pages/SmartAlerts";
 import ReceiptVoucher from "./pages/ReceiptVoucher";
+import ReceiptVoucherReports from "./pages/ReceiptVoucherReports";
 
 function Router() {
   return (
@@ -280,6 +281,12 @@ function Router() {
       <Route path="/receipt-voucher">
         <DashboardLayout>
           <ReceiptVoucher />
+        </DashboardLayout>
+      </Route>
+      {/* Receipt Voucher Reports */}
+      <Route path="/receipt-voucher-reports">
+        <DashboardLayout>
+          <ReceiptVoucherReports />
         </DashboardLayout>
       </Route>
       {/* Smart Alerts - Admin Only */}

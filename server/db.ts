@@ -33,6 +33,7 @@ import {
   LoyaltyVisit,
   InsertLoyaltyCustomer,
   InsertLoyaltyVisit,
+  receiptVouchers,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -3658,6 +3659,9 @@ export async function calculateExecutiveKPIs(startDate: Date, endDate: Date, bra
   // جلب بيانات آخر مسيرة رواتب للفترة المحددة
   const payrollData = await getLatestPayrollForPeriod(startDate, endDate, branchId);
   
+  // جلب بيانات سندات القبض
+  const receiptVouchersData = await getReceiptVouchersStats(startDate, endDate, branchId);
+  
   // إجمالي المصاريف يشمل المصاريف العادية + الرواتب
   const totalExpensesWithPayroll = expensesData.totalExpenses + payrollData.totalSalaries;
   const netProfit = revenues.totalRevenue - totalExpensesWithPayroll;
@@ -3706,6 +3710,10 @@ export async function calculateExecutiveKPIs(startDate: Date, endDate: Date, bra
     // مؤشرات إضافية
     cashPercentage: revenues.totalRevenue > 0 ? (revenues.totalCash / revenues.totalRevenue) * 100 : 0,
     networkPercentage: revenues.totalRevenue > 0 ? (revenues.totalNetwork / revenues.totalRevenue) * 100 : 0,
+    
+    // سندات القبض
+    receiptVouchersCount: receiptVouchersData.count,
+    totalReceiptVouchersAmount: receiptVouchersData.totalAmount,
   };
 }
 
@@ -6658,5 +6666,33 @@ export async function getAdvancesStats(branchId?: number): Promise<{
     deductedAmount: parseFloat(deductedResult[0]?.total || '0'),
     pendingCount: Number(pendingResult[0]?.count || 0),
     pendingAmount: parseFloat(pendingResult[0]?.total || '0'),
+  };
+}
+
+
+// إحصائيات سندات القبض للفترة المحددة
+export async function getReceiptVouchersStats(startDate: Date, endDate: Date, branchId?: number) {
+  const db = await getDb();
+  if (!db) return { count: 0, totalAmount: 0 };
+  
+  const conditions = [
+    gte(receiptVouchers.voucherDate, startDate),
+    lte(receiptVouchers.voucherDate, endDate),
+  ];
+  
+  if (branchId) {
+    conditions.push(eq(receiptVouchers.branchId, branchId));
+  }
+  
+  const result = await db.select({
+    count: sql<number>`COUNT(*)`,
+    totalAmount: sql<string>`COALESCE(SUM(${receiptVouchers.totalAmount}), 0)`,
+  })
+    .from(receiptVouchers)
+    .where(and(...conditions));
+  
+  return {
+    count: Number(result[0]?.count || 0),
+    totalAmount: parseFloat(result[0]?.totalAmount || '0'),
   };
 }

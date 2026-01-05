@@ -773,6 +773,75 @@ export default function ExecutiveDashboard() {
         </Card>
       </div>
 
+      {/* إحصائيات سندات القبض */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* عدد السندات */}
+        <Card className="bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 border-cyan-500/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">عدد السندات</CardTitle>
+            <FileText className="h-4 w-4 text-cyan-600" />
+          </CardHeader>
+          <CardContent>
+            {kpisLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-cyan-600">
+                  {kpis?.receiptVouchersCount || 0}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  سند مستلم في الفترة
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* إجمالي السندات */}
+        <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-600/5 border-indigo-500/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">إجمالي السندات</CardTitle>
+            <CreditCard className="h-4 w-4 text-indigo-600" />
+          </CardHeader>
+          <CardContent>
+            {kpisLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-indigo-600">
+                  {formatCurrency(kpis?.totalReceiptVouchersAmount || 0)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  مبالغ مستلمة (كاش)
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* الكاش المتبقي */}
+        <Card className="bg-gradient-to-br from-rose-500/10 to-rose-600/5 border-rose-500/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">الكاش المتبقي</CardTitle>
+            <Wallet className="h-4 w-4 text-rose-600" />
+          </CardHeader>
+          <CardContent>
+            {kpisLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-rose-600">
+                  {formatCurrency((kpis?.totalCash || 0) - (kpis?.totalReceiptVouchersAmount || 0))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  الرصيد = الكاش - السندات
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* أداء الموظفين */}
       <Card>
         <CardHeader>
