@@ -5600,7 +5600,7 @@ ${discrepancyRows}
         );
       }),
 
-    delete: supervisorInputProcedure
+    delete: adminProcedure
       .input(z.object({
         voucherId: z.string(),
       }))

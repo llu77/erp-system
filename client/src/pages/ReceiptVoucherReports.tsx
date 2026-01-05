@@ -18,8 +18,10 @@ export default function ReceiptVoucherReports() {
   const [periodType, setPeriodType] = useState<PeriodType>('month');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState<string>('all');
 
   const { data: receipts = [], isLoading } = trpc.receiptVoucher.getAll.useQuery({ limit: 1000, offset: 0 });
+  const { data: branches = [] } = trpc.branches.list.useQuery();
 
   // حساب نطاق التاريخ بناءً على نوع الفترة
   const dateRange = useMemo(() => {
@@ -34,7 +36,7 @@ export default function ReceiptVoucherReports() {
     }
   }, [selectedDate, periodType]);
 
-  // تصفية السندات حسب الفترة والبحث
+  // تصفية السندات حسب الفترة والبحث والفرع
   const filteredReceipts = useMemo(() => {
     return receipts.filter(receipt => {
       const receiptDate = parseISO(receipt.voucherDate.toString());
@@ -43,9 +45,12 @@ export default function ReceiptVoucherReports() {
         receipt.voucherId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         receipt.payeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         receipt.notes?.toLowerCase().includes(searchTerm.toLowerCase());
-      return inRange && matchesSearch;
+      const matchesBranch = selectedBranch === 'all' || 
+        receipt.branchName === selectedBranch ||
+        (receipt.branchId && receipt.branchId.toString() === selectedBranch);
+      return inRange && matchesSearch && matchesBranch;
     });
-  }, [receipts, dateRange, searchTerm]);
+  }, [receipts, dateRange, searchTerm, selectedBranch]);
 
   // حساب الإحصائيات
   const statistics = useMemo(() => {
@@ -149,7 +154,7 @@ export default function ReceiptVoucherReports() {
           <CardTitle>الفلاتر والبحث</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {/* نوع الفترة */}
             <div>
               <label className="text-sm font-medium">نوع الفترة</label>
@@ -173,6 +178,24 @@ export default function ReceiptVoucherReports() {
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
               />
+            </div>
+
+            {/* الفرع */}
+            <div>
+              <label className="text-sm font-medium">الفرع</label>
+              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                <SelectTrigger>
+                  <SelectValue placeholder="جميع الفروع" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع الفروع</SelectItem>
+                  {branches.map((branch: any) => (
+                    <SelectItem key={branch.id} value={branch.name}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* البحث */}

@@ -15,7 +15,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
-import { Plus, Printer, Save, Eye, Mail } from 'lucide-react';
+import { Plus, Printer, Save, Eye, Mail, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useAuth } from '@/_core/hooks/useAuth';
 
@@ -30,7 +31,9 @@ export default function ReceiptVoucher() {
   const { user } = useAuth();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedVoucher, setSelectedVoucher] = useState<any>(null);
+  const [voucherToDelete, setVoucherToDelete] = useState<string | null>(null);
 
   // بيانات النموذج المبسطة
   const [formData, setFormData] = useState({
@@ -50,6 +53,7 @@ export default function ReceiptVoucher() {
   // APIs
   const createVoucherMutation = trpc.receiptVoucher.create.useMutation();
   const sendEmailMutation = trpc.receiptVoucher.sendEmail.useMutation();
+  const deleteVoucherMutation = trpc.receiptVoucher.delete.useMutation();
   const getVouchersQuery = trpc.receiptVoucher.getAll.useQuery({ limit: 50, offset: 0 });
   const getVoucherQuery = trpc.receiptVoucher.get.useQuery(
     { voucherId: selectedVoucher?.voucherId || '' },
@@ -131,6 +135,22 @@ export default function ReceiptVoucher() {
     setShowPreviewDialog(true);
   };
 
+  // حذف السند (للأدمن فقط)
+  const handleDeleteVoucher = async () => {
+    if (!voucherToDelete) return;
+    
+    try {
+      await deleteVoucherMutation.mutateAsync({ voucherId: voucherToDelete });
+      toast.success('تم حذف السند بنجاح');
+      getVouchersQuery.refetch();
+    } catch (error: any) {
+      toast.error(error?.message || 'فشل في حذف السند');
+    } finally {
+      setShowDeleteDialog(false);
+      setVoucherToDelete(null);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -200,13 +220,27 @@ export default function ReceiptVoucher() {
                           </Badge>
                         </td>
                         <td className="py-3 px-4">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handlePreview(voucher)}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePreview(voucher)}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            {user?.role === 'admin' && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => {
+                                  setVoucherToDelete(voucher.voucherId);
+                                  setShowDeleteDialog(true);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -506,6 +540,28 @@ export default function ReceiptVoucher() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* نافذة تأكيد الحذف */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف السند</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف السند رقم {voucherToDelete}؟
+              لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteVoucher}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteVoucherMutation.isPending ? 'جاري الحذف...' : 'حذف'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
