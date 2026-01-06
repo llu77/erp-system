@@ -185,6 +185,14 @@ const menuStructure: MenuItem[] = [
     ]
   },
   
+  // برنامج الولاء (للمشرفين)
+  {
+    icon: Heart,
+    label: "برنامج الولاء",
+    path: "/loyalty",
+    roles: ["supervisor"],
+  },
+  
   // إدارة المهام
   {
     icon: ClipboardCheck,
