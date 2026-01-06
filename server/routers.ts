@@ -13,6 +13,7 @@ import * as reminderService from "./notifications/reminderService";
 import * as emailNotifications from "./notifications/emailNotificationService";
 import * as biAnalytics from "./bi/analyticsService";
 import * as aiAnalytics from "./bi/aiAnalyticsService";
+import * as revenueAnalytics from "./bi/revenueAnalyticsService";
 
 // إجراء للمدير فقط (كامل الصلاحيات)
 const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -5870,6 +5871,93 @@ ${discrepancyRows}
       }).optional())
       .query(async ({ input }) => {
         return aiAnalytics.getAIInsights(input?.branchId);
+      }),
+
+    // ==================== تحليلات الإيرادات والمصاريف الجديدة ====================
+    
+    // تحليل الإيرادات
+    analyzeRevenues: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return revenueAnalytics.analyzeRevenues(
+          new Date(input.startDate),
+          new Date(input.endDate),
+          input.branchId
+        );
+      }),
+
+    // تحليل المصاريف
+    analyzeExpenses: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return revenueAnalytics.analyzeExpenses(
+          new Date(input.startDate),
+          new Date(input.endDate),
+          input.branchId
+        );
+      }),
+
+    // تحليل أداء الموظفين
+    analyzeEmployeePerformance: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return revenueAnalytics.analyzeEmployeePerformance(
+          new Date(input.startDate),
+          new Date(input.endDate),
+          input.branchId
+        );
+      }),
+
+    // تحليل الربحية
+    analyzeProfitability: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return revenueAnalytics.analyzeProfitability(
+          new Date(input.startDate),
+          new Date(input.endDate),
+          input.branchId
+        );
+      }),
+
+    // رؤى AI الشاملة المبنية على الإيرادات والمصاريف
+    getComprehensiveInsights: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return revenueAnalytics.getComprehensiveAIInsights(
+          new Date(input.startDate),
+          new Date(input.endDate),
+          input.branchId
+        );
+      }),
+
+    // التنبؤ بالإيرادات
+    forecastRevenue: supervisorViewProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+        days: z.number().min(1).max(30).default(7),
+      }).optional())
+      .query(async ({ input }) => {
+        return revenueAnalytics.forecastRevenue(input?.branchId, input?.days || 7);
       }),
   }),
 });

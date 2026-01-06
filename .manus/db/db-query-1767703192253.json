@@ -1,0 +1,73 @@
+{
+  "query": "SELECT \n  DATE(date) as day,\n  branchId,\n  cash,\n  network,\n  balance\nFROM dailyRevenues \nWHERE date >= '2026-01-01' AND date <= '2026-01-06'\nORDER BY date, branchId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  DATE(date) as day,\n  branchId,\n  cash,\n  network,\n  balance\nFROM dailyRevenues \nWHERE date >= '2026-01-01' AND date <= '2026-01-06'\nORDER BY date, branchId;",
+  "rows": [
+    {
+      "day": "2026-01-01",
+      "branchId": "1",
+      "cash": "80.00",
+      "network": "1120.00",
+      "balance": "1120.00"
+    },
+    {
+      "day": "2026-01-01",
+      "branchId": "30001",
+      "cash": "40.00",
+      "network": "945.00",
+      "balance": "945.00"
+    },
+    {
+      "day": "2026-01-02",
+      "branchId": "1",
+      "cash": "80.00",
+      "network": "1445.00",
+      "balance": "1445.00"
+    },
+    {
+      "day": "2026-01-02",
+      "branchId": "30001",
+      "cash": "15.00",
+      "network": "820.00",
+      "balance": "820.00"
+    },
+    {
+      "day": "2026-01-03",
+      "branchId": "1",
+      "cash": "160.00",
+      "network": "1328.00",
+      "balance": "1255.00"
+    },
+    {
+      "day": "2026-01-03",
+      "branchId": "30001",
+      "cash": "35.00",
+      "network": "820.00",
+      "balance": "820.00"
+    },
+    {
+      "day": "2026-01-04",
+      "branchId": "1",
+      "cash": "115.00",
+      "network": "705.00",
+      "balance": "705.00"
+    },
+    {
+      "day": "2026-01-04",
+      "branchId": "30001",
+      "cash": "60.00",
+      "network": "445.00",
+      "balance": "445.00"
+    },
+    {
+      "day": "2026-01-05",
+      "branchId": "1",
+      "cash": "45.00",
+      "network": "905.00",
+      "balance": "890.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "day\tbranchId\tcash\tnetwork\tbalance\n2026-01-01\t1\t80.00\t1120.00\t1120.00\n2026-01-01\t30001\t40.00\t945.00\t945.00\n2026-01-02\t1\t80.00\t1445.00\t1445.00\n2026-01-02\t30001\t15.00\t820.00\t820.00\n2026-01-03\t1\t160.00\t1328.00\t1255.00\n2026-01-03\t30001\t35.00\t820.00\t820.00\n2026-01-04\t1\t115.00\t705.00\t705.00\n2026-01-04\t30001\t60.00\t445.00\t445.00\n2026-01-05\t1\t45.00\t905.00\t890.00\n",
+  "stderr": "",
+  "execution_time_ms": 1550
+}

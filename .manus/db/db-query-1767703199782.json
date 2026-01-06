@@ -1,0 +1,55 @@
+{
+  "query": "SELECT \n  DATE(date) as day,\n  branchId,\n  COUNT(*) as records\nFROM dailyRevenues \nWHERE date >= '2026-01-01' AND date <= '2026-01-06'\nGROUP BY DATE(date), branchId\nORDER BY day, branchId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  DATE(date) as day,\n  branchId,\n  COUNT(*) as records\nFROM dailyRevenues \nWHERE date >= '2026-01-01' AND date <= '2026-01-06'\nGROUP BY DATE(date), branchId\nORDER BY day, branchId;",
+  "rows": [
+    {
+      "day": "2026-01-01",
+      "branchId": "1",
+      "records": "1"
+    },
+    {
+      "day": "2026-01-01",
+      "branchId": "30001",
+      "records": "1"
+    },
+    {
+      "day": "2026-01-02",
+      "branchId": "1",
+      "records": "1"
+    },
+    {
+      "day": "2026-01-02",
+      "branchId": "30001",
+      "records": "1"
+    },
+    {
+      "day": "2026-01-03",
+      "branchId": "1",
+      "records": "1"
+    },
+    {
+      "day": "2026-01-03",
+      "branchId": "30001",
+      "records": "1"
+    },
+    {
+      "day": "2026-01-04",
+      "branchId": "1",
+      "records": "1"
+    },
+    {
+      "day": "2026-01-04",
+      "branchId": "30001",
+      "records": "1"
+    },
+    {
+      "day": "2026-01-05",
+      "branchId": "1",
+      "records": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "day\tbranchId\trecords\n2026-01-01\t1\t1\n2026-01-01\t30001\t1\n2026-01-02\t1\t1\n2026-01-02\t30001\t1\n2026-01-03\t1\t1\n2026-01-03\t30001\t1\n2026-01-04\t1\t1\n2026-01-04\t30001\t1\n2026-01-05\t1\t1\n",
+  "stderr": "",
+  "execution_time_ms": 1536
+}

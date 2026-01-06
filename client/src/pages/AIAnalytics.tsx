@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,17 +7,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
-import { format, subDays } from "date-fns";
+import { format, subDays, subMonths } from "date-fns";
 import { ar } from "date-fns/locale";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart
 } from "recharts";
 import {
   Brain, Sparkles, TrendingUp, TrendingDown, Users, Target, AlertTriangle,
   Lightbulb, Zap, RefreshCw, ChevronRight, ArrowUpRight, ArrowDownRight,
-  ShoppingCart, DollarSign, Package, Clock, Calendar, Building2, Star
+  DollarSign, Calendar, Building2, BarChart3, PieChart as PieChartIcon,
+  Activity, Award, Percent, Calculator, FileText, CheckCircle, XCircle
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -40,140 +42,204 @@ function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('ar-SA', { style: 'currency', currency: 'SAR' }).format(amount);
 }
 
-// مكون بطاقة الرؤية
-function InsightCard({ 
+// دالة تنسيق النسبة المئوية
+function formatPercent(value: number): string {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+}
+
+// مكون بطاقة الإحصائيات
+function StatCard({ 
   title, 
-  description, 
-  impact, 
-  confidence, 
-  type,
-  action 
+  value, 
+  change, 
+  icon: Icon, 
+  trend,
+  subtitle
 }: {
   title: string;
-  description: string;
-  impact: 'high' | 'medium' | 'low';
-  confidence: number;
-  type: 'opportunity' | 'risk' | 'trend';
-  action?: string;
+  value: string | number;
+  change?: number;
+  icon: any;
+  trend?: 'up' | 'down' | 'stable';
+  subtitle?: string;
 }) {
-  const impactColors = {
-    high: 'bg-red-500/10 text-red-500 border-red-500/20',
-    medium: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-    low: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  };
-
-  const typeIcons = {
-    opportunity: <Lightbulb className="h-5 w-5 text-green-500" />,
-    risk: <AlertTriangle className="h-5 w-5 text-red-500" />,
-    trend: <TrendingUp className="h-5 w-5 text-blue-500" />,
-  };
-
+  const trendColor = trend === 'up' ? 'text-green-500' : trend === 'down' ? 'text-red-500' : 'text-yellow-500';
+  const trendBg = trend === 'up' ? 'bg-green-500/10' : trend === 'down' ? 'bg-red-500/10' : 'bg-yellow-500/10';
+  
   return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2 bg-muted rounded-lg">
-            {typeIcons[type]}
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">{title}</p>
+            <p className="text-2xl font-bold">{value}</p>
+            {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
           </div>
-          <div className="flex-1 space-y-2">
-            <div className="flex items-start justify-between">
-              <h4 className="font-semibold">{title}</h4>
-              <Badge className={impactColors[impact]}>
-                {impact === 'high' ? 'تأثير عالي' : impact === 'medium' ? 'تأثير متوسط' : 'تأثير منخفض'}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">{description}</p>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">الثقة:</span>
-                <Progress value={confidence} className="w-20 h-2" />
-                <span className="text-xs font-medium">{confidence}%</span>
-              </div>
-              {action && (
-                <Button variant="link" size="sm" className="text-primary">
-                  {action}
-                  <ChevronRight className="h-4 w-4 mr-1" />
-                </Button>
-              )}
-            </div>
+          <div className={`p-3 rounded-lg ${trendBg}`}>
+            <Icon className={`h-6 w-6 ${trendColor}`} />
           </div>
         </div>
+        {change !== undefined && (
+          <div className="mt-3 flex items-center gap-1">
+            {change >= 0 ? (
+              <ArrowUpRight className="h-4 w-4 text-green-500" />
+            ) : (
+              <ArrowDownRight className="h-4 w-4 text-red-500" />
+            )}
+            <span className={change >= 0 ? 'text-green-500' : 'text-red-500'}>
+              {formatPercent(change)}
+            </span>
+            <span className="text-xs text-muted-foreground">مقارنة بالفترة السابقة</span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-// مكون شريحة العملاء
-function CustomerSegmentCard({ 
-  segment 
-}: { 
-  segment: {
-    name: string;
-    count: number;
-    percentage: number;
-    avgValue: number;
-    description: string;
-    color: string;
-  }
+// مكون بطاقة الرؤية
+function InsightCard({ 
+  title, 
+  description, 
+  type,
+  icon: Icon
+}: {
+  title: string;
+  description: string;
+  type: 'success' | 'warning' | 'danger' | 'info';
+  icon?: any;
 }) {
+  const colors = {
+    success: 'border-green-500/30 bg-green-500/5',
+    warning: 'border-yellow-500/30 bg-yellow-500/5',
+    danger: 'border-red-500/30 bg-red-500/5',
+    info: 'border-blue-500/30 bg-blue-500/5',
+  };
+  
+  const iconColors = {
+    success: 'text-green-500',
+    warning: 'text-yellow-500',
+    danger: 'text-red-500',
+    info: 'text-blue-500',
+  };
+
+  const DefaultIcon = type === 'success' ? CheckCircle : type === 'warning' ? AlertTriangle : type === 'danger' ? XCircle : Lightbulb;
+  const DisplayIcon = Icon || DefaultIcon;
+
   return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <div 
-            className="w-4 h-4 rounded-full" 
-            style={{ backgroundColor: segment.color }}
-          />
-          <h4 className="font-semibold">{segment.name}</h4>
-          <Badge variant="outline">{segment.count} عميل</Badge>
+    <div className={`p-4 rounded-lg border ${colors[type]}`}>
+      <div className="flex items-start gap-3">
+        <DisplayIcon className={`h-5 w-5 mt-0.5 ${iconColors[type]}`} />
+        <div>
+          <h4 className="font-medium">{title}</h4>
+          <p className="text-sm text-muted-foreground mt-1">{description}</p>
         </div>
-        <p className="text-sm text-muted-foreground mb-3">{segment.description}</p>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs text-muted-foreground">النسبة</p>
-            <p className="text-lg font-bold">{segment.percentage.toFixed(1)}%</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">متوسط القيمة</p>
-            <p className="text-lg font-bold">{formatCurrency(segment.avgValue)}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
 export default function AIAnalytics() {
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [period, setPeriod] = useState<'week' | 'month' | 'quarter'>('month');
   const [forecastDays, setForecastDays] = useState<number>(7);
+
+  // حساب نطاق التاريخ
+  const dateRange = useMemo(() => {
+    const end = new Date();
+    const start = new Date();
+    
+    switch (period) {
+      case 'week':
+        start.setDate(start.getDate() - 7);
+        break;
+      case 'month':
+        start.setMonth(start.getMonth() - 1);
+        break;
+      case 'quarter':
+        start.setMonth(start.getMonth() - 3);
+        break;
+    }
+    
+    return { start, end };
+  }, [period]);
 
   // جلب الفروع
   const { data: branches } = trpc.branches.list.useQuery();
 
   const branchId = selectedBranch !== 'all' ? parseInt(selectedBranch) : undefined;
 
-  // جلب التنبؤ بالمبيعات
-  const { data: salesForecast, isLoading: loadingForecast, refetch: refetchForecast } = 
-    trpc.bi.forecastSales.useQuery({ branchId, days: forecastDays });
-
-  // جلب شرائح العملاء
-  const { data: customerSegments, isLoading: loadingSegments } = 
-    trpc.bi.getCustomerSegments.useQuery();
-
-  // جلب الكشف عن الشذوذ
-  const { data: anomalies, isLoading: loadingAnomalies } = 
-    trpc.bi.detectAnomalies.useQuery({
-      startDate: subDays(new Date(), 30).toISOString(),
-      endDate: new Date().toISOString(),
+  // جلب تحليل الإيرادات
+  const { data: revenueAnalysis, isLoading: loadingRevenue, refetch: refetchRevenue } = 
+    trpc.bi.analyzeRevenues.useQuery({
+      startDate: dateRange.start.toISOString(),
+      endDate: dateRange.end.toISOString(),
+      branchId,
     });
 
-  // جلب التوصيات الذكية
-  const { data: recommendations, isLoading: loadingRecommendations } = 
-    trpc.bi.getSmartRecommendations.useQuery();
+  // جلب تحليل المصاريف
+  const { data: expenseAnalysis, isLoading: loadingExpenses } = 
+    trpc.bi.analyzeExpenses.useQuery({
+      startDate: dateRange.start.toISOString(),
+      endDate: dateRange.end.toISOString(),
+      branchId,
+    });
 
-  // جلب رؤى AI
-  const { data: aiInsights, isLoading: loadingInsights } = 
-    trpc.bi.getAIInsights.useQuery({ branchId });
+  // جلب تحليل أداء الموظفين
+  const { data: employeePerformance, isLoading: loadingEmployees } = 
+    trpc.bi.analyzeEmployeePerformance.useQuery({
+      startDate: dateRange.start.toISOString(),
+      endDate: dateRange.end.toISOString(),
+      branchId,
+    });
+
+  // جلب تحليل الربحية
+  const { data: profitability, isLoading: loadingProfitability } = 
+    trpc.bi.analyzeProfitability.useQuery({
+      startDate: dateRange.start.toISOString(),
+      endDate: dateRange.end.toISOString(),
+      branchId,
+    });
+
+  // جلب رؤى AI الشاملة
+  const { data: aiInsights, isLoading: loadingInsights, refetch: refetchInsights } = 
+    trpc.bi.getComprehensiveInsights.useQuery({
+      startDate: dateRange.start.toISOString(),
+      endDate: dateRange.end.toISOString(),
+      branchId,
+    });
+
+  // جلب التنبؤ بالإيرادات
+  const { data: revenueForecast, isLoading: loadingForecast } = 
+    trpc.bi.forecastRevenue.useQuery({ branchId, days: forecastDays });
+
+  // تحديث جميع البيانات
+  const handleRefresh = () => {
+    refetchRevenue();
+    refetchInsights();
+    toast.success('تم تحديث البيانات');
+  };
+
+  // تحديد جودة البيانات
+  const getDataQualityBadge = (quality?: string) => {
+    const colors: Record<string, string> = {
+      excellent: 'bg-green-500',
+      good: 'bg-blue-500',
+      fair: 'bg-yellow-500',
+      poor: 'bg-red-500',
+    };
+    const labels: Record<string, string> = {
+      excellent: 'ممتازة',
+      good: 'جيدة',
+      fair: 'مقبولة',
+      poor: 'ضعيفة',
+    };
+    return (
+      <Badge className={colors[quality || 'poor']}>
+        جودة البيانات: {labels[quality || 'poor']}
+      </Badge>
+    );
+  };
 
   return (
     <DashboardLayout>
@@ -185,10 +251,12 @@ export default function AIAnalytics() {
               <Brain className="h-7 w-7" />
               تحليلات الذكاء الاصطناعي
             </h1>
-            <p className="text-muted-foreground">رؤى وتوصيات ذكية مبنية على تحليل البيانات</p>
+            <p className="text-muted-foreground">
+              تحليلات علمية ودقيقة مبنية على الإيرادات والمصاريف وأداء الموظفين
+            </p>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
               <SelectTrigger className="w-[160px]">
                 <Building2 className="h-4 w-4 ml-2" />
@@ -204,73 +272,123 @@ export default function AIAnalytics() {
               </SelectContent>
             </Select>
 
-            <Button variant="outline" size="icon" onClick={() => refetchForecast()}>
+            <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
+              <SelectTrigger className="w-[140px]">
+                <Calendar className="h-4 w-4 ml-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="week">أسبوع</SelectItem>
+                <SelectItem value="month">شهر</SelectItem>
+                <SelectItem value="quarter">ربع سنة</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button variant="outline" size="icon" onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
         {/* AI Summary Card */}
-        {aiInsights && (
+        {loadingInsights ? (
+          <Card>
+            <CardContent className="p-6">
+              <Skeleton className="h-48 w-full" />
+            </CardContent>
+          </Card>
+        ) : aiInsights && (
           <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-primary" />
-                  ملخص الذكاء الاصطناعي
+                  ملخص التحليل الذكي
                 </CardTitle>
-                <Badge variant={
-                  aiInsights.riskLevel === 'low' ? 'default' :
-                  aiInsights.riskLevel === 'medium' ? 'secondary' : 'destructive'
-                }>
-                  {aiInsights.riskLevel === 'low' ? 'مخاطر منخفضة' :
-                   aiInsights.riskLevel === 'medium' ? 'مخاطر متوسطة' : 'مخاطر عالية'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {getDataQualityBadge(aiInsights.dataQuality)}
+                  <Badge variant={
+                    aiInsights.riskLevel === 'low' ? 'default' :
+                    aiInsights.riskLevel === 'medium' ? 'secondary' : 'destructive'
+                  }>
+                    {aiInsights.riskLevel === 'low' ? 'مخاطر منخفضة' :
+                     aiInsights.riskLevel === 'medium' ? 'مخاطر متوسطة' : 'مخاطر عالية'}
+                  </Badge>
+                  <Badge variant="outline">
+                    ثقة التحليل: {aiInsights.confidenceScore}%
+                  </Badge>
+                </div>
               </div>
-              <CardDescription>{aiInsights.summary}</CardDescription>
+              <CardDescription className="text-base mt-2">{aiInsights.summary}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-3 gap-6">
                 <div>
                   <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <Target className="h-4 w-4" />
-                    النتائج الرئيسية
+                    <DollarSign className="h-4 w-4 text-green-500" />
+                    رؤى الإيرادات
                   </h4>
                   <ul className="space-y-2">
-                    {aiInsights.keyFindings.slice(0, 3).map((finding: string, i: number) => (
+                    {aiInsights.revenueInsights.slice(0, 3).map((insight, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm">
-                        <ChevronRight className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
-                        {finding}
+                        <ChevronRight className="h-4 w-4 mt-0.5 text-green-500 flex-shrink-0" />
+                        {insight}
                       </li>
                     ))}
                   </ul>
                 </div>
                 <div>
                   <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <Zap className="h-4 w-4" />
+                    <Users className="h-4 w-4 text-blue-500" />
+                    رؤى أداء الموظفين
+                  </h4>
+                  <ul className="space-y-2">
+                    {aiInsights.employeeInsights.slice(0, 3).map((insight, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <ChevronRight className="h-4 w-4 mt-0.5 text-blue-500 flex-shrink-0" />
+                        {insight}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <Lightbulb className="h-4 w-4 text-yellow-500" />
                     التوصيات
                   </h4>
                   <ul className="space-y-2">
                     {aiInsights.recommendations.slice(0, 3).map((rec, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm">
-                        <ChevronRight className="h-4 w-4 mt-0.5 text-green-500 flex-shrink-0" />
+                        <ChevronRight className="h-4 w-4 mt-0.5 text-yellow-500 flex-shrink-0" />
                         {rec}
                       </li>
                     ))}
                   </ul>
                 </div>
-                <div>
-                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+              </div>
+
+              {/* المخاطر والفرص */}
+              <div className="grid md:grid-cols-2 gap-4 mt-6">
+                <div className="p-4 bg-red-500/5 rounded-lg border border-red-500/20">
+                  <h4 className="font-semibold mb-2 flex items-center gap-2 text-red-500">
                     <AlertTriangle className="h-4 w-4" />
-                    المخاطر
+                    المخاطر المحتملة
                   </h4>
-                  <ul className="space-y-2">
-                    {(aiInsights as any).risks?.slice(0, 3).map((risk: string, i: number) => (
-                      <li key={i} className="flex items-start gap-2 text-sm">
-                        <ChevronRight className="h-4 w-4 mt-0.5 text-red-500 flex-shrink-0" />
-                        {risk}
-                      </li>
-                    )) || <li className="text-sm text-muted-foreground">لا توجد مخاطر محددة</li>}
+                  <ul className="space-y-1">
+                    {aiInsights.risks.map((risk, i) => (
+                      <li key={i} className="text-sm text-muted-foreground">• {risk}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="p-4 bg-green-500/5 rounded-lg border border-green-500/20">
+                  <h4 className="font-semibold mb-2 flex items-center gap-2 text-green-500">
+                    <Zap className="h-4 w-4" />
+                    الفرص المتاحة
+                  </h4>
+                  <ul className="space-y-1">
+                    {aiInsights.opportunities.map((opp, i) => (
+                      <li key={i} className="text-sm text-muted-foreground">• {opp}</li>
+                    ))}
                   </ul>
                 </div>
               </div>
@@ -278,30 +396,507 @@ export default function AIAnalytics() {
           </Card>
         )}
 
-        <Tabs defaultValue="forecast" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="overview" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              نظرة عامة
+            </TabsTrigger>
+            <TabsTrigger value="revenue" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              الإيرادات
+            </TabsTrigger>
+            <TabsTrigger value="expenses" className="gap-2">
+              <PieChartIcon className="h-4 w-4" />
+              المصاريف
+            </TabsTrigger>
+            <TabsTrigger value="employees" className="gap-2">
+              <Users className="h-4 w-4" />
+              أداء الموظفين
+            </TabsTrigger>
             <TabsTrigger value="forecast" className="gap-2">
               <TrendingUp className="h-4 w-4" />
-              التنبؤ
-            </TabsTrigger>
-            <TabsTrigger value="segments" className="gap-2">
-              <Users className="h-4 w-4" />
-              شرائح العملاء
-            </TabsTrigger>
-            <TabsTrigger value="anomalies" className="gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              الشذوذ
-            </TabsTrigger>
-            <TabsTrigger value="recommendations" className="gap-2">
-              <Lightbulb className="h-4 w-4" />
-              التوصيات
+              التنبؤات
             </TabsTrigger>
           </TabsList>
 
-          {/* التنبؤ بالمبيعات */}
+          {/* نظرة عامة */}
+          <TabsContent value="overview" className="space-y-4">
+            {/* بطاقات الإحصائيات الرئيسية */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard
+                title="إجمالي الإيرادات"
+                value={formatCurrency(revenueAnalysis?.totalRevenue || 0)}
+                change={revenueAnalysis?.growthRate}
+                icon={DollarSign}
+                trend={revenueAnalysis?.trend}
+                subtitle={`${revenueAnalysis?.daysCount || 0} يوم عمل`}
+              />
+              <StatCard
+                title="إجمالي المصاريف"
+                value={formatCurrency(expenseAnalysis?.totalExpenses || 0)}
+                change={expenseAnalysis?.growthRate}
+                icon={Activity}
+                trend={expenseAnalysis?.trend === 'up' ? 'down' : expenseAnalysis?.trend === 'down' ? 'up' : 'stable'}
+              />
+              <StatCard
+                title="صافي الربح"
+                value={formatCurrency(profitability?.netProfit || 0)}
+                icon={Target}
+                trend={(profitability?.netProfit || 0) > 0 ? 'up' : 'down'}
+                subtitle={`هامش الربح: ${(profitability?.profitMargin || 0).toFixed(1)}%`}
+              />
+              <StatCard
+                title="متوسط أداء الموظفين"
+                value={`${employeePerformance?.length ? Math.round(employeePerformance.reduce((sum, e) => sum + e.performanceScore, 0) / employeePerformance.length) : 0}/100`}
+                icon={Award}
+                trend="stable"
+                subtitle={`${employeePerformance?.length || 0} موظف نشط`}
+              />
+            </div>
+
+            {/* الرسوم البيانية */}
+            <div className="grid lg:grid-cols-2 gap-4">
+              {/* رسم الإيرادات اليومية */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    الإيرادات اليومية
+                  </CardTitle>
+                  <CardDescription>
+                    تطور الإيرادات خلال الفترة المحددة
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingRevenue ? (
+                    <Skeleton className="h-[250px] w-full" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <AreaChart data={revenueAnalysis?.dailyData || []}>
+                        <defs>
+                          <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis 
+                          dataKey="date" 
+                          tickFormatter={(v) => safeFormatDate(v, 'MM/dd')}
+                          className="text-xs"
+                        />
+                        <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
+                        <Tooltip 
+                          formatter={(value: number) => [formatCurrency(value), 'الإيراد']}
+                          labelFormatter={(label) => safeFormatDate(label, 'EEEE, d MMMM', { locale: ar })}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="revenue" 
+                          stroke="#3b82f6" 
+                          fill="url(#revenueGradient)"
+                          strokeWidth={2}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* رسم توزيع المصاريف */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <PieChartIcon className="h-5 w-5" />
+                    توزيع المصاريف
+                  </CardTitle>
+                  <CardDescription>
+                    توزيع المصاريف حسب الفئة
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingExpenses ? (
+                    <Skeleton className="h-[250px] w-full" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={expenseAnalysis?.expensesByCategory || []}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="amount"
+                          nameKey="category"
+                          label={({ category, percentage }) => `${category}: ${percentage.toFixed(0)}%`}
+                        >
+                          {(expenseAnalysis?.expensesByCategory || []).map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* المقاييس الإحصائية */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5" />
+                  المقاييس الإحصائية للإيرادات
+                </CardTitle>
+                <CardDescription>
+                  تحليل إحصائي دقيق للإيرادات اليومية
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-4 gap-4">
+                  <div className="p-4 bg-muted/50 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground">المتوسط الحسابي</p>
+                    <p className="text-xl font-bold">{formatCurrency(revenueAnalysis?.statistics?.mean || 0)}</p>
+                  </div>
+                  <div className="p-4 bg-muted/50 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground">الوسيط</p>
+                    <p className="text-xl font-bold">{formatCurrency(revenueAnalysis?.statistics?.median || 0)}</p>
+                  </div>
+                  <div className="p-4 bg-muted/50 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground">الانحراف المعياري</p>
+                    <p className="text-xl font-bold">{formatCurrency(revenueAnalysis?.statistics?.standardDeviation || 0)}</p>
+                  </div>
+                  <div className="p-4 bg-muted/50 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground">معامل التباين</p>
+                    <p className="text-xl font-bold">{(revenueAnalysis?.statistics?.coefficientOfVariation || 0).toFixed(1)}%</p>
+                  </div>
+                </div>
+                <div className="grid md:grid-cols-3 gap-4 mt-4">
+                  <div className="p-4 bg-muted/50 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground">أقل قيمة</p>
+                    <p className="text-lg font-bold text-red-500">{formatCurrency(revenueAnalysis?.statistics?.min || 0)}</p>
+                  </div>
+                  <div className="p-4 bg-muted/50 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground">أعلى قيمة</p>
+                    <p className="text-lg font-bold text-green-500">{formatCurrency(revenueAnalysis?.statistics?.max || 0)}</p>
+                  </div>
+                  <div className="p-4 bg-muted/50 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground">المدى</p>
+                    <p className="text-lg font-bold">{formatCurrency(revenueAnalysis?.statistics?.range || 0)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* تحليل الإيرادات */}
+          <TabsContent value="revenue" className="space-y-4">
+            <div className="grid md:grid-cols-3 gap-4">
+              <StatCard
+                title="إجمالي النقد"
+                value={formatCurrency(revenueAnalysis?.totalCash || 0)}
+                icon={DollarSign}
+                trend="stable"
+                subtitle={`${revenueAnalysis?.totalRevenue ? ((revenueAnalysis.totalCash / revenueAnalysis.totalRevenue) * 100).toFixed(1) : 0}% من الإجمالي`}
+              />
+              <StatCard
+                title="إجمالي الشبكة"
+                value={formatCurrency(revenueAnalysis?.totalNetwork || 0)}
+                icon={Activity}
+                trend="stable"
+                subtitle={`${revenueAnalysis?.totalRevenue ? ((revenueAnalysis.totalNetwork / revenueAnalysis.totalRevenue) * 100).toFixed(1) : 0}% من الإجمالي`}
+              />
+              <StatCard
+                title="متوسط الإيراد اليومي"
+                value={formatCurrency(revenueAnalysis?.avgDailyRevenue || 0)}
+                icon={BarChart3}
+                trend={revenueAnalysis?.trend}
+              />
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>تفاصيل الإيرادات اليومية</CardTitle>
+                <CardDescription>
+                  جميع الإيرادات المسجلة خلال الفترة المحددة
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingRevenue ? (
+                  <Skeleton className="h-[400px] w-full" />
+                ) : (
+                  <ResponsiveContainer width="100%" height={400}>
+                    <ComposedChart data={revenueAnalysis?.dailyData || []}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis 
+                        dataKey="date" 
+                        tickFormatter={(v) => safeFormatDate(v, 'MM/dd')}
+                      />
+                      <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
+                      <Tooltip 
+                        formatter={(value: number) => [formatCurrency(value), '']}
+                        labelFormatter={(label) => safeFormatDate(label, 'EEEE, d MMMM yyyy', { locale: ar })}
+                      />
+                      <Legend />
+                      <Bar dataKey="revenue" name="الإيراد" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Line 
+                        type="monotone" 
+                        dataKey="revenue" 
+                        name="الاتجاه" 
+                        stroke="#10b981" 
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* رؤى الإيرادات */}
+            <div className="grid md:grid-cols-2 gap-4">
+              {aiInsights?.revenueInsights.map((insight, i) => (
+                <InsightCard
+                  key={i}
+                  title={`رؤية ${i + 1}`}
+                  description={insight}
+                  type={i === 0 ? 'success' : i === 1 ? 'info' : 'warning'}
+                />
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* تحليل المصاريف */}
+          <TabsContent value="expenses" className="space-y-4">
+            <div className="grid md:grid-cols-3 gap-4">
+              <StatCard
+                title="إجمالي المصاريف"
+                value={formatCurrency(expenseAnalysis?.totalExpenses || 0)}
+                change={expenseAnalysis?.growthRate}
+                icon={Activity}
+                trend={expenseAnalysis?.trend === 'up' ? 'down' : 'up'}
+              />
+              <StatCard
+                title="متوسط المصاريف اليومية"
+                value={formatCurrency(expenseAnalysis?.avgDailyExpense || 0)}
+                icon={Calculator}
+                trend="stable"
+              />
+              <StatCard
+                title="نسبة التشغيل"
+                value={`${(profitability?.operatingRatio || 0).toFixed(1)}%`}
+                icon={Percent}
+                trend={(profitability?.operatingRatio || 0) < 70 ? 'up' : 'down'}
+                subtitle="المصاريف / الإيرادات"
+              />
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>توزيع المصاريف حسب الفئة</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loadingExpenses ? (
+                    <Skeleton className="h-[300px] w-full" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={expenseAnalysis?.expensesByCategory || []} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis type="number" tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
+                        <YAxis dataKey="category" type="category" width={100} />
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                        <Bar dataKey="amount" fill="#ef4444" radius={[0, 4, 4, 0]}>
+                          {(expenseAnalysis?.expensesByCategory || []).map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>تفاصيل المصاريف</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>الفئة</TableHead>
+                        <TableHead className="text-left">المبلغ</TableHead>
+                        <TableHead className="text-left">النسبة</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(expenseAnalysis?.expensesByCategory || []).map((cat, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{cat.category}</TableCell>
+                          <TableCell>{formatCurrency(cat.amount)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Progress value={cat.percentage} className="w-16 h-2" />
+                              <span className="text-sm">{cat.percentage.toFixed(1)}%</span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* رؤى المصاريف */}
+            <div className="grid md:grid-cols-2 gap-4">
+              {aiInsights?.expenseInsights.map((insight, i) => (
+                <InsightCard
+                  key={i}
+                  title={`رؤية ${i + 1}`}
+                  description={insight}
+                  type={i === 0 ? 'warning' : 'info'}
+                />
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* أداء الموظفين */}
+          <TabsContent value="employees" className="space-y-4">
+            <div className="grid md:grid-cols-4 gap-4">
+              <StatCard
+                title="عدد الموظفين"
+                value={employeePerformance?.length || 0}
+                icon={Users}
+                trend="stable"
+              />
+              <StatCard
+                title="في تحسن"
+                value={employeePerformance?.filter(e => e.trend === 'improving').length || 0}
+                icon={TrendingUp}
+                trend="up"
+              />
+              <StatCard
+                title="مستقر"
+                value={employeePerformance?.filter(e => e.trend === 'stable').length || 0}
+                icon={Activity}
+                trend="stable"
+              />
+              <StatCard
+                title="في تراجع"
+                value={employeePerformance?.filter(e => e.trend === 'declining').length || 0}
+                icon={TrendingDown}
+                trend="down"
+              />
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Award className="h-5 w-5" />
+                  ترتيب الموظفين حسب الأداء
+                </CardTitle>
+                <CardDescription>
+                  تقييم شامل يعتمد على الإيراد والاتساق والاتجاه
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingEmployees ? (
+                  <Skeleton className="h-[400px] w-full" />
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">#</TableHead>
+                        <TableHead>الموظف</TableHead>
+                        <TableHead>الكود</TableHead>
+                        <TableHead className="text-left">إجمالي الإيراد</TableHead>
+                        <TableHead className="text-left">متوسط يومي</TableHead>
+                        <TableHead className="text-left">أيام العمل</TableHead>
+                        <TableHead className="text-left">درجة الأداء</TableHead>
+                        <TableHead className="text-left">الاتساق</TableHead>
+                        <TableHead>الاتجاه</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(employeePerformance || []).map((emp) => (
+                        <TableRow key={emp.employeeId}>
+                          <TableCell>
+                            <Badge variant={emp.rank <= 3 ? 'default' : 'outline'}>
+                              {emp.rank}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">{emp.employeeName}</TableCell>
+                          <TableCell className="text-muted-foreground">{emp.employeeCode}</TableCell>
+                          <TableCell>{formatCurrency(emp.totalRevenue)}</TableCell>
+                          <TableCell>{formatCurrency(emp.avgDailyRevenue)}</TableCell>
+                          <TableCell>{emp.daysWorked}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Progress 
+                                value={emp.performanceScore} 
+                                className={`w-16 h-2 ${
+                                  emp.performanceScore >= 70 ? '[&>div]:bg-green-500' :
+                                  emp.performanceScore >= 40 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-red-500'
+                                }`}
+                              />
+                              <span className="text-sm font-medium">{emp.performanceScore}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm">{emp.consistency.toFixed(0)}%</span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              emp.trend === 'improving' ? 'default' :
+                              emp.trend === 'declining' ? 'destructive' : 'secondary'
+                            }>
+                              {emp.trend === 'improving' ? 'تحسن' :
+                               emp.trend === 'declining' ? 'تراجع' : 'مستقر'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* رسم أداء الموظفين */}
+            <Card>
+              <CardHeader>
+                <CardTitle>مقارنة أداء الموظفين</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingEmployees ? (
+                  <Skeleton className="h-[300px] w-full" />
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={employeePerformance?.slice(0, 10) || []}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="employeeName" />
+                      <YAxis yAxisId="left" tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
+                      <YAxis yAxisId="right" orientation="right" domain={[0, 100]} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar yAxisId="left" dataKey="totalRevenue" name="الإيراد" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Line yAxisId="right" type="monotone" dataKey="performanceScore" name="درجة الأداء" stroke="#10b981" strokeWidth={2} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* التنبؤات */}
           <TabsContent value="forecast" className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">التنبؤ بالمبيعات</h3>
+              <h3 className="text-lg font-semibold">التنبؤ بالإيرادات</h3>
               <Select 
                 value={forecastDays.toString()} 
                 onValueChange={(v) => setForecastDays(parseInt(v))}
@@ -321,57 +916,58 @@ export default function AIAnalytics() {
             <div className="grid lg:grid-cols-3 gap-4">
               <Card className="lg:col-span-2">
                 <CardHeader>
-                  <CardTitle>توقعات المبيعات</CardTitle>
-                  <CardDescription>التنبؤ بالمبيعات للأيام القادمة بناءً على البيانات التاريخية</CardDescription>
+                  <CardTitle>توقعات الإيرادات</CardTitle>
+                  <CardDescription>
+                    التنبؤ بالإيرادات للأيام القادمة بناءً على البيانات التاريخية والخوارزميات الإحصائية
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {loadingForecast ? (
                     <Skeleton className="h-[300px] w-full" />
                   ) : (
                     <ResponsiveContainer width="100%" height={300}>
-                      <AreaChart data={(salesForecast as any)?.forecast || salesForecast || []}>
+                      <AreaChart data={revenueForecast || []}>
                         <defs>
                           <linearGradient id="forecastGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                         <XAxis 
                           dataKey="date" 
-                          tickFormatter={(v) => safeFormatDate(v, 'MM/dd', { locale: ar })}
-                          className="text-xs"
+                          tickFormatter={(v) => safeFormatDate(v, 'MM/dd')}
                         />
                         <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
                         <Tooltip 
-                          formatter={(value: number) => [formatCurrency(value), 'المتوقع']}
+                          formatter={(value: number) => [formatCurrency(value), '']}
                           labelFormatter={(label) => safeFormatDate(label, 'EEEE, d MMMM', { locale: ar })}
                         />
+                        <Legend />
                         <Area 
                           type="monotone" 
                           dataKey="predicted" 
-                          stroke="#3b82f6" 
+                          name="المتوقع"
+                          stroke="#8b5cf6" 
                           fill="url(#forecastGradient)"
                           strokeWidth={2}
-                          name="المتوقع"
                         />
                         <Line 
                           type="monotone" 
                           dataKey="upperBound" 
+                          name="الحد الأعلى"
                           stroke="#10b981" 
                           strokeDasharray="5 5"
                           strokeWidth={1}
-                          name="الحد الأعلى"
                         />
                         <Line 
                           type="monotone" 
                           dataKey="lowerBound" 
+                          name="الحد الأدنى"
                           stroke="#ef4444" 
                           strokeDasharray="5 5"
                           strokeWidth={1}
-                          name="الحد الأدنى"
                         />
-                        <Legend />
                       </AreaChart>
                     </ResponsiveContainer>
                   )}
@@ -382,13 +978,15 @@ export default function AIAnalytics() {
                 <Card>
                   <CardContent className="p-6">
                     <div className="flex items-center gap-4">
-                      <div className="p-3 bg-blue-500/10 rounded-lg">
-                        <DollarSign className="h-6 w-6 text-blue-500" />
+                      <div className="p-3 bg-purple-500/10 rounded-lg">
+                        <DollarSign className="h-6 w-6 text-purple-500" />
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">إجمالي المتوقع</p>
                         <p className="text-2xl font-bold">
-                          {formatCurrency((salesForecast as any)?.totalPredicted || 0)}
+                          {formatCurrency(
+                            (revenueForecast || []).reduce((sum, f) => sum + f.predicted, 0)
+                          )}
                         </p>
                       </div>
                     </div>
@@ -402,293 +1000,64 @@ export default function AIAnalytics() {
                         <TrendingUp className="h-6 w-6 text-green-500" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">نسبة الثقة</p>
+                        <p className="text-sm text-muted-foreground">متوسط الثقة</p>
                         <p className="text-2xl font-bold">
-                          {((salesForecast as any)?.confidence || 85).toFixed(0)}%
+                          {(revenueForecast || []).length > 0 
+                            ? Math.round((revenueForecast || []).reduce((sum, f) => sum + f.confidence, 0) / (revenueForecast || []).length)
+                            : 0}%
                         </p>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-lg ${
-                        ((salesForecast as any)?.trend || 0) >= 0 
-                          ? 'bg-green-500/10' 
-                          : 'bg-red-500/10'
-                      }`}>
-                        {((salesForecast as any)?.trend || 0) >= 0 
-                          ? <ArrowUpRight className="h-6 w-6 text-green-500" />
-                          : <ArrowDownRight className="h-6 w-6 text-red-500" />
-                        }
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">الاتجاه</p>
-                        <p className={`text-2xl font-bold ${
-                          ((salesForecast as any)?.trend || 0) >= 0 ? 'text-green-500' : 'text-red-500'
-                        }`}>
-                          {((salesForecast as any)?.trend || 0) >= 0 ? '+' : ''}
-                          {((salesForecast as any)?.trend || 0).toFixed(1)}%
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* شرائح العملاء */}
-          <TabsContent value="segments" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">تحليل شرائح العملاء (RFM)</h3>
-                <p className="text-sm text-muted-foreground">
-                  تصنيف العملاء بناءً على الحداثة (Recency)، التكرار (Frequency)، والقيمة المالية (Monetary)
-                </p>
-              </div>
-            </div>
-
-            <div className="grid lg:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>توزيع الشرائح</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {loadingSegments ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={(customerSegments as any)?.segments || customerSegments || []}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={100}
-                          paddingAngle={5}
-                          dataKey="count"
-                          nameKey="name"
-                          label={({ name, percentage }) => `${name}: ${percentage.toFixed(0)}%`}
-                        >
-                          {((customerSegments as any)?.segments || customerSegments || []).map((_: any, index: number) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>قيمة الشرائح</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {loadingSegments ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={(customerSegments as any)?.segments || customerSegments || []} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} />
-                        <YAxis dataKey="name" type="category" width={100} className="text-xs" />
-                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                        <Bar dataKey="totalValue" name="إجمالي القيمة" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {loadingSegments ? (
-                [1, 2, 3].map(i => <Skeleton key={i} className="h-[180px]" />)
-              ) : (
-                ((customerSegments as any)?.segments || customerSegments || [])?.map((segment: any, index: number) => (
-                  <CustomerSegmentCard 
-                    key={segment.name} 
-                    segment={{
-                      ...segment,
-                      color: COLORS[index % COLORS.length]
-                    }} 
-                  />
-                ))
-              )}
-            </div>
-          </TabsContent>
-
-          {/* الكشف عن الشذوذ */}
-          <TabsContent value="anomalies" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">الكشف عن الشذوذ</h3>
-                <p className="text-sm text-muted-foreground">
-                  تحديد المعاملات والأنماط غير الطبيعية تلقائيًا
-                </p>
-              </div>
-              <Badge variant={
-                ((anomalies as any)?.totalAnomalies || (anomalies as any[])?.length || 0) === 0 ? 'default' :
-                ((anomalies as any)?.totalAnomalies || (anomalies as any[])?.length || 0) < 5 ? 'secondary' : 'destructive'
-              }>
-                {(anomalies as any)?.totalAnomalies || (anomalies as any[])?.length || 0} شذوذ مكتشف
-              </Badge>
-            </div>
-
-            <div className="grid lg:grid-cols-3 gap-4">
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle>توزيع الشذوذ عبر الوقت</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {loadingAnomalies ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <ScatterChart>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis 
-                          dataKey="date" 
-                          tickFormatter={(v) => safeFormatDate(v, 'MM/dd')}
-                          className="text-xs"
-                        />
-                        <YAxis dataKey="value" tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
-                        <Tooltip 
-                          formatter={(value: number) => formatCurrency(value)}
-                          labelFormatter={(label) => safeFormatDate(label, 'yyyy-MM-dd')}
-                        />
-                        <Scatter 
-                          data={(anomalies as any)?.anomalies || anomalies || []} 
-                          fill="#ef4444"
-                          name="شذوذ"
-                        />
-                      </ScatterChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-
-              <div className="space-y-4">
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base">أنواع الشذوذ</CardTitle>
+                    <CardTitle className="text-sm">تفاصيل التنبؤ</CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    {loadingAnomalies ? (
-                      <div className="space-y-2">
-                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-8" />)}
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {(anomalies as any)?.byType?.map((type: any) => (
-                          <div key={type.type} className="flex items-center justify-between">
-                            <span className="text-sm">{type.type}</span>
-                            <Badge variant="outline">{type.count}</Badge>
-                          </div>
-                        )) || <p className="text-sm text-muted-foreground">لا توجد بيانات</p>}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-
-            {/* قائمة الشذوذ */}
-            <Card>
-              <CardHeader>
-                <CardTitle>تفاصيل الشذوذ المكتشف</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingAnomalies ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-16" />)}
-                  </div>
-) : ((anomalies as any)?.anomalies?.length || (anomalies as any[])?.length || 0) === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>لم يتم اكتشاف أي شذوذ في الفترة المحددة</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {((anomalies as any)?.anomalies || anomalies)?.slice(0, 10).map((anomaly: any, index: number) => (
-                      <div 
-                        key={index}
-                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-red-500/10 rounded-lg">
-                            <AlertTriangle className="h-4 w-4 text-red-500" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{anomaly.description}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {format(new Date(anomaly.date), 'yyyy-MM-dd HH:mm', { locale: ar })}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-left">
-                          <p className="font-bold">{formatCurrency(anomaly.value)}</p>
-                          <Badge variant={
-                            anomaly.severity === 'high' ? 'destructive' :
-                            anomaly.severity === 'medium' ? 'secondary' : 'outline'
-                          }>
-                            {anomaly.severity === 'high' ? 'عالي' :
-                             anomaly.severity === 'medium' ? 'متوسط' : 'منخفض'}
+                  <CardContent className="space-y-2">
+                    {(revenueForecast || []).slice(0, 5).map((forecast, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {safeFormatDate(forecast.date, 'EEE d/M', { locale: ar })}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{formatCurrency(forecast.predicted)}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {forecast.confidence}%
                           </Badge>
                         </div>
                       </div>
                     ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* التوصيات الذكية */}
-          <TabsContent value="recommendations" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">التوصيات الذكية</h3>
-                <p className="text-sm text-muted-foreground">
-                  توصيات مخصصة بناءً على تحليل أنماط البيانات
-                </p>
+                  </CardContent>
+                </Card>
               </div>
             </div>
 
-            {loadingRecommendations ? (
-              <div className="grid md:grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[150px]" />)}
-              </div>
-            ) : (recommendations?.length || 0) === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  <Lightbulb className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>لا توجد توصيات حالياً</p>
-                  <p className="text-sm">سيتم إنشاء توصيات عند توفر بيانات كافية للتحليل</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-4">
-                {recommendations?.map((rec, index) => (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  ملاحظات حول التنبؤ
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-4">
                   <InsightCard
-                    key={index}
-                    title={rec.title}
-                    description={rec.description}
-                    impact={rec.priority === 'critical' || rec.priority === 'high' ? 'high' : 
-                            rec.priority === 'medium' ? 'medium' : 'low'}
-                    confidence={rec.confidence || 75}
-                    type={rec.priority === 'critical' ? 'risk' : 
-                          rec.priority === 'high' ? 'opportunity' : 'trend'}
-                    action={rec.actionRequired}
+                    title="منهجية التنبؤ"
+                    description="يستخدم التنبؤ الانحدار الخطي والمتوسطات المتحركة بناءً على بيانات آخر 60 يوم. تقل الثقة كلما ابتعدنا في المستقبل."
+                    type="info"
+                    icon={Calculator}
                   />
-                ))}
-              </div>
-            )}
+                  <InsightCard
+                    title="حدود الثقة"
+                    description="الحد الأعلى والأدنى يمثلان نطاق الثقة 95% بناءً على الانحراف المعياري التاريخي."
+                    type="info"
+                    icon={BarChart3}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
