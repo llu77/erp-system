@@ -145,7 +145,7 @@ export async function getExecutiveSummary(
       )
     );
 
-  // استعلام المصاريف الحالية
+  // استعلام المصاريف الحالية (جميع الحالات في الفترة)
   const currentExpensesQuery = db
     .select({
       total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
@@ -153,13 +153,13 @@ export async function getExecutiveSummary(
     .from(expenses)
     .where(
       and(
-        gte(expenses.createdAt, startDate),
-        lte(expenses.createdAt, endDate),
+        gte(expenses.expenseDate, startDate),
+        lte(expenses.expenseDate, endDate),
         branchId ? eq(expenses.branchId, branchId) : undefined
       )
     );
 
-  // استعلام المصاريف السابقة
+  // استعلام المصاريف السابقة (جميع الحالات في الفترة)
   const previousExpensesQuery = db
     .select({
       total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
@@ -167,8 +167,8 @@ export async function getExecutiveSummary(
     .from(expenses)
     .where(
       and(
-        gte(expenses.createdAt, previousPeriod.startDate),
-        lte(expenses.createdAt, previousPeriod.endDate),
+        gte(expenses.expenseDate, previousPeriod.startDate),
+        lte(expenses.expenseDate, previousPeriod.endDate),
         branchId ? eq(expenses.branchId, branchId) : undefined
       )
     );

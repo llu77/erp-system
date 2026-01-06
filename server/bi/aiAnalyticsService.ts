@@ -481,24 +481,25 @@ export async function getAIInsights(branchId?: number): Promise<{
   const db = await getDb();
   if (!db) throw new Error('Database connection failed');
 
-  // جمع البيانات للتحليل
+  // جمع البيانات للتحليل - استخدام dailyRevenues بدلاً من invoices
   const endDate = new Date();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - 30);
 
-  const [salesData] = await db
+  // جلب الإيرادات الفعلية من dailyRevenues
+  const revenueConditions = [
+    gte(dailyRevenues.date, startDate),
+    lte(dailyRevenues.date, endDate)
+  ];
+  if (branchId) revenueConditions.push(eq(dailyRevenues.branchId, branchId));
+
+  const [revenueData] = await db
     .select({
-      totalSales: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
-      invoiceCount: sql<number>`COUNT(*)`,
+      totalRevenue: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
+      daysCount: sql<number>`COUNT(DISTINCT ${dailyRevenues.date})`,
     })
-    .from(invoices)
-    .where(
-      and(
-        gte(invoices.createdAt, startDate),
-        lte(invoices.createdAt, endDate),
-        branchId ? eq(invoices.branchId, branchId) : undefined
-      )
-    );
+    .from(dailyRevenues)
+    .where(and(...revenueConditions));
 
   const [lowStock] = await db
     .select({
@@ -512,6 +513,11 @@ export async function getAIInsights(branchId?: number): Promise<{
       )
     );
 
+  // حساب المتوسط اليومي بناءً على 30 يوم
+  const totalRevenue = Number(revenueData?.totalRevenue || 0);
+  const avgDailyRevenue = totalRevenue / 30;
+  const daysWithData = Number(revenueData?.daysCount || 0);
+
   try {
     const response = await invokeLLM({
       messages: [
@@ -524,8 +530,9 @@ export async function getAIInsights(branchId?: number): Promise<{
           role: "user",
           content: `قم بتحليل البيانات التالية وقدم رؤى:
           
-          - إجمالي المبيعات (آخر 30 يوم): ${salesData?.totalSales || 0} ريال
-          - عدد الفواتير: ${salesData?.invoiceCount || 0}
+          - إجمالي الإيرادات (آخر 30 يوم): ${totalRevenue.toFixed(0)} ريال
+          - متوسط الإيراد اليومي: ${avgDailyRevenue.toFixed(0)} ريال
+          - عدد الأيام المسجلة: ${daysWithData} يوم
           - منتجات منخفضة المخزون: ${lowStock?.count || 0}
           
           قدم التحليل بالصيغة التالية:
@@ -560,12 +567,23 @@ export async function getAIInsights(branchId?: number): Promise<{
     const content = response.choices[0].message.content;
     return JSON.parse(typeof content === 'string' ? content : JSON.stringify(content) || '{}');
   } catch (error) {
-    // في حالة فشل LLM
+    // في حالة فشل LLM - إرجاع تحليل بناءً على البيانات الفعلية
+    const riskLevel = totalRevenue === 0 ? 'high' : (lowStock?.count || 0) > 10 ? 'high' : 'medium';
     return {
-      summary: 'تحليل البيانات غير متاح حالياً',
-      keyFindings: [`إجمالي المبيعات: ${salesData?.totalSales || 0} ريال`, `منتجات منخفضة المخزون: ${lowStock?.count || 0}`],
-      recommendations: ['راجع المنتجات منخفضة المخزون', 'تابع أداء المبيعات'],
-      riskLevel: (lowStock?.count || 0) > 10 ? 'high' : 'medium'
+      summary: totalRevenue > 0 
+        ? `إجمالي الإيرادات خلال الشهر الماضي ${totalRevenue.toFixed(0)} ريال بمتوسط يومي ${avgDailyRevenue.toFixed(0)} ريال`
+        : 'لا توجد إيرادات مسجلة خلال الفترة المحددة',
+      keyFindings: [
+        `إجمالي الإيرادات: ${totalRevenue.toFixed(0)} ريال`,
+        `متوسط الإيراد اليومي: ${avgDailyRevenue.toFixed(0)} ريال`,
+        `عدد الأيام المسجلة: ${daysWithData} يوم`,
+        `منتجات منخفضة المخزون: ${lowStock?.count || 0}`
+      ],
+      recommendations: [
+        'راجع المنتجات منخفضة المخزون',
+        'تابع أداء الإيرادات اليومية'
+      ],
+      riskLevel
     };
   }
 }

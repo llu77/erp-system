@@ -2071,14 +2071,13 @@ export async function calculateFinancialKPIs(startDate: Date, endDate: Date, bra
       )
     );
 
-  // الحصول على إجمالي المصاريف
+  // الحصول على إجمالي المصاريف (جميع الحالات في الفترة)
   const expensesData = await db.select({
     total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`,
   }).from(expenses).where(
     and(
       gte(expenses.expenseDate, startDate),
-      lte(expenses.expenseDate, endDate),
-      eq(expenses.status, 'approved')
+      lte(expenses.expenseDate, endDate)
     )
   );
 
@@ -3480,15 +3479,14 @@ export async function getActualRevenues(startDate: Date, endDate: Date, branchId
   };
 }
 
-// حساب إجمالي المصاريف الفعلية
+// حساب إجمالي المصاريف الفعلية (جميع الحالات في الفترة)
 export async function getActualExpenses(startDate: Date, endDate: Date, branchId?: number) {
   const db = await getDb();
   if (!db) return { totalExpenses: 0, expensesCount: 0 };
   
   const conditions = [
     gte(expenses.expenseDate, startDate),
-    lte(expenses.expenseDate, endDate),
-    eq(expenses.status, 'approved')
+    lte(expenses.expenseDate, endDate)
   ];
   
   if (branchId) {

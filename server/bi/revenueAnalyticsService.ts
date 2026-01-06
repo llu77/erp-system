@@ -18,8 +18,9 @@ export interface RevenueAnalysis {
   totalRevenue: number;
   totalCash: number;
   totalNetwork: number;
-  daysCount: number;
-  avgDailyRevenue: number;
+  daysCount: number; // عدد الأيام المسجلة فعلياً
+  periodDays: number; // عدد أيام الفترة الفعلية (لحساب المتوسط الصحيح)
+  avgDailyRevenue: number; // المتوسط اليومي = إجمالي ÷ عدد أيام الفترة
   trend: 'up' | 'down' | 'stable';
   growthRate: number;
   volatility: number; // معامل التباين
@@ -243,6 +244,11 @@ export async function analyzeRevenues(
   const totalCash = dailyData.reduce((sum, d) => sum + Number(d.cash), 0);
   const totalNetwork = dailyData.reduce((sum, d) => sum + Number(d.network), 0);
   const daysCount = dailyData.length;
+  
+  // حساب عدد أيام الفترة الفعلية (للمتوسط الصحيح)
+  const periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  // المتوسط اليومي الصحيح = إجمالي الإيرادات ÷ عدد أيام الفترة الفعلية
+  const correctAvgDailyRevenue = periodDays > 0 ? totalRevenue / periodDays : 0;
 
   // حساب معدل النمو مقارنة بالفترة السابقة
   const periodLength = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -272,8 +278,9 @@ export async function analyzeRevenues(
     totalRevenue,
     totalCash,
     totalNetwork,
-    daysCount,
-    avgDailyRevenue: statistics.mean,
+    daysCount, // عدد الأيام المسجلة
+    periodDays, // عدد أيام الفترة الفعلية
+    avgDailyRevenue: correctAvgDailyRevenue, // المتوسط = إجمالي ÷ أيام الفترة الفعلية
     trend: trendAnalysis.trend,
     growthRate,
     volatility: statistics.coefficientOfVariation,
