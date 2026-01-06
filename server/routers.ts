@@ -14,6 +14,7 @@ import * as emailNotifications from "./notifications/emailNotificationService";
 import * as biAnalytics from "./bi/analyticsService";
 import * as aiAnalytics from "./bi/aiAnalyticsService";
 import * as revenueAnalytics from "./bi/revenueAnalyticsService";
+import * as financialForecast from "./bi/financialForecastService";
 
 // إجراء للمدير فقط (كامل الصلاحيات)
 const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -5958,6 +5959,56 @@ ${discrepancyRows}
       }).optional())
       .query(async ({ input }) => {
         return revenueAnalytics.forecastRevenue(input?.branchId, input?.days || 7);
+      }),
+
+    // ==================== التنبؤ المالي الجديد ====================
+    
+    // الحصول على إعدادات التكاليف
+    getFinancialSettings: supervisorViewProcedure
+      .query(async () => {
+        return financialForecast.getFinancialSettings();
+      }),
+
+    // حفظ إعدادات التكاليف
+    saveFinancialSettings: adminProcedure
+      .input(z.object({
+        variableCostRate: z.number().min(1).max(80), // الحد 1-80%
+        fixedMonthlyCosts: z.number().min(0).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return financialForecast.saveFinancialSettings(
+          input.variableCostRate,
+          input.fixedMonthlyCosts
+        );
+      }),
+
+    // الحصول على التكاليف الثابتة الحقيقية
+    getFixedCostsBreakdown: supervisorViewProcedure
+      .query(async () => {
+        return {
+          breakdown: financialForecast.FIXED_COSTS,
+          total: financialForecast.TOTAL_FIXED_COSTS,
+          perBranch: financialForecast.FIXED_COSTS_PER_BRANCH,
+          branchesCount: financialForecast.BRANCHES_COUNT,
+        };
+      }),
+
+    // تحليل الشهر الماضي
+    analyzeLastMonth: supervisorViewProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return financialForecast.analyzeLastMonth(input?.branchId);
+      }),
+
+    // التنبؤ للشهر الحالي
+    forecastCurrentMonth: supervisorViewProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return financialForecast.forecastCurrentMonth(input?.branchId);
       }),
   }),
 });

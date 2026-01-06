@@ -213,6 +213,17 @@ export default function AIAnalytics() {
   const { data: revenueForecast, isLoading: loadingForecast } = 
     trpc.bi.forecastRevenue.useQuery({ branchId, days: forecastDays });
 
+  // جلب إعدادات التكاليف
+  const { data: financialSettings } = trpc.bi.getFinancialSettings.useQuery();
+
+  // جلب تحليل الشهر الماضي
+  const { data: lastMonthAnalysis, isLoading: loadingLastMonth } = 
+    trpc.bi.analyzeLastMonth.useQuery({ branchId });
+
+  // جلب التنبؤ للشهر الحالي
+  const { data: currentMonthForecast, isLoading: loadingCurrentMonth } = 
+    trpc.bi.forecastCurrentMonth.useQuery({ branchId });
+
   // تحديث جميع البيانات
   const handleRefresh = () => {
     refetchRevenue();
@@ -894,166 +905,340 @@ export default function AIAnalytics() {
           </TabsContent>
 
           {/* التنبؤات */}
-          <TabsContent value="forecast" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">التنبؤ بالإيرادات</h3>
-              <Select 
-                value={forecastDays.toString()} 
-                onValueChange={(v) => setForecastDays(parseInt(v))}
-              >
-                <SelectTrigger className="w-[140px]">
-                  <Calendar className="h-4 w-4 ml-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7">7 أيام</SelectItem>
-                  <SelectItem value="14">14 يوم</SelectItem>
-                  <SelectItem value="30">30 يوم</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <TabsContent value="forecast" className="space-y-6">
+            {/* تفاصيل التكاليف الثابتة */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  التكاليف الثابتة الشهرية
+                </CardTitle>
+                <CardDescription>
+                  إجمالي التكاليف الثابتة للفرعين: 32,200 ر.س | لكل فرع: 16,100 ر.س
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-5 gap-4">
+                  <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/30 text-center">
+                    <p className="text-sm text-muted-foreground">رواتب</p>
+                    <p className="text-xl font-bold text-blue-500">21,000</p>
+                    <p className="text-xs text-muted-foreground">ر.س</p>
+                  </div>
+                  <div className="p-4 bg-purple-500/10 rounded-lg border border-purple-500/30 text-center">
+                    <p className="text-sm text-muted-foreground">إيجار محلات</p>
+                    <p className="text-xl font-bold text-purple-500">6,600</p>
+                    <p className="text-xs text-muted-foreground">ر.س</p>
+                  </div>
+                  <div className="p-4 bg-orange-500/10 rounded-lg border border-orange-500/30 text-center">
+                    <p className="text-sm text-muted-foreground">إيجار سكن</p>
+                    <p className="text-xl font-bold text-orange-500">3,200</p>
+                    <p className="text-xs text-muted-foreground">ر.س</p>
+                  </div>
+                  <div className="p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/30 text-center">
+                    <p className="text-sm text-muted-foreground">كهرباء</p>
+                    <p className="text-xl font-bold text-yellow-500">800</p>
+                    <p className="text-xs text-muted-foreground">ر.س</p>
+                  </div>
+                  <div className="p-4 bg-cyan-500/10 rounded-lg border border-cyan-500/30 text-center">
+                    <p className="text-sm text-muted-foreground">إنترنت</p>
+                    <p className="text-xl font-bold text-cyan-500">600</p>
+                    <p className="text-xs text-muted-foreground">ر.س</p>
+                  </div>
+                </div>
+                <div className="mt-4 p-3 bg-muted/50 rounded-lg flex items-center justify-between">
+                  <span className="text-muted-foreground">إجمالي التكاليف الثابتة (للفرعين)</span>
+                  <span className="text-xl font-bold">32,200 ر.س</span>
+                </div>
+              </CardContent>
+            </Card>
 
-            <div className="grid lg:grid-cols-3 gap-4">
-              <Card className="lg:col-span-2">
+            {/* تحليل الشهر الماضي */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5" />
+                  تحليل الشهر الماضي ({lastMonthAnalysis?.period?.month || 'ديسمبر 2025'})
+                </CardTitle>
+                <CardDescription>
+                  المتوسط اليومي = إجمالي الإيرادات ÷ {lastMonthAnalysis?.period?.totalDays || 31} يوم
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingLastMonth ? (
+                  <Skeleton className="h-[200px] w-full" />
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid md:grid-cols-4 gap-4">
+                      <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                        <p className="text-sm text-muted-foreground">إجمالي الإيرادات</p>
+                        <p className="text-2xl font-bold text-blue-500">
+                          {formatCurrency(lastMonthAnalysis?.revenue?.total || 0)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {lastMonthAnalysis?.period?.daysRecorded || 0} يوم مسجل
+                        </p>
+                      </div>
+                      <div className="p-4 bg-purple-500/10 rounded-lg border border-purple-500/30">
+                        <p className="text-sm text-muted-foreground">المتوسط اليومي</p>
+                        <p className="text-2xl font-bold text-purple-500">
+                          {formatCurrency(lastMonthAnalysis?.revenue?.dailyAverage || 0)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          إجمالي ÷ {lastMonthAnalysis?.period?.totalDays || 31} يوم
+                        </p>
+                      </div>
+                      <div className="p-4 bg-orange-500/10 rounded-lg border border-orange-500/30">
+                        <p className="text-sm text-muted-foreground">إجمالي التكاليف</p>
+                        <p className="text-2xl font-bold text-orange-500">
+                          {formatCurrency(lastMonthAnalysis?.costs?.totalCosts || 0)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          ثابتة: {formatCurrency(lastMonthAnalysis?.costs?.fixedMonthlyCosts || 0)} | متغيرة: {formatCurrency(lastMonthAnalysis?.costs?.variableCosts || 0)}
+                        </p>
+                      </div>
+                      <div className={`p-4 rounded-lg border ${lastMonthAnalysis?.profit?.status === 'ربح' ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                        <p className="text-sm text-muted-foreground">صافي الربح</p>
+                        <p className={`text-2xl font-bold ${lastMonthAnalysis?.profit?.status === 'ربح' ? 'text-green-500' : 'text-red-500'}`}>
+                          {formatCurrency(lastMonthAnalysis?.profit?.netProfit || 0)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          هامش: {(lastMonthAnalysis?.profit?.profitMargin || 0).toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* تفاصيل التكاليف */}
+                    <div className="p-4 bg-muted/30 rounded-lg">
+                      <h4 className="font-semibold mb-3">تفاصيل التكاليف</h4>
+                      <div className="grid md:grid-cols-3 gap-4 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">التكاليف الثابتة:</span>
+                          <span className="font-medium">{formatCurrency(lastMonthAnalysis?.costs?.fixedMonthlyCosts || 0)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">تكلفة البضاعة ({lastMonthAnalysis?.costs?.variableCostRate || 30}%):</span>
+                          <span className="font-medium">{formatCurrency(lastMonthAnalysis?.costs?.variableCosts || 0)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">مصاريف أخرى:</span>
+                          <span className="font-medium">{formatCurrency(lastMonthAnalysis?.costs?.otherExpenses || 0)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* التنبيهات */}
+                    {lastMonthAnalysis?.alerts && lastMonthAnalysis.alerts.length > 0 && (
+                      <div className="space-y-2">
+                        {lastMonthAnalysis.alerts.map((alert: any, i: number) => (
+                          <div key={i} className={`p-3 rounded-lg flex items-center gap-2 ${
+                            alert.level === 'critical' ? 'bg-red-500/10 border border-red-500/30' :
+                            alert.level === 'warning' ? 'bg-yellow-500/10 border border-yellow-500/30' :
+                            'bg-green-500/10 border border-green-500/30'
+                          }`}>
+                            {alert.level === 'critical' ? <XCircle className="h-5 w-5 text-red-500" /> :
+                             alert.level === 'warning' ? <AlertTriangle className="h-5 w-5 text-yellow-500" /> :
+                             <CheckCircle className="h-5 w-5 text-green-500" />}
+                            <span className={`${
+                              alert.level === 'critical' ? 'text-red-500' :
+                              alert.level === 'warning' ? 'text-yellow-500' :
+                              'text-green-500'
+                            }`}>{alert.message}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* نقطة التعادل */}
+            {!lastMonthAnalysis?.needsConfiguration && (
+              <Card>
                 <CardHeader>
-                  <CardTitle>توقعات الإيرادات</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="h-5 w-5" />
+                    نقطة التعادل
+                  </CardTitle>
                   <CardDescription>
-                    التنبؤ بالإيرادات للأيام القادمة بناءً على البيانات التاريخية والخوارزميات الإحصائية
+                    نقطة التعادل = التكاليف الثابتة ÷ (1 - نسبة التكاليف المتغيرة)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingForecast ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <AreaChart data={revenueForecast || []}>
-                        <defs>
-                          <linearGradient id="forecastGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis 
-                          dataKey="date" 
-                          tickFormatter={(v) => safeFormatDate(v, 'MM/dd')}
-                        />
-                        <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
-                        <Tooltip 
-                          formatter={(value: number) => [formatCurrency(value), '']}
-                          labelFormatter={(label) => safeFormatDate(label, 'EEEE, d MMMM', { locale: ar })}
-                        />
-                        <Legend />
-                        <Area 
-                          type="monotone" 
-                          dataKey="predicted" 
-                          name="المتوقع"
-                          stroke="#8b5cf6" 
-                          fill="url(#forecastGradient)"
-                          strokeWidth={2}
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="upperBound" 
-                          name="الحد الأعلى"
-                          stroke="#10b981" 
-                          strokeDasharray="5 5"
-                          strokeWidth={1}
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="lowerBound" 
-                          name="الحد الأدنى"
-                          stroke="#ef4444" 
-                          strokeDasharray="5 5"
-                          strokeWidth={1}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  )}
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+                      <p className="text-sm text-muted-foreground">نقطة التعادل اليومية</p>
+                      <p className="text-2xl font-bold text-yellow-500">
+                        {formatCurrency(lastMonthAnalysis?.breakEven?.daily || 0)}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+                      <p className="text-sm text-muted-foreground">نقطة التعادل الشهرية</p>
+                      <p className="text-2xl font-bold text-yellow-500">
+                        {formatCurrency(lastMonthAnalysis?.breakEven?.monthly || 0)}
+                      </p>
+                    </div>
+                    <div className={`p-4 rounded-lg border ${lastMonthAnalysis?.breakEven?.aboveBreakEven ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                      <p className="text-sm text-muted-foreground">الحالة</p>
+                      <p className={`text-2xl font-bold ${lastMonthAnalysis?.breakEven?.aboveBreakEven ? 'text-green-500' : 'text-red-500'}`}>
+                        {lastMonthAnalysis?.breakEven?.aboveBreakEven ? 'فوق التعادل ✅' : 'تحت التعادل ⚠️'}
+                      </p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
+            )}
 
-              <div className="space-y-4">
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-purple-500/10 rounded-lg">
-                        <DollarSign className="h-6 w-6 text-purple-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">إجمالي المتوقع</p>
-                        <p className="text-2xl font-bold">
-                          {formatCurrency(
-                            (revenueForecast || []).reduce((sum, f) => sum + f.predicted, 0)
-                          )}
-                        </p>
-                      </div>
+            {/* التنبؤ للشهر الحالي */}
+            {currentMonthForecast && !('error' in currentMonthForecast) && 'forecast' in currentMonthForecast && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    التنبؤ للشهر الحالي ({currentMonthForecast?.currentMonth?.month})
+                  </CardTitle>
+                  <CardDescription>
+                    اليوم {currentMonthForecast?.currentMonth?.currentDay} من {currentMonthForecast?.currentMonth?.totalDays} | متبقي {currentMonthForecast?.currentMonth?.remainingDays} يوم
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* الإجماليات */}
+                  <div className="grid md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                      <p className="text-sm text-muted-foreground">الإيرادات الفعلية</p>
+                      <p className="text-2xl font-bold text-blue-500">
+                        {formatCurrency(currentMonthForecast?.actual?.revenue || 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        حتى اليوم {currentMonthForecast?.actual?.daysElapsed}
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-green-500/10 rounded-lg">
-                        <TrendingUp className="h-6 w-6 text-green-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">متوسط الثقة</p>
-                        <p className="text-2xl font-bold">
-                          {(revenueForecast || []).length > 0 
-                            ? Math.round((revenueForecast || []).reduce((sum, f) => sum + f.confidence, 0) / (revenueForecast || []).length)
-                            : 0}%
-                        </p>
-                      </div>
+                    <div className="p-4 bg-purple-500/10 rounded-lg border border-purple-500/30">
+                      <p className="text-sm text-muted-foreground">الإيرادات المتوقعة</p>
+                      <p className="text-2xl font-bold text-purple-500">
+                        {formatCurrency(currentMonthForecast?.forecast?.expectedTotalRevenue || 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        نهاية الشهر
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="p-4 bg-orange-500/10 rounded-lg border border-orange-500/30">
+                      <p className="text-sm text-muted-foreground">التكاليف المتوقعة</p>
+                      <p className="text-2xl font-bold text-orange-500">
+                        {formatCurrency(currentMonthForecast?.forecast?.expectedTotalCosts || 0)}
+                      </p>
+                    </div>
+                    <div className={`p-4 rounded-lg border ${currentMonthForecast?.forecast?.status === 'ربح' ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                      <p className="text-sm text-muted-foreground">صافي الربح المتوقع</p>
+                      <p className={`text-2xl font-bold ${currentMonthForecast?.forecast?.status === 'ربح' ? 'text-green-500' : 'text-red-500'}`}>
+                        {formatCurrency(currentMonthForecast?.forecast?.expectedNetProfit || 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        هامش: {(currentMonthForecast?.forecast?.profitMargin || 0).toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">تفاصيل التنبؤ</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {(revenueForecast || []).slice(0, 5).map((forecast, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          {safeFormatDate(forecast.date, 'EEE d/M', { locale: ar })}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{formatCurrency(forecast.predicted)}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {forecast.confidence}%
-                          </Badge>
+                  {/* الفترات الثلاث */}
+                  <div>
+                    <h4 className="font-semibold mb-3">التنبؤ حسب الفترة</h4>
+                    <div className="grid md:grid-cols-3 gap-4">
+                      {currentMonthForecast?.periodForecasts?.map((period: any, i: number) => (
+                        <div key={i} className="p-4 bg-muted/50 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium">{period.name}</span>
+                            <Badge variant="outline">أيام {period.days}</Badge>
+                          </div>
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">الإيرادات:</span>
+                              <span className="text-blue-500">{formatCurrency(period.expectedRevenue)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">التكاليف:</span>
+                              <span className="text-orange-500">{formatCurrency(period.expectedCosts)}</span>
+                            </div>
+                            <div className="flex justify-between border-t pt-1">
+                              <span className="text-muted-foreground">صافي الربح:</span>
+                              <span className={period.status === 'ربح' ? 'text-green-500' : 'text-red-500'}>
+                                {formatCurrency(period.expectedProfit)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
+                      ))}
+                    </div>
+                  </div>
 
+                  {/* التنبؤ اليومي */}
+                  <div>
+                    <h4 className="font-semibold mb-3">التنبؤ اليومي (7 أيام القادمة)</h4>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>التاريخ</TableHead>
+                          <TableHead>اليوم</TableHead>
+                          <TableHead>الإيرادات المتوقعة</TableHead>
+                          <TableHead>التكاليف</TableHead>
+                          <TableHead>صافي الربح</TableHead>
+                          <TableHead>الثقة</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {currentMonthForecast?.dailyForecasts?.map((day: any, i: number) => (
+                          <TableRow key={i}>
+                            <TableCell>{day.date}</TableCell>
+                            <TableCell>{day.dayName}</TableCell>
+                            <TableCell className="text-blue-500">{formatCurrency(day.expectedRevenue)}</TableCell>
+                            <TableCell className="text-orange-500">{formatCurrency(day.expectedCosts)}</TableCell>
+                            <TableCell className={day.status === 'ربح' ? 'text-green-500' : 'text-red-500'}>
+                              {formatCurrency(day.expectedProfit)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{day.confidence}%</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* معلومات الحساب */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
-                  ملاحظات حول التنبؤ
+                  معادلات الحساب
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid md:grid-cols-2 gap-4">
                   <InsightCard
-                    title="منهجية التنبؤ"
-                    description="يستخدم التنبؤ الانحدار الخطي والمتوسطات المتحركة بناءً على بيانات آخر 60 يوم. تقل الثقة كلما ابتعدنا في المستقبل."
+                    title="المتوسط اليومي"
+                    description={`المتوسط = إجمالي إيرادات الشهر الماضي ÷ عدد أيام الشهر (${lastMonthAnalysis?.period?.totalDays || 31} يوم)`}
                     type="info"
                     icon={Calculator}
                   />
                   <InsightCard
-                    title="حدود الثقة"
-                    description="الحد الأعلى والأدنى يمثلان نطاق الثقة 95% بناءً على الانحراف المعياري التاريخي."
+                    title="نقطة التعادل"
+                    description={`نقطة التعادل = التكاليف الثابتة (${formatCurrency(lastMonthAnalysis?.costs?.fixedMonthlyCosts || 0)}) ÷ (1 - نسبة التكاليف ${lastMonthAnalysis?.costs?.variableCostRate || 0}%)`}
                     type="info"
-                    icon={BarChart3}
+                    icon={Target}
+                  />
+                  <InsightCard
+                    title="صافي الربح"
+                    description="صافي الربح = الإيرادات - (التكاليف الثابتة + التكاليف المتغيرة)"
+                    type="info"
+                    icon={DollarSign}
+                  />
+                  <InsightCard
+                    title="التكاليف المتغيرة"
+                    description={`التكاليف المتغيرة = الإيرادات × نسبة تكلفة البضاعة (${lastMonthAnalysis?.costs?.variableCostRate || 0}%)`}
+                    type="info"
+                    icon={Percent}
                   />
                 </div>
               </CardContent>

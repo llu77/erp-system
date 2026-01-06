@@ -1,0 +1,9 @@
+{
+  "query": "\nINSERT INTO company_settings (`key`, `value`, `type`, `category`, `description`) VALUES\n('variable_cost_rate', '0', 'number', 'financial', 'نسبة تكلفة البضاعة المتغيرة (%)'),\n('fixed_monthly_costs', '0', 'number', 'financial', 'التكاليف الثابتة الشهرية (ر.س)')\nON DUPLICATE KEY UPDATE `description` = VALUES(`description`);\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute \nINSERT INTO company_settings (`key`, `value`, `type`, `category`, `description`) VALUES\n('variable_cost_rate', '0', 'number', 'financial', 'نسبة تكلفة البضاعة المتغيرة (%)'),\n('fixed_monthly_costs', '0', 'number', 'financial', 'التكاليف الثابتة الشهرية (ر.س)')\nON DUPLICATE KEY UPDATE `description` = VALUES(`description`);\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1765
+}
