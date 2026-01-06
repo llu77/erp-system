@@ -1201,6 +1201,31 @@ export default function Expenses() {
                             <span>{expense.branchName}</span>
                           </div>
                         )}
+                        {expense.attachments && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground">المرفقات:</span>
+                            <div className="flex gap-1">
+                              {(() => {
+                                try {
+                                  const atts = JSON.parse(expense.attachments as string);
+                                  return atts.map((att: { name: string; url: string }, idx: number) => (
+                                    <Button
+                                      key={idx}
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setViewAttachment(att.url)}
+                                      title={att.name}
+                                    >
+                                      <Eye className="h-4 w-4 text-blue-500" />
+                                    </Button>
+                                  ));
+                                } catch {
+                                  return <span>-</span>;
+                                }
+                              })()}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center justify-end gap-1 mt-3 pt-3 border-t">
                         {expense.status === 'pending' && (
@@ -1254,6 +1279,7 @@ export default function Expenses() {
                         <TableHead>الفرع</TableHead>
                         <TableHead>التاريخ</TableHead>
                         <TableHead>طريقة الدفع</TableHead>
+                        <TableHead>المرفقات</TableHead>
                         <TableHead>الحالة</TableHead>
                         <TableHead>الإجراءات</TableHead>
                       </TableRow>
@@ -1290,6 +1316,32 @@ export default function Expenses() {
                               <CreditCard className="h-4 w-4 text-muted-foreground" />
                               {paymentMethods.find(m => m.value === expense.paymentMethod)?.label}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {expense.attachments ? (
+                              <div className="flex items-center gap-1">
+                                {(() => {
+                                  try {
+                                    const atts = JSON.parse(expense.attachments as string);
+                                    return atts.map((att: { name: string; url: string }, idx: number) => (
+                                      <Button
+                                        key={idx}
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setViewAttachment(att.url)}
+                                        title={att.name}
+                                      >
+                                        <Image className="h-4 w-4 text-blue-500" />
+                                      </Button>
+                                    ));
+                                  } catch {
+                                    return <span className="text-muted-foreground">-</span>;
+                                  }
+                                })()}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge className={statusColors[expense.status]}>
@@ -1584,6 +1636,41 @@ export default function Expenses() {
             </CardContent>
           )}
         </Card>
+
+        {/* نافذة عرض المرفق */}
+        <Dialog open={!!viewAttachment} onOpenChange={() => setViewAttachment(null)}>
+          <DialogContent className="sm:max-w-4xl max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle>عرض المرفق</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center justify-center">
+              {viewAttachment && (
+                viewAttachment.toLowerCase().endsWith('.pdf') ? (
+                  <iframe
+                    src={viewAttachment}
+                    className="w-full h-[70vh] border rounded-lg"
+                    title="عرض PDF"
+                  />
+                ) : (
+                  <img
+                    src={viewAttachment}
+                    alt="صورة الفاتورة"
+                    className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                  />
+                )
+              )}
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" onClick={() => window.open(viewAttachment!, '_blank')}>
+                  <Download className="h-4 w-4 ml-2" />
+                  فتح في نافذة جديدة
+                </Button>
+                <Button variant="outline" onClick={() => setViewAttachment(null)}>
+                  إغلاق
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* نافذة التعديل */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
