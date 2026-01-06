@@ -1,20 +1,22 @@
 /**
  * Bonus Calculator - حاسبة البونص الأسبوعي
  * 
- * مستويات البونص:
- * - المستوى 5: ≥2400 ر.س → 180 ر.س
- * - المستوى 4: 2100-2399 ر.س → 135 ر.س
- * - المستوى 3: 1800-2099 ر.س → 95 ر.س
- * - المستوى 2: 1500-1799 ر.س → 60 ر.س
- * - المستوى 1: 1200-1499 ر.س → 35 ر.س
- * - بدون: <1200 ر.س → 0 ر.س
+ * مستويات البونص (محدثة 7 يناير 2026):
+ * - المستوى 7: ≥3200 ر.س → 190 ر.س
+ * - المستوى 6: 2800-3199 ر.س → 155 ر.س
+ * - المستوى 5: 2500-2799 ر.س → 120 ر.س
+ * - المستوى 4: 2200-2499 ر.س → 90 ر.س
+ * - المستوى 3: 1950-2199 ر.س → 65 ر.س
+ * - المستوى 2: 1750-1949 ر.س → 55 ر.س
+ * - المستوى 1: 1450-1749 ر.س → 35 ر.س
+ * - بدون: <1450 ر.س → 0 ر.س
  * 
- * @version 2.0.0 - مع Input Validation وتحسينات الأداء
+ * @version 3.0.0 - مستويات بونص محدثة
  */
 
 // ==================== Types ====================
 
-export type BonusTier = "tier_1" | "tier_2" | "tier_3" | "tier_4" | "tier_5" | "none";
+export type BonusTier = "tier_1" | "tier_2" | "tier_3" | "tier_4" | "tier_5" | "tier_6" | "tier_7" | "none";
 
 export interface BonusCalculation {
   tier: BonusTier;
@@ -291,19 +293,25 @@ export function calculateBonus(weeklyRevenue: unknown): BonusCalculation {
 
   const revenue = validation.data!;
 
-  if (revenue >= 2400) {
-    return { tier: "tier_5", amount: 180, isEligible: true };
+  if (revenue >= 3200) {
+    return { tier: "tier_7", amount: 190, isEligible: true };
   }
-  if (revenue >= 2100) {
-    return { tier: "tier_4", amount: 135, isEligible: true };
+  if (revenue >= 2800) {
+    return { tier: "tier_6", amount: 155, isEligible: true };
   }
-  if (revenue >= 1800) {
-    return { tier: "tier_3", amount: 95, isEligible: true };
+  if (revenue >= 2500) {
+    return { tier: "tier_5", amount: 120, isEligible: true };
   }
-  if (revenue >= 1500) {
-    return { tier: "tier_2", amount: 60, isEligible: true };
+  if (revenue >= 2200) {
+    return { tier: "tier_4", amount: 90, isEligible: true };
   }
-  if (revenue >= 1200) {
+  if (revenue >= 1950) {
+    return { tier: "tier_3", amount: 65, isEligible: true };
+  }
+  if (revenue >= 1750) {
+    return { tier: "tier_2", amount: 55, isEligible: true };
+  }
+  if (revenue >= 1450) {
     return { tier: "tier_1", amount: 35, isEligible: true };
   }
   return { tier: "none", amount: 0, isEligible: false };
@@ -326,15 +334,19 @@ export function calculateBonusSafe(
   const revenue = validation.data!;
   let result: BonusCalculation;
 
-  if (revenue >= 2400) {
-    result = { tier: "tier_5", amount: 180, isEligible: true };
-  } else if (revenue >= 2100) {
-    result = { tier: "tier_4", amount: 135, isEligible: true };
-  } else if (revenue >= 1800) {
-    result = { tier: "tier_3", amount: 95, isEligible: true };
-  } else if (revenue >= 1500) {
-    result = { tier: "tier_2", amount: 60, isEligible: true };
-  } else if (revenue >= 1200) {
+  if (revenue >= 3200) {
+    result = { tier: "tier_7", amount: 190, isEligible: true };
+  } else if (revenue >= 2800) {
+    result = { tier: "tier_6", amount: 155, isEligible: true };
+  } else if (revenue >= 2500) {
+    result = { tier: "tier_5", amount: 120, isEligible: true };
+  } else if (revenue >= 2200) {
+    result = { tier: "tier_4", amount: 90, isEligible: true };
+  } else if (revenue >= 1950) {
+    result = { tier: "tier_3", amount: 65, isEligible: true };
+  } else if (revenue >= 1750) {
+    result = { tier: "tier_2", amount: 55, isEligible: true };
+  } else if (revenue >= 1450) {
     result = { tier: "tier_1", amount: 35, isEligible: true };
   } else {
     result = { tier: "none", amount: 0, isEligible: false };
@@ -610,6 +622,8 @@ export function createWeekSummary(
  */
 export function getTierNameAr(tier: BonusTier): string {
   const names: Record<BonusTier, string> = {
+    tier_7: "المستوى 7",
+    tier_6: "المستوى 6",
     tier_5: "المستوى 5",
     tier_4: "المستوى 4",
     tier_3: "المستوى 3",
@@ -625,8 +639,10 @@ export function getTierNameAr(tier: BonusTier): string {
  */
 export function getTierColor(tier: BonusTier): string {
   const colors: Record<BonusTier, string> = {
-    tier_5: "purple",
-    tier_4: "blue",
+    tier_7: "purple",
+    tier_6: "indigo",
+    tier_5: "blue",
+    tier_4: "cyan",
     tier_3: "green",
     tier_2: "yellow",
     tier_1: "orange",
@@ -645,12 +661,14 @@ export function getTierThresholds(): Array<{
   bonusAmount: number;
 }> {
   return [
-    { tier: "tier_5", minRevenue: 2400, maxRevenue: null, bonusAmount: 180 },
-    { tier: "tier_4", minRevenue: 2100, maxRevenue: 2399.99, bonusAmount: 135 },
-    { tier: "tier_3", minRevenue: 1800, maxRevenue: 2099.99, bonusAmount: 95 },
-    { tier: "tier_2", minRevenue: 1500, maxRevenue: 1799.99, bonusAmount: 60 },
-    { tier: "tier_1", minRevenue: 1200, maxRevenue: 1499.99, bonusAmount: 35 },
-    { tier: "none", minRevenue: 0, maxRevenue: 1199.99, bonusAmount: 0 },
+    { tier: "tier_7", minRevenue: 3200, maxRevenue: null, bonusAmount: 190 },
+    { tier: "tier_6", minRevenue: 2800, maxRevenue: 3199.99, bonusAmount: 155 },
+    { tier: "tier_5", minRevenue: 2500, maxRevenue: 2799.99, bonusAmount: 120 },
+    { tier: "tier_4", minRevenue: 2200, maxRevenue: 2499.99, bonusAmount: 90 },
+    { tier: "tier_3", minRevenue: 1950, maxRevenue: 2199.99, bonusAmount: 65 },
+    { tier: "tier_2", minRevenue: 1750, maxRevenue: 1949.99, bonusAmount: 55 },
+    { tier: "tier_1", minRevenue: 1450, maxRevenue: 1749.99, bonusAmount: 35 },
+    { tier: "none", minRevenue: 0, maxRevenue: 1449.99, bonusAmount: 0 },
   ];
 }
 
@@ -671,11 +689,13 @@ export function getRevenueToNextTier(currentRevenue: number): {
 
   const revenue = validation.data!;
   const thresholds = [
-    { tier: "tier_5" as BonusTier, min: 2400 },
-    { tier: "tier_4" as BonusTier, min: 2100 },
-    { tier: "tier_3" as BonusTier, min: 1800 },
-    { tier: "tier_2" as BonusTier, min: 1500 },
-    { tier: "tier_1" as BonusTier, min: 1200 },
+    { tier: "tier_7" as BonusTier, min: 3200 },
+    { tier: "tier_6" as BonusTier, min: 2800 },
+    { tier: "tier_5" as BonusTier, min: 2500 },
+    { tier: "tier_4" as BonusTier, min: 2200 },
+    { tier: "tier_3" as BonusTier, min: 1950 },
+    { tier: "tier_2" as BonusTier, min: 1750 },
+    { tier: "tier_1" as BonusTier, min: 1450 },
     { tier: "none" as BonusTier, min: 0 },
   ];
 

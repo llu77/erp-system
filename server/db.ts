@@ -6346,13 +6346,15 @@ export async function initializeDefaultBonusTiers() {
   const existing = await db.select().from(bonusTierSettings).limit(1);
   if (existing.length > 0) return; // المستويات موجودة بالفعل
   
-  // إضافة المستويات الافتراضية
+  // إضافة المستويات الافتراضية (محدثة 7 يناير 2026)
   const defaultTiers = [
-    { tierKey: 'tier_5', tierName: 'المستوى 5', minRevenue: '2400', maxRevenue: null, bonusAmount: '180', color: 'purple', sortOrder: 5 },
-    { tierKey: 'tier_4', tierName: 'المستوى 4', minRevenue: '2100', maxRevenue: '2399.99', bonusAmount: '135', color: 'blue', sortOrder: 4 },
-    { tierKey: 'tier_3', tierName: 'المستوى 3', minRevenue: '1800', maxRevenue: '2099.99', bonusAmount: '95', color: 'green', sortOrder: 3 },
-    { tierKey: 'tier_2', tierName: 'المستوى 2', minRevenue: '1500', maxRevenue: '1799.99', bonusAmount: '60', color: 'yellow', sortOrder: 2 },
-    { tierKey: 'tier_1', tierName: 'المستوى 1', minRevenue: '1200', maxRevenue: '1499.99', bonusAmount: '35', color: 'orange', sortOrder: 1 },
+    { tierKey: 'tier_7', tierName: 'المستوى 7', minRevenue: '3200', maxRevenue: null, bonusAmount: '190', color: 'purple', sortOrder: 7 },
+    { tierKey: 'tier_6', tierName: 'المستوى 6', minRevenue: '2800', maxRevenue: '3199.99', bonusAmount: '155', color: 'indigo', sortOrder: 6 },
+    { tierKey: 'tier_5', tierName: 'المستوى 5', minRevenue: '2500', maxRevenue: '2799.99', bonusAmount: '120', color: 'blue', sortOrder: 5 },
+    { tierKey: 'tier_4', tierName: 'المستوى 4', minRevenue: '2200', maxRevenue: '2499.99', bonusAmount: '90', color: 'cyan', sortOrder: 4 },
+    { tierKey: 'tier_3', tierName: 'المستوى 3', minRevenue: '1950', maxRevenue: '2199.99', bonusAmount: '65', color: 'green', sortOrder: 3 },
+    { tierKey: 'tier_2', tierName: 'المستوى 2', minRevenue: '1750', maxRevenue: '1949.99', bonusAmount: '55', color: 'yellow', sortOrder: 2 },
+    { tierKey: 'tier_1', tierName: 'المستوى 1', minRevenue: '1450', maxRevenue: '1749.99', bonusAmount: '35', color: 'orange', sortOrder: 1 },
   ];
   
   for (const tier of defaultTiers) {
