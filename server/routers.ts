@@ -13,6 +13,7 @@ import * as reminderService from "./notifications/reminderService";
 import * as emailNotifications from "./notifications/emailNotificationService";
 import * as biAnalytics from "./bi/analyticsService";
 import * as aiAnalytics from "./bi/aiAnalyticsService";
+import { agentService } from "./ai/agents";
 
 // إجراء للمدير فقط (كامل الصلاحيات)
 const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -5819,6 +5820,83 @@ ${discrepancyRows}
       }).optional())
       .query(async ({ input }) => {
         return aiAnalytics.getAIInsights(input?.branchId);
+      }),
+  }),
+
+  // ==================== AI Agents ====================
+  aiAgents: router({
+    // الحصول على قائمة المساعدين المتاحين
+    getAssistants: protectedProcedure
+      .query(async () => {
+        return agentService.getAvailableAssistants();
+      }),
+
+    // إنشاء جلسة محادثة جديدة
+    createSession: protectedProcedure
+      .input(z.object({
+        assistantId: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const sessionId = agentService.createSession(input.assistantId, ctx.user.id);
+        return { sessionId };
+      }),
+
+    // إرسال رسالة للمساعد
+    chat: protectedProcedure
+      .input(z.object({
+        sessionId: z.string(),
+        assistantId: z.string(),
+        message: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const response = await agentService.chat(
+          input.sessionId,
+          input.assistantId,
+          input.message,
+          {
+            userName: ctx.user.name ?? ctx.user.username ?? undefined,
+            branchId: ctx.user.branchId ?? undefined,
+          }
+        );
+        return response;
+      }),
+
+    // الحصول على سجل المحادثة
+    getHistory: protectedProcedure
+      .input(z.object({
+        sessionId: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return agentService.getConversationHistory(input.sessionId);
+      }),
+
+    // مسح سجل المحادثة
+    clearHistory: protectedProcedure
+      .input(z.object({
+        sessionId: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        agentService.clearConversationHistory(input.sessionId);
+        return { success: true };
+      }),
+
+    // إنهاء الجلسة
+    endSession: protectedProcedure
+      .input(z.object({
+        sessionId: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const success = agentService.endSession(input.sessionId);
+        return { success };
+      }),
+
+    // الحصول على إحصائيات الجلسة
+    getSessionStats: protectedProcedure
+      .input(z.object({
+        sessionId: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return agentService.getSessionStats(input.sessionId);
       }),
   }),
 });

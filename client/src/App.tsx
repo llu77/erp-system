@@ -56,6 +56,7 @@ import ReceiptVoucherReports from "./pages/ReceiptVoucherReports";
 import BIDashboard from "./pages/BIDashboard";
 import ReportBuilder from "./pages/ReportBuilder";
 import AIAnalytics from "./pages/AIAnalytics";
+import AIAssistant from "./pages/AIAssistant";
 
 function Router() {
   return (
@@ -303,6 +304,10 @@ function Router() {
       {/* AI Analytics */}
       <Route path="/ai-analytics">
         <AIAnalytics />
+      </Route>
+      {/* AI Assistant */}
+      <Route path="/ai-assistant">
+        <AIAssistant />
       </Route>
       {/* Smart Alerts - Admin Only */}
       <Route path="/smart-alerts">
