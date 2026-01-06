@@ -5640,6 +5640,41 @@ ${discrepancyRows}
         return result;
       }),
 
+    // توليد PDF لسند قبض فردي
+    generatePDF: supervisorInputProcedure
+      .input(z.object({
+        voucherId: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { getReceiptVoucher } = await import('./receiptVoucher');
+        const { generateSingleReceiptVoucherPDF } = await import('./pdfService');
+        
+        const voucher = await getReceiptVoucher(input.voucherId);
+        if (!voucher) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'السند غير موجود' });
+        }
+
+        const pdfBuffer = await generateSingleReceiptVoucherPDF({
+          voucherId: voucher.voucherId,
+          voucherDate: voucher.voucherDate,
+          dueDate: voucher.dueDate,
+          payeeName: voucher.payeeName,
+          payeePhone: voucher.payeePhone,
+          payeeEmail: voucher.payeeEmail,
+          branchName: voucher.branchName,
+          totalAmount: voucher.totalAmount,
+          status: voucher.status,
+          createdByName: voucher.createdByName,
+          createdAt: voucher.createdAt,
+          notes: voucher.notes,
+          items: voucher.items || [],
+        });
+        
+        // تحويل Buffer إلى Base64 لإرساله للعميل
+        const base64PDF = pdfBuffer.toString('base64');
+        return { pdf: base64PDF, filename: `receipt-voucher-${voucher.voucherId}.pdf` };
+      }),
+
     generateReportPDF: supervisorInputProcedure
       .input(z.object({
         title: z.string(),

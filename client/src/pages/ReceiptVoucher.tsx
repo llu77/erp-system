@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
-import { Plus, Printer, Save, Eye, Mail, Trash2 } from 'lucide-react';
+import { Plus, Printer, Save, Eye, Mail, Trash2, Download, FileText } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useAuth } from '@/_core/hooks/useAuth';
@@ -79,6 +79,7 @@ export default function ReceiptVoucher() {
   const createVoucherMutation = trpc.receiptVoucher.create.useMutation();
   const sendEmailMutation = trpc.receiptVoucher.sendEmail.useMutation();
   const deleteVoucherMutation = trpc.receiptVoucher.delete.useMutation();
+  const generatePDFMutation = trpc.receiptVoucher.generatePDF.useMutation();
   const getVouchersQuery = trpc.receiptVoucher.getAll.useQuery({ limit: 50, offset: 0 });
   const getVoucherQuery = trpc.receiptVoucher.get.useQuery(
     { voucherId: selectedVoucher?.voucherId || '' },
@@ -150,9 +151,84 @@ export default function ReceiptVoucher() {
     }
   };
 
-  // طباعة السند
-  const handlePrint = () => {
-    window.print();
+  // طباعة السند ك PDF احترافي
+  const handlePrint = async () => {
+    if (!selectedVoucher?.voucherId) {
+      toast.error('يرجى اختيار سند للطباعة');
+      return;
+    }
+
+    try {
+      toast.loading('جاري توليد السند...', { id: 'pdf-loading' });
+      
+      const result = await generatePDFMutation.mutateAsync({
+        voucherId: selectedVoucher.voucherId,
+      });
+
+      // تحويل Base64 إلى Blob
+      const byteCharacters = atob(result.pdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+
+      // فتح PDF في نافذة جديدة للطباعة
+      const pdfUrl = URL.createObjectURL(blob);
+      const printWindow = window.open(pdfUrl, '_blank');
+      
+      if (printWindow) {
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
+        };
+      }
+
+      toast.success('تم توليد السند بنجاح', { id: 'pdf-loading' });
+    } catch (error) {
+      toast.error('فشل في توليد السند', { id: 'pdf-loading' });
+    }
+  };
+
+  // تحميل السند ك PDF
+  const handleDownloadPDF = async () => {
+    if (!selectedVoucher?.voucherId) {
+      toast.error('يرجى اختيار سند للتحميل');
+      return;
+    }
+
+    try {
+      toast.loading('جاري تحميل السند...', { id: 'pdf-download' });
+      
+      const result = await generatePDFMutation.mutateAsync({
+        voucherId: selectedVoucher.voucherId,
+      });
+
+      // تحويل Base64 إلى Blob
+      const byteCharacters = atob(result.pdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+
+      // تحميل الملف
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success('تم تحميل السند بنجاح', { id: 'pdf-download' });
+    } catch (error) {
+      toast.error('فشل في تحميل السند', { id: 'pdf-download' });
+    }
   };
 
   // معاينة السند
@@ -559,9 +635,22 @@ export default function ReceiptVoucher() {
               <Mail className="w-4 h-4 mr-2" />
               {sendEmailMutation.isPending ? 'جاري الإرسال...' : 'إرسال عبر البريد'}
             </Button>
-            <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700">
-              <Printer className="w-4 h-4 mr-2" />
-              طباعة
+            <Button 
+              onClick={handleDownloadPDF} 
+              disabled={generatePDFMutation.isPending}
+              variant="outline"
+              className="gap-2"
+            >
+              <Download className="w-4 h-4" />
+              {generatePDFMutation.isPending ? 'جاري...' : 'تحميل PDF'}
+            </Button>
+            <Button 
+              onClick={handlePrint} 
+              disabled={generatePDFMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700 gap-2"
+            >
+              <Printer className="w-4 h-4" />
+              {generatePDFMutation.isPending ? 'جاري...' : 'طباعة PDF'}
             </Button>
           </DialogFooter>
         </DialogContent>

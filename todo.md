@@ -2082,3 +2082,4 @@ node scripts/scheduledTasks.mjs weekly-report
 - [ ] إضافة تحليل شرائح العملاء (RFM)
 
 - [x] إصلاح أخطاء استعلامات SQL في لوحة BI المتقدمة - تعديل لاستخدام dailyRevenues بدلاً من invoices
+- [x] إصلاح طباعة السندات لتكون PDF احترافية بدلاً من لقطة شاشة
