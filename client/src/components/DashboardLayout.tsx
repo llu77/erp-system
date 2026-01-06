@@ -61,7 +61,6 @@ import {
   ClipboardCheck,
   Heart,
   Brain,
-  MessageSquare,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -116,7 +115,6 @@ const menuStructure: MenuItem[] = [
       { icon: BarChart3, label: "لوحة BI المتقدمة", path: "/bi-dashboard", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: FileText, label: "منشئ التقارير", path: "/report-builder", roles: ["admin", "manager", "supervisor"] },
       { icon: Brain, label: "تحليلات AI", path: "/ai-analytics", roles: ["admin", "manager"] },
-      { icon: MessageSquare, label: "المساعد الذكي", path: "/ai-assistant", roles: ["admin", "manager"] },
     ]
   },
   

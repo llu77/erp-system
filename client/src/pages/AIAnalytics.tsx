@@ -23,6 +23,18 @@ import { toast } from "sonner";
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
+// دالة آمنة لتنسيق التاريخ
+function safeFormatDate(value: any, formatStr: string, options?: { locale?: any }): string {
+  try {
+    if (!value) return '';
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return String(value);
+    return format(date, formatStr, options);
+  } catch {
+    return String(value);
+  }
+}
+
 // دالة تنسيق العملة
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('ar-SA', { style: 'currency', currency: 'SAR' }).format(amount);
@@ -327,13 +339,13 @@ export default function AIAnalytics() {
                         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                         <XAxis 
                           dataKey="date" 
-                          tickFormatter={(v) => format(new Date(v), 'MM/dd', { locale: ar })}
+                          tickFormatter={(v) => safeFormatDate(v, 'MM/dd', { locale: ar })}
                           className="text-xs"
                         />
                         <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
                         <Tooltip 
                           formatter={(value: number) => [formatCurrency(value), 'المتوقع']}
-                          labelFormatter={(label) => format(new Date(label), 'EEEE, d MMMM', { locale: ar })}
+                          labelFormatter={(label) => safeFormatDate(label, 'EEEE, d MMMM', { locale: ar })}
                         />
                         <Area 
                           type="monotone" 
@@ -542,13 +554,13 @@ export default function AIAnalytics() {
                         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                         <XAxis 
                           dataKey="date" 
-                          tickFormatter={(v) => format(new Date(v), 'MM/dd')}
+                          tickFormatter={(v) => safeFormatDate(v, 'MM/dd')}
                           className="text-xs"
                         />
                         <YAxis dataKey="value" tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
                         <Tooltip 
                           formatter={(value: number) => formatCurrency(value)}
-                          labelFormatter={(label) => format(new Date(label), 'yyyy-MM-dd')}
+                          labelFormatter={(label) => safeFormatDate(label, 'yyyy-MM-dd')}
                         />
                         <Scatter 
                           data={(anomalies as any)?.anomalies || anomalies || []} 
