@@ -611,11 +611,31 @@ export async function getComprehensiveAIInsights(
       messages: [
         {
           role: "system",
-          content: `أنت محلل أعمال خبير متخصص في تحليل البيانات المالية وأداء الموظفين.
-          قم بتحليل البيانات المقدمة بشكل علمي ودقيق وحيادي.
-          استخدم المؤشرات الإحصائية لدعم استنتاجاتك.
-          قدم توصيات عملية وقابلة للتنفيذ.
-          يجب أن تكون إجابتك بصيغة JSON فقط.`
+          content: `أنت محلل أعمال خبير متخصص في تحليل البيانات المالية وأداء الموظفين لصالونات التجميل.
+
+## مبادئ التحليل:
+1. **الدقة العلمية**: استخدم المؤشرات الإحصائية لدعم استنتاجاتك
+2. **الموضوعية**: قدم تحليلاً متوازناً يشمل الإيجابيات والسلبيات
+3. **العملية**: ركز على توصيات قابلة للتنفيذ فعلياً
+4. **السياق**: ضع في اعتبارك طبيعة عمل الصالونات (موسمية، أيام الذروة، العطلات)
+
+## معايير التقييم:
+- هامش ربح > 25%: ممتاز
+- هامش ربح 15-25%: جيد
+- هامش ربح 5-15%: مقبول
+- هامش ربح < 5%: يحتاج تحسين
+- نسبة تشغيل < 70%: ممتازة
+- نسبة تشغيل > 90%: خطرة
+- معامل تباين < 20%: استقرار عالي
+- معامل تباين > 40%: تذبذب كبير
+
+## أسلوب الكتابة:
+- استخدم لغة عربية فصحى واضحة
+- اجعل كل رؤية محددة وقابلة للقياس
+- اربط التوصيات بالبيانات الفعلية
+- تجنب العموميات والكلام الإنشائي
+
+يجب أن تكون إجابتك بصيغة JSON فقط.`
         },
         {
           role: "user",
@@ -625,9 +645,9 @@ export async function getComprehensiveAIInsights(
 - إجمالي الإيرادات: ${analysisData.revenue.total} ريال
 - متوسط الإيراد اليومي: ${analysisData.revenue.avgDaily} ريال
 - الاتجاه: ${analysisData.revenue.trend === 'up' ? 'صاعد' : analysisData.revenue.trend === 'down' ? 'هابط' : 'مستقر'}
-- معدل النمو: ${analysisData.revenue.growthRate}%
+- معدل النمو مقارنة بالفترة السابقة: ${analysisData.revenue.growthRate}%
 - معامل التباين (التذبذب): ${analysisData.revenue.volatility}%
-- نسبة النقد: ${analysisData.revenue.cashRatio}%
+- نسبة النقد من الإيرادات: ${analysisData.revenue.cashRatio}%
 - عدد الأيام المسجلة: ${analysisData.revenue.daysCount}
 
 ## بيانات المصاريف:
@@ -635,9 +655,9 @@ export async function getComprehensiveAIInsights(
 - متوسط المصاريف اليومية: ${analysisData.expenses.avgDaily} ريال
 - الاتجاه: ${analysisData.expenses.trend === 'up' ? 'صاعد' : analysisData.expenses.trend === 'down' ? 'هابط' : 'مستقر'}
 - معدل النمو: ${analysisData.expenses.growthRate}%
-- أعلى الفئات: ${JSON.stringify(analysisData.expenses.topCategories)}
+- أعلى فئات المصاريف: ${JSON.stringify(analysisData.expenses.topCategories)}
 
-## الربحية:
+## مؤشرات الربحية:
 - صافي الربح: ${analysisData.profitability.netProfit} ريال
 - هامش الربح: ${analysisData.profitability.profitMargin}%
 - نسبة التشغيل: ${analysisData.profitability.operatingRatio}%
@@ -648,6 +668,41 @@ export async function getComprehensiveAIInsights(
 - موظفين في تحسن: ${analysisData.employees.improvingCount}
 - موظفين في تراجع: ${analysisData.employees.decliningCount}
 - أفضل 3 موظفين: ${JSON.stringify(analysisData.employees.topPerformers)}
+
+## المطلوب:
+قدم تحليلاً شاملاً يتضمن:
+
+1. **الملخص التنفيذي**: جملتان إلى ثلاث جمل تلخص الوضع المالي والتشغيلي
+
+2. **رؤى الإيرادات** (3 رؤى):
+   - تحليل الاتجاه ومعدل النمو
+   - تقييم الاستقرار (معامل التباين)
+   - تحليل طرق الدفع (نقد/شبكة)
+
+3. **رؤى المصاريف** (2 رؤيتان):
+   - تحليل الفئات الرئيسية
+   - تقييم نسبة التشغيل
+
+4. **رؤى الموظفين** (2 رؤيتان):
+   - تحليل الأداء العام
+   - الفجوة بين أفضل وأضعف الموظفين
+
+5. **التوصيات** (3 توصيات):
+   - توصيات محددة وقابلة للتنفيذ
+   - مرتبطة بالبيانات الفعلية
+
+6. **المخاطر** (2 مخاطر):
+   - مخاطر محتملة بناءً على البيانات
+
+7. **الفرص** (2 فرصتان):
+   - فرص للتحسين والنمو
+
+8. **مستوى الخطر**: حدد مستوى الخطر بناءً على:
+   - low: هامش ربح > 15% ونسبة تشغيل < 80%
+   - medium: هامش ربح 5-15% أو نسبة تشغيل 80-90%
+   - high: هامش ربح < 5% أو نسبة تشغيل > 90%
+
+9. **درجة الثقة**: بناءً على جودة البيانات (60-95)
 
 قدم التحليل بالصيغة التالية:
 {
@@ -802,4 +857,343 @@ export async function forecastRevenue(
   }
 
   return forecasts;
+}
+
+
+/**
+ * تقرير مقارنة شهري لأداء الفروع
+ * يقارن أداء كل فرع على مدار الأشهر الماضية
+ */
+export interface MonthlyBranchComparison {
+  branchId: number;
+  branchName: string;
+  months: {
+    month: string;
+    monthLabel: string;
+    totalRevenue: number;
+    totalExpenses: number;
+    netProfit: number;
+    profitMargin: number;
+    daysCount: number;
+    avgDailyRevenue: number;
+    growthRate: number; // مقارنة بالشهر السابق
+  }[];
+  summary: {
+    totalRevenue: number;
+    totalExpenses: number;
+    totalProfit: number;
+    avgMonthlyRevenue: number;
+    avgProfitMargin: number;
+    bestMonth: string;
+    worstMonth: string;
+    overallTrend: 'improving' | 'declining' | 'stable';
+    consistencyScore: number; // 0-100
+  };
+}
+
+export interface MonthlyComparisonReport {
+  period: string;
+  monthsCount: number;
+  branches: MonthlyBranchComparison[];
+  overallSummary: {
+    totalRevenue: number;
+    totalExpenses: number;
+    totalProfit: number;
+    avgProfitMargin: number;
+    bestBranch: { id: number; name: string; profit: number };
+    worstBranch: { id: number; name: string; profit: number };
+    monthlyTrend: { month: string; totalRevenue: number; totalProfit: number }[];
+  };
+  insights: string[];
+  recommendations: string[];
+}
+
+/**
+ * إنشاء تقرير مقارنة شهري لجميع الفروع
+ */
+export async function generateMonthlyComparisonReport(
+  monthsCount: number = 6
+): Promise<MonthlyComparisonReport> {
+  const db = await getDb();
+  if (!db) throw new Error('Database connection failed');
+
+  // جلب جميع الفروع
+  const allBranches = await db.select().from(branches);
+  
+  // تحديد الأشهر للتحليل
+  const months: { start: Date; end: Date; label: string; key: string }[] = [];
+  const now = new Date();
+  
+  for (let i = monthsCount - 1; i >= 0; i--) {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    
+    months.push({
+      start: monthDate,
+      end: monthEnd,
+      label: monthDate.toLocaleDateString('ar-SA', { month: 'long', year: 'numeric' }),
+      key: `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`
+    });
+  }
+
+  // تحليل كل فرع
+  const branchComparisons: MonthlyBranchComparison[] = [];
+  
+  for (const branch of allBranches) {
+    const monthlyData: MonthlyBranchComparison['months'] = [];
+    let previousRevenue = 0;
+    
+    for (const month of months) {
+      // جلب الإيرادات للشهر
+      const [revenueData] = await db
+        .select({
+          total: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(dailyRevenues)
+        .where(and(
+          eq(dailyRevenues.branchId, branch.id),
+          gte(dailyRevenues.date, month.start),
+          lte(dailyRevenues.date, month.end)
+        ));
+      
+      // جلب المصاريف للشهر (باستثناء التكاليف الثابتة المكررة)
+      const [expenseData] = await db
+        .select({
+          total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
+        })
+        .from(expenses)
+        .where(and(
+          eq(expenses.branchId, branch.id),
+          gte(expenses.expenseDate, month.start),
+          lte(expenses.expenseDate, month.end),
+          sql`${expenses.category} NOT IN ('shop_rent', 'housing_rent', 'electricity', 'internet')`
+        ));
+      
+      const totalRevenue = Number(revenueData?.total || 0);
+      const recordedExpenses = Number(expenseData?.total || 0);
+      const totalExpenses = FIXED_COSTS_PER_BRANCH + recordedExpenses;
+      const netProfit = totalRevenue - totalExpenses;
+      const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+      const daysCount = Number(revenueData?.count || 0);
+      const daysInMonth = Math.ceil((month.end.getTime() - month.start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const avgDailyRevenue = daysInMonth > 0 ? totalRevenue / daysInMonth : 0;
+      
+      // حساب معدل النمو مقارنة بالشهر السابق
+      const growthRate = previousRevenue > 0 
+        ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 
+        : 0;
+      
+      monthlyData.push({
+        month: month.key,
+        monthLabel: month.label,
+        totalRevenue,
+        totalExpenses,
+        netProfit,
+        profitMargin,
+        daysCount,
+        avgDailyRevenue,
+        growthRate
+      });
+      
+      previousRevenue = totalRevenue;
+    }
+    
+    // حساب ملخص الفرع
+    const totalRevenue = monthlyData.reduce((sum, m) => sum + m.totalRevenue, 0);
+    const totalExpenses = monthlyData.reduce((sum, m) => sum + m.totalExpenses, 0);
+    const totalProfit = monthlyData.reduce((sum, m) => sum + m.netProfit, 0);
+    const avgMonthlyRevenue = monthlyData.length > 0 ? totalRevenue / monthlyData.length : 0;
+    const avgProfitMargin = monthlyData.length > 0 
+      ? monthlyData.reduce((sum, m) => sum + m.profitMargin, 0) / monthlyData.length 
+      : 0;
+    
+    // أفضل وأسوأ شهر
+    const sortedByProfit = [...monthlyData].sort((a, b) => b.netProfit - a.netProfit);
+    const bestMonth = sortedByProfit[0]?.monthLabel || '';
+    const worstMonth = sortedByProfit[sortedByProfit.length - 1]?.monthLabel || '';
+    
+    // تحديد الاتجاه العام
+    const revenueValues = monthlyData.map(m => m.totalRevenue);
+    const trendAnalysis = calculateTrend(revenueValues);
+    
+    // حساب درجة الاتساق
+    const stats = calculateStatistics(revenueValues);
+    const consistencyScore = stats.mean > 0 
+      ? Math.max(0, 100 - stats.coefficientOfVariation) 
+      : 0;
+    
+    branchComparisons.push({
+      branchId: branch.id,
+      branchName: branch.name,
+      months: monthlyData,
+      summary: {
+        totalRevenue,
+        totalExpenses,
+        totalProfit,
+        avgMonthlyRevenue,
+        avgProfitMargin,
+        bestMonth,
+        worstMonth,
+        overallTrend: trendAnalysis.trend === 'up' ? 'improving' : 
+                      trendAnalysis.trend === 'down' ? 'declining' : 'stable',
+        consistencyScore: Math.round(consistencyScore)
+      }
+    });
+  }
+  
+  // حساب الملخص العام
+  const totalRevenue = branchComparisons.reduce((sum, b) => sum + b.summary.totalRevenue, 0);
+  const totalExpenses = branchComparisons.reduce((sum, b) => sum + b.summary.totalExpenses, 0);
+  const totalProfit = branchComparisons.reduce((sum, b) => sum + b.summary.totalProfit, 0);
+  const avgProfitMargin = branchComparisons.length > 0
+    ? branchComparisons.reduce((sum, b) => sum + b.summary.avgProfitMargin, 0) / branchComparisons.length
+    : 0;
+  
+  // أفضل وأسوأ فرع
+  const sortedBranches = [...branchComparisons].sort((a, b) => b.summary.totalProfit - a.summary.totalProfit);
+  const bestBranch = sortedBranches[0] 
+    ? { id: sortedBranches[0].branchId, name: sortedBranches[0].branchName, profit: sortedBranches[0].summary.totalProfit }
+    : { id: 0, name: '', profit: 0 };
+  const worstBranch = sortedBranches[sortedBranches.length - 1]
+    ? { id: sortedBranches[sortedBranches.length - 1].branchId, name: sortedBranches[sortedBranches.length - 1].branchName, profit: sortedBranches[sortedBranches.length - 1].summary.totalProfit }
+    : { id: 0, name: '', profit: 0 };
+  
+  // الاتجاه الشهري الإجمالي
+  const monthlyTrend = months.map((month, index) => {
+    const monthRevenue = branchComparisons.reduce((sum, b) => sum + (b.months[index]?.totalRevenue || 0), 0);
+    const monthProfit = branchComparisons.reduce((sum, b) => sum + (b.months[index]?.netProfit || 0), 0);
+    return {
+      month: month.label,
+      totalRevenue: monthRevenue,
+      totalProfit: monthProfit
+    };
+  });
+  
+  // توليد الرؤى والتوصيات باستخدام AI
+  const { insights, recommendations } = await generateComparisonInsights(branchComparisons, monthlyTrend);
+  
+  return {
+    period: `${months[0]?.label || ''} - ${months[months.length - 1]?.label || ''}`,
+    monthsCount,
+    branches: branchComparisons,
+    overallSummary: {
+      totalRevenue,
+      totalExpenses,
+      totalProfit,
+      avgProfitMargin,
+      bestBranch,
+      worstBranch,
+      monthlyTrend
+    },
+    insights,
+    recommendations
+  };
+}
+
+/**
+ * توليد رؤى وتوصيات للمقارنة الشهرية
+ */
+async function generateComparisonInsights(
+  branches: MonthlyBranchComparison[],
+  monthlyTrend: { month: string; totalRevenue: number; totalProfit: number }[]
+): Promise<{ insights: string[]; recommendations: string[] }> {
+  try {
+    const analysisData = {
+      branches: branches.map(b => ({
+        name: b.branchName,
+        totalRevenue: Math.round(b.summary.totalRevenue),
+        totalProfit: Math.round(b.summary.totalProfit),
+        avgProfitMargin: b.summary.avgProfitMargin.toFixed(1),
+        trend: b.summary.overallTrend,
+        consistency: b.summary.consistencyScore,
+        bestMonth: b.summary.bestMonth,
+        worstMonth: b.summary.worstMonth
+      })),
+      monthlyTrend: monthlyTrend.map(m => ({
+        month: m.month,
+        revenue: Math.round(m.totalRevenue),
+        profit: Math.round(m.totalProfit)
+      }))
+    };
+
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system",
+          content: `أنت محلل أعمال خبير متخصص في تحليل أداء الفروع والمقارنات الشهرية.
+          قدم تحليلاً دقيقاً وموضوعياً مع رؤى عملية وتوصيات قابلة للتنفيذ.
+          ركز على:
+          1. الفروقات في الأداء بين الفروع
+          2. الاتجاهات الشهرية والموسمية
+          3. نقاط القوة والضعف لكل فرع
+          4. الفرص والتحديات
+          يجب أن تكون إجابتك بصيغة JSON فقط.`
+        },
+        {
+          role: "user",
+          content: `قم بتحليل بيانات المقارنة الشهرية التالية وقدم رؤى وتوصيات:
+
+## بيانات الفروع:
+${JSON.stringify(analysisData.branches, null, 2)}
+
+## الاتجاه الشهري:
+${JSON.stringify(analysisData.monthlyTrend, null, 2)}
+
+قدم التحليل بالصيغة التالية:
+{
+  "insights": [
+    "رؤية 1 عن أداء الفروع",
+    "رؤية 2 عن الاتجاهات",
+    "رؤية 3 عن المقارنة",
+    "رؤية 4 عن الفرص"
+  ],
+  "recommendations": [
+    "توصية 1 عملية وقابلة للتنفيذ",
+    "توصية 2",
+    "توصية 3"
+  ]
+}`
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "comparison_insights",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              insights: { type: "array", items: { type: "string" } },
+              recommendations: { type: "array", items: { type: "string" } }
+            },
+            required: ["insights", "recommendations"],
+            additionalProperties: false
+          }
+        }
+      }
+    });
+
+    const content = response.choices[0].message.content;
+    return JSON.parse(typeof content === 'string' ? content : JSON.stringify(content) || '{}');
+  } catch (error) {
+    // في حالة فشل LLM، نقدم رؤى أساسية
+    const sortedByProfit = [...branches].sort((a, b) => b.summary.totalProfit - a.summary.totalProfit);
+    const bestBranch = sortedByProfit[0];
+    const worstBranch = sortedByProfit[sortedByProfit.length - 1];
+    
+    return {
+      insights: [
+        `أفضل فرع من حيث الربحية: ${bestBranch?.branchName || 'غير محدد'} بإجمالي ربح ${Math.round(bestBranch?.summary.totalProfit || 0)} ريال`,
+        `الفرع الأقل ربحية: ${worstBranch?.branchName || 'غير محدد'} بإجمالي ربح ${Math.round(worstBranch?.summary.totalProfit || 0)} ريال`,
+        `متوسط هامش الربح للفروع: ${(branches.reduce((sum, b) => sum + b.summary.avgProfitMargin, 0) / branches.length).toFixed(1)}%`,
+        `${branches.filter(b => b.summary.overallTrend === 'improving').length} فرع في تحسن، ${branches.filter(b => b.summary.overallTrend === 'declining').length} في تراجع`
+      ],
+      recommendations: [
+        'دراسة عوامل نجاح الفرع الأفضل وتطبيقها على الفروع الأخرى',
+        'مراجعة تكاليف التشغيل للفروع ذات الربحية المنخفضة',
+        'تحسين استراتيجيات التسويق للفروع المتراجعة'
+      ]
+    };
+  }
 }

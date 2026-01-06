@@ -25,6 +25,289 @@ import { toast } from "sonner";
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
+// مكون تقرير المقارنة الشهرية للفروع
+function MonthlyBranchComparison() {
+  const [monthsCount, setMonthsCount] = useState<number>(6);
+  
+  const { data: comparisonReport, isLoading, refetch } = 
+    trpc.bi.getMonthlyComparisonReport.useQuery({ monthsCount });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-[200px] w-full" />
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
+
+  if (!comparisonReport) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-muted-foreground">
+          لا توجد بيانات للعرض
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* الفلاتر */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">تقرير المقارنة الشهرية</h3>
+          <p className="text-sm text-muted-foreground">{comparisonReport.period}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={monthsCount.toString()} onValueChange={(v) => setMonthsCount(parseInt(v))}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="3">3 أشهر</SelectItem>
+              <SelectItem value="6">6 أشهر</SelectItem>
+              <SelectItem value="12">12 شهر</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="icon" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* الملخص العام */}
+      <div className="grid md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">إجمالي الإيرادات</p>
+            <p className="text-2xl font-bold text-green-500">
+              {formatCurrency(comparisonReport.overallSummary.totalRevenue)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">إجمالي المصاريف</p>
+            <p className="text-2xl font-bold text-red-500">
+              {formatCurrency(comparisonReport.overallSummary.totalExpenses)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">صافي الربح</p>
+            <p className={`text-2xl font-bold ${comparisonReport.overallSummary.totalProfit >= 0 ? 'text-blue-500' : 'text-red-500'}`}>
+              {formatCurrency(comparisonReport.overallSummary.totalProfit)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">متوسط هامش الربح</p>
+            <p className="text-2xl font-bold text-purple-500">
+              {comparisonReport.overallSummary.avgProfitMargin.toFixed(1)}%
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* أفضل وأسوأ فرع */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card className="border-green-500/30 bg-green-500/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Award className="h-5 w-5 text-green-500" />
+              <span className="font-semibold">أفضل فرع</span>
+            </div>
+            <p className="text-lg font-bold">{comparisonReport.overallSummary.bestBranch.name}</p>
+            <p className="text-sm text-muted-foreground">
+              ربح: {formatCurrency(comparisonReport.overallSummary.bestBranch.profit)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-red-500/30 bg-red-500/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              <span className="font-semibold">الفرع الأقل ربحية</span>
+            </div>
+            <p className="text-lg font-bold">{comparisonReport.overallSummary.worstBranch.name}</p>
+            <p className="text-sm text-muted-foreground">
+              ربح: {formatCurrency(comparisonReport.overallSummary.worstBranch.profit)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* رسم بياني للاتجاه الشهري */}
+      <Card>
+        <CardHeader>
+          <CardTitle>الاتجاه الشهري الإجمالي</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={comparisonReport.overallSummary.monthlyTrend}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="month" className="text-xs" />
+              <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
+              <Tooltip formatter={(value: number) => formatCurrency(value)} />
+              <Legend />
+              <Bar dataKey="totalRevenue" name="الإيرادات" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Line type="monotone" dataKey="totalProfit" name="صافي الربح" stroke="#10b981" strokeWidth={3} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* تفاصيل كل فرع */}
+      {comparisonReport.branches.map((branch) => (
+        <Card key={branch.branchId}>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  {branch.branchName}
+                </CardTitle>
+                <CardDescription>
+                  الاتجاه: {branch.summary.overallTrend === 'improving' ? 'تحسن ↑' : 
+                         branch.summary.overallTrend === 'declining' ? 'تراجع ↓' : 'مستقر →'}
+                  {' | '}اتساق: {branch.summary.consistencyScore}%
+                </CardDescription>
+              </div>
+              <div className="text-left">
+                <Badge variant={branch.summary.overallTrend === 'improving' ? 'default' : 
+                              branch.summary.overallTrend === 'declining' ? 'destructive' : 'secondary'}>
+                  {branch.summary.overallTrend === 'improving' ? 'في تحسن' : 
+                   branch.summary.overallTrend === 'declining' ? 'في تراجع' : 'مستقر'}
+                </Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* ملخص الفرع */}
+            <div className="grid md:grid-cols-5 gap-4 mb-6">
+              <div className="p-3 bg-green-500/10 rounded-lg text-center">
+                <p className="text-xs text-muted-foreground">إجمالي الإيرادات</p>
+                <p className="text-lg font-bold text-green-500">{formatCurrency(branch.summary.totalRevenue)}</p>
+              </div>
+              <div className="p-3 bg-red-500/10 rounded-lg text-center">
+                <p className="text-xs text-muted-foreground">إجمالي المصاريف</p>
+                <p className="text-lg font-bold text-red-500">{formatCurrency(branch.summary.totalExpenses)}</p>
+              </div>
+              <div className="p-3 bg-blue-500/10 rounded-lg text-center">
+                <p className="text-xs text-muted-foreground">صافي الربح</p>
+                <p className={`text-lg font-bold ${branch.summary.totalProfit >= 0 ? 'text-blue-500' : 'text-red-500'}`}>
+                  {formatCurrency(branch.summary.totalProfit)}
+                </p>
+              </div>
+              <div className="p-3 bg-purple-500/10 rounded-lg text-center">
+                <p className="text-xs text-muted-foreground">متوسط هامش الربح</p>
+                <p className="text-lg font-bold text-purple-500">{branch.summary.avgProfitMargin.toFixed(1)}%</p>
+              </div>
+              <div className="p-3 bg-yellow-500/10 rounded-lg text-center">
+                <p className="text-xs text-muted-foreground">متوسط شهري</p>
+                <p className="text-lg font-bold text-yellow-500">{formatCurrency(branch.summary.avgMonthlyRevenue)}</p>
+              </div>
+            </div>
+
+            {/* جدول الأشهر */}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الشهر</TableHead>
+                  <TableHead className="text-left">الإيرادات</TableHead>
+                  <TableHead className="text-left">المصاريف</TableHead>
+                  <TableHead className="text-left">صافي الربح</TableHead>
+                  <TableHead className="text-left">هامش الربح</TableHead>
+                  <TableHead className="text-left">معدل النمو</TableHead>
+                  <TableHead className="text-left">أيام العمل</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {branch.months.map((month) => (
+                  <TableRow key={month.month}>
+                    <TableCell className="font-medium">{month.monthLabel}</TableCell>
+                    <TableCell className="text-green-500">{formatCurrency(month.totalRevenue)}</TableCell>
+                    <TableCell className="text-red-500">{formatCurrency(month.totalExpenses)}</TableCell>
+                    <TableCell className={month.netProfit >= 0 ? 'text-blue-500' : 'text-red-500'}>
+                      {formatCurrency(month.netProfit)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={month.profitMargin >= 15 ? 'default' : month.profitMargin >= 5 ? 'secondary' : 'destructive'}>
+                        {month.profitMargin.toFixed(1)}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className={month.growthRate >= 0 ? 'text-green-500' : 'text-red-500'}>
+                        {month.growthRate >= 0 ? '+' : ''}{month.growthRate.toFixed(1)}%
+                      </span>
+                    </TableCell>
+                    <TableCell>{month.daysCount}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {/* أفضل وأسوأ شهر */}
+            <div className="flex gap-4 mt-4 text-sm">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span>أفضل شهر: <strong>{branch.summary.bestMonth}</strong></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <XCircle className="h-4 w-4 text-red-500" />
+                <span>أسوأ شهر: <strong>{branch.summary.worstMonth}</strong></span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+
+      {/* الرؤى والتوصيات */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-yellow-500" />
+              الرؤى
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {comparisonReport.insights.map((insight, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <ChevronRight className="h-4 w-4 mt-0.5 text-yellow-500 flex-shrink-0" />
+                  {insight}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-blue-500" />
+              التوصيات
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {comparisonReport.recommendations.map((rec, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <ChevronRight className="h-4 w-4 mt-0.5 text-blue-500 flex-shrink-0" />
+                  {rec}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 // دالة آمنة لتنسيق التاريخ
 function safeFormatDate(value: any, formatStr: string, options?: { locale?: any }): string {
   try {
@@ -415,7 +698,7 @@ export default function AIAnalytics() {
         )}
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               نظرة عامة
@@ -431,6 +714,10 @@ export default function AIAnalytics() {
             <TabsTrigger value="employees" className="gap-2">
               <Users className="h-4 w-4" />
               أداء الموظفين
+            </TabsTrigger>
+            <TabsTrigger value="comparison" className="gap-2">
+              <Building2 className="h-4 w-4" />
+              مقارنة الفروع
             </TabsTrigger>
             <TabsTrigger value="forecast" className="gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -992,6 +1279,11 @@ export default function AIAnalytics() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* مقارنة الفروع الشهرية */}
+          <TabsContent value="comparison" className="space-y-6">
+            <MonthlyBranchComparison />
           </TabsContent>
 
           {/* التنبؤات */}

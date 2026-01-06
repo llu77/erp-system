@@ -6061,6 +6061,15 @@ ${discrepancyRows}
         
         return branchAnalyses;
       }),
+
+    // تقرير المقارنة الشهرية للفروع
+    getMonthlyComparisonReport: supervisorViewProcedure
+      .input(z.object({
+        monthsCount: z.number().min(1).max(12).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return revenueAnalytics.generateMonthlyComparisonReport(input?.monthsCount || 6);
+      }),
   }),
 });
 
