@@ -1719,3 +1719,158 @@ export const receiptVoucherItems = mysqlTable("receiptVoucherItems", {
 
 export type ReceiptVoucherItem = typeof receiptVoucherItems.$inferSelect;
 export type InsertReceiptVoucherItem = typeof receiptVoucherItems.$inferInsert;
+
+
+// ==================== جدول التقارير المحفوظة ====================
+export const savedReports = mysqlTable("savedReports", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  description: text("description"),
+  createdBy: int("createdBy").notNull(),
+  config: json("config").notNull(), // إعدادات التقرير
+  isPublic: boolean("isPublic").default(false).notNull(),
+  category: varchar("category", { length: 50 }), // sales, inventory, hr, finance
+  lastRunAt: timestamp("lastRunAt"),
+  runCount: int("runCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SavedReport = typeof savedReports.$inferSelect;
+export type InsertSavedReport = typeof savedReports.$inferInsert;
+
+// ==================== جدول جدولة التقارير ====================
+export const reportSchedules = mysqlTable("reportSchedules", {
+  id: int("id").autoincrement().primaryKey(),
+  reportId: int("reportId").notNull(),
+  scheduleType: mysqlEnum("scheduleType", ["daily", "weekly", "monthly"]).notNull(),
+  scheduleTime: varchar("scheduleTime", { length: 10 }).notNull(), // HH:MM
+  scheduleDay: int("scheduleDay"), // يوم الأسبوع (0-6) أو الشهر (1-31)
+  recipients: json("recipients").notNull(), // قائمة البريد الإلكتروني
+  format: mysqlEnum("format", ["pdf", "excel", "csv"]).default("pdf").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  lastRunAt: timestamp("lastRunAt"),
+  nextRunAt: timestamp("nextRunAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ReportSchedule = typeof reportSchedules.$inferSelect;
+export type InsertReportSchedule = typeof reportSchedules.$inferInsert;
+
+// ==================== جدول سجل تشغيل التقارير ====================
+export const reportExecutionLogs = mysqlTable("reportExecutionLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  reportId: int("reportId").notNull(),
+  executedBy: int("executedBy"),
+  executionType: mysqlEnum("executionType", ["manual", "scheduled"]).notNull(),
+  status: mysqlEnum("status", ["success", "failed"]).notNull(),
+  durationMs: int("durationMs"),
+  rowsReturned: int("rowsReturned"),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ReportExecutionLog = typeof reportExecutionLogs.$inferSelect;
+export type InsertReportExecutionLog = typeof reportExecutionLogs.$inferInsert;
+
+// ==================== جدول تحليلات AI المحفوظة ====================
+export const aiAnalytics = mysqlTable("aiAnalytics", {
+  id: int("id").autoincrement().primaryKey(),
+  analysisType: mysqlEnum("analysisType", [
+    "sales_forecast",
+    "customer_segmentation", 
+    "anomaly_detection",
+    "inventory_optimization",
+    "pricing_recommendation",
+    "marketing_recommendation"
+  ]).notNull(),
+  branchId: int("branchId"),
+  dateRange: json("dateRange"), // { startDate, endDate }
+  results: json("results").notNull(), // نتائج التحليل
+  confidence: decimal("confidence", { precision: 5, scale: 2 }), // نسبة الثقة
+  isActive: boolean("isActive").default(true).notNull(),
+  expiresAt: timestamp("expiresAt"), // تاريخ انتهاء صلاحية التحليل
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AiAnalytics = typeof aiAnalytics.$inferSelect;
+export type InsertAiAnalytics = typeof aiAnalytics.$inferInsert;
+
+// ==================== جدول توصيات AI ====================
+export const aiRecommendations = mysqlTable("aiRecommendations", {
+  id: int("id").autoincrement().primaryKey(),
+  type: mysqlEnum("type", [
+    "inventory_reorder",
+    "pricing_change",
+    "customer_retention",
+    "marketing_campaign",
+    "staffing",
+    "general"
+  ]).notNull(),
+  priority: mysqlEnum("priority", ["low", "medium", "high", "critical"]).default("medium").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description").notNull(),
+  actionRequired: text("actionRequired"),
+  relatedEntityType: varchar("relatedEntityType", { length: 50 }), // product, customer, employee, branch
+  relatedEntityId: int("relatedEntityId"),
+  metadata: json("metadata"), // بيانات إضافية
+  status: mysqlEnum("status", ["pending", "viewed", "actioned", "dismissed"]).default("pending").notNull(),
+  viewedBy: int("viewedBy"),
+  viewedAt: timestamp("viewedAt"),
+  actionedBy: int("actionedBy"),
+  actionedAt: timestamp("actionedAt"),
+  expiresAt: timestamp("expiresAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AiRecommendation = typeof aiRecommendations.$inferSelect;
+export type InsertAiRecommendation = typeof aiRecommendations.$inferInsert;
+
+// ==================== جدول لوحات التحكم المخصصة ====================
+export const customDashboards = mysqlTable("customDashboards", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  layout: json("layout").notNull(), // تخطيط الـ widgets
+  isDefault: boolean("isDefault").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CustomDashboard = typeof customDashboards.$inferSelect;
+export type InsertCustomDashboard = typeof customDashboards.$inferInsert;
+
+// ==================== جدول تصنيف العملاء (RFM) ====================
+export const customerSegments = mysqlTable("customerSegments", {
+  id: int("id").autoincrement().primaryKey(),
+  customerId: int("customerId").notNull(),
+  recencyScore: int("recencyScore").notNull(), // 1-5
+  frequencyScore: int("frequencyScore").notNull(), // 1-5
+  monetaryScore: int("monetaryScore").notNull(), // 1-5
+  rfmScore: varchar("rfmScore", { length: 10 }).notNull(), // e.g., "555", "111"
+  segment: mysqlEnum("segment", [
+    "champions",
+    "loyal_customers",
+    "potential_loyalists",
+    "new_customers",
+    "promising",
+    "need_attention",
+    "about_to_sleep",
+    "at_risk",
+    "cant_lose",
+    "hibernating",
+    "lost"
+  ]).notNull(),
+  lastPurchaseDate: timestamp("lastPurchaseDate"),
+  totalPurchases: int("totalPurchases").default(0).notNull(),
+  totalSpent: decimal("totalSpent", { precision: 12, scale: 2 }).default("0").notNull(),
+  avgOrderValue: decimal("avgOrderValue", { precision: 12, scale: 2 }).default("0").notNull(),
+  predictedClv: decimal("predictedClv", { precision: 12, scale: 2 }), // Customer Lifetime Value
+  churnRisk: decimal("churnRisk", { precision: 5, scale: 2 }), // نسبة خطر الفقدان
+  calculatedAt: timestamp("calculatedAt").defaultNow().notNull(),
+});
+
+export type CustomerSegment = typeof customerSegments.$inferSelect;
+export type InsertCustomerSegment = typeof customerSegments.$inferInsert;

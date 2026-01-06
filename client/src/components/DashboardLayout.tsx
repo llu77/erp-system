@@ -112,6 +112,9 @@ const menuStructure: MenuItem[] = [
       { icon: Store, label: "لوحة المبيعات", path: "/sales-dashboard", roles: ["admin", "manager", "viewer"] },
       { icon: BarChart3, label: "التقارير", path: "/reports", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Brain, label: "التنبيهات الذكية", path: "/smart-alerts", roles: ["admin", "manager"] },
+      { icon: BarChart3, label: "لوحة BI المتقدمة", path: "/bi-dashboard", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: FileText, label: "منشئ التقارير", path: "/report-builder", roles: ["admin", "manager", "supervisor"] },
+      { icon: Brain, label: "تحليلات AI", path: "/ai-analytics", roles: ["admin", "manager"] },
     ]
   },
   

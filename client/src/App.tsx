@@ -53,6 +53,9 @@ import SchedulerDashboard from "./pages/SchedulerDashboard";
 import SmartAlerts from "./pages/SmartAlerts";
 import ReceiptVoucher from "./pages/ReceiptVoucher";
 import ReceiptVoucherReports from "./pages/ReceiptVoucherReports";
+import BIDashboard from "./pages/BIDashboard";
+import ReportBuilder from "./pages/ReportBuilder";
+import AIAnalytics from "./pages/AIAnalytics";
 
 function Router() {
   return (
@@ -288,6 +291,18 @@ function Router() {
         <DashboardLayout>
           <ReceiptVoucherReports />
         </DashboardLayout>
+      </Route>
+      {/* BI Dashboard - Advanced Analytics */}
+      <Route path="/bi-dashboard">
+        <BIDashboard />
+      </Route>
+      {/* Report Builder */}
+      <Route path="/report-builder">
+        <ReportBuilder />
+      </Route>
+      {/* AI Analytics */}
+      <Route path="/ai-analytics">
+        <AIAnalytics />
       </Route>
       {/* Smart Alerts - Admin Only */}
       <Route path="/smart-alerts">

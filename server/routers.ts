@@ -11,6 +11,8 @@ import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from "./
 import * as advancedNotifications from "./notifications/advancedNotificationService";
 import * as reminderService from "./notifications/reminderService";
 import * as emailNotifications from "./notifications/emailNotificationService";
+import * as biAnalytics from "./bi/analyticsService";
+import * as aiAnalytics from "./bi/aiAnalyticsService";
 
 // إجراء للمدير فقط (كامل الصلاحيات)
 const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -5668,6 +5670,120 @@ ${discrepancyRows}
         // تحويل Buffer إلى Base64 لإرساله للعميل
         const base64PDF = pdfBuffer.toString('base64');
         return { pdf: base64PDF };
+      }),
+  }),
+
+  // ==================== تحليلات BI والذكاء الاصطناعي ====================
+  bi: router({
+    // الملخص التنفيذي
+    getExecutiveSummary: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return biAnalytics.getExecutiveSummary(
+          { startDate: new Date(input.startDate), endDate: new Date(input.endDate) },
+          input.branchId
+        );
+      }),
+
+    // تحليلات المبيعات
+    getSalesAnalytics: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+        groupBy: z.enum(['day', 'week', 'month']).optional(),
+      }))
+      .query(async ({ input }) => {
+        return biAnalytics.getSalesAnalytics(
+          { startDate: new Date(input.startDate), endDate: new Date(input.endDate) },
+          input.branchId,
+          input.groupBy || 'day'
+        );
+      }),
+
+    // تحليلات المخزون
+    getInventoryAnalytics: supervisorViewProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return biAnalytics.getInventoryAnalytics(input?.branchId);
+      }),
+
+    // التحليلات المالية
+    getFinancialAnalytics: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return biAnalytics.getFinancialAnalytics(
+          { startDate: new Date(input.startDate), endDate: new Date(input.endDate) },
+          input.branchId
+        );
+      }),
+
+    // مقارنة الفروع
+    getBranchComparison: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        metric: z.enum(['sales', 'expenses', 'profit', 'customers']),
+      }))
+      .query(async ({ input }) => {
+        return biAnalytics.getBranchComparison(
+          { startDate: new Date(input.startDate), endDate: new Date(input.endDate) },
+          input.metric
+        );
+      }),
+
+    // التنبؤ بالمبيعات (AI)
+    forecastSales: supervisorViewProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+        days: z.number().min(1).max(30).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return aiAnalytics.forecastSales(input?.branchId, input?.days || 7);
+      }),
+
+    // تحليل شرائح العملاء (RFM)
+    getCustomerSegments: supervisorViewProcedure
+      .query(async () => {
+        return aiAnalytics.analyzeCustomerSegments();
+      }),
+
+    // الكشف عن الشذوذ
+    detectAnomalies: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return aiAnalytics.detectAnomalies({
+          startDate: new Date(input.startDate),
+          endDate: new Date(input.endDate)
+        });
+      }),
+
+    // التوصيات الذكية
+    getSmartRecommendations: supervisorViewProcedure
+      .query(async () => {
+        return aiAnalytics.getSmartRecommendations();
+      }),
+
+    // رؤى AI الشاملة
+    getAIInsights: supervisorViewProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return aiAnalytics.getAIInsights(input?.branchId);
       }),
   }),
 });
