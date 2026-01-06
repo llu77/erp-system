@@ -1,0 +1,65 @@
+{
+  "query": "SELECT \n  category,\n  COUNT(*) as count,\n  SUM(amount) as total_amount\nFROM expenses\nGROUP BY category\nORDER BY total_amount DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  category,\n  COUNT(*) as count,\n  SUM(amount) as total_amount\nFROM expenses\nGROUP BY category\nORDER BY total_amount DESC;",
+  "rows": [
+    {
+      "category": "shop_supplies",
+      "count": "11",
+      "total_amount": "8455.00"
+    },
+    {
+      "category": "residency_renewal",
+      "count": "1",
+      "total_amount": "3450.00"
+    },
+    {
+      "category": "housing_rent",
+      "count": "2",
+      "total_amount": "3300.00"
+    },
+    {
+      "category": "other",
+      "count": "6",
+      "total_amount": "1203.00"
+    },
+    {
+      "category": "bonus",
+      "count": "1",
+      "total_amount": "610.00"
+    },
+    {
+      "category": "maintenance",
+      "count": "3",
+      "total_amount": "600.00"
+    },
+    {
+      "category": "internet",
+      "count": "1",
+      "total_amount": "270.00"
+    },
+    {
+      "category": "printing",
+      "count": "5",
+      "total_amount": "166.00"
+    },
+    {
+      "category": "medical_exam",
+      "count": "1",
+      "total_amount": "150.00"
+    },
+    {
+      "category": "improvements",
+      "count": "1",
+      "total_amount": "50.00"
+    },
+    {
+      "category": "carpet_cleaning",
+      "count": "1",
+      "total_amount": "30.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "category\tcount\ttotal_amount\nshop_supplies\t11\t8455.00\nresidency_renewal\t1\t3450.00\nhousing_rent\t2\t3300.00\nother\t6\t1203.00\nbonus\t1\t610.00\nmaintenance\t3\t600.00\ninternet\t1\t270.00\nprinting\t5\t166.00\nmedical_exam\t1\t150.00\nimprovements\t1\t50.00\ncarpet_cleaning\t1\t30.00\n",
+  "stderr": "",
+  "execution_time_ms": 1509
+}

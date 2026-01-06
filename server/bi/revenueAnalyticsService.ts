@@ -304,9 +304,15 @@ export async function analyzeExpenses(
   const db = await getDb();
   if (!db) throw new Error('Database connection failed');
 
+  // الفئات المكررة مع التكاليف الثابتة - يجب استبعادها
+  // التكاليف الثابتة تشمل: إيجار محل، إيجار سكن، كهرباء، إنترنت، رواتب
+  const duplicateCategories = ['shop_rent', 'housing_rent', 'electricity', 'internet'];
+  
   const conditions = [
     gte(expenses.expenseDate, startDate),
-    lte(expenses.expenseDate, endDate)
+    lte(expenses.expenseDate, endDate),
+    // استبعاد الفئات المكررة مع التكاليف الثابتة
+    sql`${expenses.category} NOT IN ('shop_rent', 'housing_rent', 'electricity', 'internet')`
   ];
   if (branchId) conditions.push(eq(expenses.branchId, branchId));
 
@@ -346,7 +352,9 @@ export async function analyzeExpenses(
 
   const previousConditions = [
     gte(expenses.expenseDate, previousStart),
-    lte(expenses.expenseDate, previousEnd)
+    lte(expenses.expenseDate, previousEnd),
+    // استبعاد الفئات المكررة مع التكاليف الثابتة
+    sql`${expenses.category} NOT IN ('shop_rent', 'housing_rent', 'electricity', 'internet')`
   ];
   if (branchId) previousConditions.push(eq(expenses.branchId, branchId));
 

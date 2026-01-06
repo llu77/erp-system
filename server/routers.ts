@@ -6010,6 +6010,57 @@ ${discrepancyRows}
       .query(async ({ input }) => {
         return financialForecast.forecastCurrentMonth(input?.branchId);
       }),
+
+    // تحليل جميع الفروع على حدة
+    analyzeAllBranches: supervisorViewProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ input }) => {
+        // جلب جميع الفروع
+        const allBranches = await db.getBranches();
+        
+        // تحليل كل فرع على حدة
+        const branchAnalyses = await Promise.all(
+          allBranches.map(async (branch: { id: number; name: string }) => {
+            const profitability = await revenueAnalytics.analyzeProfitability(
+              new Date(input.startDate),
+              new Date(input.endDate),
+              branch.id
+            );
+            
+            const revenues = await revenueAnalytics.analyzeRevenues(
+              new Date(input.startDate),
+              new Date(input.endDate),
+              branch.id
+            );
+            
+            const expenses = await revenueAnalytics.analyzeExpenses(
+              new Date(input.startDate),
+              new Date(input.endDate),
+              branch.id
+            );
+            
+            return {
+              branchId: branch.id,
+              branchName: branch.name,
+              totalRevenue: profitability.totalRevenue,
+              totalExpenses: profitability.totalExpenses,
+              netProfit: profitability.netProfit,
+              profitMargin: profitability.profitMargin,
+              operatingRatio: profitability.operatingRatio,
+              breakEvenPoint: profitability.breakEvenPoint,
+              daysCount: revenues.daysCount,
+              avgDailyRevenue: revenues.avgDailyRevenue,
+              recordedExpenses: expenses.totalExpenses,
+              fixedCosts: financialForecast.FIXED_COSTS_PER_BRANCH,
+            };
+          })
+        );
+        
+        return branchAnalyses;
+      }),
   }),
 });
 

@@ -1,0 +1,8 @@
+{
+  "query": "SELECT \n  e.id,\n  e.category,\n  e.amount,\n  e.description,\n  e.expense_date,\n  b.name as branch_name\nFROM expenses e\nLEFT JOIN branches b ON e.branch_id = b.id\nWHERE e.expense_date >= '2025-12-01'\nORDER BY e.expense_date DESC, e.category\nLIMIT 50;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  e.id,\n  e.category,\n  e.amount,\n  e.description,\n  e.expense_date,\n  b.name as branch_name\nFROM expenses e\nLEFT JOIN branches b ON e.branch_id = b.id\nWHERE e.expense_date >= '2025-12-01'\nORDER BY e.expense_date DESC, e.category\nLIMIT 50;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'e.branch_id' in 'on clause'"
+  ]
+}

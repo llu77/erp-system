@@ -224,6 +224,13 @@ export default function AIAnalytics() {
   const { data: currentMonthForecast, isLoading: loadingCurrentMonth } = 
     trpc.bi.forecastCurrentMonth.useQuery({ branchId });
 
+  // جلب تحليل جميع الفروع على حدة
+  const { data: branchAnalyses, isLoading: loadingBranchAnalyses } = 
+    trpc.bi.analyzeAllBranches.useQuery({
+      startDate: dateRange.start.toISOString(),
+      endDate: dateRange.end.toISOString(),
+    });
+
   // تحديث جميع البيانات
   const handleRefresh = () => {
     refetchRevenue();
@@ -599,6 +606,89 @@ export default function AIAnalytics() {
                     <p className="text-lg font-bold">{formatCurrency(revenueAnalysis?.statistics?.range || 0)}</p>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* مقارنة الفروع */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  تحليل كل فرع على حدة
+                </CardTitle>
+                <CardDescription>مقارنة الأداء المالي لكل فرع</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingBranchAnalyses ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : branchAnalyses && branchAnalyses.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">الفرع</TableHead>
+                          <TableHead className="text-right">الإيرادات</TableHead>
+                          <TableHead className="text-right">التكاليف الثابتة</TableHead>
+                          <TableHead className="text-right">المصاريف المسجلة</TableHead>
+                          <TableHead className="text-right">إجمالي التكاليف</TableHead>
+                          <TableHead className="text-right">صافي الربح</TableHead>
+                          <TableHead className="text-right">هامش الربح</TableHead>
+                          <TableHead className="text-right">الحالة</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {branchAnalyses.map((branch) => (
+                          <TableRow key={branch.branchId}>
+                            <TableCell className="font-medium">{branch.branchName}</TableCell>
+                            <TableCell className="text-blue-500">{formatCurrency(branch.totalRevenue)}</TableCell>
+                            <TableCell className="text-muted-foreground">{formatCurrency(branch.fixedCosts)}</TableCell>
+                            <TableCell className="text-orange-500">{formatCurrency(branch.recordedExpenses)}</TableCell>
+                            <TableCell className="text-red-400">{formatCurrency(branch.totalExpenses)}</TableCell>
+                            <TableCell className={branch.netProfit >= 0 ? 'text-green-500 font-bold' : 'text-red-500 font-bold'}>
+                              {formatCurrency(branch.netProfit)}
+                            </TableCell>
+                            <TableCell className={branch.profitMargin >= 0 ? 'text-green-500' : 'text-red-500'}>
+                              {branch.profitMargin.toFixed(1)}%
+                            </TableCell>
+                            <TableCell>
+                              {branch.netProfit >= 0 ? (
+                                <Badge className="bg-green-500">رابح</Badge>
+                              ) : (
+                                <Badge className="bg-red-500">خاسر</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {/* صف الإجمالي */}
+                        <TableRow className="bg-muted/50 font-bold">
+                          <TableCell>الإجمالي</TableCell>
+                          <TableCell className="text-blue-500">
+                            {formatCurrency(branchAnalyses.reduce((sum, b) => sum + b.totalRevenue, 0))}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatCurrency(branchAnalyses.reduce((sum, b) => sum + b.fixedCosts, 0))}
+                          </TableCell>
+                          <TableCell className="text-orange-500">
+                            {formatCurrency(branchAnalyses.reduce((sum, b) => sum + b.recordedExpenses, 0))}
+                          </TableCell>
+                          <TableCell className="text-red-400">
+                            {formatCurrency(branchAnalyses.reduce((sum, b) => sum + b.totalExpenses, 0))}
+                          </TableCell>
+                          <TableCell className={branchAnalyses.reduce((sum, b) => sum + b.netProfit, 0) >= 0 ? 'text-green-500' : 'text-red-500'}>
+                            {formatCurrency(branchAnalyses.reduce((sum, b) => sum + b.netProfit, 0))}
+                          </TableCell>
+                          <TableCell>-</TableCell>
+                          <TableCell>-</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-4">لا توجد بيانات للفروع</p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

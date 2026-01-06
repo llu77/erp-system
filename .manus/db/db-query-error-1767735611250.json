@@ -1,0 +1,8 @@
+{
+  "query": "SELECT \n  id,\n  category,\n  amount,\n  description,\n  expense_date\nFROM expenses\nWHERE expense_date >= '2025-12-01'\nORDER BY expense_date DESC, category\nLIMIT 50;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  id,\n  category,\n  amount,\n  description,\n  expense_date\nFROM expenses\nWHERE expense_date >= '2025-12-01'\nORDER BY expense_date DESC, category\nLIMIT 50;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'expense_date' in 'where clause'"
+  ]
+}
