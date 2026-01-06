@@ -5637,6 +5637,38 @@ ${discrepancyRows}
 
         return result;
       }),
+
+    generateReportPDF: supervisorInputProcedure
+      .input(z.object({
+        title: z.string(),
+        periodType: z.string(),
+        startDate: z.string(),
+        endDate: z.string(),
+        branchName: z.string(),
+        statistics: z.object({
+          count: z.number(),
+          totalAmount: z.number(),
+          averageAmount: z.number(),
+        }),
+        receipts: z.array(z.object({
+          voucherId: z.string(),
+          voucherDate: z.string(),
+          payeeName: z.string(),
+          totalAmount: z.string(),
+          status: z.string(),
+          createdByName: z.string(),
+          notes: z.string().optional(),
+          branchName: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        const { generateReceiptVoucherReportPDF } = await import('./pdfService');
+        const pdfBuffer = await generateReceiptVoucherReportPDF(input);
+        
+        // تحويل Buffer إلى Base64 لإرساله للعميل
+        const base64PDF = pdfBuffer.toString('base64');
+        return { pdf: base64PDF };
+      }),
   }),
 });
 

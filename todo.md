@@ -2037,3 +2037,4 @@ node scripts/scheduledTasks.mjs weekly-report
 - [ ] اختبار وحفظ checkpoint
 - [x] إصلاح خطأ Invalid time value في صفحة تقارير السندات
 - [x] إصلاح زر تصدير PDF في صفحة تقارير السندات
+- [x] إنشاء تقرير PDF احترافي حقيقي لتقارير السندات (ليس صفحة ويب)

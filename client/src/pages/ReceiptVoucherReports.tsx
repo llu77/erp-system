@@ -8,17 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO, isWithinInterval, isValid } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { Download, FileText } from 'lucide-react';
+import { Download, FileText, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { 
-  PDF_BASE_STYLES, 
-  getPDFHeader, 
-  getPDFFooter, 
-  getPDFInfoSection, 
-  getPDFSummarySection, 
-  openPrintWindow,
-  formatCurrency 
-} from '@/utils/pdfTemplates';
 
 type PeriodType = 'day' | 'week' | 'month';
 
@@ -66,9 +57,11 @@ export default function ReceiptVoucherReports() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const { data: receipts = [], isLoading } = trpc.receiptVoucher.getAll.useQuery({ limit: 1000, offset: 0 });
   const { data: branches = [] } = trpc.branches.list.useQuery();
+  const generatePDFMutation = trpc.receiptVoucher.generateReportPDF.useMutation();
 
   // حساب نطاق التاريخ بناءً على نوع الفترة
   const dateRange = useMemo(() => {
@@ -154,100 +147,62 @@ export default function ReceiptVoucherReports() {
     toast.success('تم تصدير التقرير بنجاح');
   };
 
-  // تصدير إلى PDF باستخدام نظام PDF الموحد
-  const exportToPDF = () => {
-    const periodLabel = periodType === 'day' ? 'يومي' : periodType === 'week' ? 'أسبوعي' : 'شهري';
-    const startDateStr = format(dateRange.start, 'yyyy-MM-dd');
-    const endDateStr = format(dateRange.end, 'yyyy-MM-dd');
+  // تصدير إلى PDF احترافي
+  const exportToPDF = async () => {
+    setIsGeneratingPDF(true);
     
-    const getStatusLabel = (status: string) => {
-      switch (status) {
-        case 'draft': return 'مسودة';
-        case 'approved': return 'معتمد';
-        case 'paid': return 'مدفوع';
-        case 'cancelled': return 'ملغي';
-        default: return status || '-';
+    try {
+      const periodLabel = periodType === 'day' ? 'يومي' : periodType === 'week' ? 'أسبوعي' : 'شهري';
+      const startDateStr = format(dateRange.start, 'yyyy-MM-dd');
+      const endDateStr = format(dateRange.end, 'yyyy-MM-dd');
+      
+      const result = await generatePDFMutation.mutateAsync({
+        title: 'تقرير سندات القبض',
+        periodType: periodLabel,
+        startDate: startDateStr,
+        endDate: endDateStr,
+        branchName: selectedBranch === 'all' ? 'جميع الفروع' : selectedBranch,
+        statistics: {
+          count: statistics.count,
+          totalAmount: statistics.totalAmount,
+          averageAmount: statistics.averageAmount,
+        },
+        receipts: filteredReceipts.map(receipt => ({
+          voucherId: receipt.voucherId,
+          voucherDate: safeFormatDate(receipt.voucherDate),
+          payeeName: receipt.payeeName || '',
+          totalAmount: (parseFloat(receipt.totalAmount as any) || 0).toFixed(2),
+          status: receipt.status || 'draft',
+          createdByName: receipt.createdByName || '',
+          notes: receipt.notes || '',
+          branchName: receipt.branchName || '',
+        })),
+      });
+
+      // تحويل Base64 إلى Blob وتحميله
+      const byteCharacters = atob(result.pdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
-    };
-    
-    const htmlContent = `
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <title>تقرير سندات القبض - ${startDateStr}</title>
-  <style>
-    ${PDF_BASE_STYLES}
-    .status-draft { color: #666; }
-    .status-approved { color: #0066cc; }
-    .status-paid { color: #006600; }
-    .status-cancelled { color: #cc0000; text-decoration: line-through; }
-  </style>
-</head>
-<body>
-  ${getPDFHeader('تقرير سندات القبض', { reportNumber: `RVR-${format(new Date(), 'yyyyMMdd')}` })}
-  
-  ${getPDFInfoSection([
-    { label: 'نوع الفترة', value: periodLabel },
-    { label: 'من تاريخ', value: startDateStr },
-    { label: 'إلى تاريخ', value: endDateStr },
-    { label: 'الفرع', value: selectedBranch === 'all' ? 'جميع الفروع' : selectedBranch },
-  ])}
-  
-  ${getPDFSummarySection([
-    { label: 'عدد السندات', value: statistics.count.toString() },
-    { label: 'إجمالي المبالغ', value: formatCurrency(statistics.totalAmount) },
-    { label: 'المتوسط', value: formatCurrency(statistics.averageAmount) },
-  ])}
-  
-  <table class="pdf-table">
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>رقم السند</th>
-        <th>التاريخ</th>
-        <th>المدفوع له</th>
-        <th>المبلغ الكلي</th>
-        <th>المشرف</th>
-        <th>الحالة</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${filteredReceipts.length === 0 ? `
-        <tr>
-          <td colspan="7" style="text-align: center; padding: 20px;">لا توجد سندات في الفترة المحددة</td>
-        </tr>
-      ` : filteredReceipts.map((receipt, index) => {
-        const statusClass = `status-${receipt.status || 'draft'}`;
-        return `
-          <tr>
-            <td>${index + 1}</td>
-            <td>${receipt.voucherId}</td>
-            <td>${safeFormatDate(receipt.voucherDate)}</td>
-            <td class="text-right">${receipt.payeeName || '-'}</td>
-            <td>${formatCurrency(parseFloat(receipt.totalAmount as any) || 0)}</td>
-            <td>${receipt.createdByName || '-'}</td>
-            <td class="${statusClass}">${getStatusLabel(receipt.status)}</td>
-          </tr>
-        `;
-      }).join('')}
-    </tbody>
-    <tfoot>
-      <tr style="font-weight: bold; background: #f5f5f5;">
-        <td colspan="4" style="text-align: left;">الإجمالي</td>
-        <td>${formatCurrency(statistics.totalAmount)}</td>
-        <td colspan="2"></td>
-      </tr>
-    </tfoot>
-  </table>
-  
-  ${getPDFFooter()}
-</body>
-</html>
-    `;
-    
-    openPrintWindow(htmlContent);
-    toast.success('تم فتح تقرير سندات القبض للطباعة أو الحفظ كـ PDF');
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      
+      // إنشاء رابط التحميل
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `تقرير_سندات_القبض_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('تم تحميل التقرير بنجاح');
+    } catch (error: any) {
+      console.error('خطأ في إنشاء PDF:', error);
+      toast.error(error?.message || 'فشل في إنشاء التقرير');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   return (
@@ -360,9 +315,18 @@ export default function ReceiptVoucherReports() {
           <Download className="w-4 h-4" />
           تصدير Excel
         </Button>
-        <Button onClick={exportToPDF} variant="outline" className="gap-2">
-          <FileText className="w-4 h-4" />
-          تصدير PDF
+        <Button 
+          onClick={exportToPDF} 
+          variant="default" 
+          className="gap-2 bg-red-600 hover:bg-red-700"
+          disabled={isGeneratingPDF}
+        >
+          {isGeneratingPDF ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <FileText className="w-4 h-4" />
+          )}
+          {isGeneratingPDF ? 'جاري إنشاء PDF...' : 'تحميل PDF'}
         </Button>
       </div>
 
