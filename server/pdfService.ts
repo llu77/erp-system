@@ -309,62 +309,112 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
     
     /* التوقيعات */
     .signatures-section {
-      padding: 30px;
+      padding: 40px 30px;
       display: flex;
       justify-content: space-between;
-      align-items: flex-end;
+      align-items: center;
+      background: #fafafa;
+      border-top: 1px solid #e0e0e0;
     }
     
     .signature-box {
       text-align: center;
-      width: 180px;
+      width: 220px;
+      padding: 20px;
+    }
+    
+    .signature-image-container {
+      height: 80px;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
     }
     
     .signature-image {
-      height: 60px;
-      margin-bottom: 10px;
+      max-height: 70px;
+      max-width: 150px;
+      object-fit: contain;
+    }
+    
+    .signature-handwriting {
+      font-family: 'Brush Script MT', 'Segoe Script', cursive;
+      font-size: 28px;
+      color: #1a4a7a;
+      font-style: italic;
+      margin-bottom: 5px;
     }
     
     .signature-line {
-      border-top: 2px solid #1a1a1a;
-      padding-top: 10px;
+      border-top: 2px solid #333;
+      padding-top: 15px;
+      margin-top: 10px;
     }
     
     .signature-name {
       font-weight: 700;
-      font-size: 14px;
-      margin-bottom: 3px;
+      font-size: 18px;
+      color: #1a4a7a;
+      margin-bottom: 5px;
     }
     
     .signature-title {
-      font-size: 11px;
+      font-size: 14px;
       color: #666;
     }
     
     .stamp-box {
       text-align: center;
+      padding: 10px;
     }
     
     .stamp {
-      width: 100px;
-      height: 100px;
-      border: 4px solid #1a1a1a;
+      width: 140px;
+      height: 140px;
+      border: 4px solid #1a4a7a;
       border-radius: 50%;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       font-weight: 700;
-      color: #1a1a1a;
+      color: #1a4a7a;
+      background: rgba(26, 74, 122, 0.03);
+      position: relative;
+    }
+    
+    .stamp::before {
+      content: '';
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      border: 2px solid #1a4a7a;
+      border-radius: 50%;
+    }
+    
+    .stamp-inner {
+      text-align: center;
+      z-index: 1;
     }
     
     .stamp-logo {
-      font-size: 14px;
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 5px;
+      letter-spacing: 1px;
+    }
+    
+    .stamp-arabic {
+      font-size: 18px;
+      font-weight: 700;
       margin-bottom: 3px;
     }
     
     .stamp-text {
-      font-size: 10px;
+      font-size: 11px;
+      opacity: 0.8;
     }
     
     /* ذيل السند */
@@ -501,18 +551,35 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
     <!-- التوقيعات -->
     <div class="signatures-section">
       <div class="signature-box">
+        <div class="signature-image-container">
+          <svg width="120" height="50" viewBox="0 0 120 50" style="opacity: 0.85;">
+            <path d="M10,35 Q20,10 40,30 T70,25 Q90,20 110,30" stroke="#1a4a7a" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <path d="M15,40 Q30,35 50,38" stroke="#1a4a7a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
         <div class="signature-line">
           <div class="signature-name">سالم الوادعي</div>
           <div class="signature-title">مدير المالية</div>
         </div>
       </div>
+      
       <div class="stamp-box">
         <div class="stamp">
-          <div class="stamp-logo">Symbol AI</div>
-          <div class="stamp-text">الإدارة المالية</div>
+          <div class="stamp-inner">
+            <div class="stamp-arabic">الإدارة</div>
+            <div class="stamp-logo">Symbol AI</div>
+            <div class="stamp-text">الإدارة المالية</div>
+          </div>
         </div>
       </div>
+      
       <div class="signature-box">
+        <div class="signature-image-container">
+          <svg width="120" height="50" viewBox="0 0 120 50" style="opacity: 0.85;">
+            <path d="M15,30 Q35,5 55,25 T85,20 Q100,18 110,25" stroke="#1a4a7a" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <path d="M20,38 Q40,42 60,36 T90,40" stroke="#1a4a7a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
         <div class="signature-line">
           <div class="signature-name">عمر المطيري</div>
           <div class="signature-title">المراجع المالي</div>
