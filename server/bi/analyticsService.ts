@@ -115,33 +115,33 @@ export async function getExecutiveSummary(
   const { startDate, endDate } = dateRange;
   const previousPeriod = getPreviousPeriod(startDate, endDate);
 
-  // استعلام المبيعات الحالية
+  // استعلام الإيرادات الحالية (من جدول الإيرادات اليومية)
   const currentSalesQuery = db
     .select({
-      total: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+      total: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
       count: sql<number>`COUNT(*)`,
     })
-    .from(invoices)
+    .from(dailyRevenues)
     .where(
       and(
-        gte(invoices.createdAt, startDate),
-        lte(invoices.createdAt, endDate),
-        branchId ? eq(invoices.branchId, branchId) : undefined
+        gte(dailyRevenues.date, startDate),
+        lte(dailyRevenues.date, endDate),
+        branchId ? eq(dailyRevenues.branchId, branchId) : undefined
       )
     );
 
-  // استعلام المبيعات السابقة
+  // استعلام الإيرادات السابقة (من جدول الإيرادات اليومية)
   const previousSalesQuery = db
     .select({
-      total: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+      total: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
       count: sql<number>`COUNT(*)`,
     })
-    .from(invoices)
+    .from(dailyRevenues)
     .where(
       and(
-        gte(invoices.createdAt, previousPeriod.startDate),
-        lte(invoices.createdAt, previousPeriod.endDate),
-        branchId ? eq(invoices.branchId, branchId) : undefined
+        gte(dailyRevenues.date, previousPeriod.startDate),
+        lte(dailyRevenues.date, previousPeriod.endDate),
+        branchId ? eq(dailyRevenues.branchId, branchId) : undefined
       )
     );
 
@@ -173,23 +173,23 @@ export async function getExecutiveSummary(
       )
     );
 
-  // استعلام أفضل الفروع
+  // استعلام أفضل الفروع (من جدول الإيرادات اليومية)
   const topBranchesQuery = db
     .select({
-      branchId: invoices.branchId,
+      branchId: dailyRevenues.branchId,
       branchName: branches.name,
-      sales: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+      sales: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
     })
-    .from(invoices)
-    .leftJoin(branches, eq(invoices.branchId, branches.id))
+    .from(dailyRevenues)
+    .leftJoin(branches, eq(dailyRevenues.branchId, branches.id))
     .where(
       and(
-        gte(invoices.createdAt, startDate),
-        lte(invoices.createdAt, endDate)
+        gte(dailyRevenues.date, startDate),
+        lte(dailyRevenues.date, endDate)
       )
     )
-    .groupBy(invoices.branchId, branches.name)
-    .orderBy(desc(sql`SUM(${invoices.total})`))
+    .groupBy(dailyRevenues.branchId, branches.name)
+    .orderBy(desc(sql`SUM(${dailyRevenues.cash} + ${dailyRevenues.network})`))
     .limit(5);
 
   // تنفيذ جميع الاستعلامات
@@ -268,56 +268,56 @@ export async function getSalesAnalytics(
   if (!db) throw new Error('Database connection failed');
   const { startDate, endDate } = dateRange;
 
-  // المبيعات الإجمالية
+  // الإيرادات الإجمالية (من جدول الإيرادات اليومية)
   const [totals] = await db
     .select({
-      totalSales: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+      totalSales: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
       totalInvoices: sql<number>`COUNT(*)`,
     })
-    .from(invoices)
+    .from(dailyRevenues)
     .where(
       and(
-        gte(invoices.createdAt, startDate),
-        lte(invoices.createdAt, endDate),
-        branchId ? eq(invoices.branchId, branchId) : undefined
+        gte(dailyRevenues.date, startDate),
+        lte(dailyRevenues.date, endDate),
+        branchId ? eq(dailyRevenues.branchId, branchId) : undefined
       )
     );
 
-  // المبيعات حسب اليوم
+  // الإيرادات حسب اليوم (من جدول الإيرادات اليومية)
   const salesByDay = await db
     .select({
-      date: sql<string>`DATE(${invoices.createdAt})`,
-      sales: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+      date: dailyRevenues.date,
+      sales: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
       invoices: sql<number>`COUNT(*)`,
     })
-    .from(invoices)
+    .from(dailyRevenues)
     .where(
       and(
-        gte(invoices.createdAt, startDate),
-        lte(invoices.createdAt, endDate),
-        branchId ? eq(invoices.branchId, branchId) : undefined
+        gte(dailyRevenues.date, startDate),
+        lte(dailyRevenues.date, endDate),
+        branchId ? eq(dailyRevenues.branchId, branchId) : undefined
       )
     )
-    .groupBy(sql`DATE(${invoices.createdAt})`)
-    .orderBy(asc(sql`DATE(${invoices.createdAt})`));
+    .groupBy(dailyRevenues.date)
+    .orderBy(asc(dailyRevenues.date));
 
-  // المبيعات حسب الفرع
+  // الإيرادات حسب الفرع (من جدول الإيرادات اليومية)
   const salesByBranch = await db
     .select({
-      branchId: invoices.branchId,
+      branchId: dailyRevenues.branchId,
       branchName: branches.name,
-      sales: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+      sales: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
     })
-    .from(invoices)
-    .leftJoin(branches, eq(invoices.branchId, branches.id))
+    .from(dailyRevenues)
+    .leftJoin(branches, eq(dailyRevenues.branchId, branches.id))
     .where(
       and(
-        gte(invoices.createdAt, startDate),
-        lte(invoices.createdAt, endDate)
+        gte(dailyRevenues.date, startDate),
+        lte(dailyRevenues.date, endDate)
       )
     )
-    .groupBy(invoices.branchId, branches.name)
-    .orderBy(desc(sql`SUM(${invoices.total})`));
+    .groupBy(dailyRevenues.branchId, branches.name)
+    .orderBy(desc(sql`SUM(${dailyRevenues.cash} + ${dailyRevenues.network})`));
 
   // أفضل المنتجات
   const topProducts = await db
@@ -371,7 +371,7 @@ export async function getSalesAnalytics(
       ? totalSalesValue / Number(totals?.totalInvoices || 1) 
       : 0,
     salesByDay: salesByDay.map((d: any) => ({
-      date: String(d.date),
+      date: d.date instanceof Date ? d.date.toISOString().split('T')[0] : String(d.date),
       sales: Number(d.sales),
       invoices: Number(d.invoices)
     })),
@@ -515,17 +515,17 @@ export async function getFinancialAnalytics(dateRange: DateRange, branchId?: num
   if (!db) throw new Error('Database connection failed');
   const { startDate, endDate } = dateRange;
 
-  // الإيرادات
+  // الإيرادات (من جدول الإيرادات اليومية)
   const [revenueData] = await db
     .select({
-      revenue: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+      revenue: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
     })
-    .from(invoices)
+    .from(dailyRevenues)
     .where(
       and(
-        gte(invoices.createdAt, startDate),
-        lte(invoices.createdAt, endDate),
-        branchId ? eq(invoices.branchId, branchId) : undefined
+        gte(dailyRevenues.date, startDate),
+        lte(dailyRevenues.date, endDate),
+        branchId ? eq(dailyRevenues.branchId, branchId) : undefined
       )
     );
 
@@ -576,38 +576,38 @@ export async function getFinancialAnalytics(dateRange: DateRange, branchId?: num
     .groupBy(expenses.category)
     .orderBy(desc(sql`SUM(${expenses.amount})`));
 
-  // الإيرادات مقابل المصاريف حسب اليوم
+  // الإيرادات مقابل المصاريف حسب اليوم (من جدول الإيرادات اليومية)
   const revenueByDay = await db
     .select({
-      date: sql<string>`DATE(${invoices.createdAt})`,
-      revenue: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+      date: dailyRevenues.date,
+      revenue: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
     })
-    .from(invoices)
+    .from(dailyRevenues)
     .where(
       and(
-        gte(invoices.createdAt, startDate),
-        lte(invoices.createdAt, endDate),
-        branchId ? eq(invoices.branchId, branchId) : undefined
+        gte(dailyRevenues.date, startDate),
+        lte(dailyRevenues.date, endDate),
+        branchId ? eq(dailyRevenues.branchId, branchId) : undefined
       )
     )
-    .groupBy(sql`DATE(${invoices.createdAt})`)
-    .orderBy(asc(sql`DATE(${invoices.createdAt})`));
+    .groupBy(dailyRevenues.date)
+    .orderBy(asc(dailyRevenues.date));
 
   const expensesByDay = await db
     .select({
-      date: sql<string>`DATE(${expenses.createdAt})`,
+      date: expenses.expenseDate,
       expenses: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
     })
     .from(expenses)
     .where(
       and(
-        gte(expenses.createdAt, startDate),
-        lte(expenses.createdAt, endDate),
+        gte(expenses.expenseDate, startDate),
+        lte(expenses.expenseDate, endDate),
         branchId ? eq(expenses.branchId, branchId) : undefined
       )
     )
-    .groupBy(sql`DATE(${expenses.createdAt})`)
-    .orderBy(asc(sql`DATE(${expenses.createdAt})`));
+    .groupBy(expenses.expenseDate)
+    .orderBy(asc(expenses.expenseDate));
 
   const revenue = Number(revenueData?.revenue || 0);
   const cogs = Number(cogsData?.cogs || 0);
@@ -616,12 +616,16 @@ export async function getFinancialAnalytics(dateRange: DateRange, branchId?: num
   const netProfit = grossProfit - operatingExpenses;
 
   // دمج الإيرادات والمصاريف
-  const expenseMap = new Map(expensesByDay.map((e: { date: string; expenses: number }) => [String(e.date), Number(e.expenses)]));
-  const revenueVsExpenses = revenueByDay.map((r: { date: string; revenue: number }) => {
+  const expenseMap = new Map(expensesByDay.map((e: { date: Date | null; expenses: number }) => {
+    const dateStr = e.date ? (e.date instanceof Date ? e.date.toISOString().split('T')[0] : String(e.date)) : '';
+    return [dateStr, Number(e.expenses)];
+  }));
+  const revenueVsExpenses = revenueByDay.map((r: { date: Date | null; revenue: number }) => {
+    const dateStr = r.date ? (r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date)) : '';
     const rev = Number(r.revenue);
-    const exp = expenseMap.get(String(r.date)) || 0;
+    const exp = expenseMap.get(dateStr) || 0;
     return {
-      date: String(r.date),
+      date: dateStr,
       revenue: rev,
       expenses: exp,
       profit: rev - exp
@@ -662,21 +666,21 @@ export async function getBranchComparison(
   if (metric === 'sales') {
     return db
       .select({
-        branchId: invoices.branchId,
+        branchId: dailyRevenues.branchId,
         branchName: branches.name,
-        value: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+        value: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
         count: sql<number>`COUNT(*)`,
       })
-      .from(invoices)
-      .leftJoin(branches, eq(invoices.branchId, branches.id))
+      .from(dailyRevenues)
+      .leftJoin(branches, eq(dailyRevenues.branchId, branches.id))
       .where(
         and(
-          gte(invoices.createdAt, startDate),
-          lte(invoices.createdAt, endDate)
+          gte(dailyRevenues.date, startDate),
+          lte(dailyRevenues.date, endDate)
         )
       )
-      .groupBy(invoices.branchId, branches.name)
-      .orderBy(desc(sql`SUM(${invoices.total})`));
+      .groupBy(dailyRevenues.branchId, branches.name)
+      .orderBy(desc(sql`SUM(${dailyRevenues.cash} + ${dailyRevenues.network})`));
   }
 
   if (metric === 'expenses') {

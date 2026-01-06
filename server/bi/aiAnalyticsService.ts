@@ -7,7 +7,7 @@ import { invokeLLM } from "../_core/llm";
 import { getDb } from "../db";
 import { 
   invoices, customers, products, aiRecommendations, customerSegments,
-  aiAnalytics
+  aiAnalytics, dailyRevenues, branches
 } from "../../drizzle/schema";
 import { sql, eq, and, gte, lte, desc, asc } from "drizzle-orm";
 
@@ -77,20 +77,20 @@ export async function forecastSales(
 
   const historicalSales = await db
     .select({
-      date: sql<string>`DATE(${invoices.createdAt})`,
-      total: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+      date: dailyRevenues.date,
+      total: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
       count: sql<number>`COUNT(*)`,
     })
-    .from(invoices)
+    .from(dailyRevenues)
     .where(
       and(
-        gte(invoices.createdAt, startDate),
-        lte(invoices.createdAt, endDate),
-        branchId ? eq(invoices.branchId, branchId) : undefined
+        gte(dailyRevenues.date, startDate),
+        lte(dailyRevenues.date, endDate),
+        branchId ? eq(dailyRevenues.branchId, branchId) : undefined
       )
     )
-    .groupBy(sql`DATE(${invoices.createdAt})`)
-    .orderBy(asc(sql`DATE(${invoices.createdAt})`));
+    .groupBy(dailyRevenues.date)
+    .orderBy(asc(dailyRevenues.date));
 
   if (historicalSales.length < 7) {
     // بيانات غير كافية للتنبؤ
@@ -113,7 +113,7 @@ export async function forecastSales(
     avgDailySales: Math.round(avgDailySales),
     trend,
     recentDays: recentSales.slice(-7).map(d => ({
-      date: d.date,
+      date: d.date instanceof Date ? d.date.toISOString().split('T')[0] : String(d.date),
       sales: Math.round(Number(d.total))
     }))
   };
@@ -365,21 +365,21 @@ export async function detectAnomalies(
 
   const anomalies: AnomalyResult[] = [];
 
-  // جلب المبيعات اليومية
+  // جلب الإيرادات اليومية
   const dailySales = await db
     .select({
-      date: sql<string>`DATE(${invoices.createdAt})`,
-      total: sql<number>`COALESCE(SUM(${invoices.total}), 0)`,
+      date: dailyRevenues.date,
+      total: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
     })
-    .from(invoices)
+    .from(dailyRevenues)
     .where(
       and(
-        gte(invoices.createdAt, dateRange.startDate),
-        lte(invoices.createdAt, dateRange.endDate)
+        gte(dailyRevenues.date, dateRange.startDate),
+        lte(dailyRevenues.date, dateRange.endDate)
       )
     )
-    .groupBy(sql`DATE(${invoices.createdAt})`)
-    .orderBy(asc(sql`DATE(${invoices.createdAt})`));
+    .groupBy(dailyRevenues.date)
+    .orderBy(asc(dailyRevenues.date));
 
   if (dailySales.length >= 7) {
     // حساب المتوسط والانحراف المعياري
@@ -393,16 +393,17 @@ export async function detectAnomalies(
       const deviation = Math.abs(value - mean) / stdDev;
 
       if (deviation > 2) {
+        const dateStr = day.date instanceof Date ? day.date.toISOString().split('T')[0] : String(day.date);
         anomalies.push({
           type: 'sales',
           severity: deviation > 3 ? 'high' : 'medium',
           description: value > mean 
-            ? `مبيعات مرتفعة بشكل غير طبيعي في ${day.date}`
-            : `مبيعات منخفضة بشكل غير طبيعي في ${day.date}`,
+            ? `إيرادات مرتفعة بشكل غير طبيعي في ${dateStr}`
+            : `إيرادات منخفضة بشكل غير طبيعي في ${dateStr}`,
           value,
           expectedValue: mean,
           deviation: Math.round(deviation * 100) / 100,
-          date: new Date(day.date)
+          date: day.date instanceof Date ? day.date : new Date(day.date)
         });
       }
     });

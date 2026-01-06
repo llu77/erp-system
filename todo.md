@@ -2080,3 +2080,5 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إنشاء منشئ التقارير المخصصة
 - [ ] إضافة التنبؤ بالمبيعات
 - [ ] إضافة تحليل شرائح العملاء (RFM)
+
+- [x] إصلاح أخطاء استعلامات SQL في لوحة BI المتقدمة - تعديل لاستخدام dailyRevenues بدلاً من invoices
