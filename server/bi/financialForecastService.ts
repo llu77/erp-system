@@ -1,14 +1,14 @@
 /**
  * Financial Forecast Service - خدمة التنبؤ المالي
  * 
- * التكاليف الثابتة الحقيقية:
- * - رواتب: 21,000 ر.س
- * - إيجارات محلات: 6,600 ر.س
- * - إيجارات سكن: 3,200 ر.س
- * - كهرباء: 800 ر.س
- * - إنترنت: 600 ر.س
- * - المجموع: 32,200 ر.س (للفرعين)
- * - لكل فرع: 16,100 ر.س
+ * التكاليف الثابتة الحقيقية لكل فرع:
+ * - رواتب: 12,000 ر.س
+ * - إيجار محل: 3,300 ر.س
+ * - إيجار سكن: 1,700 ر.س
+ * - كهرباء: 400 ر.س
+ * - إنترنت: 300 ر.س
+ * - المجموع لكل فرع: 17,700 ر.س
+ * - المجموع للفرعين: 35,400 ر.س
  * 
  * المنطق:
  * 1. المتوسط اليومي = إجمالي إيرادات الشهر الماضي ÷ عدد أيام الشهر
@@ -21,17 +21,21 @@ import { dailyRevenues, companySettings, expenses } from "../../drizzle/schema";
 import { eq, sql, and, gte, lte } from "drizzle-orm";
 
 // ==================== التكاليف الثابتة الحقيقية ====================
-export const FIXED_COSTS = {
-  salaries: 21000,      // رواتب
-  shopRent: 6600,       // إيجارات محلات
-  housingRent: 3200,    // إيجارات سكن
-  electricity: 800,     // كهرباء
-  internet: 600,        // إنترنت
+// التكاليف الثابتة لكل فرع (لبن أو طريق)
+export const FIXED_COSTS_PER_BRANCH_BREAKDOWN = {
+  salaries: 12000,      // رواتب
+  shopRent: 3300,       // إيجار محل
+  housingRent: 1700,    // إيجار سكن
+  electricity: 400,     // كهرباء
+  internet: 300,        // إنترنت
 };
 
-export const TOTAL_FIXED_COSTS = Object.values(FIXED_COSTS).reduce((a, b) => a + b, 0); // 32,200
+// للتوافق مع الكود القديم
+export const FIXED_COSTS = FIXED_COSTS_PER_BRANCH_BREAKDOWN;
+
+export const FIXED_COSTS_PER_BRANCH = Object.values(FIXED_COSTS_PER_BRANCH_BREAKDOWN).reduce((a, b) => a + b, 0); // 17,700
 export const BRANCHES_COUNT = 2;
-export const FIXED_COSTS_PER_BRANCH = TOTAL_FIXED_COSTS / BRANCHES_COUNT; // 16,100
+export const TOTAL_FIXED_COSTS = FIXED_COSTS_PER_BRANCH * BRANCHES_COUNT; // 35,400
 
 // ==================== الحصول على إعدادات التكاليف ====================
 export async function getFinancialSettings() {

@@ -10,6 +10,7 @@ import {
   monthlyRecords
 } from "../../drizzle/schema";
 import { sql, eq, and, gte, lte, desc, asc } from "drizzle-orm";
+import { TOTAL_FIXED_COSTS, FIXED_COSTS_PER_BRANCH, BRANCHES_COUNT } from "./financialForecastService";
 
 // ==================== أنواع البيانات ====================
 
@@ -475,7 +476,7 @@ export async function analyzeEmployeePerformance(
 }
 
 /**
- * تحليل الربحية
+ * تحليل الربحية - محدث ليستخدم التكاليف الثابتة الحقيقية
  */
 export async function analyzeProfitability(
   startDate: Date,
@@ -485,26 +486,49 @@ export async function analyzeProfitability(
   const revenueAnalysis = await analyzeRevenues(startDate, endDate, branchId);
   const expenseAnalysis = await analyzeExpenses(startDate, endDate, branchId);
 
-  const netProfit = revenueAnalysis.totalRevenue - expenseAnalysis.totalExpenses;
+  // حساب عدد أشهر الفترة
+  const periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const monthsInPeriod = periodDays / 30;
+
+  // التكاليف الثابتة الحقيقية للفترة
+  // إذا تم تحديد فرع واحد، نستخدم تكاليف فرع واحد
+  // إذا كانت جميع الفروع، نستخدم إجمالي التكاليف الثابتة
+  const fixedCostsForPeriod = branchId 
+    ? FIXED_COSTS_PER_BRANCH * monthsInPeriod 
+    : TOTAL_FIXED_COSTS * monthsInPeriod;
+
+  // المصاريف المسجلة في النظام (مصاريف إضافية غير التكاليف الثابتة)
+  const recordedExpenses = expenseAnalysis.totalExpenses;
+
+  // إجمالي التكاليف = التكاليف الثابتة + المصاريف المسجلة
+  // التكاليف الثابتة: رواتب + إيجار محل + إيجار سكن + كهرباء + إنترنت (17,700 لكل فرع)
+  // المصاريف المسجلة: مصاريف إضافية مسجلة في صفحة المصاريف
+  const totalCosts = fixedCostsForPeriod + recordedExpenses;
+
+  // صافي الربح = الإيرادات - إجمالي التكاليف
+  const netProfit = revenueAnalysis.totalRevenue - totalCosts;
   const profitMargin = revenueAnalysis.totalRevenue > 0 
     ? (netProfit / revenueAnalysis.totalRevenue) * 100 
     : 0;
   
-  // نقطة التعادل = المصاريف الثابتة / (1 - نسبة المصاريف المتغيرة)
-  // نفترض أن 30% من المصاريف متغيرة
-  const variableExpenseRatio = 0.3;
-  const fixedExpenses = expenseAnalysis.totalExpenses * 0.7;
-  const breakEvenPoint = fixedExpenses / (1 - variableExpenseRatio);
+  // نقطة التعادل = التكاليف الثابتة / (1 - نسبة التكاليف المتغيرة)
+  // نسبة التكاليف المتغيرة = المصاريف المسجلة / الإيرادات
+  const variableCostRatio = revenueAnalysis.totalRevenue > 0 
+    ? recordedExpenses / revenueAnalysis.totalRevenue 
+    : 0.1; // افتراضي 10%
+  const breakEvenPoint = (1 - variableCostRatio) > 0 
+    ? fixedCostsForPeriod / (1 - variableCostRatio) 
+    : fixedCostsForPeriod;
   
-  // نسبة التشغيل = المصاريف / الإيرادات
+  // نسبة التشغيل = إجمالي التكاليف / الإيرادات
   const operatingRatio = revenueAnalysis.totalRevenue > 0 
-    ? (expenseAnalysis.totalExpenses / revenueAnalysis.totalRevenue) * 100 
+    ? (totalCosts / revenueAnalysis.totalRevenue) * 100 
     : 0;
 
   return {
     period: revenueAnalysis.period,
     totalRevenue: revenueAnalysis.totalRevenue,
-    totalExpenses: expenseAnalysis.totalExpenses,
+    totalExpenses: totalCosts, // إجمالي التكاليف (ثابتة + متغيرة)
     netProfit,
     profitMargin,
     breakEvenPoint,
