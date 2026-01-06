@@ -1,0 +1,142 @@
+{
+  "query": "SELECT \n  wb.id,\n  wb.branchId,\n  b.name as branchName,\n  wb.weekNumber,\n  wb.month,\n  wb.year,\n  wb.status,\n  wb.totalAmount,\n  wb.weekStart,\n  wb.weekEnd\nFROM weeklyBonuses wb\nLEFT JOIN branches b ON wb.branchId = b.id\nORDER BY wb.year DESC, wb.month DESC, wb.weekNumber DESC\nLIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  wb.id,\n  wb.branchId,\n  b.name as branchName,\n  wb.weekNumber,\n  wb.month,\n  wb.year,\n  wb.status,\n  wb.totalAmount,\n  wb.weekStart,\n  wb.weekEnd\nFROM weeklyBonuses wb\nLEFT JOIN branches b ON wb.branchId = b.id\nORDER BY wb.year DESC, wb.month DESC, wb.weekNumber DESC\nLIMIT 20;",
+  "rows": [
+    {
+      "id": "240003",
+      "branchId": "1",
+      "branchName": "Laban",
+      "weekNumber": "1",
+      "month": "1",
+      "year": "2026",
+      "status": "pending",
+      "totalAmount": "190.00",
+      "weekStart": "2026-01-01 00:00:00",
+      "weekEnd": "2026-01-07 00:00:00"
+    },
+    {
+      "id": "240004",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "weekNumber": "1",
+      "month": "1",
+      "year": "2026",
+      "status": "pending",
+      "totalAmount": "35.00",
+      "weekStart": "2026-01-01 00:00:00",
+      "weekEnd": "2026-01-07 00:00:00"
+    },
+    {
+      "id": "120001",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "weekNumber": "5",
+      "month": "12",
+      "year": "2025",
+      "status": "pending",
+      "totalAmount": "0.00",
+      "weekStart": "2025-12-30 00:00:00",
+      "weekEnd": "2025-12-31 23:59:59"
+    },
+    {
+      "id": "120002",
+      "branchId": "1",
+      "branchName": "Laban",
+      "weekNumber": "5",
+      "month": "12",
+      "year": "2025",
+      "status": "pending",
+      "totalAmount": "180.00",
+      "weekStart": "2025-12-30 00:00:00",
+      "weekEnd": "2025-12-31 23:59:59"
+    },
+    {
+      "id": "90001",
+      "branchId": "1",
+      "branchName": "Laban",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025",
+      "status": "pending",
+      "totalAmount": "420.00",
+      "weekStart": "2025-12-23 00:00:00",
+      "weekEnd": "2025-12-29 23:59:59"
+    },
+    {
+      "id": "90002",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025",
+      "status": "pending",
+      "totalAmount": "225.00",
+      "weekStart": "2025-12-23 00:00:00",
+      "weekEnd": "2025-12-29 23:59:59"
+    },
+    {
+      "id": "30001",
+      "branchId": "30003",
+      "branchName": "NULL",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "status": "pending",
+      "totalAmount": "0.00",
+      "weekStart": "2025-12-16 00:00:00",
+      "weekEnd": "2025-12-22 23:59:59"
+    },
+    {
+      "id": "1",
+      "branchId": "1",
+      "branchName": "Laban",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "status": "pending",
+      "totalAmount": "0.00",
+      "weekStart": "2025-12-16 05:00:00",
+      "weekEnd": "2025-12-23 04:59:59"
+    },
+    {
+      "id": "60001",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "status": "pending",
+      "totalAmount": "0.00",
+      "weekStart": "2025-12-16 00:00:00",
+      "weekEnd": "2025-12-22 23:59:59"
+    },
+    {
+      "id": "150002",
+      "branchId": "1",
+      "branchName": "Laban",
+      "weekNumber": "1",
+      "month": "12",
+      "year": "2025",
+      "status": "pending",
+      "totalAmount": "1080.00",
+      "weekStart": "2025-12-01 00:00:00",
+      "weekEnd": "2025-12-07 23:59:59"
+    },
+    {
+      "id": "150001",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "weekNumber": "1",
+      "month": "12",
+      "year": "2025",
+      "status": "pending",
+      "totalAmount": "720.00",
+      "weekStart": "2025-12-01 00:00:00",
+      "weekEnd": "2025-12-07 23:59:59"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tbranchId\tbranchName\tweekNumber\tmonth\tyear\tstatus\ttotalAmount\tweekStart\tweekEnd\n240003\t1\tLaban\t1\t1\t2026\tpending\t190.00\t2026-01-01 00:00:00\t2026-01-07 00:00:00\n240004\t30001\tTwiq Branch - Riyadh\t1\t1\t2026\tpending\t35.00\t2026-01-01 00:00:00\t2026-01-07 00:00:00\n120001\t30001\tTwiq Branch - Riyadh\t5\t12\t2025\tpending\t0.00\t2025-12-30 00:00:00\t2025-12-31 23:59:59\n120002\t1\tLaban\t5\t12\t2025\tpending\t180.00\t2025-12-30 00:00:00\t2025-12-31 23:59:59\n90001\t1\tLaban\t4\t12\t2025\tpending\t420.00\t2025-12-23 00:00:00\t2025-12-29 23:59:59\n90002\t30001\tTwiq Branch - Riyadh\t4\t12\t2025\tpending\t225.00\t2025-12-23 00:00:00\t2025-12-29 23:59:59\n30001\t30003\tNULL\t3\t12\t2025\tpending\t0.00\t2025-12-16 00:00:00\t2025-12-22 23:59:59\n1\t1\tLaban\t3\t12\t2025\tpending\t0.00\t2025-12-16 05:00:00\t2025-12-23 04:59:59\n60001\t30001\tTwiq Branch - Riyadh\t3\t12\t2025\tpending\t0.00\t2025-12-16 00:00:00\t2025-12-22 23:59:59\n150002\t1\tLaban\t1\t12\t2025\tpending\t1080.00\t2025-12-01 00:00:00\t2025-12-07 23:59:59\n150001\t30001\tTwiq Branch - Riyadh\t1\t12\t2025\tpending\t720.00\t2025-12-01 00:00:00\t2025-12-07 23:59:59\n",
+  "stderr": "",
+  "execution_time_ms": 1846
+}

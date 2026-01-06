@@ -1,0 +1,370 @@
+{
+  "query": "SELECT \n  er.employeeId,\n  e.name as employeeName,\n  dr.branchId,\n  b.name as branchName,\n  dr.date,\n  er.cash,\n  er.network,\n  er.total\nFROM employeeRevenues er\nLEFT JOIN dailyRevenues dr ON er.dailyRevenueId = dr.id\nLEFT JOIN employees e ON er.employeeId = e.id\nLEFT JOIN branches b ON dr.branchId = b.id\nWHERE dr.date >= '2026-01-01' AND dr.date <= '2026-01-07'\nORDER BY dr.branchId, er.employeeId, dr.date;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  er.employeeId,\n  e.name as employeeName,\n  dr.branchId,\n  b.name as branchName,\n  dr.date,\n  er.cash,\n  er.network,\n  er.total\nFROM employeeRevenues er\nLEFT JOIN dailyRevenues dr ON er.dailyRevenueId = dr.id\nLEFT JOIN employees e ON er.employeeId = e.id\nLEFT JOIN branches b ON dr.branchId = b.id\nWHERE dr.date >= '2026-01-01' AND dr.date <= '2026-01-07'\nORDER BY dr.branchId, er.employeeId, dr.date;",
+  "rows": [
+    {
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-01 00:00:00",
+      "cash": "0.00",
+      "network": "320.00",
+      "total": "320.00"
+    },
+    {
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-02 00:00:00",
+      "cash": "0.00",
+      "network": "470.00",
+      "total": "470.00"
+    },
+    {
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-03 00:00:00",
+      "cash": "20.00",
+      "network": "420.00",
+      "total": "440.00"
+    },
+    {
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-04 00:00:00",
+      "cash": "0.00",
+      "network": "220.00",
+      "total": "220.00"
+    },
+    {
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-05 00:00:00",
+      "cash": "45.00",
+      "network": "195.00",
+      "total": "240.00"
+    },
+    {
+      "employeeId": "30004",
+      "employeeName": "عبدالحي جلال",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-01 00:00:00",
+      "cash": "40.00",
+      "network": "275.00",
+      "total": "315.00"
+    },
+    {
+      "employeeId": "30004",
+      "employeeName": "عبدالحي جلال",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-02 00:00:00",
+      "cash": "0.00",
+      "network": "375.00",
+      "total": "375.00"
+    },
+    {
+      "employeeId": "30004",
+      "employeeName": "عبدالحي جلال",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-03 00:00:00",
+      "cash": "20.00",
+      "network": "313.00",
+      "total": "333.00"
+    },
+    {
+      "employeeId": "30004",
+      "employeeName": "عبدالحي جلال",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-04 00:00:00",
+      "cash": "20.00",
+      "network": "200.00",
+      "total": "220.00"
+    },
+    {
+      "employeeId": "30004",
+      "employeeName": "عبدالحي جلال",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-05 00:00:00",
+      "cash": "0.00",
+      "network": "315.00",
+      "total": "315.00"
+    },
+    {
+      "employeeId": "30007",
+      "employeeName": "السيد محمد",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-01 00:00:00",
+      "cash": "0.00",
+      "network": "280.00",
+      "total": "280.00"
+    },
+    {
+      "employeeId": "30007",
+      "employeeName": "السيد محمد",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-02 00:00:00",
+      "cash": "0.00",
+      "network": "365.00",
+      "total": "365.00"
+    },
+    {
+      "employeeId": "30007",
+      "employeeName": "السيد محمد",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-03 00:00:00",
+      "cash": "95.00",
+      "network": "260.00",
+      "total": "355.00"
+    },
+    {
+      "employeeId": "30007",
+      "employeeName": "السيد محمد",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-04 00:00:00",
+      "cash": "0.00",
+      "network": "150.00",
+      "total": "150.00"
+    },
+    {
+      "employeeId": "30007",
+      "employeeName": "السيد محمد",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-05 00:00:00",
+      "cash": "0.00",
+      "network": "165.00",
+      "total": "165.00"
+    },
+    {
+      "employeeId": "30012",
+      "employeeName": "محمود عماره ",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-01 00:00:00",
+      "cash": "40.00",
+      "network": "245.00",
+      "total": "285.00"
+    },
+    {
+      "employeeId": "30012",
+      "employeeName": "محمود عماره ",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-02 00:00:00",
+      "cash": "80.00",
+      "network": "235.00",
+      "total": "315.00"
+    },
+    {
+      "employeeId": "30012",
+      "employeeName": "محمود عماره ",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-03 00:00:00",
+      "cash": "25.00",
+      "network": "335.00",
+      "total": "360.00"
+    },
+    {
+      "employeeId": "30012",
+      "employeeName": "محمود عماره ",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-04 00:00:00",
+      "cash": "95.00",
+      "network": "135.00",
+      "total": "230.00"
+    },
+    {
+      "employeeId": "30012",
+      "employeeName": "محمود عماره ",
+      "branchId": "1",
+      "branchName": "Laban",
+      "date": "2026-01-05 00:00:00",
+      "cash": "0.00",
+      "network": "270.00",
+      "total": "270.00"
+    },
+    {
+      "employeeId": "60001",
+      "employeeName": "محمد ناصر",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-01 00:00:00",
+      "cash": "20.00",
+      "network": "255.00",
+      "total": "275.00"
+    },
+    {
+      "employeeId": "60001",
+      "employeeName": "محمد ناصر",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-02 00:00:00",
+      "cash": "0.00",
+      "network": "355.00",
+      "total": "355.00"
+    },
+    {
+      "employeeId": "60001",
+      "employeeName": "محمد ناصر",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-03 00:00:00",
+      "cash": "0.00",
+      "network": "200.00",
+      "total": "200.00"
+    },
+    {
+      "employeeId": "60001",
+      "employeeName": "محمد ناصر",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-04 00:00:00",
+      "cash": "0.00",
+      "network": "220.00",
+      "total": "220.00"
+    },
+    {
+      "employeeId": "90001",
+      "employeeName": "فارس محمد ",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-01 00:00:00",
+      "cash": "20.00",
+      "network": "200.00",
+      "total": "220.00"
+    },
+    {
+      "employeeId": "90001",
+      "employeeName": "فارس محمد ",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-02 00:00:00",
+      "cash": "0.00",
+      "network": "210.00",
+      "total": "210.00"
+    },
+    {
+      "employeeId": "90001",
+      "employeeName": "فارس محمد ",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-03 00:00:00",
+      "cash": "20.00",
+      "network": "235.00",
+      "total": "255.00"
+    },
+    {
+      "employeeId": "90001",
+      "employeeName": "فارس محمد ",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-04 00:00:00",
+      "cash": "0.00",
+      "network": "75.00",
+      "total": "75.00"
+    },
+    {
+      "employeeId": "90002",
+      "employeeName": "عمرو",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-01 00:00:00",
+      "cash": "0.00",
+      "network": "220.00",
+      "total": "220.00"
+    },
+    {
+      "employeeId": "90002",
+      "employeeName": "عمرو",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-02 00:00:00",
+      "cash": "15.00",
+      "network": "55.00",
+      "total": "70.00"
+    },
+    {
+      "employeeId": "90002",
+      "employeeName": "عمرو",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-03 00:00:00",
+      "cash": "15.00",
+      "network": "155.00",
+      "total": "170.00"
+    },
+    {
+      "employeeId": "90002",
+      "employeeName": "عمرو",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-04 00:00:00",
+      "cash": "40.00",
+      "network": "20.00",
+      "total": "60.00"
+    },
+    {
+      "employeeId": "90003",
+      "employeeName": "محمد اسماعيل",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-01 00:00:00",
+      "cash": "0.00",
+      "network": "270.00",
+      "total": "270.00"
+    },
+    {
+      "employeeId": "90003",
+      "employeeName": "محمد اسماعيل",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-02 00:00:00",
+      "cash": "0.00",
+      "network": "200.00",
+      "total": "200.00"
+    },
+    {
+      "employeeId": "90003",
+      "employeeName": "محمد اسماعيل",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-03 00:00:00",
+      "cash": "0.00",
+      "network": "230.00",
+      "total": "230.00"
+    },
+    {
+      "employeeId": "90003",
+      "employeeName": "محمد اسماعيل",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "date": "2026-01-04 00:00:00",
+      "cash": "20.00",
+      "network": "130.00",
+      "total": "150.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "employeeId\temployeeName\tbranchId\tbranchName\tdate\tcash\tnetwork\ttotal\n30002\tعلاء ناصر\t1\tLaban\t2026-01-01 00:00:00\t0.00\t320.00\t320.00\n30002\tعلاء ناصر\t1\tLaban\t2026-01-02 00:00:00\t0.00\t470.00\t470.00\n30002\tعلاء ناصر\t1\tLaban\t2026-01-03 00:00:00\t20.00\t420.00\t440.00\n30002\tعلاء ناصر\t1\tLaban\t2026-01-04 00:00:00\t0.00\t220.00\t220.00\n30002\tعلاء ناصر\t1\tLaban\t2026-01-05 00:00:00\t45.00\t195.00\t240.00\n30004\tعبدالحي جلال\t1\tLaban\t2026-01-01 00:00:00\t40.00\t275.00\t315.00\n30004\tعبدالحي جلال\t1\tLaban\t2026-01-02 00:00:00\t0.00\t375.00\t375.00\n30004\tعبدالحي جلال\t1\tLaban\t2026-01-03 00:00:00\t20.00\t313.00\t333.00\n30004\tعبدالحي جلال\t1\tLaban\t2026-01-04 00:00:00\t20.00\t200.00\t220.00\n30004\tعبدالحي جلال\t1\tLaban\t2026-01-05 00:00:00\t0.00\t315.00\t315.00\n30007\tالسيد محمد\t1\tLaban\t2026-01-01 00:00:00\t0.00\t280.00\t280.00\n30007\tالسيد محمد\t1\tLaban\t2026-01-02 00:00:00\t0.00\t365.00\t365.00\n30007\tالسيد محمد\t1\tLaban\t2026-01-03 00:00:00\t95.00\t260.00\t355.00\n30007\tالسيد محمد\t1\tLaban\t2026-01-04 00:00:00\t0.00\t150.00\t150.00\n30007\tالسيد محمد\t1\tLaban\t2026-01-05 00:00:00\t0.00\t165.00\t165.00\n30012\tمحمود عماره \t1\tLaban\t2026-01-01 00:00:00\t40.00\t245.00\t285.00\n30012\tمحمود عماره \t1\tLaban\t2026-01-02 00:00:00\t80.00\t235.00\t315.00\n30012\tمحمود عماره \t1\tLaban\t2026-01-03 00:00:00\t25.00\t335.00\t360.00\n30012\tمحمود عماره \t1\tLaban\t2026-01-04 00:00:00\t95.00\t135.00\t230.00\n30012\tمحمود عماره \t1\tLaban\t2026-01-05 00:00:00\t0.00\t270.00\t270.00\n60001\tمحمد ناصر\t30001\tTwiq Branch - Riyadh\t2026-01-01 00:00:00\t20.00\t255.00\t275.00\n60001\tمحمد ناصر\t30001\tTwiq Branch - Riyadh\t2026-01-02 00:00:00\t0.00\t355.00\t355.00\n60001\tمحمد ناصر\t30001\tTwiq Branch - Riyadh\t2026-01-03 00:00:00\t0.00\t200.00\t200.00\n60001\tمحمد ناصر\t30001\tTwiq Branch - Riyadh\t2026-01-04 00:00:00\t0.00\t220.00\t220.00\n90001\tفارس محمد \t30001\tTwiq Branch - Riyadh\t2026-01-01 00:00:00\t20.00\t200.00\t220.00\n90001\tفارس محمد \t30001\tTwiq Branch - Riyadh\t2026-01-02 00:00:00\t0.00\t210.00\t210.00\n90001\tفارس محمد \t30001\tTwiq Branch - Riyadh\t2026-01-03 00:00:00\t20.00\t235.00\t255.00\n90001\tفارس محمد \t30001\tTwiq Branch - Riyadh\t2026-01-04 00:00:00\t0.00\t75.00\t75.00\n90002\tعمرو\t30001\tTwiq Branch - Riyadh\t2026-01-01 00:00:00\t0.00\t220.00\t220.00\n90002\tعمرو\t30001\tTwiq Branch - Riyadh\t2026-01-02 00:00:00\t15.00\t55.00\t70.00\n90002\tعمرو\t30001\tTwiq Branch - Riyadh\t2026-01-03 00:00:00\t15.00\t155.00\t170.00\n90002\tعمرو\t30001\tTwiq Branch - Riyadh\t2026-01-04 00:00:00\t40.00\t20.00\t60.00\n90003\tمحمد اسماعيل\t30001\tTwiq Branch - Riyadh\t2026-01-01 00:00:00\t0.00\t270.00\t270.00\n90003\tمحمد اسماعيل\t30001\tTwiq Branch - Riyadh\t2026-01-02 00:00:00\t0.00\t200.00\t200.00\n90003\tمحمد اسماعيل\t30001\tTwiq Branch - Riyadh\t2026-01-03 00:00:00\t0.00\t230.00\t230.00\n90003\tمحمد اسماعيل\t30001\tTwiq Branch - Riyadh\t2026-01-04 00:00:00\t20.00\t130.00\t150.00\n",
+  "stderr": "",
+  "execution_time_ms": 1506
+}

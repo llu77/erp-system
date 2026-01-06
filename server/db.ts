@@ -5968,11 +5968,46 @@ export async function detectBonusDiscrepancies(branchId: number, weekNumber: num
     .leftJoin(employees, eq(bonusDetails.employeeId, employees.id))
     .where(eq(bonusDetails.weeklyBonusId, bonusRecord.id));
 
-  // حساب تواريخ الأسبوع
-  const weekStart = new Date(year, month - 1, (weekNumber - 1) * 7 + 1);
+  // حساب تواريخ الأسبوع بشكل صحيح
+  // الأسبوع 1: أيام 1-7
+  // الأسبوع 2: أيام 8-14
+  // الأسبوع 3: أيام 15-21
+  // الأسبوع 4: أيام 22-28
+  // الأسبوع 5: أيام 29 إلى نهاية الشهر (يوم أو يومين أو ثلاثة حسب الشهر)
+  const lastDayOfMonth = new Date(year, month, 0).getDate();
+  
+  let startDay: number;
+  let endDay: number;
+  
+  switch (weekNumber) {
+    case 1:
+      startDay = 1;
+      endDay = 7;
+      break;
+    case 2:
+      startDay = 8;
+      endDay = 14;
+      break;
+    case 3:
+      startDay = 15;
+      endDay = 21;
+      break;
+    case 4:
+      startDay = 22;
+      endDay = 28;
+      break;
+    case 5:
+      startDay = 29;
+      endDay = lastDayOfMonth; // يوم أو يومين أو ثلاثة حسب الشهر
+      break;
+    default:
+      startDay = 1;
+      endDay = 7;
+  }
+  
+  const weekStart = new Date(year, month - 1, startDay);
   weekStart.setUTCHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekEnd.getDate() + 6);
+  const weekEnd = new Date(year, month - 1, endDay);
   weekEnd.setUTCHours(23, 59, 59, 999);
 
   // الحصول على الإيرادات الفعلية من قاعدة البيانات

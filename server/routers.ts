@@ -1819,6 +1819,57 @@ export const appRouter = router({
           console.error('[Smart Monitoring] Error:', error.message);
         }
 
+        // فحص الفروقات وإرسال تنبيهات استباقية
+        try {
+          const revenueDate = new Date(input.date);
+          const day = revenueDate.getDate();
+          const month = revenueDate.getMonth() + 1;
+          const year = revenueDate.getFullYear();
+          
+          // حساب رقم الأسبوع
+          let weekNumber: number;
+          if (day <= 7) weekNumber = 1;
+          else if (day <= 14) weekNumber = 2;
+          else if (day <= 21) weekNumber = 3;
+          else if (day <= 28) weekNumber = 4;
+          else weekNumber = 5;
+          
+          // فحص الفروقات بعد التزامن
+          const discrepancyResult = await db.detectBonusDiscrepancies(
+            input.branchId,
+            weekNumber,
+            month,
+            year
+          );
+          
+          // إرسال تنبيه إذا وجدت فروقات
+          if (discrepancyResult.discrepancies && discrepancyResult.discrepancies.length > 0) {
+            const branch = await db.getBranchById(input.branchId);
+            const branchName = branch?.nameAr || 'غير محدد';
+            
+            // إرسال تنبيه بريد إلكتروني للمسؤولين
+            const emailService = await import('./notifications/emailNotificationService');
+            const recipients = await db.getNotificationRecipients();
+            const adminRecipients = recipients.filter(r => r.isActive && (r.role === 'admin' || r.role === 'general_supervisor'));
+            
+            for (const recipient of adminRecipients) {
+              if (recipient.email) {
+                await emailService.sendBonusDiscrepancyAlert(recipient.email, {
+                  branchName,
+                  weekNumber,
+                  month,
+                  year,
+                  discrepancies: discrepancyResult.discrepancies,
+                }).catch(err => console.error('خطأ في إرسال تنبيه الفروقات:', err));
+              }
+            }
+            
+            console.log(`[تنبيه استباقي] تم اكتشاف ${discrepancyResult.discrepancies.length} فروقات في فرع ${branchName}`);
+          }
+        } catch (error: any) {
+          console.error('[تنبيه استباقي] خطأ:', error.message);
+        }
+
         return { success: true, message: 'تم حفظ الإيرادات بنجاح' };
       }),
 
