@@ -373,6 +373,74 @@ export async function analyzeLastMonth(branchId?: number) {
   };
 }
 
+// ==================== جلب أنماط الإيرادات اليومية ====================
+async function getDayOfWeekPatterns(branchId?: number, daysBack: number = 60) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - daysBack);
+  const startDateStr = startDate.toISOString().split('T')[0];
+  
+  // جلب الإيرادات اليومية مع يوم الأسبوع
+  const dailyData = await db
+    .select({
+      date: dailyRevenues.date,
+      total: dailyRevenues.total,
+    })
+    .from(dailyRevenues)
+    .where(
+      branchId
+        ? sql`DATE(${dailyRevenues.date}) >= ${startDateStr} AND ${dailyRevenues.branchId} = ${branchId}`
+        : sql`DATE(${dailyRevenues.date}) >= ${startDateStr}`
+    );
+  
+  // تجميع الإيرادات حسب يوم الأسبوع (0 = الأحد, 6 = السبت)
+  const dayPatterns: Record<number, number[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+  
+  for (const row of dailyData) {
+    const date = new Date(row.date);
+    const dayOfWeek = date.getDay();
+    const total = Number(row.total || 0);
+    if (total > 0) {
+      dayPatterns[dayOfWeek].push(total);
+    }
+  }
+  
+  // حساب المتوسط لكل يوم
+  const dayAverages: Record<number, number> = {};
+  let totalAvg = 0;
+  let daysWithData = 0;
+  
+  for (let day = 0; day <= 6; day++) {
+    const values = dayPatterns[day];
+    if (values.length > 0) {
+      dayAverages[day] = values.reduce((a, b) => a + b, 0) / values.length;
+      totalAvg += dayAverages[day];
+      daysWithData++;
+    }
+  }
+  
+  const overallAvg = daysWithData > 0 ? totalAvg / daysWithData : 0;
+  
+  // حساب معاملات اليوم (نسبة متوسط اليوم إلى المتوسط العام)
+  const dayFactors: Record<number, number> = {};
+  for (let day = 0; day <= 6; day++) {
+    if (dayAverages[day] && overallAvg > 0) {
+      dayFactors[day] = dayAverages[day] / overallAvg;
+    } else {
+      dayFactors[day] = 1; // افتراضي
+    }
+  }
+  
+  return {
+    dayAverages,
+    dayFactors,
+    overallAvg,
+    dataPoints: dailyData.length
+  };
+}
+
 // ==================== التنبؤ للشهر الحالي ====================
 export async function forecastCurrentMonth(branchId?: number) {
   const db = await getDb();
@@ -389,6 +457,9 @@ export async function forecastCurrentMonth(branchId?: number) {
     return lastMonthAnalysis;
   }
 
+  // جلب أنماط الإيرادات اليومية للتنبؤ الذكي
+  const patterns = await getDayOfWeekPatterns(branchId, 60);
+  
   const dailyAverage = lastMonthAnalysis.revenue?.dailyAverage || 0;
   const settings = await getFinancialSettings();
   const fixedCosts = branchId ? FIXED_COSTS_PER_BRANCH : TOTAL_FIXED_COSTS;
@@ -421,8 +492,22 @@ export async function forecastCurrentMonth(branchId?: number) {
   // جلب المصاريف الأخرى للشهر الحالي
   const otherExpenses = await getOtherExpenses(branchId, startDate, todayDate);
 
-  // التنبؤ بالإيرادات المتبقية
-  const expectedRemainingRevenue = dailyAverage * remainingDays;
+  // التنبؤ بالإيرادات المتبقية باستخدام أنماط الأيام
+  let expectedRemainingRevenue = 0;
+  if (patterns && patterns.overallAvg > 0) {
+    // استخدام معاملات اليوم للتنبؤ الذكي
+    for (let i = 1; i <= remainingDays; i++) {
+      const futureDate = new Date(now);
+      futureDate.setDate(now.getDate() + i);
+      const dayOfWeek = futureDate.getDay();
+      const dayFactor = patterns.dayFactors[dayOfWeek] || 1;
+      expectedRemainingRevenue += dailyAverage * dayFactor;
+    }
+  } else {
+    // الطريقة التقليدية
+    expectedRemainingRevenue = dailyAverage * remainingDays;
+  }
+  
   const expectedTotalRevenue = actualRevenue + expectedRemainingRevenue;
 
   // حساب الربح المتوقع
@@ -468,7 +553,7 @@ export async function forecastCurrentMonth(branchId?: number) {
     };
   });
 
-  // التنبؤ اليومي للأيام القادمة (7 أيام)
+  // التنبؤ اليومي للأيام القادمة (7 أيام) - باستخدام أنماط الأيام الحقيقية
   const dailyForecasts = [];
   const dailyFixedCosts = fixedCosts / 30;
   const dailyOtherExpenses = otherExpenses.total / 30;
@@ -479,9 +564,14 @@ export async function forecastCurrentMonth(branchId?: number) {
 
     const dayName = forecastDate.toLocaleDateString('ar-SA', { weekday: 'long' });
     const dateStr = forecastDate.toLocaleDateString('ar-SA', { day: 'numeric', month: 'numeric' });
+    
+    // استخدام معامل اليوم للتنبؤ الذكي
+    const dayOfWeek = forecastDate.getDay();
+    const dayFactor = patterns?.dayFactors[dayOfWeek] || 1;
+    const adjustedDailyRevenue = dailyAverage * dayFactor;
 
     const dayProfit = calculateProfit(
-      dailyAverage,
+      adjustedDailyRevenue,
       settings.variableCostRate,
       dailyFixedCosts,
       dailyOtherExpenses
@@ -490,7 +580,7 @@ export async function forecastCurrentMonth(branchId?: number) {
     dailyForecasts.push({
       date: dateStr,
       dayName,
-      expectedRevenue: Math.round(dailyAverage),
+      expectedRevenue: Math.round(adjustedDailyRevenue),
       fixedCosts: Math.round(dailyFixedCosts),
       variableCosts: Math.round(dayProfit.variableCosts),
       otherExpenses: Math.round(dailyOtherExpenses),
@@ -498,6 +588,7 @@ export async function forecastCurrentMonth(branchId?: number) {
       expectedProfit: Math.round(dayProfit.netProfit),
       status: dayProfit.status,
       confidence: Math.max(50, 95 - (i * 5)),
+      dayFactor: Math.round(dayFactor * 100) / 100, // إضافة معامل اليوم للشفافية
     });
   }
 

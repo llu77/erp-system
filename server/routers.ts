@@ -6078,6 +6078,32 @@ ${discrepancyRows}
       .query(async ({ input }) => {
         return revenueAnalytics.generateMonthlyComparisonReport(input?.monthsCount || 6);
       }),
+
+    // المحادثة مع AI
+    chatWithAI: supervisorViewProcedure
+      .input(z.object({
+        message: z.string().min(1),
+        conversationHistory: z.array(z.object({
+          role: z.enum(['user', 'assistant', 'system']),
+          content: z.string(),
+        })).optional(),
+        branchId: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const aiChat = await import('./bi/aiChatService');
+        return aiChat.chatWithAI(
+          input.message,
+          input.conversationHistory || [],
+          input.branchId
+        );
+      }),
+
+    // جلب الأسئلة المقترحة
+    getSuggestedQuestions: supervisorViewProcedure
+      .query(async () => {
+        const aiChat = await import('./bi/aiChatService');
+        return aiChat.getSuggestedQuestions();
+      }),
   }),
 });
 

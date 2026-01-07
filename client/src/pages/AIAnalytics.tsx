@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,9 +19,13 @@ import {
   Brain, Sparkles, TrendingUp, TrendingDown, Users, Target, AlertTriangle,
   Lightbulb, Zap, RefreshCw, ChevronRight, ArrowUpRight, ArrowDownRight,
   DollarSign, Calendar, Building2, BarChart3, PieChart as PieChartIcon,
-  Activity, Award, Percent, Calculator, FileText, CheckCircle, XCircle
+  Activity, Award, Percent, Calculator, FileText, CheckCircle, XCircle,
+  MessageSquare, Send, Bot, User, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Streamdown } from "streamdown";
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
@@ -424,11 +428,28 @@ function InsightCard({
 
 export default function AIAnalytics() {
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
-  const [period, setPeriod] = useState<'week' | 'month' | 'quarter'>('month');
+  const [period, setPeriod] = useState<'week' | 'month' | 'quarter' | 'custom'>('month');
   const [forecastDays, setForecastDays] = useState<number>(7);
+  
+  // الفترة الزمنية المخصصة
+  const [customStartDate, setCustomStartDate] = useState<string>(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - 1);
+    return date.toISOString().split('T')[0];
+  });
+  const [customEndDate, setCustomEndDate] = useState<string>(() => {
+    return new Date().toISOString().split('T')[0];
+  });
 
   // حساب نطاق التاريخ
   const dateRange = useMemo(() => {
+    if (period === 'custom') {
+      return {
+        start: new Date(customStartDate),
+        end: new Date(customEndDate)
+      };
+    }
+    
     const end = new Date();
     const start = new Date();
     
@@ -445,7 +466,7 @@ export default function AIAnalytics() {
     }
     
     return { start, end };
-  }, [period]);
+  }, [period, customStartDate, customEndDate]);
 
   // جلب الفروع
   const { data: branches } = trpc.branches.list.useQuery();
@@ -573,7 +594,7 @@ export default function AIAnalytics() {
               </SelectContent>
             </Select>
 
-            <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
+            <Select value={period} onValueChange={(v) => setPeriod(v as 'week' | 'month' | 'quarter' | 'custom')}>
               <SelectTrigger className="w-[140px]">
                 <Calendar className="h-4 w-4 ml-2" />
                 <SelectValue />
@@ -582,8 +603,28 @@ export default function AIAnalytics() {
                 <SelectItem value="week">أسبوع</SelectItem>
                 <SelectItem value="month">شهر</SelectItem>
                 <SelectItem value="quarter">ربع سنة</SelectItem>
+                <SelectItem value="custom">فترة مخصصة</SelectItem>
               </SelectContent>
             </Select>
+            
+            {/* حقول الفترة المخصصة */}
+            {period === 'custom' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="px-3 py-2 border rounded-md text-sm bg-background"
+                />
+                <span className="text-muted-foreground">إلى</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="px-3 py-2 border rounded-md text-sm bg-background"
+                />
+              </div>
+            )}
 
             <Button variant="outline" size="icon" onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4" />
@@ -698,7 +739,7 @@ export default function AIAnalytics() {
         )}
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               نظرة عامة
@@ -722,6 +763,10 @@ export default function AIAnalytics() {
             <TabsTrigger value="forecast" className="gap-2">
               <TrendingUp className="h-4 w-4" />
               التنبؤات
+            </TabsTrigger>
+            <TabsTrigger value="chat" className="gap-2">
+              <MessageSquare className="h-4 w-4" />
+              مستشار AI
             </TabsTrigger>
           </TabsList>
 
@@ -1626,8 +1671,196 @@ export default function AIAnalytics() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* مستشار AI */}
+          <TabsContent value="chat" className="space-y-4">
+            <AIChatSection branchId={branchId} />
+          </TabsContent>
         </Tabs>
       </div>
     </DashboardLayout>
+  );
+}
+
+// مكون المحادثة مع AI
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+function AIChatSection({ branchId }: { branchId?: number }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  // جلب الأسئلة المقترحة
+  const { data: suggestedQuestions } = trpc.bi.getSuggestedQuestions.useQuery();
+
+  // mutation للمحادثة
+  const chatMutation = trpc.bi.chatWithAI.useMutation({
+    onSuccess: (data) => {
+      setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+      setIsLoading(false);
+    },
+    onError: (error) => {
+      toast.error('حدث خطأ أثناء المحادثة');
+      setIsLoading(false);
+    },
+  });
+
+  // التمرير للأسفل عند إضافة رسالة جديدة
+  React.useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSendMessage = async (message?: string) => {
+    const msgToSend = message || inputMessage.trim();
+    if (!msgToSend || isLoading) return;
+
+    setMessages(prev => [...prev, { role: 'user', content: msgToSend }]);
+    setInputMessage('');
+    setIsLoading(true);
+
+    chatMutation.mutate({
+      message: msgToSend,
+      conversationHistory: messages.map(m => ({ role: m.role, content: m.content })),
+      branchId,
+    });
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  return (
+    <div className="grid lg:grid-cols-4 gap-4 h-[calc(100vh-300px)] min-h-[500px]">
+      {/* منطقة المحادثة */}
+      <Card className="lg:col-span-3 flex flex-col">
+        <CardHeader className="border-b bg-gradient-to-l from-primary/5 to-transparent">
+          <CardTitle className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-primary" />
+            مستشار ERP الذكي
+          </CardTitle>
+          <CardDescription>
+            مستشار أعمال ذكي متخصص في تحليل بياناتك المالية والتشغيلية
+          </CardDescription>
+        </CardHeader>
+        
+        {/* منطقة الرسائل */}
+        <ScrollArea ref={scrollRef} className="flex-1 p-4">
+          <div className="space-y-4">
+            {messages.length === 0 ? (
+              <div className="text-center py-12">
+                <Bot className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">مرحباً بك في مستشار ERP</h3>
+                <p className="text-muted-foreground mb-4">
+                  أنا هنا لمساعدتك في تحليل بيانات مشروعك وتقديم توصيات عملية
+                </p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {suggestedQuestions?.slice(0, 4).map((q, i) => (
+                    <Button
+                      key={i}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSendMessage(q)}
+                      className="text-xs"
+                    >
+                      {q}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              messages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                >
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                    msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                  }`}>
+                    {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                  </div>
+                  <div className={`max-w-[80%] rounded-lg p-3 ${
+                    msg.role === 'user' 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'bg-muted'
+                  }`}>
+                    {msg.role === 'assistant' ? (
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <Streamdown>{msg.content}</Streamdown>
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+            {isLoading && (
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                  <Bot className="h-4 w-4" />
+                </div>
+                <div className="bg-muted rounded-lg p-3">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        {/* منطقة الإدخال */}
+        <div className="p-4 border-t">
+          <div className="flex gap-2">
+            <Textarea
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder="اكتب سؤالك هنا..."
+              className="min-h-[60px] resize-none"
+              disabled={isLoading}
+            />
+            <Button
+              onClick={() => handleSendMessage()}
+              disabled={!inputMessage.trim() || isLoading}
+              className="px-4"
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* الأسئلة المقترحة */}
+      <Card className="lg:col-span-1">
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Lightbulb className="h-4 w-4" />
+            أسئلة مقترحة
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {suggestedQuestions?.map((question, i) => (
+            <Button
+              key={i}
+              variant="ghost"
+              className="w-full justify-start text-right text-xs h-auto py-2 px-3"
+              onClick={() => handleSendMessage(question)}
+              disabled={isLoading}
+            >
+              <ChevronRight className="h-3 w-3 ml-2 flex-shrink-0" />
+              <span className="line-clamp-2">{question}</span>
+            </Button>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

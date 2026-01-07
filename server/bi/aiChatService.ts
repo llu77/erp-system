@@ -1,0 +1,307 @@
+/**
+ * خدمة المحادثة مع AI للتحليلات المالية
+ * مستشار أعمال ذكي مع وصول كامل للبيانات
+ */
+
+import { invokeLLM } from "../_core/llm";
+import { getDb } from "../db";
+import { 
+  dailyRevenues, employeeRevenues, expenses, employees, branches,
+  monthlyRecords
+} from "../../drizzle/schema";
+import { sql, eq, and, gte, lte, desc, asc } from "drizzle-orm";
+import { TOTAL_FIXED_COSTS, FIXED_COSTS_PER_BRANCH, BRANCHES_COUNT } from "./financialForecastService";
+
+// ==================== أنواع البيانات ====================
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+export interface BusinessContext {
+  currentDate: string;
+  branches: { id: number; name: string }[];
+  recentRevenue: {
+    last7Days: number;
+    last30Days: number;
+    avgDaily: number;
+  };
+  recentExpenses: {
+    last30Days: number;
+    byCategory: { category: string; amount: number }[];
+  };
+  profitability: {
+    last30Days: {
+      revenue: number;
+      expenses: number;
+      profit: number;
+      margin: number;
+    };
+  };
+  employeeCount: number;
+  topPerformers: { name: string; revenue: number }[];
+  alerts: string[];
+}
+
+// ==================== جلب سياق الأعمال ====================
+
+async function getBusinessContext(branchId?: number): Promise<BusinessContext> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  const now = new Date();
+  const last7Days = new Date(now);
+  last7Days.setDate(last7Days.getDate() - 7);
+  const last30Days = new Date(now);
+  last30Days.setDate(last30Days.getDate() - 30);
+
+  // جلب الفروع
+  const allBranches = await db.select({ id: branches.id, name: branches.name }).from(branches);
+
+  // جلب إيرادات آخر 7 أيام
+  const [revenue7Days] = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(${dailyRevenues.total}), 0)`,
+    })
+    .from(dailyRevenues)
+    .where(
+      branchId
+        ? sql`DATE(${dailyRevenues.date}) >= ${last7Days.toISOString().split('T')[0]} AND ${dailyRevenues.branchId} = ${branchId}`
+        : sql`DATE(${dailyRevenues.date}) >= ${last7Days.toISOString().split('T')[0]}`
+    );
+
+  // جلب إيرادات آخر 30 يوم
+  const [revenue30Days] = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(${dailyRevenues.total}), 0)`,
+      count: sql<number>`COUNT(DISTINCT DATE(${dailyRevenues.date}))`,
+    })
+    .from(dailyRevenues)
+    .where(
+      branchId
+        ? sql`DATE(${dailyRevenues.date}) >= ${last30Days.toISOString().split('T')[0]} AND ${dailyRevenues.branchId} = ${branchId}`
+        : sql`DATE(${dailyRevenues.date}) >= ${last30Days.toISOString().split('T')[0]}`
+    );
+
+  const totalRevenue30 = Number(revenue30Days?.total || 0);
+  const daysWithRevenue = Number(revenue30Days?.count || 1);
+  const avgDaily = daysWithRevenue > 0 ? totalRevenue30 / daysWithRevenue : 0;
+
+  // جلب المصاريف آخر 30 يوم
+  const expensesByCategory = await db
+    .select({
+      category: expenses.category,
+      total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
+    })
+    .from(expenses)
+    .where(
+      branchId
+        ? sql`DATE(${expenses.expenseDate}) >= ${last30Days.toISOString().split('T')[0]} AND ${expenses.branchId} = ${branchId} AND ${expenses.status} IN ('approved', 'paid')`
+        : sql`DATE(${expenses.expenseDate}) >= ${last30Days.toISOString().split('T')[0]} AND ${expenses.status} IN ('approved', 'paid')`
+    )
+    .groupBy(expenses.category);
+
+  const totalExpenses30 = expensesByCategory.reduce((sum, e) => sum + Number(e.total), 0);
+  const fixedCosts = branchId ? FIXED_COSTS_PER_BRANCH : TOTAL_FIXED_COSTS;
+  const totalCosts = totalExpenses30 + fixedCosts;
+
+  // جلب عدد الموظفين
+  const [employeeCountResult] = await db
+    .select({
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(employees)
+    .where(eq(employees.isActive, true));
+
+  // جلب أفضل الموظفين أداءً
+  const topPerformers = await db
+    .select({
+      name: employees.name,
+      revenue: sql<number>`COALESCE(SUM(${employeeRevenues.total}), 0)`,
+    })
+    .from(employeeRevenues)
+    .innerJoin(employees, eq(employeeRevenues.employeeId, employees.id))
+    .innerJoin(dailyRevenues, eq(employeeRevenues.dailyRevenueId, dailyRevenues.id))
+    .where(
+      sql`DATE(${dailyRevenues.date}) >= ${last30Days.toISOString().split('T')[0]}`
+    )
+    .groupBy(employees.id, employees.name)
+    .orderBy(desc(sql`SUM(${employeeRevenues.total})`))
+    .limit(5);
+
+  // توليد التنبيهات
+  const alerts: string[] = [];
+  const profit = totalRevenue30 - totalCosts;
+  const margin = totalRevenue30 > 0 ? (profit / totalRevenue30) * 100 : 0;
+
+  if (margin < 10) {
+    alerts.push('⚠️ هامش الربح منخفض جداً (أقل من 10%)');
+  }
+  if (profit < 0) {
+    alerts.push('🔴 المشروع يحقق خسائر في آخر 30 يوم');
+  }
+  if (avgDaily < fixedCosts / 30) {
+    alerts.push('⚠️ المتوسط اليومي أقل من التكاليف الثابتة اليومية');
+  }
+
+  return {
+    currentDate: now.toLocaleDateString('ar-SA', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    }),
+    branches: allBranches,
+    recentRevenue: {
+      last7Days: Math.round(Number(revenue7Days?.total || 0)),
+      last30Days: Math.round(totalRevenue30),
+      avgDaily: Math.round(avgDaily),
+    },
+    recentExpenses: {
+      last30Days: Math.round(totalExpenses30),
+      byCategory: expensesByCategory.map(e => ({
+        category: getCategoryName(e.category),
+        amount: Math.round(Number(e.total)),
+      })),
+    },
+    profitability: {
+      last30Days: {
+        revenue: Math.round(totalRevenue30),
+        expenses: Math.round(totalCosts),
+        profit: Math.round(profit),
+        margin: Math.round(margin * 10) / 10,
+      },
+    },
+    employeeCount: Number(employeeCountResult?.count || 0),
+    topPerformers: topPerformers.map(p => ({
+      name: p.name,
+      revenue: Math.round(Number(p.revenue)),
+    })),
+    alerts,
+  };
+}
+
+// ==================== ترجمة أسماء الفئات ====================
+
+function getCategoryName(category: string): string {
+  const categories: Record<string, string> = {
+    salaries: 'رواتب',
+    shop_rent: 'إيجار المحل',
+    housing_rent: 'إيجار السكن',
+    electricity: 'كهرباء',
+    internet: 'إنترنت',
+    maintenance: 'صيانة',
+    supplies: 'مستلزمات',
+    marketing: 'تسويق',
+    transportation: 'نقل',
+    other: 'أخرى',
+  };
+  return categories[category] || category;
+}
+
+// ==================== البرومبت الأساسي ====================
+
+function getSystemPrompt(context: BusinessContext): string {
+  return `أنت مستشار أعمال ذكي متخصص في تحليل البيانات المالية والتشغيلية للمشاريع التجارية.
+اسمك "مستشار ERP" وأنت خبير في:
+- تحليل الإيرادات والمصاريف
+- التنبؤ المالي والتخطيط الاستراتيجي
+- تحليل أداء الموظفين
+- تحسين الكفاءة التشغيلية
+- إدارة المخاطر المالية
+
+## شخصيتك:
+- محترف وعلمي في التحليل
+- عملي في التوصيات
+- صريح في تحديد المشاكل
+- إيجابي في تقديم الحلول
+- تستخدم الأرقام والبيانات لدعم تحليلاتك
+
+## السياق الحالي للمشروع:
+- التاريخ: ${context.currentDate}
+- عدد الفروع: ${context.branches.length} (${context.branches.map(b => b.name).join('، ')})
+- عدد الموظفين: ${context.employeeCount}
+
+## البيانات المالية (آخر 30 يوم):
+- إجمالي الإيرادات: ${context.recentRevenue.last30Days.toLocaleString('ar-SA')} ر.س
+- إيرادات آخر 7 أيام: ${context.recentRevenue.last7Days.toLocaleString('ar-SA')} ر.س
+- المتوسط اليومي: ${context.recentRevenue.avgDaily.toLocaleString('ar-SA')} ر.س
+- إجمالي المصاريف: ${context.profitability.last30Days.expenses.toLocaleString('ar-SA')} ر.س
+- صافي الربح: ${context.profitability.last30Days.profit.toLocaleString('ar-SA')} ر.س
+- هامش الربح: ${context.profitability.last30Days.margin}%
+
+## المصاريف حسب الفئة:
+${context.recentExpenses.byCategory.map(e => `- ${e.category}: ${e.amount.toLocaleString('ar-SA')} ر.س`).join('\n')}
+
+## أفضل الموظفين أداءً:
+${context.topPerformers.map((p, i) => `${i + 1}. ${p.name}: ${p.revenue.toLocaleString('ar-SA')} ر.س`).join('\n')}
+
+## التنبيهات الحالية:
+${context.alerts.length > 0 ? context.alerts.join('\n') : 'لا توجد تنبيهات'}
+
+## قواعد الرد:
+1. استخدم البيانات المتاحة لدعم تحليلاتك
+2. قدم توصيات عملية وقابلة للتنفيذ
+3. كن صريحاً في تحديد المشاكل
+4. استخدم الأرقام والنسب المئوية
+5. اقترح خطوات محددة للتحسين
+6. إذا سُئلت عن بيانات غير متاحة، اعترف بذلك واقترح بدائل
+7. استخدم التنسيق المناسب (عناوين، قوائم، جداول) لتسهيل القراءة
+8. أجب باللغة العربية دائماً`;
+}
+
+// ==================== المحادثة مع AI ====================
+
+export async function chatWithAI(
+  message: string,
+  conversationHistory: ChatMessage[] = [],
+  branchId?: number
+): Promise<{ response: string; context: BusinessContext }> {
+  // جلب سياق الأعمال الحالي
+  const context = await getBusinessContext(branchId);
+  
+  // بناء الرسائل
+  const messages: ChatMessage[] = [
+    { role: 'system', content: getSystemPrompt(context) },
+    ...conversationHistory.slice(-10), // آخر 10 رسائل فقط
+    { role: 'user', content: message },
+  ];
+
+  try {
+    const response = await invokeLLM({
+      messages: messages.map(m => ({
+        role: m.role as 'system' | 'user' | 'assistant',
+        content: m.content,
+      })),
+    });
+
+    const assistantMessage = response.choices[0]?.message?.content || 'عذراً، لم أتمكن من معالجة طلبك.';
+
+    return {
+      response: typeof assistantMessage === 'string' ? assistantMessage : JSON.stringify(assistantMessage),
+      context,
+    };
+  } catch (error) {
+    console.error('AI Chat Error:', error);
+    return {
+      response: 'عذراً، حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.',
+      context,
+    };
+  }
+}
+
+// ==================== أسئلة مقترحة ====================
+
+export function getSuggestedQuestions(): string[] {
+  return [
+    'ما هو تحليلك للوضع المالي الحالي؟',
+    'كيف يمكنني تحسين هامش الربح؟',
+    'ما هي أكبر التحديات التي تواجه المشروع؟',
+    'قارن أداء الفروع المختلفة',
+    'ما هي توقعاتك للشهر القادم؟',
+    'كيف يمكنني تقليل المصاريف؟',
+    'من هم أفضل الموظفين وكيف يمكن تحفيزهم؟',
+    'ما هي الفرص المتاحة للنمو؟',
+  ];
+}

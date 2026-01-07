@@ -910,6 +910,7 @@ export interface MonthlyComparisonReport {
 
 /**
  * إنشاء تقرير مقارنة شهري لجميع الفروع
+ * ملاحظة: يتم استبعاد الأشهر التي لا تحتوي على إيرادات من الحسابات
  */
 export async function generateMonthlyComparisonReport(
   monthsCount: number = 6
@@ -935,6 +936,27 @@ export async function generateMonthlyComparisonReport(
       key: `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`
     });
   }
+  
+  // تحديد الأشهر التي تحتوي على إيرادات فعلية
+  const monthsWithRevenue = new Set<string>();
+  for (const month of months) {
+    const [revenueCheck] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
+      })
+      .from(dailyRevenues)
+      .where(and(
+        gte(dailyRevenues.date, month.start),
+        lte(dailyRevenues.date, month.end)
+      ));
+    
+    if (Number(revenueCheck?.total || 0) > 0) {
+      monthsWithRevenue.add(month.key);
+    }
+  }
+  
+  // تصفية الأشهر للاحتفاظ فقط بالأشهر ذات الإيرادات
+  const activeMonths = months.filter(m => monthsWithRevenue.has(m.key));
 
   // تحليل كل فرع
   const branchComparisons: MonthlyBranchComparison[] = [];
@@ -943,7 +965,8 @@ export async function generateMonthlyComparisonReport(
     const monthlyData: MonthlyBranchComparison['months'] = [];
     let previousRevenue = 0;
     
-    for (const month of months) {
+    // استخدام activeMonths بدلاً من months لاستبعاد الأشهر بدون إيرادات
+    for (const month of activeMonths) {
       // جلب الإيرادات للشهر
       const [revenueData] = await db
         .select({
@@ -956,6 +979,15 @@ export async function generateMonthlyComparisonReport(
           gte(dailyRevenues.date, month.start),
           lte(dailyRevenues.date, month.end)
         ));
+      
+      const totalRevenue = Number(revenueData?.total || 0);
+      
+      // إذا لم يكن هناك إيرادات لهذا الفرع في هذا الشهر، لا نحتسب المصاريف الثابتة
+      // هذا يمنع احتساب مصاريف ثابتة لأشهر بدون نشاط فعلي
+      if (totalRevenue === 0) {
+        // تخطي الشهر إذا لم يكن هناك إيرادات لهذا الفرع
+        continue;
+      }
       
       // جلب المصاريف للشهر (باستثناء التكاليف الثابتة المكررة)
       const [expenseData] = await db
@@ -970,8 +1002,8 @@ export async function generateMonthlyComparisonReport(
           sql`${expenses.category} NOT IN ('shop_rent', 'housing_rent', 'electricity', 'internet')`
         ));
       
-      const totalRevenue = Number(revenueData?.total || 0);
       const recordedExpenses = Number(expenseData?.total || 0);
+      // احتساب التكاليف الثابتة فقط للأشهر ذات الإيرادات
       const totalExpenses = FIXED_COSTS_PER_BRANCH + recordedExpenses;
       const netProfit = totalRevenue - totalExpenses;
       const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
@@ -1059,10 +1091,17 @@ export async function generateMonthlyComparisonReport(
     ? { id: sortedBranches[sortedBranches.length - 1].branchId, name: sortedBranches[sortedBranches.length - 1].branchName, profit: sortedBranches[sortedBranches.length - 1].summary.totalProfit }
     : { id: 0, name: '', profit: 0 };
   
-  // الاتجاه الشهري الإجمالي
-  const monthlyTrend = months.map((month, index) => {
-    const monthRevenue = branchComparisons.reduce((sum, b) => sum + (b.months[index]?.totalRevenue || 0), 0);
-    const monthProfit = branchComparisons.reduce((sum, b) => sum + (b.months[index]?.netProfit || 0), 0);
+  // الاتجاه الشهري الإجمالي - فقط للأشهر ذات الإيرادات
+  const monthlyTrend = activeMonths.map((month) => {
+    // جمع إيرادات وأرباح كل الفروع لهذا الشهر
+    const monthRevenue = branchComparisons.reduce((sum, b) => {
+      const monthData = b.months.find(m => m.month === month.key);
+      return sum + (monthData?.totalRevenue || 0);
+    }, 0);
+    const monthProfit = branchComparisons.reduce((sum, b) => {
+      const monthData = b.months.find(m => m.month === month.key);
+      return sum + (monthData?.netProfit || 0);
+    }, 0);
     return {
       month: month.label,
       totalRevenue: monthRevenue,
@@ -1073,8 +1112,11 @@ export async function generateMonthlyComparisonReport(
   // توليد الرؤى والتوصيات باستخدام AI
   const { insights, recommendations } = await generateComparisonInsights(branchComparisons, monthlyTrend);
   
+  // تحديد الفترة بناءً على الأشهر النشطة فقط
   return {
-    period: `${months[0]?.label || ''} - ${months[months.length - 1]?.label || ''}`,
+    period: activeMonths.length > 0 
+      ? `${activeMonths[0]?.label || ''} - ${activeMonths[activeMonths.length - 1]?.label || ''}`
+      : 'لا توجد بيانات',
     monthsCount,
     branches: branchComparisons,
     overallSummary: {
