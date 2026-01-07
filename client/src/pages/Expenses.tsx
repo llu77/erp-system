@@ -355,8 +355,17 @@ export default function Expenses() {
     return true;
   });
 
-  // حساب إجمالي المصاريف المفلترة
-  const filteredTotal = filteredExpenses?.reduce((sum, exp) => sum + parseFloat(exp.amount || '0'), 0) || 0;
+  // حساب إجمالي المصاريف المفلترة (فقط المعتمدة والمدفوعة)
+  const filteredTotal = filteredExpenses?.reduce((sum, exp) => {
+    // احتساب فقط المصاريف المعتمدة أو المدفوعة
+    if (exp.status === 'approved' || exp.status === 'paid') {
+      return sum + parseFloat(exp.amount || '0');
+    }
+    return sum;
+  }, 0) || 0;
+  
+  // عدد المصاريف المعتمدة والمدفوعة
+  const approvedAndPaidCount = filteredExpenses?.filter(exp => exp.status === 'approved' || exp.status === 'paid').length || 0;
 
   // تصدير السلف إلى Excel
   const exportAdvancesToExcel = () => {
@@ -598,9 +607,10 @@ export default function Expenses() {
     const monthName = monthNames[month - 1];
     const branchName = filterBranch === 'all' ? 'جميع الفروع' : branches?.find(b => b.id.toString() === filterBranch)?.nameAr || 'غير محدد';
     
-    // تجميع المصاريف حسب التصنيف
+    // تجميع المصاريف حسب التصنيف (فقط المعتمدة والمدفوعة)
+    const approvedAndPaidExpenses = filteredExpenses?.filter(exp => exp.status === 'approved' || exp.status === 'paid') || [];
     const expensesByCategory: Record<string, { count: number; total: number; items: typeof filteredExpenses }> = {};
-    filteredExpenses?.forEach(exp => {
+    approvedAndPaidExpenses.forEach(exp => {
       if (!expensesByCategory[exp.category]) {
         expensesByCategory[exp.category] = { count: 0, total: 0, items: [] };
       }
@@ -608,6 +618,9 @@ export default function Expenses() {
       expensesByCategory[exp.category].total += parseFloat(exp.amount || '0');
       expensesByCategory[exp.category].items?.push(exp);
     });
+    
+    // حساب الإجمالي للمعتمدة والمدفوعة فقط
+    const reportTotal = approvedAndPaidExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount || '0'), 0);
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -744,8 +757,8 @@ export default function Expenses() {
 
         <div class="summary-cards">
           <div class="summary-card">
-            <div class="label">عدد المصاريف</div>
-            <div class="value">${filteredExpenses?.length || 0}</div>
+            <div class="label">عدد المصاريف (معتمدة/مدفوعة)</div>
+            <div class="value">${approvedAndPaidExpenses.length}</div>
           </div>
           <div class="summary-card">
             <div class="label">عدد التصنيفات</div>
@@ -753,11 +766,11 @@ export default function Expenses() {
           </div>
           <div class="summary-card">
             <div class="label">متوسط المصروف</div>
-            <div class="value">${filteredExpenses?.length ? (filteredTotal / filteredExpenses.length).toFixed(2) : '0.00'} ر.س</div>
+            <div class="value">${approvedAndPaidExpenses.length ? (reportTotal / approvedAndPaidExpenses.length).toFixed(2) : '0.00'} ر.س</div>
           </div>
           <div class="summary-card">
-            <div class="label">إجمالي المصاريف</div>
-            <div class="value">${filteredTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</div>
+            <div class="label">إجمالي المصاريف (معتمدة/مدفوعة)</div>
+            <div class="value">${reportTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</div>
           </div>
         </div>
 
@@ -795,8 +808,8 @@ export default function Expenses() {
         `).join('')}
 
         <div class="grand-total">
-          <span>إجمالي المصاريف لشهر ${monthName} ${year}</span>
-          <span>${filteredTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ريال سعودي</span>
+          <span>إجمالي المصاريف المعتمدة والمدفوعة لشهر ${monthName} ${year}</span>
+          <span>${reportTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ريال سعودي</span>
         </div>
 
         <div class="footer">
@@ -1143,13 +1156,17 @@ export default function Expenses() {
               </Button>
             </div>
             {/* عرض إجمالي المصاريف المفلترة */}
-            <div className="mt-4 pt-4 border-t flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                عدد المصاريف: <strong>{filteredExpenses?.length || 0}</strong>
-              </span>
-              <span className="text-lg font-bold text-red-600">
-                إجمالي: {filteredTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س
-              </span>
+            <div className="mt-4 pt-4 border-t flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                <span>عدد المصاريف: <strong>{filteredExpenses?.length || 0}</strong></span>
+                <span>المعتمدة/المدفوعة: <strong className="text-green-600">{approvedAndPaidCount}</strong></span>
+              </div>
+              <div className="text-left">
+                <span className="text-xs text-muted-foreground block">إجمالي المعتمدة والمدفوعة فقط</span>
+                <span className="text-lg font-bold text-red-600">
+                  {filteredTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
