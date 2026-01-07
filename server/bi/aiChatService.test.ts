@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getSuggestedQuestions } from './aiChatService';
+import { getSuggestedQuestions, getWelcomeMessage } from './aiChatService';
 
 describe('AI Chat Service', () => {
   describe('getSuggestedQuestions', () => {
@@ -136,6 +136,26 @@ describe('Forecast Service - Day Pattern Analysis', () => {
     expect(getAverageForDay(0)).toBe(1250); // Has data
     expect(getAverageForDay(1)).toBe(1500); // No data, uses global
     expect(getAverageForDay(5)).toBe(1750); // Has data
+  });
+});
+
+describe('Welcome Message and User Name', () => {
+  it('should return a welcome message', () => {
+    const message = getWelcomeMessage();
+    expect(message).toBeDefined();
+    expect(typeof message).toBe('string');
+    expect(message.length).toBeGreaterThan(0);
+  });
+
+  it('should include Symbol AI in welcome message', () => {
+    const message = getWelcomeMessage();
+    expect(message).toContain('Symbol AI');
+  });
+
+  it('should ask about user name in welcome message', () => {
+    const message = getWelcomeMessage();
+    expect(message).toContain('عمر');
+    expect(message).toContain('سالم');
   });
 });
 

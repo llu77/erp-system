@@ -6088,13 +6088,15 @@ ${discrepancyRows}
           content: z.string(),
         })).optional(),
         branchId: z.number().optional(),
+        userName: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const aiChat = await import('./bi/aiChatService');
         return aiChat.chatWithAI(
           input.message,
           input.conversationHistory || [],
-          input.branchId
+          input.branchId,
+          input.userName
         );
       }),
 
@@ -6103,6 +6105,13 @@ ${discrepancyRows}
       .query(async () => {
         const aiChat = await import('./bi/aiChatService');
         return aiChat.getSuggestedQuestions();
+      }),
+
+    // جلب رسالة الترحيب
+    getWelcomeMessage: supervisorViewProcedure
+      .query(async () => {
+        const aiChat = await import('./bi/aiChatService');
+        return aiChat.getWelcomeMessage();
       }),
   }),
 });

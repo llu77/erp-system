@@ -1716,10 +1716,15 @@ function AIChatSection({ branchId }: { branchId?: number }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [userName, setUserName] = useState<string | undefined>(undefined);
+  const [showWelcome, setShowWelcome] = useState(true);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
   // جلب الأسئلة المقترحة
   const { data: suggestedQuestions } = trpc.bi.getSuggestedQuestions.useQuery();
+  
+  // جلب رسالة الترحيب
+  const { data: welcomeMessage } = trpc.bi.getWelcomeMessage.useQuery();
 
   // mutation للمحادثة
   const chatMutation = trpc.bi.chatWithAI.useMutation({
@@ -1738,9 +1743,28 @@ function AIChatSection({ branchId }: { branchId?: number }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // التعرف على اسم المستخدم من الرسالة
+  const detectUserName = (message: string): string | undefined => {
+    const lowerMsg = message.toLowerCase();
+    if (lowerMsg.includes('عمر') || lowerMsg === 'عمر') return 'عمر';
+    if (lowerMsg.includes('سالم') || lowerMsg === 'سالم') return 'سالم';
+    return undefined;
+  };
+
   const handleSendMessage = async (message?: string) => {
     const msgToSend = message || inputMessage.trim();
     if (!msgToSend || isLoading) return;
+
+    // التعرف على اسم المستخدم إذا لم يكن محدداً
+    let currentUserName = userName;
+    if (!currentUserName && showWelcome) {
+      const detectedName = detectUserName(msgToSend);
+      if (detectedName) {
+        setUserName(detectedName);
+        currentUserName = detectedName;
+        setShowWelcome(false);
+      }
+    }
 
     setMessages(prev => [...prev, { role: 'user', content: msgToSend }]);
     setInputMessage('');
@@ -1750,6 +1774,7 @@ function AIChatSection({ branchId }: { branchId?: number }) {
       message: msgToSend,
       conversationHistory: messages.map(m => ({ role: m.role, content: m.content })),
       branchId,
+      userName: currentUserName,
     });
   };
 
@@ -1788,28 +1813,76 @@ function AIChatSection({ branchId }: { branchId?: number }) {
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 flex items-center justify-center mb-6">
                 <Sparkles className="h-10 w-10 text-amber-500" />
               </div>
-              <h3 className="text-2xl font-bold mb-2">مرحباً بك في Symbol AI</h3>
-              <p className="text-muted-foreground mb-8 max-w-md">
-                أنا مستشارك الذكي لتحليل بيانات مشروعك. يمكنني مساعدتك في فهم الإيرادات، المصاريف، وتقديم توصيات عملية.
-              </p>
               
-              {/* الأسئلة المقترحة */}
-              <div className="w-full max-w-2xl">
-                <p className="text-sm text-muted-foreground mb-3">جرّب أحد هذه الأسئلة:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {suggestedQuestions?.slice(0, 6).map((q, i) => (
-                    <Button
-                      key={i}
-                      variant="outline"
-                      onClick={() => handleSendMessage(q)}
-                      className="h-auto py-3 px-4 text-right justify-start hover:bg-amber-500/10 hover:border-amber-500/50 transition-colors"
-                    >
-                      <ChevronRight className="h-4 w-4 ml-2 flex-shrink-0 text-amber-500" />
-                      <span className="text-sm line-clamp-2">{q}</span>
-                    </Button>
-                  ))}
-                </div>
-              </div>
+              {showWelcome && !userName ? (
+                <>
+                  <h3 className="text-2xl font-bold mb-4">مرحباً! أنا Symbol AI 👋</h3>
+                  <p className="text-muted-foreground mb-6 max-w-md">
+                    مستشارك الذكي لتحليل الأعمال. قبل أن نبدأ، أود التعرف عليك:
+                  </p>
+                  
+                  {/* أزرار اختيار الاسم */}
+                  <div className="flex flex-col gap-3 w-full max-w-sm mb-8">
+                    <p className="text-lg font-semibold text-amber-500">هل أنت عمر أم سالم؟</p>
+                    <div className="flex gap-3 justify-center">
+                      <Button
+                        size="lg"
+                        onClick={() => {
+                          setUserName('عمر');
+                          setShowWelcome(false);
+                          handleSendMessage('أنا عمر');
+                        }}
+                        className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-6"
+                      >
+                        <User className="h-5 w-5 ml-2" />
+                        عمر
+                      </Button>
+                      <Button
+                        size="lg"
+                        onClick={() => {
+                          setUserName('سالم');
+                          setShowWelcome(false);
+                          handleSendMessage('أنا سالم');
+                        }}
+                        className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-6"
+                      >
+                        <User className="h-5 w-5 ml-2" />
+                        سالم
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      هذا سيساعدني في تخصيص التحليلات والتوصيات بشكل أفضل لك
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-2xl font-bold mb-2">
+                    {userName ? `مرحباً ${userName}! 👋` : 'مرحباً بك في Symbol AI'}
+                  </h3>
+                  <p className="text-muted-foreground mb-8 max-w-md">
+                    أنا مستشارك الذكي لتحليل بيانات مشروعك. يمكنني مساعدتك في فهم الإيرادات، المصاريف، وتقديم توصيات عملية.
+                  </p>
+                  
+                  {/* الأسئلة المقترحة */}
+                  <div className="w-full max-w-2xl">
+                    <p className="text-sm text-muted-foreground mb-3">جرّب أحد هذه الأسئلة:</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {suggestedQuestions?.slice(0, 6).map((q, i) => (
+                        <Button
+                          key={i}
+                          variant="outline"
+                          onClick={() => handleSendMessage(q)}
+                          className="h-auto py-3 px-4 text-right justify-start hover:bg-amber-500/10 hover:border-amber-500/50 transition-colors"
+                        >
+                          <ChevronRight className="h-4 w-4 ml-2 flex-shrink-0 text-amber-500" />
+                          <span className="text-sm line-clamp-2">{q}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
