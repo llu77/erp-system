@@ -1,0 +1,66 @@
+{
+  "query": "SELECT tierKey, tierName, minRevenue, maxRevenue, bonusAmount, sortOrder FROM bonusTierSettings ORDER BY sortOrder DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT tierKey, tierName, minRevenue, maxRevenue, bonusAmount, sortOrder FROM bonusTierSettings ORDER BY sortOrder DESC;",
+  "rows": [
+    {
+      "tierKey": "tier_7",
+      "tierName": "المستوى 7",
+      "minRevenue": "3200.00",
+      "maxRevenue": "NULL",
+      "bonusAmount": "190.00",
+      "sortOrder": "7"
+    },
+    {
+      "tierKey": "tier_6",
+      "tierName": "المستوى 6",
+      "minRevenue": "2800.00",
+      "maxRevenue": "3199.99",
+      "bonusAmount": "155.00",
+      "sortOrder": "6"
+    },
+    {
+      "tierKey": "tier_5",
+      "tierName": "المستوى 5",
+      "minRevenue": "2500.00",
+      "maxRevenue": "2799.99",
+      "bonusAmount": "120.00",
+      "sortOrder": "5"
+    },
+    {
+      "tierKey": "tier_4",
+      "tierName": "المستوى 4",
+      "minRevenue": "2200.00",
+      "maxRevenue": "2499.99",
+      "bonusAmount": "90.00",
+      "sortOrder": "4"
+    },
+    {
+      "tierKey": "tier_3",
+      "tierName": "المستوى 3",
+      "minRevenue": "1950.00",
+      "maxRevenue": "2199.99",
+      "bonusAmount": "65.00",
+      "sortOrder": "3"
+    },
+    {
+      "tierKey": "tier_2",
+      "tierName": "المستوى 2",
+      "minRevenue": "1750.00",
+      "maxRevenue": "1949.99",
+      "bonusAmount": "55.00",
+      "sortOrder": "2"
+    },
+    {
+      "tierKey": "tier_1",
+      "tierName": "المستوى 1",
+      "minRevenue": "1450.00",
+      "maxRevenue": "1749.99",
+      "bonusAmount": "35.00",
+      "sortOrder": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "tierKey\ttierName\tminRevenue\tmaxRevenue\tbonusAmount\tsortOrder\ntier_7\tالمستوى 7\t3200.00\tNULL\t190.00\t7\ntier_6\tالمستوى 6\t2800.00\t3199.99\t155.00\t6\ntier_5\tالمستوى 5\t2500.00\t2799.99\t120.00\t5\ntier_4\tالمستوى 4\t2200.00\t2499.99\t90.00\t4\ntier_3\tالمستوى 3\t1950.00\t2199.99\t65.00\t3\ntier_2\tالمستوى 2\t1750.00\t1949.99\t55.00\t2\ntier_1\tالمستوى 1\t1450.00\t1749.99\t35.00\t1\n",
+  "stderr": "",
+  "execution_time_ms": 1547
+}
