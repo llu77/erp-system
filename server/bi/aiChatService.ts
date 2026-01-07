@@ -42,6 +42,26 @@ export interface BusinessContext {
   employeeCount: number;
   topPerformers: { name: string; revenue: number }[];
   alerts: string[];
+  // بيانات تفصيلية إضافية
+  branchDetails?: {
+    id: number;
+    name: string;
+    revenue7Days: number;
+    revenue30Days: number;
+    avgDaily: number;
+  }[];
+  dailyTrend?: {
+    date: string;
+    revenue: number;
+    dayName: string;
+  }[];
+  employeeDetails?: {
+    name: string;
+    branch: string;
+    revenue30Days: number;
+    avgDaily: number;
+    workDays: number;
+  }[];
 }
 
 // ==================== جلب سياق الأعمال ====================
@@ -145,6 +165,88 @@ async function getBusinessContext(branchId?: number): Promise<BusinessContext> {
     alerts.push('⚠️ المتوسط اليومي أقل من التكاليف الثابتة اليومية');
   }
 
+  // جلب بيانات تفصيلية للفروع
+  const branchDetails = await Promise.all(
+    allBranches.map(async (branch) => {
+      const [rev7] = await db
+        .select({ total: sql<number>`COALESCE(SUM(${dailyRevenues.total}), 0)` })
+        .from(dailyRevenues)
+        .where(sql`DATE(${dailyRevenues.date}) >= ${last7Days.toISOString().split('T')[0]} AND ${dailyRevenues.branchId} = ${branch.id}`);
+      
+      const [rev30] = await db
+        .select({ 
+          total: sql<number>`COALESCE(SUM(${dailyRevenues.total}), 0)`,
+          count: sql<number>`COUNT(DISTINCT DATE(${dailyRevenues.date}))`
+        })
+        .from(dailyRevenues)
+        .where(sql`DATE(${dailyRevenues.date}) >= ${last30Days.toISOString().split('T')[0]} AND ${dailyRevenues.branchId} = ${branch.id}`);
+      
+      const total30 = Number(rev30?.total || 0);
+      const days = Number(rev30?.count || 1);
+      
+      return {
+        id: branch.id,
+        name: branch.name,
+        revenue7Days: Math.round(Number(rev7?.total || 0)),
+        revenue30Days: Math.round(total30),
+        avgDaily: Math.round(days > 0 ? total30 / days : 0),
+      };
+    })
+  );
+
+  // جلب الاتجاه اليومي (آخر 7 أيام)
+  const dailyTrendData = await db
+    .select({
+      date: dailyRevenues.date,
+      total: sql<number>`COALESCE(SUM(${dailyRevenues.total}), 0)`,
+    })
+    .from(dailyRevenues)
+    .where(
+      branchId
+        ? sql`DATE(${dailyRevenues.date}) >= ${last7Days.toISOString().split('T')[0]} AND ${dailyRevenues.branchId} = ${branchId}`
+        : sql`DATE(${dailyRevenues.date}) >= ${last7Days.toISOString().split('T')[0]}`
+    )
+    .groupBy(dailyRevenues.date)
+    .orderBy(asc(dailyRevenues.date));
+
+  const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  const dailyTrend = dailyTrendData.map(d => {
+    const date = new Date(d.date);
+    return {
+      date: date.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' }),
+      revenue: Math.round(Number(d.total)),
+      dayName: dayNames[date.getDay()],
+    };
+  });
+
+  // جلب تفاصيل الموظفين
+  const employeeDetailsData = await db
+    .select({
+      name: employees.name,
+      branchId: employees.branchId,
+      total: sql<number>`COALESCE(SUM(${employeeRevenues.total}), 0)`,
+      workDays: sql<number>`COUNT(DISTINCT DATE(${dailyRevenues.date}))`,
+    })
+    .from(employeeRevenues)
+    .innerJoin(employees, eq(employeeRevenues.employeeId, employees.id))
+    .innerJoin(dailyRevenues, eq(employeeRevenues.dailyRevenueId, dailyRevenues.id))
+    .where(sql`DATE(${dailyRevenues.date}) >= ${last30Days.toISOString().split('T')[0]}`)
+    .groupBy(employees.id, employees.name, employees.branchId)
+    .orderBy(desc(sql`SUM(${employeeRevenues.total})`));
+
+  const branchMap = new Map(allBranches.map(b => [b.id, b.name]));
+  const employeeDetails = employeeDetailsData.map(e => {
+    const total = Number(e.total);
+    const days = Number(e.workDays) || 1;
+    return {
+      name: e.name,
+      branch: branchMap.get(e.branchId) || 'غير محدد',
+      revenue30Days: Math.round(total),
+      avgDaily: Math.round(total / days),
+      workDays: days,
+    };
+  });
+
   return {
     currentDate: now.toLocaleDateString('ar-SA', { 
       weekday: 'long', 
@@ -179,6 +281,9 @@ async function getBusinessContext(branchId?: number): Promise<BusinessContext> {
       revenue: Math.round(Number(p.revenue)),
     })),
     alerts,
+    branchDetails,
+    dailyTrend,
+    employeeDetails,
   };
 }
 
@@ -240,6 +345,15 @@ ${context.topPerformers.map((p, i) => `${i + 1}. ${p.name}: ${p.revenue.toLocale
 
 ## التنبيهات الحالية:
 ${context.alerts.length > 0 ? context.alerts.join('\n') : 'لا توجد تنبيهات'}
+
+## بيانات الفروع التفصيلية:
+${context.branchDetails?.map(b => `- ${b.name}: إيرادات 7 أيام: ${b.revenue7Days.toLocaleString('ar-SA')} ر.س | 30 يوم: ${b.revenue30Days.toLocaleString('ar-SA')} ر.س | متوسط يومي: ${b.avgDaily.toLocaleString('ar-SA')} ر.س`).join('\n') || 'لا توجد بيانات'}
+
+## الاتجاه اليومي (آخر 7 أيام):
+${context.dailyTrend?.map(d => `- ${d.dayName} (${d.date}): ${d.revenue.toLocaleString('ar-SA')} ر.س`).join('\n') || 'لا توجد بيانات'}
+
+## تفاصيل الموظفين (آخر 30 يوم):
+${context.employeeDetails?.slice(0, 10).map((e, i) => `${i + 1}. ${e.name} (${e.branch}): ${e.revenue30Days.toLocaleString('ar-SA')} ر.س | متوسط: ${e.avgDaily.toLocaleString('ar-SA')} ر.س/يوم | ${e.workDays} يوم عمل`).join('\n') || 'لا توجد بيانات'}
 
 ## قواعد الرد:
 1. استخدم البيانات المتاحة لدعم تحليلاتك

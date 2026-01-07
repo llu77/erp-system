@@ -739,36 +739,60 @@ export default function AIAnalytics() {
         )}
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="overview" className="gap-2">
-              <BarChart3 className="h-4 w-4" />
-              نظرة عامة
-            </TabsTrigger>
-            <TabsTrigger value="revenue" className="gap-2">
-              <DollarSign className="h-4 w-4" />
-              الإيرادات
-            </TabsTrigger>
-            <TabsTrigger value="expenses" className="gap-2">
-              <PieChartIcon className="h-4 w-4" />
-              المصاريف
-            </TabsTrigger>
-            <TabsTrigger value="employees" className="gap-2">
-              <Users className="h-4 w-4" />
-              أداء الموظفين
-            </TabsTrigger>
-            <TabsTrigger value="comparison" className="gap-2">
-              <Building2 className="h-4 w-4" />
-              مقارنة الفروع
-            </TabsTrigger>
-            <TabsTrigger value="forecast" className="gap-2">
-              <TrendingUp className="h-4 w-4" />
-              التنبؤات
-            </TabsTrigger>
-            <TabsTrigger value="chat" className="gap-2">
-              <MessageSquare className="h-4 w-4" />
-              مستشار AI
-            </TabsTrigger>
-          </TabsList>
+          {/* التبويبات - تصميم محسّن */}
+          <div className="bg-card rounded-xl p-2 border shadow-sm">
+            <TabsList className="flex flex-wrap gap-1 h-auto bg-transparent p-0">
+              <TabsTrigger 
+                value="overview" 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+              >
+                <BarChart3 className="h-4 w-4" />
+                <span className="hidden sm:inline">نظرة عامة</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="revenue" 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+              >
+                <DollarSign className="h-4 w-4" />
+                <span className="hidden sm:inline">الإيرادات</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="expenses" 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+              >
+                <PieChartIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">المصاريف</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="employees" 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+              >
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">الموظفين</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="comparison" 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+              >
+                <Building2 className="h-4 w-4" />
+                <span className="hidden sm:inline">الفروع</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="forecast" 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+              >
+                <TrendingUp className="h-4 w-4" />
+                <span className="hidden sm:inline">التنبؤات</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="chat" 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-amber-500 data-[state=active]:text-white transition-all"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline">Symbol AI</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* نظرة عامة */}
           <TabsContent value="overview" className="space-y-4">
