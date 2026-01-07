@@ -1,0 +1,80 @@
+{
+  "query": "SELECT \n  d.date,\n  b.name as branch_name,\n  d.total\nFROM dailyRevenues d\nJOIN branches b ON d.branchId = b.id\nWHERE d.date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)\nORDER BY d.date DESC, b.name\nLIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  d.date,\n  b.name as branch_name,\n  d.total\nFROM dailyRevenues d\nJOIN branches b ON d.branchId = b.id\nWHERE d.date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)\nORDER BY d.date DESC, b.name\nLIMIT 20;",
+  "rows": [
+    {
+      "date": "2026-01-06 00:00:00",
+      "branch_name": "Laban",
+      "total": "920.00"
+    },
+    {
+      "date": "2026-01-06 00:00:00",
+      "branch_name": "Twiq Branch - Riyadh",
+      "total": "660.00"
+    },
+    {
+      "date": "2026-01-05 00:00:00",
+      "branch_name": "Laban",
+      "total": "950.00"
+    },
+    {
+      "date": "2026-01-05 00:00:00",
+      "branch_name": "Twiq Branch - Riyadh",
+      "total": "625.00"
+    },
+    {
+      "date": "2026-01-04 00:00:00",
+      "branch_name": "Laban",
+      "total": "820.00"
+    },
+    {
+      "date": "2026-01-04 00:00:00",
+      "branch_name": "Twiq Branch - Riyadh",
+      "total": "505.00"
+    },
+    {
+      "date": "2026-01-03 00:00:00",
+      "branch_name": "Laban",
+      "total": "1488.00"
+    },
+    {
+      "date": "2026-01-03 00:00:00",
+      "branch_name": "Twiq Branch - Riyadh",
+      "total": "855.00"
+    },
+    {
+      "date": "2026-01-02 00:00:00",
+      "branch_name": "Laban",
+      "total": "1525.00"
+    },
+    {
+      "date": "2026-01-02 00:00:00",
+      "branch_name": "Twiq Branch - Riyadh",
+      "total": "835.00"
+    },
+    {
+      "date": "2026-01-01 00:00:00",
+      "branch_name": "Laban",
+      "total": "1200.00"
+    },
+    {
+      "date": "2026-01-01 00:00:00",
+      "branch_name": "Twiq Branch - Riyadh",
+      "total": "985.00"
+    },
+    {
+      "date": "2025-12-31 00:00:00",
+      "branch_name": "Laban",
+      "total": "1310.00"
+    },
+    {
+      "date": "2025-12-31 00:00:00",
+      "branch_name": "Twiq Branch - Riyadh",
+      "total": "785.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "date\tbranch_name\ttotal\n2026-01-06 00:00:00\tLaban\t920.00\n2026-01-06 00:00:00\tTwiq Branch - Riyadh\t660.00\n2026-01-05 00:00:00\tLaban\t950.00\n2026-01-05 00:00:00\tTwiq Branch - Riyadh\t625.00\n2026-01-04 00:00:00\tLaban\t820.00\n2026-01-04 00:00:00\tTwiq Branch - Riyadh\t505.00\n2026-01-03 00:00:00\tLaban\t1488.00\n2026-01-03 00:00:00\tTwiq Branch - Riyadh\t855.00\n2026-01-02 00:00:00\tLaban\t1525.00\n2026-01-02 00:00:00\tTwiq Branch - Riyadh\t835.00\n2026-01-01 00:00:00\tLaban\t1200.00\n2026-01-01 00:00:00\tTwiq Branch - Riyadh\t985.00\n2025-12-31 00:00:00\tLaban\t1310.00\n2025-12-31 00:00:00\tTwiq Branch - Riyadh\t785.00\n",
+  "stderr": "",
+  "execution_time_ms": 1524
+}

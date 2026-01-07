@@ -1,0 +1,60 @@
+{
+  "query": "SELECT \n  DATE(date) as day,\n  SUM(total) as total_revenue,\n  COUNT(*) as records\nFROM dailyRevenues \nWHERE date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)\nGROUP BY DATE(date)\nORDER BY day DESC\nLIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  DATE(date) as day,\n  SUM(total) as total_revenue,\n  COUNT(*) as records\nFROM dailyRevenues \nWHERE date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)\nGROUP BY DATE(date)\nORDER BY day DESC\nLIMIT 10;",
+  "rows": [
+    {
+      "day": "2026-01-06",
+      "total_revenue": "1580.00",
+      "records": "2"
+    },
+    {
+      "day": "2026-01-05",
+      "total_revenue": "1575.00",
+      "records": "2"
+    },
+    {
+      "day": "2026-01-04",
+      "total_revenue": "1325.00",
+      "records": "2"
+    },
+    {
+      "day": "2026-01-03",
+      "total_revenue": "2343.00",
+      "records": "2"
+    },
+    {
+      "day": "2026-01-02",
+      "total_revenue": "2360.00",
+      "records": "2"
+    },
+    {
+      "day": "2026-01-01",
+      "total_revenue": "2185.00",
+      "records": "2"
+    },
+    {
+      "day": "2025-12-31",
+      "total_revenue": "2095.00",
+      "records": "2"
+    },
+    {
+      "day": "2025-12-30",
+      "total_revenue": "1875.00",
+      "records": "2"
+    },
+    {
+      "day": "2025-12-29",
+      "total_revenue": "1415.00",
+      "records": "2"
+    },
+    {
+      "day": "2025-12-28",
+      "total_revenue": "2205.00",
+      "records": "2"
+    }
+  ],
+  "messages": [],
+  "stdout": "day\ttotal_revenue\trecords\n2026-01-06\t1580.00\t2\n2026-01-05\t1575.00\t2\n2026-01-04\t1325.00\t2\n2026-01-03\t2343.00\t2\n2026-01-02\t2360.00\t2\n2026-01-01\t2185.00\t2\n2025-12-31\t2095.00\t2\n2025-12-30\t1875.00\t2\n2025-12-29\t1415.00\t2\n2025-12-28\t2205.00\t2\n",
+  "stderr": "",
+  "execution_time_ms": 1514
+}

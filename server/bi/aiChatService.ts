@@ -402,6 +402,7 @@ export async function chatWithAI(
         role: m.role as 'system' | 'user' | 'assistant',
         content: m.content,
       })),
+      temperature: 0.2, // تحليل دقيق ومنطقي
     });
 
     const assistantMessage = response.choices[0]?.message?.content || 'عذراً، لم أتمكن من معالجة طلبك.';
