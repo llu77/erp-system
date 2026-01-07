@@ -1718,6 +1718,7 @@ function AIChatSection({ branchId }: { branchId?: number }) {
   const [isLoading, setIsLoading] = useState(false);
   const [userName, setUserName] = useState<string | undefined>(undefined);
   const [showWelcome, setShowWelcome] = useState(true);
+  const [nameInput, setNameInput] = useState('');
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
   // جلب الأسئلة المقترحة
@@ -1743,28 +1744,39 @@ function AIChatSection({ branchId }: { branchId?: number }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // التعرف على اسم المستخدم من الرسالة
-  const detectUserName = (message: string): string | undefined => {
-    const lowerMsg = message.toLowerCase();
-    if (lowerMsg.includes('عمر') || lowerMsg === 'عمر') return 'عمر';
-    if (lowerMsg.includes('سالم') || lowerMsg === 'سالم') return 'سالم';
-    return undefined;
+  // استخراج الاسم من النص
+  const extractName = (text: string): string => {
+    // إزالة الكلمات الشائعة واستخراج الاسم
+    const cleanText = text
+      .replace(/أنا|اسمي|الاسم|هو|هي|my name is|i am|i'm/gi, '')
+      .trim();
+    return cleanText || text.trim();
+  };
+
+  // إرسال الاسم وبدء المحادثة
+  const handleNameSubmit = () => {
+    const name = extractName(nameInput);
+    if (!name) return;
+    
+    setUserName(name);
+    setShowWelcome(false);
+    setNameInput('');
+    
+    // إرسال رسالة ترحيب بالاسم
+    setMessages([{ role: 'user', content: `أنا ${name}` }]);
+    setIsLoading(true);
+    
+    chatMutation.mutate({
+      message: `أنا ${name}، مرحباً بي`,
+      conversationHistory: [],
+      branchId,
+      userName: name,
+    });
   };
 
   const handleSendMessage = async (message?: string) => {
     const msgToSend = message || inputMessage.trim();
     if (!msgToSend || isLoading) return;
-
-    // التعرف على اسم المستخدم إذا لم يكن محدداً
-    let currentUserName = userName;
-    if (!currentUserName && showWelcome) {
-      const detectedName = detectUserName(msgToSend);
-      if (detectedName) {
-        setUserName(detectedName);
-        currentUserName = detectedName;
-        setShowWelcome(false);
-      }
-    }
 
     setMessages(prev => [...prev, { role: 'user', content: msgToSend }]);
     setInputMessage('');
@@ -1774,7 +1786,7 @@ function AIChatSection({ branchId }: { branchId?: number }) {
       message: msgToSend,
       conversationHistory: messages.map(m => ({ role: m.role, content: m.content })),
       branchId,
-      userName: currentUserName,
+      userName,
     });
   };
 
@@ -1791,10 +1803,12 @@ function AIChatSection({ branchId }: { branchId?: number }) {
       <div className="flex-shrink-0 mb-4">
         <Card className="border-amber-500/30 bg-gradient-to-l from-amber-500/10 to-transparent">
           <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
-                <Sparkles className="h-6 w-6 text-white" />
-              </div>
+            <div className="flex items-center gap-4">
+              <img 
+                src="/symbol-ai-logo.png" 
+                alt="Symbol AI" 
+                className="w-14 h-14 rounded-xl shadow-lg object-contain bg-gradient-to-br from-amber-500/20 to-orange-600/20 p-1"
+              />
               <div>
                 <h2 className="text-xl font-bold text-amber-500">Symbol AI</h2>
                 <p className="text-sm text-muted-foreground">مستشارك الذكي لتحليل الأعمال</p>
@@ -1810,47 +1824,43 @@ function AIChatSection({ branchId }: { branchId?: number }) {
         <div className="flex-1 overflow-y-auto p-4">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-4">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 flex items-center justify-center mb-6">
-                <Sparkles className="h-10 w-10 text-amber-500" />
-              </div>
+              {/* شعار Symbol AI */}
+              <img 
+                src="/symbol-ai-logo.png" 
+                alt="Symbol AI" 
+                className="w-24 h-24 rounded-2xl shadow-lg object-contain bg-gradient-to-br from-amber-500/10 to-orange-600/10 p-2 mb-6"
+              />
               
               {showWelcome && !userName ? (
                 <>
-                  <h3 className="text-2xl font-bold mb-4">مرحباً! أنا Symbol AI 👋</h3>
+                  <h3 className="text-2xl font-bold mb-4 text-amber-500">مرحباً! أنا Symbol AI 👋</h3>
                   <p className="text-muted-foreground mb-6 max-w-md">
                     مستشارك الذكي لتحليل الأعمال. قبل أن نبدأ، أود التعرف عليك:
                   </p>
                   
-                  {/* أزرار اختيار الاسم */}
-                  <div className="flex flex-col gap-3 w-full max-w-sm mb-8">
-                    <p className="text-lg font-semibold text-amber-500">هل أنت عمر أم سالم؟</p>
-                    <div className="flex gap-3 justify-center">
+                  {/* حقل إدخال الاسم */}
+                  <div className="flex flex-col gap-4 w-full max-w-sm mb-8">
+                    <p className="text-lg font-semibold text-amber-500">ما اسمك؟</p>
+                    <div className="flex gap-3">
+                      <input
+                        type="text"
+                        value={nameInput}
+                        onChange={(e) => setNameInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleNameSubmit()}
+                        placeholder="اكتب اسمك هنا..."
+                        className="flex-1 px-4 py-3 rounded-xl border-2 border-amber-500/30 bg-background focus:border-amber-500 focus:outline-none text-center text-lg"
+                        autoFocus
+                      />
                       <Button
                         size="lg"
-                        onClick={() => {
-                          setUserName('عمر');
-                          setShowWelcome(false);
-                          handleSendMessage('أنا عمر');
-                        }}
-                        className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-6"
+                        onClick={handleNameSubmit}
+                        disabled={!nameInput.trim()}
+                        className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold px-6"
                       >
-                        <User className="h-5 w-5 ml-2" />
-                        عمر
-                      </Button>
-                      <Button
-                        size="lg"
-                        onClick={() => {
-                          setUserName('سالم');
-                          setShowWelcome(false);
-                          handleSendMessage('أنا سالم');
-                        }}
-                        className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-6"
-                      >
-                        <User className="h-5 w-5 ml-2" />
-                        سالم
+                        <Send className="h-5 w-5" />
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="text-xs text-muted-foreground">
                       هذا سيساعدني في تخصيص التحليلات والتوصيات بشكل أفضل لك
                     </p>
                   </div>
@@ -1885,42 +1895,50 @@ function AIChatSection({ branchId }: { branchId?: number }) {
               )}
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-6 py-2">
               {messages.map((msg, i) => (
                 <div
                   key={i}
-                  className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                  className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                 >
-                  <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
+                  {/* صورة المرسل */}
+                  {msg.role === 'user' ? (
+                    <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-md">
+                      <User className="h-5 w-5" />
+                    </div>
+                  ) : (
+                    <img 
+                      src="/symbol-ai-logo.png" 
+                      alt="Symbol AI" 
+                      className="flex-shrink-0 w-10 h-10 rounded-xl shadow-md object-contain bg-gradient-to-br from-amber-500/20 to-orange-600/20 p-0.5"
+                    />
+                  )}
+                  {/* فقاعة الرسالة */}
+                  <div className={`max-w-[80%] rounded-2xl px-5 py-4 shadow-sm ${
                     msg.role === 'user' 
-                      ? 'bg-primary text-primary-foreground' 
-                      : 'bg-gradient-to-br from-amber-500 to-orange-600'
-                  }`}>
-                    {msg.role === 'user' ? <User className="h-5 w-5" /> : <Sparkles className="h-5 w-5 text-white" />}
-                  </div>
-                  <div className={`max-w-[75%] rounded-2xl px-4 py-3 ${
-                    msg.role === 'user' 
-                      ? 'bg-primary text-primary-foreground rounded-tr-none' 
-                      : 'bg-muted rounded-tl-none'
+                      ? 'bg-primary text-primary-foreground rounded-tr-sm' 
+                      : 'bg-card border border-border rounded-tl-sm'
                   }`}>
                     {msg.role === 'assistant' ? (
-                      <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                      <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:mb-3 [&_ul]:mb-3 [&_ol]:mb-3 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_table]:text-xs [&_th]:px-2 [&_td]:px-2">
                         <Streamdown>{msg.content}</Streamdown>
                       </div>
                     ) : (
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                     )}
                   </div>
                 </div>
               ))}
               {isLoading && (
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-                    <Sparkles className="h-5 w-5 text-white" />
-                  </div>
-                  <div className="bg-muted rounded-2xl rounded-tl-none px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
+                <div className="flex gap-4">
+                  <img 
+                    src="/symbol-ai-logo.png" 
+                    alt="Symbol AI" 
+                    className="flex-shrink-0 w-10 h-10 rounded-xl shadow-md object-contain bg-gradient-to-br from-amber-500/20 to-orange-600/20 p-0.5 animate-pulse"
+                  />
+                  <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="h-5 w-5 animate-spin text-amber-500" />
                       <span className="text-sm text-muted-foreground">Symbol AI يفكر...</span>
                     </div>
                   </div>
