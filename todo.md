@@ -2260,3 +2260,4 @@ node scripts/scheduledTasks.mjs weekly-report
 ## إصلاح Symbol AI - Temperature والبيانات (7 يناير 2026)
 - [x] ضبط temperature على 0.2 للتحليل الدقيق
 - [x] فحص وإصلاح جلب البيانات الحقيقية من قاعدة البيانات
+- [x] إصلاح Symbol AI ليصل لبيانات المصاريف الحقيقية من قاعدة البيانات

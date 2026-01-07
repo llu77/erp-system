@@ -10,7 +10,7 @@ import {
   monthlyRecords
 } from "../../drizzle/schema";
 import { sql, eq, and, gte, lte, desc, asc } from "drizzle-orm";
-import { TOTAL_FIXED_COSTS, FIXED_COSTS_PER_BRANCH, BRANCHES_COUNT } from "./financialForecastService";
+import { TOTAL_FIXED_COSTS, FIXED_COSTS_PER_BRANCH, BRANCHES_COUNT, FIXED_COSTS_PER_BRANCH_BREAKDOWN } from "./financialForecastService";
 
 // ==================== أنواع البيانات ====================
 
@@ -31,10 +31,23 @@ export interface BusinessContext {
     last30Days: number;
     byCategory: { category: string; amount: number }[];
   };
+  fixedCosts: {
+    total: number;
+    perBranch: number;
+    breakdown: {
+      salaries: number;
+      shopRent: number;
+      housingRent: number;
+      electricity: number;
+      internet: number;
+    };
+  };
   profitability: {
     last30Days: {
       revenue: number;
-      expenses: number;
+      variableExpenses: number;
+      fixedCosts: number;
+      totalExpenses: number;
       profit: number;
       margin: number;
     };
@@ -267,10 +280,17 @@ async function getBusinessContext(branchId?: number): Promise<BusinessContext> {
         amount: Math.round(Number(e.total)),
       })),
     },
+    fixedCosts: {
+      total: fixedCosts,
+      perBranch: FIXED_COSTS_PER_BRANCH,
+      breakdown: FIXED_COSTS_PER_BRANCH_BREAKDOWN,
+    },
     profitability: {
       last30Days: {
         revenue: Math.round(totalRevenue30),
-        expenses: Math.round(totalCosts),
+        variableExpenses: Math.round(totalExpenses30),
+        fixedCosts: fixedCosts,
+        totalExpenses: Math.round(totalCosts),
         profit: Math.round(profit),
         margin: Math.round(margin * 10) / 10,
       },
@@ -345,12 +365,30 @@ ${userGreeting}
 - إجمالي الإيرادات: ${context.recentRevenue.last30Days.toLocaleString('ar-SA')} ر.س
 - إيرادات آخر 7 أيام: ${context.recentRevenue.last7Days.toLocaleString('ar-SA')} ر.س
 - المتوسط اليومي: ${context.recentRevenue.avgDaily.toLocaleString('ar-SA')} ر.س
-- إجمالي المصاريف: ${context.profitability.last30Days.expenses.toLocaleString('ar-SA')} ر.س
+
+## المصاريف المتغيرة (المسجلة فعلياً في النظام - آخر 30 يوم):
+- إجمالي المصاريف المتغيرة: ${context.recentExpenses.last30Days.toLocaleString('ar-SA')} ر.س
+- تفصيل المصاريف حسب الفئة:
+${context.recentExpenses.byCategory.map(e => `  • ${e.category}: ${e.amount.toLocaleString('ar-SA')} ر.س`).join('\n')}
+
+## التكاليف الثابتة الشهرية (تقديرية):
+- إجمالي التكاليف الثابتة: ${context.fixedCosts.total.toLocaleString('ar-SA')} ر.س
+- تفصيل التكاليف الثابتة لكل فرع (${context.fixedCosts.perBranch.toLocaleString('ar-SA')} ر.س):
+  • رواتب: ${context.fixedCosts.breakdown.salaries.toLocaleString('ar-SA')} ر.س
+  • إيجار المحل: ${context.fixedCosts.breakdown.shopRent.toLocaleString('ar-SA')} ر.س
+  • إيجار السكن: ${context.fixedCosts.breakdown.housingRent.toLocaleString('ar-SA')} ر.س
+  • كهرباء: ${context.fixedCosts.breakdown.electricity.toLocaleString('ar-SA')} ر.س
+  • إنترنت: ${context.fixedCosts.breakdown.internet.toLocaleString('ar-SA')} ر.س
+
+## ملخص الربحية (آخر 30 يوم):
+- الإيرادات: ${context.profitability.last30Days.revenue.toLocaleString('ar-SA')} ر.س
+- المصاريف المتغيرة (من البيانات المالية): ${context.profitability.last30Days.variableExpenses.toLocaleString('ar-SA')} ر.س
+- التكاليف الثابتة (تقديرية): ${context.profitability.last30Days.fixedCosts.toLocaleString('ar-SA')} ر.س
+- إجمالي التكاليف: ${context.profitability.last30Days.totalExpenses.toLocaleString('ar-SA')} ر.س
 - صافي الربح: ${context.profitability.last30Days.profit.toLocaleString('ar-SA')} ر.س
 - هامش الربح: ${context.profitability.last30Days.margin}%
 
-## المصاريف حسب الفئة:
-${context.recentExpenses.byCategory.map(e => `- ${e.category}: ${e.amount.toLocaleString('ar-SA')} ر.س`).join('\n')}
+**ملاحظة هامة:** المصاريف المتغيرة هي المصاريف المسجلة فعلياً في صفحة المصاريف، بينما التكاليف الثابتة هي تقديرات شهرية للرواتب والإيجارات والمرافق
 
 ## أفضل الموظفين أداءً:
 ${context.topPerformers.map((p, i) => `${i + 1}. ${p.name}: ${p.revenue.toLocaleString('ar-SA')} ر.س`).join('\n')}
