@@ -1692,7 +1692,7 @@ function AIChatSection({ branchId }: { branchId?: number }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
   // جلب الأسئلة المقترحة
   const { data: suggestedQuestions } = trpc.bi.getSuggestedQuestions.useQuery();
@@ -1703,7 +1703,7 @@ function AIChatSection({ branchId }: { branchId?: number }) {
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
       setIsLoading(false);
     },
-    onError: (error) => {
+    onError: () => {
       toast.error('حدث خطأ أثناء المحادثة');
       setIsLoading(false);
     },
@@ -1711,9 +1711,7 @@ function AIChatSection({ branchId }: { branchId?: number }) {
 
   // التمرير للأسفل عند إضافة رسالة جديدة
   React.useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSendMessage = async (message?: string) => {
@@ -1739,61 +1737,77 @@ function AIChatSection({ branchId }: { branchId?: number }) {
   };
 
   return (
-    <div className="grid lg:grid-cols-4 gap-4 h-[calc(100vh-300px)] min-h-[500px]">
-      {/* منطقة المحادثة */}
-      <Card className="lg:col-span-3 flex flex-col">
-        <CardHeader className="border-b bg-gradient-to-l from-primary/5 to-transparent">
-          <CardTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-primary" />
-            مستشار ERP الذكي
-          </CardTitle>
-          <CardDescription>
-            مستشار أعمال ذكي متخصص في تحليل بياناتك المالية والتشغيلية
-          </CardDescription>
-        </CardHeader>
-        
+    <div className="flex flex-col h-[calc(100vh-280px)] min-h-[600px]">
+      {/* الهيدر */}
+      <div className="flex-shrink-0 mb-4">
+        <Card className="border-amber-500/30 bg-gradient-to-l from-amber-500/10 to-transparent">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+                <Sparkles className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-amber-500">Symbol AI</h2>
+                <p className="text-sm text-muted-foreground">مستشارك الذكي لتحليل الأعمال</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* منطقة المحادثة الرئيسية */}
+      <Card className="flex-1 flex flex-col overflow-hidden">
         {/* منطقة الرسائل */}
-        <ScrollArea ref={scrollRef} className="flex-1 p-4">
-          <div className="space-y-4">
-            {messages.length === 0 ? (
-              <div className="text-center py-12">
-                <Bot className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">مرحباً بك في مستشار ERP</h3>
-                <p className="text-muted-foreground mb-4">
-                  أنا هنا لمساعدتك في تحليل بيانات مشروعك وتقديم توصيات عملية
-                </p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {suggestedQuestions?.slice(0, 4).map((q, i) => (
+        <div className="flex-1 overflow-y-auto p-4">
+          {messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center px-4">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 flex items-center justify-center mb-6">
+                <Sparkles className="h-10 w-10 text-amber-500" />
+              </div>
+              <h3 className="text-2xl font-bold mb-2">مرحباً بك في Symbol AI</h3>
+              <p className="text-muted-foreground mb-8 max-w-md">
+                أنا مستشارك الذكي لتحليل بيانات مشروعك. يمكنني مساعدتك في فهم الإيرادات، المصاريف، وتقديم توصيات عملية.
+              </p>
+              
+              {/* الأسئلة المقترحة */}
+              <div className="w-full max-w-2xl">
+                <p className="text-sm text-muted-foreground mb-3">جرّب أحد هذه الأسئلة:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {suggestedQuestions?.slice(0, 6).map((q, i) => (
                     <Button
                       key={i}
                       variant="outline"
-                      size="sm"
                       onClick={() => handleSendMessage(q)}
-                      className="text-xs"
+                      className="h-auto py-3 px-4 text-right justify-start hover:bg-amber-500/10 hover:border-amber-500/50 transition-colors"
                     >
-                      {q}
+                      <ChevronRight className="h-4 w-4 ml-2 flex-shrink-0 text-amber-500" />
+                      <span className="text-sm line-clamp-2">{q}</span>
                     </Button>
                   ))}
                 </div>
               </div>
-            ) : (
-              messages.map((msg, i) => (
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {messages.map((msg, i) => (
                 <div
                   key={i}
                   className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                 >
-                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                    msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                  }`}>
-                    {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                  </div>
-                  <div className={`max-w-[80%] rounded-lg p-3 ${
+                  <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
                     msg.role === 'user' 
                       ? 'bg-primary text-primary-foreground' 
-                      : 'bg-muted'
+                      : 'bg-gradient-to-br from-amber-500 to-orange-600'
+                  }`}>
+                    {msg.role === 'user' ? <User className="h-5 w-5" /> : <Sparkles className="h-5 w-5 text-white" />}
+                  </div>
+                  <div className={`max-w-[75%] rounded-2xl px-4 py-3 ${
+                    msg.role === 'user' 
+                      ? 'bg-primary text-primary-foreground rounded-tr-none' 
+                      : 'bg-muted rounded-tl-none'
                   }`}>
                     {msg.role === 'assistant' ? (
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                         <Streamdown>{msg.content}</Streamdown>
                       </div>
                     ) : (
@@ -1801,65 +1815,46 @@ function AIChatSection({ branchId }: { branchId?: number }) {
                     )}
                   </div>
                 </div>
-              ))
-            )}
-            {isLoading && (
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                  <Bot className="h-4 w-4" />
+              ))}
+              {isLoading && (
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                    <Sparkles className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="bg-muted rounded-2xl rounded-tl-none px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
+                      <span className="text-sm text-muted-foreground">Symbol AI يفكر...</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-muted rounded-lg p-3">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
-              </div>
-            )}
-          </div>
-        </ScrollArea>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
 
         {/* منطقة الإدخال */}
-        <div className="p-4 border-t">
-          <div className="flex gap-2">
+        <div className="flex-shrink-0 p-4 border-t bg-background/50 backdrop-blur-sm">
+          <div className="flex gap-3 items-end">
             <Textarea
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={handleKeyPress}
-              placeholder="اكتب سؤالك هنا..."
-              className="min-h-[60px] resize-none"
+              placeholder="اكتب سؤالك لـ Symbol AI..."
+              className="min-h-[50px] max-h-[150px] resize-none rounded-xl border-2 focus:border-amber-500/50"
               disabled={isLoading}
             />
             <Button
               onClick={() => handleSendMessage()}
               disabled={!inputMessage.trim() || isLoading}
-              className="px-4"
+              size="lg"
+              className="h-[50px] w-[50px] rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700"
             >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             </Button>
           </div>
         </div>
-      </Card>
-
-      {/* الأسئلة المقترحة */}
-      <Card className="lg:col-span-1">
-        <CardHeader>
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Lightbulb className="h-4 w-4" />
-            أسئلة مقترحة
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {suggestedQuestions?.map((question, i) => (
-            <Button
-              key={i}
-              variant="ghost"
-              className="w-full justify-start text-right text-xs h-auto py-2 px-3"
-              onClick={() => handleSendMessage(question)}
-              disabled={isLoading}
-            >
-              <ChevronRight className="h-3 w-3 ml-2 flex-shrink-0" />
-              <span className="line-clamp-2">{question}</span>
-            </Button>
-          ))}
-        </CardContent>
       </Card>
     </div>
   );
