@@ -5851,12 +5851,20 @@ ${discrepancyRows}
       .input(z.object({
         startDate: z.string(),
         endDate: z.string(),
+        sendNotifications: z.boolean().optional(),
+        branchId: z.number().optional(),
       }))
       .query(async ({ input }) => {
-        return aiAnalytics.detectAnomalies({
-          startDate: new Date(input.startDate),
-          endDate: new Date(input.endDate)
-        });
+        return aiAnalytics.detectAnomalies(
+          {
+            startDate: new Date(input.startDate),
+            endDate: new Date(input.endDate)
+          },
+          {
+            sendNotifications: input.sendNotifications,
+            branchId: input.branchId,
+          }
+        );
       }),
 
     // التوصيات الذكية

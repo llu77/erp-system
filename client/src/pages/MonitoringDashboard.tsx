@@ -4,7 +4,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, CheckCircle, Clock, TrendingUp, RefreshCw, AlertCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, TrendingUp, RefreshCw, AlertCircle, Bell, Send, Mail } from 'lucide-react';
+import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import DashboardLayout from '@/components/DashboardLayout';
 
@@ -35,6 +36,232 @@ interface ReconciliationStatus {
   unmatchedRecords: number;
   discrepancies: number;
   lastRun: Date;
+}
+
+// مكون تبويب الشذوذ
+function AnomaliesTab({ stats }: { stats: MonitoringStats }) {
+  const [sendingNotification, setSendingNotification] = useState(false);
+  const [anomalies, setAnomalies] = useState<Array<{
+    id: string;
+    type: 'revenue_deviation' | 'expense_anomaly' | 'pattern_anomaly';
+    severity: 'info' | 'warning' | 'critical';
+    title: string;
+    description: string;
+    branchName: string;
+    date: string;
+    currentValue: number;
+    expectedValue: number;
+    deviationPercent: number;
+    notificationSent?: boolean;
+  }>>([
+    {
+      id: '1',
+      type: 'revenue_deviation',
+      severity: 'critical',
+      title: 'انحراف في الإيرادات',
+      description: 'الإيرادات أقل من المتوسط بنسبة 35%',
+      branchName: 'الفرع الرئيسي',
+      date: new Date().toLocaleDateString('ar-SA'),
+      currentValue: 5200,
+      expectedValue: 8000,
+      deviationPercent: -35,
+      notificationSent: false,
+    },
+    {
+      id: '2',
+      type: 'expense_anomaly',
+      severity: 'warning',
+      title: 'قيمة شاذة في المصاريف',
+      description: 'مصروف بقيمة 15,000 ريال (أعلى من المتوسط بـ 250%)',
+      branchName: 'فرع الشمال',
+      date: new Date().toLocaleDateString('ar-SA'),
+      currentValue: 15000,
+      expectedValue: 4285,
+      deviationPercent: 250,
+      notificationSent: false,
+    },
+    {
+      id: '3',
+      type: 'pattern_anomaly',
+      severity: 'info',
+      title: 'نمط غير عادي في الطلبات',
+      description: 'عدد الطلبات أعلى من المتوسط بنسبة 45%',
+      branchName: 'فرع الجنوب',
+      date: new Date().toLocaleDateString('ar-SA'),
+      currentValue: 145,
+      expectedValue: 100,
+      deviationPercent: 45,
+      notificationSent: false,
+    },
+  ]);
+
+  const sendNotificationMutation = trpc.system.notifyOwner.useMutation();
+
+  const handleSendNotification = async (anomalyId: string) => {
+    const anomaly = anomalies.find(a => a.id === anomalyId);
+    if (!anomaly) return;
+
+    setSendingNotification(true);
+    try {
+      const severityLabels = {
+        info: 'معلومة',
+        warning: 'تحذير',
+        critical: 'حرج',
+      };
+
+      const content = `
+🚨 **تنبيه شذوذ من لوحة المراقبة**
+
+**النوع:** ${anomaly.title}
+**الخطورة:** ${severityLabels[anomaly.severity]}
+**الفرع:** ${anomaly.branchName}
+**التاريخ:** ${anomaly.date}
+
+**التفاصيل:**
+${anomaly.description}
+
+**القيمة الحالية:** ${anomaly.currentValue.toLocaleString('ar-SA')} ر.س
+**القيمة المتوقعة:** ${anomaly.expectedValue.toLocaleString('ar-SA')} ر.س
+**نسبة الانحراف:** ${anomaly.deviationPercent > 0 ? '+' : ''}${anomaly.deviationPercent}%
+      `.trim();
+
+      await sendNotificationMutation.mutateAsync({
+        title: `🚨 ${severityLabels[anomaly.severity]} - ${anomaly.title} | ${anomaly.branchName}`,
+        content,
+      });
+
+      // تحديث حالة الإشعار
+      setAnomalies(prev => prev.map(a => 
+        a.id === anomalyId ? { ...a, notificationSent: true } : a
+      ));
+
+      toast.success('تم إرسال الإشعار بنجاح', {
+        description: `تم إرسال تنبيه بخصوص: ${anomaly.title}`,
+      });
+    } catch (error) {
+      console.error('خطأ في إرسال الإشعار:', error);
+      toast.error('فشل إرسال الإشعار', {
+        description: 'حدث خطأ أثناء إرسال الإشعار. يرجى المحاولة مرة أخرى.',
+      });
+    } finally {
+      setSendingNotification(false);
+    }
+  };
+
+  const handleSendAllNotifications = async () => {
+    const unsentAnomalies = anomalies.filter(a => !a.notificationSent && (a.severity === 'critical' || a.severity === 'warning'));
+    
+    if (unsentAnomalies.length === 0) {
+      toast.info('لا توجد تنبيهات جديدة لإرسالها');
+      return;
+    }
+
+    setSendingNotification(true);
+    let sentCount = 0;
+
+    for (const anomaly of unsentAnomalies) {
+      try {
+        await handleSendNotification(anomaly.id);
+        sentCount++;
+      } catch (error) {
+        console.error(`خطأ في إرسال إشعار ${anomaly.id}:`, error);
+      }
+    }
+
+    setSendingNotification(false);
+    toast.success(`تم إرسال ${sentCount} إشعار`);
+  };
+
+  const getSeverityBadge = (severity: string) => {
+    switch (severity) {
+      case 'critical':
+        return <Badge variant="destructive">حرج</Badge>;
+      case 'warning':
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">تحذير</Badge>;
+      default:
+        return <Badge variant="outline">معلومة</Badge>;
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>الشذوذ المكتشف</CardTitle>
+            <CardDescription>تحليل الشذوذ الإحصائي والآلي</CardDescription>
+          </div>
+          <Button 
+            onClick={handleSendAllNotifications}
+            disabled={sendingNotification || anomalies.every(a => a.notificationSent || a.severity === 'info')}
+            size="sm"
+            className="gap-2"
+          >
+            <Mail className="w-4 h-4" />
+            إرسال جميع التنبيهات
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            تم اكتشاف {stats.anomaliesDetected} شذوذ في البيانات خلال آخر 24 ساعة
+          </AlertDescription>
+        </Alert>
+
+        <div className="space-y-3">
+          {anomalies.map((anomaly) => (
+            <div key={anomaly.id} className="border rounded-lg p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="font-semibold">{anomaly.title}</h4>
+                    {getSeverityBadge(anomaly.severity)}
+                    {anomaly.notificationSent && (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        تم الإرسال
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600">{anomaly.description}</p>
+                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-500">
+                    <span>🏢 {anomaly.branchName}</span>
+                    <span>📅 {anomaly.date}</span>
+                    <span>📊 القيمة: {anomaly.currentValue.toLocaleString('ar-SA')} ر.س</span>
+                    <span>📈 المتوقع: {anomaly.expectedValue.toLocaleString('ar-SA')} ر.س</span>
+                    <span className={anomaly.deviationPercent > 0 ? 'text-red-600' : 'text-green-600'}>
+                      📉 الانحراف: {anomaly.deviationPercent > 0 ? '+' : ''}{anomaly.deviationPercent}%
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSendNotification(anomaly.id)}
+                  disabled={sendingNotification || anomaly.notificationSent}
+                  className="shrink-0"
+                >
+                  {anomaly.notificationSent ? (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-1 text-green-600" />
+                      تم الإرسال
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-1" />
+                      إرسال إشعار
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function MonitoringDashboard() {
@@ -331,58 +558,7 @@ export default function MonitoringDashboard() {
 
           {/* تبويب الشذوذ */}
           <TabsContent value="anomalies" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>الشذوذ المكتشف</CardTitle>
-                <CardDescription>تحليل الشذوذ الإحصائي والآلي</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    تم اكتشاف {stats.anomaliesDetected} شذوذ في البيانات خلال آخر 24 ساعة
-                  </AlertDescription>
-                </Alert>
-
-                <div className="space-y-3">
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-semibold">انحراف في الإيرادات</h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          الإيرادات أقل من المتوسط بنسبة 35%
-                        </p>
-                      </div>
-                      <Badge variant="destructive">حرج</Badge>
-                    </div>
-                  </div>
-
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-semibold">قيمة شاذة في المصاريف</h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          مصروف بقيمة 15,000 ريال (أعلى من المتوسط بـ 250%)
-                        </p>
-                      </div>
-                      <Badge variant="secondary">تحذير</Badge>
-                    </div>
-                  </div>
-
-                  <div className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-semibold">نمط غير عادي في الطلبات</h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          عدد الطلبات أعلى من المتوسط بنسبة 45%
-                        </p>
-                      </div>
-                      <Badge variant="secondary">معلومة</Badge>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <AnomaliesTab stats={stats} />
           </TabsContent>
         </Tabs>
 

@@ -1122,3 +1122,107 @@ export async function sendWeeklyBonusReport(
     return { success: false, sentCount: 0 };
   }
 }
+
+
+
+// ==================== إشعار الشذوذ من لوحة المراقبة ====================
+export interface AnomalyAlertData {
+  anomalyType: 'revenue_deviation' | 'expense_anomaly' | 'pattern_anomaly';
+  severity: 'info' | 'warning' | 'critical';
+  branchName: string;
+  date: string;
+  title: string;
+  description: string;
+  currentValue: number;
+  expectedValue: number;
+  deviationPercent: number;
+  additionalDetails?: string;
+}
+
+export async function sendAnomalyAlert(data: AnomalyAlertData): Promise<{ success: boolean; sentCount: number }> {
+  try {
+    const { getAnomalyAlertTemplate } = await import('./emailTemplates');
+    
+    // الحصول على المستلمين (المسؤولين والمشرفين العامين)
+    const recipients = await getRecipientsForNotification('general');
+    const adminRecipients = recipients.filter(r => 
+      r.role === 'admin' || r.role === 'general_supervisor'
+    );
+    
+    if (adminRecipients.length === 0) {
+      console.log('[Anomaly Alert] لا يوجد مستلمين مفعلين');
+      return { success: true, sentCount: 0 };
+    }
+
+    const html = getAnomalyAlertTemplate(data);
+    
+    const severityLabels = {
+      info: 'معلومة',
+      warning: 'تحذير',
+      critical: '🚨 حرج',
+    };
+    
+    const anomalyTypeLabels = {
+      revenue_deviation: 'انحراف في الإيرادات',
+      expense_anomaly: 'قيمة شاذة في المصاريف',
+      pattern_anomaly: 'نمط غير عادي',
+    };
+
+    const subject = `${severityLabels[data.severity]} - ${anomalyTypeLabels[data.anomalyType]} | ${data.branchName} | ${data.date}`;
+
+    let sentCount = 0;
+    for (const recipient of adminRecipients) {
+      try {
+        await resend.emails.send({
+          from: FROM_EMAIL,
+          to: recipient.email,
+          subject,
+          html,
+        });
+        sentCount++;
+        console.log(`✓ تم إرسال تنبيه الشذوذ إلى: ${recipient.email}`);
+        
+        // تسجيل الإشعار
+        await db.logSentNotification({
+          recipientId: recipient.id || 0,
+          recipientEmail: recipient.email,
+          recipientName: recipient.name || 'مسؤول',
+          notificationType: 'anomaly_alert',
+          subject,
+          bodyArabic: `${data.title} - ${data.description}`,
+          status: 'sent',
+          sentAt: new Date(),
+        });
+      } catch (error) {
+        console.error(`✗ فشل إرسال تنبيه الشذوذ إلى ${recipient.email}:`, error);
+      }
+    }
+
+    console.log(`[Anomaly Alert] تم إرسال ${sentCount} إشعار - ${data.title}`);
+    return { success: true, sentCount };
+  } catch (error) {
+    console.error('[Anomaly Alert] خطأ:', error);
+    return { success: false, sentCount: 0 };
+  }
+}
+
+// إرسال تنبيهات متعددة للشذوذ
+export async function sendMultipleAnomalyAlerts(
+  anomalies: AnomalyAlertData[]
+): Promise<{ success: boolean; totalSent: number; alertsSent: number }> {
+  let totalSent = 0;
+  let alertsSent = 0;
+  
+  // فلترة التنبيهات الحرجة والتحذيرية فقط (تجاهل المعلومات)
+  const importantAnomalies = anomalies.filter(a => a.severity === 'critical' || a.severity === 'warning');
+  
+  for (const anomaly of importantAnomalies) {
+    const result = await sendAnomalyAlert(anomaly);
+    if (result.success && result.sentCount > 0) {
+      totalSent += result.sentCount;
+      alertsSent++;
+    }
+  }
+  
+  return { success: true, totalSent, alertsSent };
+}

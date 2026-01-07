@@ -1611,3 +1611,147 @@ export function getEmployeePayslipTemplate(data: {
     html: getBaseTemplate(content, 'قسيمة راتب'),
   };
 }
+
+
+// ==================== قالب إشعار الشذوذ من لوحة المراقبة ====================
+export function getAnomalyAlertTemplate(data: {
+  anomalyType: 'revenue_deviation' | 'expense_anomaly' | 'pattern_anomaly';
+  severity: 'info' | 'warning' | 'critical';
+  branchName: string;
+  date: string;
+  title: string;
+  description: string;
+  currentValue: number;
+  expectedValue: number;
+  deviationPercent: number;
+  additionalDetails?: string;
+}): string {
+  const severityConfig = {
+    info: {
+      color: '#3b82f6',
+      bgGradient: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+      icon: 'ℹ️',
+      label: 'معلومة',
+    },
+    warning: {
+      color: '#f59e0b',
+      bgGradient: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+      icon: '⚠️',
+      label: 'تحذير',
+    },
+    critical: {
+      color: '#ef4444',
+      bgGradient: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+      icon: '🚨',
+      label: 'حرج',
+    },
+  };
+
+  const anomalyTypeLabels = {
+    revenue_deviation: 'انحراف في الإيرادات',
+    expense_anomaly: 'قيمة شاذة في المصاريف',
+    pattern_anomaly: 'نمط غير عادي',
+  };
+
+  const config = severityConfig[data.severity];
+  const typeLabel = anomalyTypeLabels[data.anomalyType];
+
+  const content = `
+    <div style="padding: 30px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <div style="background: ${config.bgGradient}; width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+          <span style="font-size: 40px;">${config.icon}</span>
+        </div>
+        <h2 style="color: #1f2937; margin: 0; font-size: 24px;">تنبيه من لوحة المراقبة</h2>
+        <p style="color: #64748b; margin-top: 10px;">تم اكتشاف شذوذ يتطلب انتباهك</p>
+      </div>
+
+      <!-- شارة مستوى الخطورة -->
+      <div style="text-align: center; margin-bottom: 25px;">
+        <span style="display: inline-block; padding: 8px 20px; border-radius: 25px; font-size: 14px; font-weight: 600; color: white; background: ${config.color};">
+          ${config.label} - ${typeLabel}
+        </span>
+      </div>
+
+      <!-- معلومات الشذوذ الرئيسية -->
+      <div style="background: ${config.bgGradient}; border-radius: 16px; padding: 25px; margin-bottom: 25px; border-right: 5px solid ${config.color};">
+        <h3 style="color: ${config.color}; margin: 0 0 15px; font-size: 20px;">${data.title}</h3>
+        <p style="color: #374151; margin: 0; font-size: 16px; line-height: 1.8;">${data.description}</p>
+      </div>
+
+      <!-- جدول التفاصيل -->
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; color: #64748b; width: 40%;">
+            <span style="margin-left: 8px;">📍</span> الفرع
+          </td>
+          <td style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; color: #1f2937; font-weight: 600;">${data.branchName}</td>
+        </tr>
+        <tr>
+          <td style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; color: #64748b;">
+            <span style="margin-left: 8px;">📅</span> التاريخ
+          </td>
+          <td style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; color: #1f2937; font-weight: 600;">${data.date}</td>
+        </tr>
+        <tr>
+          <td style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; color: #64748b;">
+            <span style="margin-left: 8px;">📊</span> القيمة الحالية
+          </td>
+          <td style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; color: ${config.color}; font-weight: 700; font-size: 18px;">
+            ${data.currentValue.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; color: #64748b;">
+            <span style="margin-left: 8px;">📈</span> القيمة المتوقعة
+          </td>
+          <td style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; color: #1f2937; font-weight: 600;">
+            ${data.expectedValue.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 15px 20px; color: #64748b;">
+            <span style="margin-left: 8px;">📉</span> نسبة الانحراف
+          </td>
+          <td style="padding: 15px 20px; color: ${config.color}; font-weight: 700; font-size: 18px;">
+            ${data.deviationPercent > 0 ? '+' : ''}${data.deviationPercent.toFixed(1)}%
+          </td>
+        </tr>
+      </table>
+
+      ${data.additionalDetails ? `
+      <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px;">
+        <h4 style="color: #64748b; margin: 0 0 10px; font-size: 14px;">
+          <span style="margin-left: 8px;">📝</span> تفاصيل إضافية
+        </h4>
+        <p style="color: #374151; margin: 0; line-height: 1.8;">${data.additionalDetails}</p>
+      </div>
+      ` : ''}
+
+      <!-- التوصيات -->
+      <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 12px; padding: 20px; margin-bottom: 25px;">
+        <h4 style="color: #0369a1; margin: 0 0 15px; font-size: 16px;">
+          <span style="margin-left: 8px;">💡</span> التوصيات
+        </h4>
+        <ul style="color: #374151; margin: 0; padding-right: 20px; line-height: 2;">
+          <li>مراجعة البيانات المدخلة للتأكد من صحتها</li>
+          <li>التواصل مع مشرف الفرع للتحقق من الوضع</li>
+          ${data.severity === 'critical' ? '<li style="color: #dc2626; font-weight: 600;">يتطلب إجراء فوري</li>' : ''}
+        </ul>
+      </div>
+
+      <!-- زر الإجراء -->
+      <div style="text-align: center; padding: 20px; background: #f8fafc; border-radius: 12px;">
+        <p style="color: #64748b; margin-bottom: 15px; font-size: 14px;">
+          لمراجعة التفاصيل واتخاذ الإجراء المناسب
+        </p>
+        <a href="https://sym.manus.space/monitoring" 
+           style="display: inline-block; background: linear-gradient(135deg, ${config.color} 0%, ${config.color}dd 100%); color: white; padding: 14px 35px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+          الذهاب للوحة المراقبة
+        </a>
+      </div>
+    </div>
+  `;
+
+  return getBaseTemplate(content, 'تنبيه شذوذ - Symbol AI');
+}

@@ -355,31 +355,38 @@ export async function analyzeCustomerSegments(): Promise<CustomerSegmentResult[]
 }
 
 /**
- * الكشف عن الشذوذ
+ * الكشف عن الشذوذ مع إرسال إشعارات فورية
  */
 export async function detectAnomalies(
-  dateRange: { startDate: Date; endDate: Date }
+  dateRange: { startDate: Date; endDate: Date },
+  options?: { sendNotifications?: boolean; branchId?: number }
 ): Promise<AnomalyResult[]> {
   const db = await getDb();
   if (!db) throw new Error('Database connection failed');
 
   const anomalies: AnomalyResult[] = [];
 
-  // جلب الإيرادات اليومية
+  // جلب الإيرادات اليومية مع معلومات الفرع
   const dailySales = await db
     .select({
       date: dailyRevenues.date,
+      branchId: dailyRevenues.branchId,
       total: sql<number>`COALESCE(SUM(${dailyRevenues.cash} + ${dailyRevenues.network}), 0)`,
     })
     .from(dailyRevenues)
     .where(
       and(
         gte(dailyRevenues.date, dateRange.startDate),
-        lte(dailyRevenues.date, dateRange.endDate)
+        lte(dailyRevenues.date, dateRange.endDate),
+        options?.branchId ? eq(dailyRevenues.branchId, options.branchId) : undefined
       )
     )
-    .groupBy(dailyRevenues.date)
+    .groupBy(dailyRevenues.date, dailyRevenues.branchId)
     .orderBy(asc(dailyRevenues.date));
+
+  // جلب أسماء الفروع
+  const branchesData = await db.select().from(branches);
+  const branchMap = new Map(branchesData.map(b => [b.id, b.nameAr || b.name || `فرع ${b.id}`]));
 
   if (dailySales.length >= 7) {
     // حساب المتوسط والانحراف المعياري
@@ -394,6 +401,9 @@ export async function detectAnomalies(
 
       if (deviation > 2) {
         const dateStr = day.date instanceof Date ? day.date.toISOString().split('T')[0] : String(day.date);
+        const branchName = branchMap.get(day.branchId) || 'غير محدد';
+        const deviationPercent = ((value - mean) / mean) * 100;
+        
         anomalies.push({
           type: 'sales',
           severity: deviation > 3 ? 'high' : 'medium',
@@ -403,10 +413,43 @@ export async function detectAnomalies(
           value,
           expectedValue: mean,
           deviation: Math.round(deviation * 100) / 100,
-          date: day.date instanceof Date ? day.date : new Date(day.date)
+          date: day.date instanceof Date ? day.date : new Date(day.date),
+          relatedEntity: { type: 'branch', id: day.branchId, name: branchName }
         });
       }
     });
+  }
+
+  // إرسال إشعارات فورية للشذوذ الحرج والتحذيري
+  if (options?.sendNotifications && anomalies.length > 0) {
+    try {
+      const { sendAnomalyAlert } = await import('../notifications/emailNotificationService');
+      
+      for (const anomaly of anomalies) {
+        if (anomaly.severity === 'high' || anomaly.severity === 'medium') {
+          const branchName = anomaly.relatedEntity?.name || 'غير محدد';
+          const dateStr = anomaly.date instanceof Date 
+            ? anomaly.date.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })
+            : String(anomaly.date);
+          const deviationPercent = ((anomaly.value - anomaly.expectedValue) / anomaly.expectedValue) * 100;
+          
+          await sendAnomalyAlert({
+            anomalyType: 'revenue_deviation',
+            severity: anomaly.severity === 'high' ? 'critical' : 'warning',
+            branchName,
+            date: dateStr,
+            title: anomaly.value > anomaly.expectedValue ? 'ارتفاع غير طبيعي في الإيرادات' : 'انخفاض غير طبيعي في الإيرادات',
+            description: anomaly.description,
+            currentValue: anomaly.value,
+            expectedValue: anomaly.expectedValue,
+            deviationPercent: Math.round(deviationPercent * 10) / 10,
+            additionalDetails: `معامل الانحراف المعياري: ${anomaly.deviation}σ`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[Anomaly Detection] خطأ في إرسال الإشعارات:', error);
+    }
   }
 
   return anomalies;
