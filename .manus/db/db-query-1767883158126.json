@@ -1,0 +1,127 @@
+{
+  "query": "SELECT id, branchId, year, month, weekNumber, status, totalAmount FROM weeklyBonuses ORDER BY year DESC, month DESC, weekNumber DESC",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, branchId, year, month, weekNumber, status, totalAmount FROM weeklyBonuses ORDER BY year DESC, month DESC, weekNumber DESC",
+  "rows": [
+    {
+      "id": "270002",
+      "branchId": "30001",
+      "year": "2026",
+      "month": "1",
+      "weekNumber": "2",
+      "status": "pending",
+      "totalAmount": "0.00"
+    },
+    {
+      "id": "270001",
+      "branchId": "1",
+      "year": "2026",
+      "month": "1",
+      "weekNumber": "2",
+      "status": "pending",
+      "totalAmount": "0.00"
+    },
+    {
+      "id": "240003",
+      "branchId": "1",
+      "year": "2026",
+      "month": "1",
+      "weekNumber": "1",
+      "status": "pending",
+      "totalAmount": "300.00"
+    },
+    {
+      "id": "240004",
+      "branchId": "30001",
+      "year": "2026",
+      "month": "1",
+      "weekNumber": "1",
+      "status": "pending",
+      "totalAmount": "90.00"
+    },
+    {
+      "id": "120002",
+      "branchId": "1",
+      "year": "2025",
+      "month": "12",
+      "weekNumber": "5",
+      "status": "pending",
+      "totalAmount": "190.00"
+    },
+    {
+      "id": "120001",
+      "branchId": "30001",
+      "year": "2025",
+      "month": "12",
+      "weekNumber": "5",
+      "status": "pending",
+      "totalAmount": "0.00"
+    },
+    {
+      "id": "90002",
+      "branchId": "30001",
+      "year": "2025",
+      "month": "12",
+      "weekNumber": "4",
+      "status": "pending",
+      "totalAmount": "120.00"
+    },
+    {
+      "id": "90001",
+      "branchId": "1",
+      "year": "2025",
+      "month": "12",
+      "weekNumber": "4",
+      "status": "pending",
+      "totalAmount": "275.00"
+    },
+    {
+      "id": "1",
+      "branchId": "1",
+      "year": "2025",
+      "month": "12",
+      "weekNumber": "3",
+      "status": "pending",
+      "totalAmount": "0.00"
+    },
+    {
+      "id": "60001",
+      "branchId": "30001",
+      "year": "2025",
+      "month": "12",
+      "weekNumber": "3",
+      "status": "pending",
+      "totalAmount": "0.00"
+    },
+    {
+      "id": "30001",
+      "branchId": "30003",
+      "year": "2025",
+      "month": "12",
+      "weekNumber": "3",
+      "status": "pending",
+      "totalAmount": "0.00"
+    },
+    {
+      "id": "150001",
+      "branchId": "30001",
+      "year": "2025",
+      "month": "12",
+      "weekNumber": "1",
+      "status": "pending",
+      "totalAmount": "760.00"
+    },
+    {
+      "id": "150002",
+      "branchId": "1",
+      "year": "2025",
+      "month": "12",
+      "weekNumber": "1",
+      "status": "pending",
+      "totalAmount": "1140.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tbranchId\tyear\tmonth\tweekNumber\tstatus\ttotalAmount\n270002\t30001\t2026\t1\t2\tpending\t0.00\n270001\t1\t2026\t1\t2\tpending\t0.00\n240003\t1\t2026\t1\t1\tpending\t300.00\n240004\t30001\t2026\t1\t1\tpending\t90.00\n120002\t1\t2025\t12\t5\tpending\t190.00\n120001\t30001\t2025\t12\t5\tpending\t0.00\n90002\t30001\t2025\t12\t4\tpending\t120.00\n90001\t1\t2025\t12\t4\tpending\t275.00\n1\t1\t2025\t12\t3\tpending\t0.00\n60001\t30001\t2025\t12\t3\tpending\t0.00\n30001\t30003\t2025\t12\t3\tpending\t0.00\n150001\t30001\t2025\t12\t1\tpending\t760.00\n150002\t1\t2025\t12\t1\tpending\t1140.00\n",
+  "stderr": "",
+  "execution_time_ms": 1518
+}

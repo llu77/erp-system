@@ -2111,6 +2111,28 @@ export const appRouter = router({
       return result;
     }),
 
+    // جميع طلبات البونص (السجل الكامل)
+    all: adminProcedure
+      .input(z.object({ limit: z.number().default(50) }).optional())
+      .query(async ({ input }) => {
+        const requests = await db.getAllBonusRequests(input?.limit || 50);
+        const result = [];
+        
+        for (const req of requests) {
+          const branch = await db.getBranchById(req.branchId);
+          const details = await db.getBonusDetails(req.id);
+          result.push({
+            ...req,
+            branchName: branch?.nameAr || 'غير محدد',
+            details,
+            eligibleCount: details.filter(d => d.isEligible).length,
+            totalEmployees: details.length,
+          });
+        }
+        
+        return result;
+      }),
+
     // الموافقة على البونص
     approve: adminProcedure
       .input(z.object({ weeklyBonusId: z.number() }))

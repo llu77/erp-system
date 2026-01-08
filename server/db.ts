@@ -1072,6 +1072,16 @@ export async function getPendingBonusRequests() {
     .orderBy(desc(weeklyBonuses.requestedAt));
 }
 
+// الحصول على جميع طلبات البونص (للعرض في السجل) - جميع الأسابيع التي تم حسابها
+export async function getAllBonusRequests(limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  // جلب جميع البونصات التي تم حسابها (كل الحالات)
+  return await db.select().from(weeklyBonuses)
+    .orderBy(desc(weeklyBonuses.year), desc(weeklyBonuses.month), desc(weeklyBonuses.weekNumber))
+    .limit(limit);
+}
+
 export async function getBonusDetails(weeklyBonusId: number) {
   const db = await getDb();
   if (!db) return [];
