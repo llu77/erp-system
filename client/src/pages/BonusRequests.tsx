@@ -95,10 +95,10 @@ export default function BonusRequests() {
   // تصدير PDF للبونص (من جهة العميل)
   const [exportingPDF, setExportingPDF] = useState<number | null>(null);
   
-  const handleExportPDF = (request: any) => {
+  const handleExportPDF = async (request: any) => {
     try {
       setExportingPDF(request.id);
-      generateBonusPDF(request);
+      await generateBonusPDF(request);
       toast.success("تم تصدير التقرير بنجاح");
     } catch (error) {
       toast.error("فشل تصدير التقرير");
