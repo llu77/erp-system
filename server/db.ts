@@ -1082,6 +1082,120 @@ export async function getAllBonusRequests(limit = 50) {
     .limit(limit);
 }
 
+// إحصائيات البونص
+export async function getBonusStats() {
+  const db = await getDb();
+  if (!db) return {
+    totalPaidThisMonth: 0,
+    totalPaidThisYear: 0,
+    totalPaidAllTime: 0,
+    totalBeneficiariesThisMonth: 0,
+    totalBeneficiariesThisYear: 0,
+    pendingRequestsCount: 0,
+    approvedNotPaidCount: 0,
+    monthlyBreakdown: [] as { month: number; year: number; total: number; count: number }[],
+  };
+
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  // جلب جميع البونصات
+  const allBonuses = await db.select().from(weeklyBonuses);
+  
+  // حساب الإحصائيات
+  let totalPaidThisMonth = 0;
+  let totalPaidThisYear = 0;
+  let totalPaidAllTime = 0;
+  let pendingRequestsCount = 0;
+  let approvedNotPaidCount = 0;
+  const monthlyMap = new Map<string, { total: number; count: number }>();
+
+  for (const bonus of allBonuses) {
+    const amount = parseFloat(bonus.totalAmount || '0');
+    
+    // البونصات المصروفة أو الموافق عليها
+    if (bonus.status === 'paid' || bonus.status === 'approved') {
+      totalPaidAllTime += amount;
+      
+      if (bonus.year === currentYear) {
+        totalPaidThisYear += amount;
+        
+        if (bonus.month === currentMonth) {
+          totalPaidThisMonth += amount;
+        }
+      }
+      
+      // تجميع شهري
+      const key = `${bonus.year}-${bonus.month}`;
+      const existing = monthlyMap.get(key) || { total: 0, count: 0 };
+      existing.total += amount;
+      existing.count += 1;
+      monthlyMap.set(key, existing);
+    }
+    
+    if (bonus.status === 'requested') {
+      pendingRequestsCount++;
+    }
+    
+    if (bonus.status === 'approved') {
+      approvedNotPaidCount++;
+    }
+  }
+
+  // حساب عدد المستفيدين
+  const thisMonthBonusIds = allBonuses
+    .filter(b => b.year === currentYear && b.month === currentMonth && (b.status === 'paid' || b.status === 'approved'))
+    .map(b => b.id);
+  
+  const thisYearBonusIds = allBonuses
+    .filter(b => b.year === currentYear && (b.status === 'paid' || b.status === 'approved'))
+    .map(b => b.id);
+
+  let totalBeneficiariesThisMonth = 0;
+  let totalBeneficiariesThisYear = 0;
+
+  if (thisMonthBonusIds.length > 0) {
+    const monthDetails = await db.select()
+      .from(bonusDetails)
+      .where(and(
+        inArray(bonusDetails.weeklyBonusId, thisMonthBonusIds),
+        eq(bonusDetails.isEligible, true)
+      ));
+    totalBeneficiariesThisMonth = monthDetails.length;
+  }
+
+  if (thisYearBonusIds.length > 0) {
+    const yearDetails = await db.select()
+      .from(bonusDetails)
+      .where(and(
+        inArray(bonusDetails.weeklyBonusId, thisYearBonusIds),
+        eq(bonusDetails.isEligible, true)
+      ));
+    totalBeneficiariesThisYear = yearDetails.length;
+  }
+
+  // تحويل التجميع الشهري إلى مصفوفة
+  const monthlyBreakdown = Array.from(monthlyMap.entries())
+    .map(([key, value]) => {
+      const [year, month] = key.split('-').map(Number);
+      return { year, month, ...value };
+    })
+    .sort((a, b) => b.year - a.year || b.month - a.month)
+    .slice(0, 12); // آخر 12 شهر
+
+  return {
+    totalPaidThisMonth,
+    totalPaidThisYear,
+    totalPaidAllTime,
+    totalBeneficiariesThisMonth,
+    totalBeneficiariesThisYear,
+    pendingRequestsCount,
+    approvedNotPaidCount,
+    monthlyBreakdown,
+  };
+}
+
 export async function getBonusDetails(weeklyBonusId: number) {
   const db = await getDb();
   if (!db) return [];

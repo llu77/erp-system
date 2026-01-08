@@ -23,7 +23,11 @@ import {
   Clock,
   History,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  TrendingUp,
+  DollarSign,
+  BarChart3,
+  CalendarDays
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -42,6 +46,9 @@ export default function BonusRequests() {
 
   // جلب جميع طلبات البونص (السجل الكامل)
   const { data: allRequests, isLoading: allLoading, refetch: refetchAll } = trpc.bonuses.all.useQuery({ limit: 50 });
+
+  // جلب إحصائيات البونص
+  const { data: bonusStats, isLoading: statsLoading } = trpc.bonuses.stats.useQuery();
 
   // الموافقة على البونص
   const approveMutation = trpc.bonuses.approve.useMutation({
@@ -289,6 +296,105 @@ export default function BonusRequests() {
             طلبات صرف البونص
           </h1>
           <p className="text-muted-foreground">مراجعة والموافقة على طلبات صرف البونص الأسبوعي</p>
+        </div>
+
+        {/* بطاقات الإحصائيات */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* إجمالي الشهر الحالي */}
+          <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2 text-green-400">
+                <CalendarDays className="h-4 w-4" />
+                الشهر الحالي
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {statsLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-green-400">
+                    {(bonusStats?.totalPaidThisMonth || 0).toFixed(2)} ر.س
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {bonusStats?.totalBeneficiariesThisMonth || 0} مستفيد
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* إجمالي السنة */}
+          <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2 text-blue-400">
+                <TrendingUp className="h-4 w-4" />
+                السنة الحالية
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {statsLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-blue-400">
+                    {(bonusStats?.totalPaidThisYear || 0).toFixed(2)} ر.س
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {bonusStats?.totalBeneficiariesThisYear || 0} مستفيد
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* طلبات معلقة */}
+          <Card className="bg-gradient-to-br from-orange-500/10 to-orange-600/5 border-orange-500/20">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2 text-orange-400">
+                <Clock className="h-4 w-4" />
+                طلبات معلقة
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {statsLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-orange-400">
+                    {bonusStats?.pendingRequestsCount || 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    بانتظار المراجعة
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* موافق عليها (لم تصرف بعد) */}
+          <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2 text-purple-400">
+                <CheckCircle className="h-4 w-4" />
+                موافق عليها
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {statsLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-purple-400">
+                    {bonusStats?.approvedNotPaidCount || 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    بانتظار الصرف
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* التبويبات */}

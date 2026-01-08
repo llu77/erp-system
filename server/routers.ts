@@ -2593,6 +2593,11 @@ ${discrepancyRows}
       .query(async ({ input }) => {
         return await db.getBonusTierAuditLogs(input?.limit || 50);
       }),
+
+    // إحصائيات البونص
+    stats: adminProcedure.query(async () => {
+      return await db.getBonusStats();
+    }),
   }),
 
   // ==================== طلبات الموظفين ====================
