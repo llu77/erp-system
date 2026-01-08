@@ -77,6 +77,18 @@ export default function BonusRequests() {
     },
   });
 
+  // طلب صرف البونص (من المسودة)
+  const requestPaymentMutation = trpc.bonuses.request.useMutation({
+    onSuccess: () => {
+      toast.success("تم إرسال طلب الصرف بنجاح - تم إشعار المشرفين");
+      refetchPending();
+      refetchAll();
+    },
+    onError: (error) => {
+      toast.error(error.message || "فشل إرسال طلب الصرف");
+    },
+  });
+
   const handleApprove = () => {
     if (selectedBonusId) {
       approveMutation.mutate({ weeklyBonusId: selectedBonusId });
@@ -270,6 +282,29 @@ export default function BonusRequests() {
             >
               <CheckCircle className="h-4 w-4 ml-2" />
               موافقة
+            </Button>
+          </div>
+        )}
+
+        {/* زر طلب الصرف للمسودات */}
+        {request.status === 'pending' && Number(request.totalAmount) > 0 && (
+          <div className="flex justify-end mt-4">
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={() => requestPaymentMutation.mutate({ weeklyBonusId: request.id })}
+              disabled={requestPaymentMutation.isPending}
+            >
+              {requestPaymentMutation.isPending ? (
+                <>
+                  <Clock className="h-4 w-4 ml-2 animate-spin" />
+                  جاري الإرسال...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 ml-2" />
+                  طلب صرف البونص
+                </>
+              )}
             </Button>
           </div>
         )}

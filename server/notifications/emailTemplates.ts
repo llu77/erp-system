@@ -1755,3 +1755,190 @@ export function getAnomalyAlertTemplate(data: {
 
   return getBaseTemplate(content, 'تنبيه شذوذ - Symbol AI');
 }
+
+
+// ==================== قالب طلب صرف بونص أسبوعي متقدم ====================
+export function getAdvancedBonusPaymentRequestTemplate(data: {
+  branchName: string;
+  branchId: number;
+  weekNumber: number;
+  month: number;
+  year: number;
+  totalAmount: number;
+  eligibleCount: number;
+  totalEmployees: number;
+  requestedBy: string;
+  requestedByRole: string;
+  recipientName: string;
+  recipientRole: string;
+  employees: Array<{
+    name: string;
+    code: string;
+    weeklyRevenue: number;
+    tier: string;
+    bonusAmount: number;
+  }>;
+}): { subject: string; html: string } {
+  const tierNames: Record<string, string> = {
+    tier_7: 'المستوى 7',
+    tier_6: 'المستوى 6',
+    tier_5: 'المستوى 5',
+    tier_4: 'المستوى 4',
+    tier_3: 'المستوى 3',
+    tier_2: 'المستوى 2',
+    tier_1: 'المستوى 1',
+    none: 'غير مؤهل',
+  };
+
+  const tierColors: Record<string, string> = {
+    tier_7: '#9333ea',
+    tier_6: '#a855f7',
+    tier_5: '#3b82f6',
+    tier_4: '#0ea5e9',
+    tier_3: '#22c55e',
+    tier_2: '#eab308',
+    tier_1: '#f97316',
+    none: '#9ca3af',
+  };
+
+  const eligibilityPercentage = data.totalEmployees > 0 
+    ? Math.round((data.eligibleCount / data.totalEmployees) * 100) 
+    : 0;
+
+  // إنشاء صفوف جدول الموظفين
+  const employeesRows = data.employees.map((emp, index) => `
+    <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+      <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #64748b;">${index + 1}</td>
+      <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #1f2937;">${emp.name}</td>
+      <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-family: monospace;">${emp.code}</td>
+      <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; text-align: left; color: #1f2937;">${emp.weeklyRevenue.toFixed(2)} ر.س</td>
+      <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; text-align: center;">
+        <span style="display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; color: white; background: ${tierColors[emp.tier] || '#9ca3af'};">
+          ${tierNames[emp.tier] || 'غير محدد'}
+        </span>
+      </td>
+      <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; text-align: left; font-weight: 700; color: #22c55e;">${emp.bonusAmount.toFixed(2)} ر.س</td>
+    </tr>
+  `).join('');
+
+  const content = `
+    <div class="header" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 40px 30px; text-align: center; position: relative;">
+      <div style="position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #22c55e, #3b82f6, #a855f7, #eab308);"></div>
+      <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border-radius: 20px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(34, 197, 94, 0.3);">
+        <span style="font-size: 40px;">💰</span>
+      </div>
+      <h1 style="color: #ffffff; font-size: 26px; font-weight: 700; margin: 0 0 10px;">طلب صرف بونص أسبوعي</h1>
+      <div style="color: rgba(255, 255, 255, 0.8); font-size: 16px;">الأسبوع ${data.weekNumber} - ${data.month}/${data.year}</div>
+      <div style="margin-top: 15px; display: inline-block; padding: 8px 20px; background: rgba(255,255,255,0.1); border-radius: 25px; color: #ffffff; font-size: 14px;">
+        🏢 ${data.branchName}
+      </div>
+    </div>
+    
+    <div class="content" style="padding: 40px 30px; background: #ffffff;">
+      <!-- التحية -->
+      <div style="margin-bottom: 30px; line-height: 1.8; color: #374151;">
+        السلام عليكم ورحمة الله وبركاته،<br><br>
+        <strong style="color: #a855f7;">${data.recipientName}</strong> - ${data.recipientRole}<br><br>
+        تم تقديم طلب صرف بونص أسبوعي يتطلب مراجعتكم والموافقة عليه.
+      </div>
+      
+      <!-- بطاقة المبلغ الإجمالي -->
+      <div style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border-radius: 20px; padding: 35px; text-align: center; margin-bottom: 30px; box-shadow: 0 15px 40px rgba(34, 197, 94, 0.25);">
+        <div style="color: rgba(255,255,255,0.9); font-size: 14px; margin-bottom: 10px;">إجمالي البونص المطلوب صرفه</div>
+        <div style="color: #ffffff; font-size: 48px; font-weight: 700; text-shadow: 0 2px 10px rgba(0,0,0,0.2);">${data.totalAmount.toFixed(2)}</div>
+        <div style="color: rgba(255,255,255,0.9); font-size: 18px; margin-top: 5px;">ريال سعودي</div>
+      </div>
+      
+      <!-- إحصائيات سريعة -->
+      <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px; margin-bottom: 35px;">
+        <div style="flex: 1; min-width: 140px; text-align: center; padding: 25px 15px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 16px;">
+          <div style="font-size: 36px; font-weight: 700; color: #22c55e;">${data.eligibleCount}</div>
+          <div style="font-size: 13px; color: #64748b; margin-top: 5px;">موظف مؤهل</div>
+        </div>
+        <div style="flex: 1; min-width: 140px; text-align: center; padding: 25px 15px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-radius: 16px;">
+          <div style="font-size: 36px; font-weight: 700; color: #3b82f6;">${data.totalEmployees}</div>
+          <div style="font-size: 13px; color: #64748b; margin-top: 5px;">إجمالي الموظفين</div>
+        </div>
+        <div style="flex: 1; min-width: 140px; text-align: center; padding: 25px 15px; background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%); border-radius: 16px;">
+          <div style="font-size: 36px; font-weight: 700; color: #eab308;">${eligibilityPercentage}%</div>
+          <div style="font-size: 13px; color: #64748b; margin-top: 5px;">نسبة الأهلية</div>
+        </div>
+      </div>
+      
+      <!-- معلومات الطلب -->
+      <div style="background: #f8fafc; border-radius: 16px; padding: 25px; margin-bottom: 30px;">
+        <h3 style="color: #1f2937; margin: 0 0 20px; font-size: 18px; display: flex; align-items: center;">
+          <span style="margin-left: 10px;">📋</span> معلومات الطلب
+        </h3>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+          <div>
+            <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">🏢 الفرع</div>
+            <div style="font-size: 16px; color: #1f2937; font-weight: 600;">${data.branchName}</div>
+          </div>
+          <div>
+            <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">📅 الفترة</div>
+            <div style="font-size: 16px; color: #1f2937; font-weight: 600;">الأسبوع ${data.weekNumber} - ${data.month}/${data.year}</div>
+          </div>
+          <div>
+            <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">👤 مقدم الطلب</div>
+            <div style="font-size: 16px; color: #1f2937; font-weight: 600;">${data.requestedBy}</div>
+          </div>
+          <div>
+            <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">🎖️ الصلاحية</div>
+            <div style="font-size: 16px; color: #1f2937; font-weight: 600;">${data.requestedByRole}</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- جدول تفاصيل الموظفين -->
+      <h3 style="color: #1f2937; margin: 0 0 20px; font-size: 18px; display: flex; align-items: center;">
+        <span style="margin-left: 10px;">👥</span> تفاصيل البونص لكل موظف
+      </h3>
+      <div style="overflow-x: auto; margin-bottom: 30px;">
+        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+          <thead>
+            <tr style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+              <th style="padding: 15px; text-align: center; color: white; font-weight: 600; font-size: 13px;">#</th>
+              <th style="padding: 15px; text-align: right; color: white; font-weight: 600; font-size: 13px;">اسم الموظف</th>
+              <th style="padding: 15px; text-align: right; color: white; font-weight: 600; font-size: 13px;">الكود</th>
+              <th style="padding: 15px; text-align: left; color: white; font-weight: 600; font-size: 13px;">الإيراد الأسبوعي</th>
+              <th style="padding: 15px; text-align: center; color: white; font-weight: 600; font-size: 13px;">المستوى</th>
+              <th style="padding: 15px; text-align: left; color: white; font-weight: 600; font-size: 13px;">البونص</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${employeesRows}
+            <tr style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">
+              <td colspan="5" style="padding: 15px 20px; font-weight: 700; color: white; border: none;">الإجمالي</td>
+              <td style="padding: 15px 20px; font-weight: 700; color: white; border: none; text-align: left; font-size: 18px;">${data.totalAmount.toFixed(2)} ر.س</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- فاصل -->
+      <div style="height: 2px; background: linear-gradient(90deg, transparent, #e2e8f0, transparent); margin: 30px 0;"></div>
+      
+      <!-- أزرار الإجراء -->
+      <div style="text-align: center;">
+        <p style="color: #64748b; margin-bottom: 20px; font-size: 15px;">يرجى مراجعة الطلب واتخاذ الإجراء المناسب:</p>
+        <a href="https://sym.manus.space/bonus-requests" style="display: inline-block; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; padding: 16px 40px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 16px; margin: 0 10px 10px; box-shadow: 0 8px 25px rgba(34, 197, 94, 0.3);">
+          ✓ مراجعة الطلب
+        </a>
+      </div>
+      
+      <!-- تذييل -->
+      <div style="margin-top: 40px; padding: 25px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 16px; text-align: center;">
+        <p style="color: #64748b; margin: 0; font-size: 13px; line-height: 1.8;">
+          هذا البريد تم إرساله تلقائياً من نظام Symbol AI<br>
+          للاستفسارات، يرجى التواصل مع الإدارة
+        </p>
+      </div>
+    </div>
+  `;
+  
+  return {
+    subject: `💰 طلب صرف بونص - ${data.branchName} | الأسبوع ${data.weekNumber} | ${data.totalAmount.toFixed(2)} ر.س`,
+    html: getBaseTemplate(content, 'طلب صرف بونص أسبوعي'),
+  };
+}

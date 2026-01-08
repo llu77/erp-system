@@ -2047,6 +2047,17 @@ export const appRouter = router({
     request: protectedProcedure
       .input(z.object({ weeklyBonusId: z.number() }))
       .mutation(async ({ input, ctx }) => {
+        // الحصول على بيانات البونص أولاً
+        const weeklyBonus = await db.getWeeklyBonusById(input.weeklyBonusId);
+        if (!weeklyBonus) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'البونص غير موجود' });
+        }
+        
+        // التحقق من أن البونص في حالة انتظار (مسودة)
+        if (weeklyBonus.status !== 'pending') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن طلب صرف بونص تم طلبه مسبقاً' });
+        }
+        
         await db.updateWeeklyBonusStatus(input.weeklyBonusId, 'requested', ctx.user.id);
         
         await db.createBonusAuditLog({
@@ -2067,25 +2078,33 @@ export const appRouter = router({
         // إرسال إشعار بريد إلكتروني متقدم
         const bonusDetails = await db.getBonusDetails(input.weeklyBonusId);
         if (bonusDetails.length > 0) {
-          const now = new Date();
-          const branchId = bonusDetails[0].employeeId ? (await db.getEmployeeById(bonusDetails[0].employeeId))?.branchId || 1 : 1;
-          const weeklyBonus = await db.getCurrentWeekBonus(branchId, now.getFullYear(), now.getMonth() + 1, Math.ceil(now.getDate() / 7));
-          if (weeklyBonus) {
-            const branch = await db.getBranchById(weeklyBonus.branchId);
-            const userDetail = bonusDetails.find(d => d.employeeName === ctx.user.name);
-            
-            emailNotifications.notifyBonusRequest({
-              employeeName: ctx.user.name || 'مشرف',
-              amount: userDetail ? parseFloat(String(userDetail.bonusAmount)) : parseFloat(String(weeklyBonus.totalAmount)),
-              weekNumber: weeklyBonus.weekNumber,
-              month: weeklyBonus.month,
-              year: weeklyBonus.year,
-              branchId: weeklyBonus.branchId,
-              branchName: branch?.nameAr || 'غير محدد',
-              weeklyRevenue: userDetail ? parseFloat(String(userDetail.weeklyRevenue)) : 0,
-              tier: userDetail?.bonusTier || 'none',
-            }).catch(err => console.error('خطأ في إرسال إشعار طلب البونص:', err));
-          }
+          const branch = await db.getBranchById(weeklyBonus.branchId);
+          
+          // تحضير بيانات الموظفين للقالب المتقدم
+          const employeesData = bonusDetails
+            .filter(d => d.isEligible)
+            .map(d => ({
+              name: d.employeeName || 'غير محدد',
+              code: d.employeeCode || '',
+              weeklyRevenue: parseFloat(String(d.weeklyRevenue)) || 0,
+              tier: d.bonusTier || 'none',
+              bonusAmount: parseFloat(String(d.bonusAmount)) || 0,
+            }));
+          
+          // إرسال الإشعار المتقدم
+          emailNotifications.notifyAdvancedBonusPaymentRequest({
+            branchId: weeklyBonus.branchId,
+            branchName: branch?.nameAr || 'غير محدد',
+            weekNumber: weeklyBonus.weekNumber,
+            month: weeklyBonus.month,
+            year: weeklyBonus.year,
+            totalAmount: parseFloat(String(weeklyBonus.totalAmount)) || 0,
+            eligibleCount: employeesData.length,
+            totalEmployees: bonusDetails.length,
+            requestedBy: ctx.user.name || 'مشرف',
+            requestedByRole: ctx.user.role === 'admin' ? 'مسؤول النظام' : ctx.user.role === 'manager' ? 'المدير' : ctx.user.role === 'supervisor' ? 'مشرف الفرع' : 'مستخدم',
+            employees: employeesData,
+          }).catch(err => console.error('خطأ في إرسال إشعار طلب صرف البونص المتقدم:', err));
         }
 
         return { success: true, message: 'تم إرسال طلب الصرف بنجاح' };

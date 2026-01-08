@@ -1226,3 +1226,75 @@ export async function sendMultipleAnomalyAlerts(
   
   return { success: true, totalSent, alertsSent };
 }
+
+
+// ==================== إشعار طلب صرف بونص أسبوعي متقدم ====================
+export async function notifyAdvancedBonusPaymentRequest(data: {
+  branchId: number;
+  branchName: string;
+  weekNumber: number;
+  month: number;
+  year: number;
+  totalAmount: number;
+  eligibleCount: number;
+  totalEmployees: number;
+  requestedBy: string;
+  requestedByRole: string;
+  employees: Array<{
+    name: string;
+    code: string;
+    weeklyRevenue: number;
+    tier: string;
+    bonusAmount: number;
+  }>;
+}): Promise<{ success: boolean; sentCount: number }> {
+  console.log(`📧 إرسال طلب صرف بونص متقدم: ${data.branchName} - الأسبوع ${data.weekNumber} - ${data.totalAmount} ر.س`);
+  
+  const recipients = await getRecipientsForNotification('bonus', data.branchId);
+  
+  if (recipients.length === 0) {
+    console.log('⚠️ لا يوجد مستلمين لإشعار طلب صرف البونص');
+    return { success: false, sentCount: 0 };
+  }
+  
+  let sentCount = 0;
+  
+  const roleNames: Record<string, string> = {
+    admin: 'مسؤول النظام',
+    manager: 'المدير',
+    general_supervisor: 'المشرف العام',
+    branch_supervisor: 'مشرف الفرع',
+    supervisor: 'المشرف',
+  };
+  
+  for (const recipient of recipients) {
+    try {
+      const { subject, html } = templates.getAdvancedBonusPaymentRequestTemplate({
+        ...data,
+        recipientName: recipient.name,
+        recipientRole: roleNames[recipient.role] || recipient.role,
+      });
+      
+      if (await sendEmail(recipient.email, subject, html)) {
+        sentCount++;
+        
+        // تسجيل الإشعار
+        await db.logSentNotification({
+          recipientId: recipient.id || 0,
+          recipientEmail: recipient.email,
+          recipientName: recipient.name,
+          notificationType: 'bonus_payment_request',
+          subject,
+          bodyArabic: `طلب صرف بونص - ${data.branchName} - الأسبوع ${data.weekNumber} - ${data.totalAmount} ر.س`,
+          status: 'sent',
+          sentAt: new Date(),
+        });
+      }
+    } catch (error) {
+      console.error(`✗ فشل إرسال إشعار طلب صرف البونص إلى ${recipient.email}:`, error);
+    }
+  }
+  
+  console.log(`✓ تم إرسال طلب صرف البونص إلى ${sentCount} مستلم`);
+  return { success: sentCount > 0, sentCount };
+}
