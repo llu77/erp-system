@@ -2617,6 +2617,63 @@ ${discrepancyRows}
     stats: adminProcedure.query(async () => {
       return await db.getBonusStats();
     }),
+
+    // تصدير PDF للبونص الأسبوعي
+    exportPDF: adminProcedure
+      .input(z.object({ weeklyBonusId: z.number() }))
+      .mutation(async ({ input }) => {
+        const bonus = await db.getWeeklyBonusById(input.weeklyBonusId);
+        if (!bonus) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'البونص غير موجود' });
+        }
+
+        const branch = await db.getBranchById(bonus.branchId);
+        const details = await db.getBonusDetails(input.weeklyBonusId);
+        
+        // جلب معلومات المستخدمين
+        const requestedByUser = bonus.requestedBy ? await db.getUserById(bonus.requestedBy) : null;
+        const approvedByUser = bonus.approvedBy ? await db.getUserById(bonus.approvedBy) : null;
+        const paidByUser = bonus.paidBy ? await db.getUserById(bonus.paidBy) : null;
+
+        // تحضير بيانات الموظفين
+        const employees = details.map(d => ({
+          name: d.employeeName || 'غير محدد',
+          code: d.employeeCode || '',
+          weeklyRevenue: parseFloat(String(d.weeklyRevenue)) || 0,
+          tier: d.bonusTier || 'none',
+          bonusAmount: parseFloat(String(d.bonusAmount)) || 0,
+          isEligible: d.isEligible || false,
+        }));
+
+        const { generateWeeklyBonusReportPDF } = await import('./pdfService');
+        
+        const pdfBuffer = await generateWeeklyBonusReportPDF({
+          branchName: branch?.nameAr || 'غير محدد',
+          weekNumber: bonus.weekNumber,
+          month: bonus.month,
+          year: bonus.year,
+          status: bonus.status,
+          totalAmount: parseFloat(bonus.totalAmount || '0'),
+          eligibleCount: details.filter(d => d.isEligible).length,
+          totalEmployees: details.length,
+          requestedAt: bonus.requestedAt,
+          approvedAt: bonus.approvedAt,
+          paidAt: bonus.paidAt,
+          requestedByName: requestedByUser?.name ?? undefined,
+          approvedByName: approvedByUser?.name ?? undefined,
+          paidByName: paidByUser?.name ?? undefined,
+          paymentMethod: bonus.paymentMethod ?? undefined,
+          paymentReference: bonus.paymentReference ?? undefined,
+          employees,
+        });
+
+        // تحويل البفر إلى base64
+        return {
+          success: true,
+          pdf: pdfBuffer.toString('base64'),
+          filename: `bonus-report-${branch?.nameAr || 'branch'}-week${bonus.weekNumber}-${bonus.month}-${bonus.year}.pdf`,
+        };
+      }),
   }),
 
   // ==================== طلبات الموظفين ====================

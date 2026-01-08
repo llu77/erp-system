@@ -27,7 +27,9 @@ import {
   TrendingUp,
   DollarSign,
   BarChart3,
-  CalendarDays
+  CalendarDays,
+  FileDown,
+  Loader2
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -86,6 +88,35 @@ export default function BonusRequests() {
     },
     onError: (error) => {
       toast.error(error.message || "فشل إرسال طلب الصرف");
+    },
+  });
+
+  // تصدير PDF للبونص
+  const exportPDFMutation = trpc.bonuses.exportPDF.useMutation({
+    onSuccess: (data) => {
+      // تحويل base64 إلى blob وتنزيل الملف
+      const byteCharacters = atob(data.pdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      
+      // إنشاء رابط التنزيل
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = data.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("تم تصدير التقرير بنجاح");
+    },
+    onError: (error) => {
+      toast.error(error.message || "فشل تصدير التقرير");
     },
   });
 
@@ -259,32 +290,54 @@ export default function BonusRequests() {
           </div>
         )}
 
-        {/* أزرار الإجراءات */}
-        {showActions && request.status === 'requested' && (
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              className="text-destructive border-destructive hover:bg-destructive/10"
-              onClick={() => {
-                setSelectedBonusId(request.id);
-                setShowRejectDialog(true);
-              }}
-            >
-              <XCircle className="h-4 w-4 ml-2" />
-              رفض
-            </Button>
-            <Button
-              className="bg-green-600 hover:bg-green-700"
-              onClick={() => {
-                setSelectedBonusId(request.id);
-                setShowApproveDialog(true);
-              }}
-            >
-              <CheckCircle className="h-4 w-4 ml-2" />
-              موافقة
-            </Button>
-          </div>
-        )}
+        {/* زر تصدير PDF */}
+        <div className="flex justify-between items-center mt-4">
+          <Button
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={() => exportPDFMutation.mutate({ weeklyBonusId: request.id })}
+            disabled={exportPDFMutation.isPending}
+          >
+            {exportPDFMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                جاري التصدير...
+              </>
+            ) : (
+              <>
+                <FileDown className="h-4 w-4" />
+                تصدير PDF
+              </>
+            )}
+          </Button>
+
+          {/* أزرار الإجراءات */}
+          {showActions && request.status === 'requested' && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="text-destructive border-destructive hover:bg-destructive/10"
+                onClick={() => {
+                  setSelectedBonusId(request.id);
+                  setShowRejectDialog(true);
+                }}
+              >
+                <XCircle className="h-4 w-4 ml-2" />
+                رفض
+              </Button>
+              <Button
+                className="bg-green-600 hover:bg-green-700"
+                onClick={() => {
+                  setSelectedBonusId(request.id);
+                  setShowApproveDialog(true);
+                }}
+              >
+                <CheckCircle className="h-4 w-4 ml-2" />
+                موافقة
+              </Button>
+            </div>
+          )}
+        </div>
 
         {/* زر طلب الصرف للمسودات */}
         {request.status === 'pending' && Number(request.totalAmount) > 0 && (
