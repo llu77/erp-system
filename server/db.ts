@@ -7048,3 +7048,20 @@ export async function getDeletionRequestsStats() {
   
   return stats;
 }
+
+
+// حذف زيارة مباشرة (للأدمن)
+export async function deleteLoyaltyVisit(visitId: number): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+  
+  try {
+    await db.delete(loyaltyVisits)
+      .where(eq(loyaltyVisits.id, visitId));
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting loyalty visit:', error);
+    return { success: false, error: 'فشل حذف الزيارة' };
+  }
+}

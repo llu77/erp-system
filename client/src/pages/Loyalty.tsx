@@ -100,6 +100,24 @@ export default function Loyalty() {
     },
   });
 
+  // حذف زيارة مباشر (للأدمن فقط)
+  const directDeleteMutation = trpc.loyalty.deleteVisit.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success('تم حذف الزيارة بنجاح');
+        setShowDeleteDialog(false);
+        setDeletionReason('');
+        setDeleteVisitId(null);
+        utils.loyalty.branchVisits.invalidate();
+        utils.loyalty.pendingVisits.invalidate();
+        utils.loyalty.stats.invalidate();
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || 'فشل حذف الزيارة');
+    },
+  });
+
   // توليد باركود QR
   useEffect(() => {
     const baseUrl = window.location.origin;
@@ -785,23 +803,26 @@ export default function Loyalty() {
           </DialogContent>
         </Dialog>
 
-        {/* نافذة طلب حذف الزيارة */}
+        {/* نافذة حذف الزيارة */}
         <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-red-600">
                 <AlertTriangle className="h-5 w-5" />
-                طلب حذف زيارة
+                {user?.role === 'admin' ? 'حذف زيارة' : 'طلب حذف زيارة'}
               </DialogTitle>
               <DialogDescription>
-                سيتم إرسال طلب الحذف للأدمن للموافقة عليه. يرجى كتابة سبب الحذف.
+                {user?.role === 'admin' 
+                  ? 'سيتم حذف الزيارة نهائياً. يرجى كتابة سبب الحذف.'
+                  : 'سيتم إرسال طلب الحذف للأدمن للموافقة عليه. يرجى كتابة سبب الحذف.'
+                }
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>سبب طلب الحذف <span className="text-red-500">*</span></Label>
+                <Label>سبب الحذف <span className="text-red-500">*</span></Label>
                 <Textarea
-                  placeholder="أدخل سبب طلب الحذف (على الأقل 10 أحرف)..."
+                  placeholder="أدخل سبب الحذف (على الأقل 5 أحرف)..."
                   value={deletionReason}
                   onChange={(e) => setDeletionReason(e.target.value)}
                   rows={4}
@@ -826,22 +847,31 @@ export default function Loyalty() {
               <Button 
                 variant="destructive" 
                 onClick={() => {
-                  if (deleteVisitId && deletionReason.trim().length >= 10) {
-                    deletionMutation.mutate({
-                      visitId: deleteVisitId,
-                      deletionReason: deletionReason.trim(),
-                    });
+                  if (deleteVisitId && deletionReason.trim().length >= 5) {
+                    if (user?.role === 'admin') {
+                      // الأدمن يحذف مباشرة
+                      directDeleteMutation.mutate({
+                        visitId: deleteVisitId,
+                        reason: deletionReason.trim(),
+                      });
+                    } else {
+                      // المشرف يرسل طلب
+                      deletionMutation.mutate({
+                        visitId: deleteVisitId,
+                        deletionReason: deletionReason.trim(),
+                      });
+                    }
                   }
                 }}
-                disabled={deletionMutation.isPending || deletionReason.trim().length < 10}
+                disabled={(deletionMutation.isPending || directDeleteMutation.isPending) || deletionReason.trim().length < 5}
               >
-                {deletionMutation.isPending ? (
+                {(deletionMutation.isPending || directDeleteMutation.isPending) ? (
                   <>
                     <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                    جاري الإرسال...
+                    جاري الحذف...
                   </>
                 ) : (
-                  'إرسال طلب الحذف'
+                  user?.role === 'admin' ? 'حذف الزيارة' : 'إرسال طلب الحذف'
                 )}
               </Button>
             </DialogFooter>

@@ -5711,6 +5711,45 @@ ${discrepancyRows}
         const { hasPendingDeletionRequest } = await import('./db');
         return await hasPendingDeletionRequest(input.visitId);
       }),
+
+    // حذف زيارة مباشرة (للأدمن فقط)
+    deleteVisit: adminProcedure
+      .input(z.object({
+        visitId: z.number(),
+        reason: z.string().min(5, 'يجب كتابة سبب الحذف (5 أحرف على الأقل)'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { getVisitById, deleteLoyaltyVisit, createVisitDeletionRequest } = await import('./db');
+        
+        // التحقق من وجود الزيارة
+        const visit = await getVisitById(input.visitId);
+        if (!visit) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الزيارة غير موجودة' });
+        }
+        
+        // تسجيل طلب الحذف للسجلات (مع حالة موافق عليه مباشرة)
+        await createVisitDeletionRequest({
+          visitId: input.visitId,
+          customerName: visit.customerName || 'غير محدد',
+          customerPhone: visit.customerPhone || '',
+          serviceType: visit.serviceType || undefined,
+          visitDate: visit.visitDate ? new Date(visit.visitDate) : undefined,
+          branchId: visit.branchId || undefined,
+          branchName: visit.branchName || undefined,
+          deletionReason: `[حذف مباشر بواسطة الأدمن] ${input.reason}`,
+          requestedBy: ctx.user.id,
+          requestedByName: ctx.user.name || 'أدمن',
+        });
+        
+        // حذف الزيارة مباشرة
+        const result = await deleteLoyaltyVisit(input.visitId);
+        
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: result.error || 'فشل حذف الزيارة' });
+        }
+        
+        return { success: true, message: 'تم حذف الزيارة بنجاح' };
+      }),
   }),
 
   // ═══════════════════════════════════════════════════════════════════════════════
