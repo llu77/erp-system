@@ -168,7 +168,7 @@ const menuStructure: MenuItem[] = [
     children: [
       { icon: FilePlus, label: "تقديم طلب", path: "/submit-request", roles: ["admin", "manager", "employee", "supervisor"] },
       { icon: ClipboardList, label: "إدارة الطلبات", path: "/manage-requests", roles: ["admin", "manager", "supervisor", "viewer"] },
-      { icon: Gift, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin"] },
+      { icon: Gift, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin", "supervisor"] },
     ]
   },
   

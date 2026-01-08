@@ -2110,8 +2110,8 @@ export const appRouter = router({
         return { success: true, message: 'تم إرسال طلب الصرف بنجاح' };
       }),
 
-    // طلبات البونص المعلقة (للمسؤول)
-    pending: adminProcedure.query(async () => {
+    // طلبات البونص المعلقة (للمسؤول والمشرف)
+    pending: supervisorViewProcedure.query(async () => {
       const requests = await db.getPendingBonusRequests();
       const result = [];
       
@@ -2130,8 +2130,8 @@ export const appRouter = router({
       return result;
     }),
 
-    // جميع طلبات البونص (السجل الكامل)
-    all: adminProcedure
+    // جميع طلبات البونص (السجل الكامل) - متاح للمشرف
+    all: supervisorViewProcedure
       .input(z.object({ limit: z.number().default(50) }).optional())
       .query(async ({ input }) => {
         const requests = await db.getAllBonusRequests(input?.limit || 50);
@@ -2613,13 +2613,13 @@ ${discrepancyRows}
         return await db.getBonusTierAuditLogs(input?.limit || 50);
       }),
 
-    // إحصائيات البونص
-    stats: adminProcedure.query(async () => {
+    // إحصائيات البونص - متاح للمشرف
+    stats: supervisorViewProcedure.query(async () => {
       return await db.getBonusStats();
     }),
 
-    // تصدير PDF للبونص الأسبوعي
-    exportPDF: adminProcedure
+    // تصدير PDF للبونص الأسبوعي - متاح للمشرف
+    exportPDF: supervisorViewProcedure
       .input(z.object({ weeklyBonusId: z.number() }))
       .mutation(async ({ input }) => {
         const bonus = await db.getWeeklyBonusById(input.weeklyBonusId);
