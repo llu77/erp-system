@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { generateBonusPDF } from "@/lib/bonusPdfGenerator";
 
 export default function BonusRequests() {
   const { user } = useAuth();
@@ -91,34 +92,21 @@ export default function BonusRequests() {
     },
   });
 
-  // تصدير PDF للبونص
-  const exportPDFMutation = trpc.bonuses.exportPDF.useMutation({
-    onSuccess: (data) => {
-      // تحويل base64 إلى blob وتنزيل الملف
-      const byteCharacters = atob(data.pdf);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
-      
-      // إنشاء رابط التنزيل
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = data.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
+  // تصدير PDF للبونص (من جهة العميل)
+  const [exportingPDF, setExportingPDF] = useState<number | null>(null);
+  
+  const handleExportPDF = (request: any) => {
+    try {
+      setExportingPDF(request.id);
+      generateBonusPDF(request);
       toast.success("تم تصدير التقرير بنجاح");
-    },
-    onError: (error) => {
-      toast.error(error.message || "فشل تصدير التقرير");
-    },
-  });
+    } catch (error) {
+      toast.error("فشل تصدير التقرير");
+      console.error('PDF export error:', error);
+    } finally {
+      setExportingPDF(null);
+    }
+  };
 
   const handleApprove = () => {
     if (selectedBonusId) {
@@ -295,10 +283,10 @@ export default function BonusRequests() {
           <Button
             variant="outline"
             className="flex items-center gap-2"
-            onClick={() => exportPDFMutation.mutate({ weeklyBonusId: request.id })}
-            disabled={exportPDFMutation.isPending}
+            onClick={() => handleExportPDF(request)}
+            disabled={exportingPDF === request.id}
           >
-            {exportPDFMutation.isPending ? (
+            {exportingPDF === request.id ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 جاري التصدير...
