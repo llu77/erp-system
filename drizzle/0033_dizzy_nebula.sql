@@ -1,0 +1,22 @@
+CREATE TABLE `loyaltyVisitDeletionRequests` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`visitId` int NOT NULL,
+	`customerName` varchar(255) NOT NULL,
+	`customerPhone` varchar(20) NOT NULL,
+	`serviceType` varchar(255),
+	`visitDate` timestamp,
+	`branchId` int,
+	`branchName` varchar(255),
+	`deletionReason` text NOT NULL,
+	`requestedBy` int NOT NULL,
+	`requestedByName` varchar(255),
+	`requestedAt` timestamp NOT NULL DEFAULT (now()),
+	`status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+	`processedBy` int,
+	`processedByName` varchar(255),
+	`processedAt` timestamp,
+	`adminNotes` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `loyaltyVisitDeletionRequests_id` PRIMARY KEY(`id`)
+);

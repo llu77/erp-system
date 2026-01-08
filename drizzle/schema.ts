@@ -1874,3 +1874,47 @@ export const customerSegments = mysqlTable("customerSegments", {
 
 export type CustomerSegment = typeof customerSegments.$inferSelect;
 export type InsertCustomerSegment = typeof customerSegments.$inferInsert;
+
+
+// ==================== جدول طلبات حذف زيارات الولاء ====================
+/**
+ * LoyaltyVisitDeletionRequests - طلبات حذف زيارات الولاء
+ * يتم تقديم طلب الحذف من المشرف ويحتاج موافقة الأدمن
+ */
+export const loyaltyVisitDeletionRequests = mysqlTable("loyaltyVisitDeletionRequests", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // الزيارة المطلوب حذفها
+  visitId: int("visitId").notNull(), // معرف الزيارة
+  
+  // معلومات الزيارة (للحفظ التاريخي)
+  customerName: varchar("customerName", { length: 255 }).notNull(),
+  customerPhone: varchar("customerPhone", { length: 20 }).notNull(),
+  serviceType: varchar("serviceType", { length: 255 }),
+  visitDate: timestamp("visitDate"),
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // سبب طلب الحذف
+  deletionReason: text("deletionReason").notNull(),
+  
+  // مقدم الطلب
+  requestedBy: int("requestedBy").notNull(), // المستخدم الذي طلب الحذف
+  requestedByName: varchar("requestedByName", { length: 255 }),
+  requestedAt: timestamp("requestedAt").defaultNow().notNull(),
+  
+  // حالة الطلب
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  
+  // الموافقة/الرفض
+  processedBy: int("processedBy"), // الأدمن الذي وافق أو رفض
+  processedByName: varchar("processedByName", { length: 255 }),
+  processedAt: timestamp("processedAt"),
+  adminNotes: text("adminNotes"), // ملاحظات الأدمن
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LoyaltyVisitDeletionRequest = typeof loyaltyVisitDeletionRequests.$inferSelect;
+export type InsertLoyaltyVisitDeletionRequest = typeof loyaltyVisitDeletionRequests.$inferInsert;

@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { trpc } from '@/lib/trpc';
-import { QrCode, Users, Gift, Calendar, Search, Eye, Printer, CheckCircle, XCircle, Clock, Image as ImageIcon, BarChart3, Settings } from 'lucide-react';
+import { QrCode, Users, Gift, Calendar, Search, Eye, Printer, CheckCircle, XCircle, Clock, Image as ImageIcon, BarChart3, Settings, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { Link } from 'wouter';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
@@ -28,6 +28,9 @@ export default function Loyalty() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showImageDialog, setShowImageDialog] = useState(false);
   const [selectedImageUrl, setSelectedImageUrl] = useState('');
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteVisitId, setDeleteVisitId] = useState<number | null>(null);
+  const [deletionReason, setDeletionReason] = useState('');
 
   const utils = trpc.useUtils();
 
@@ -77,6 +80,23 @@ export default function Loyalty() {
     },
     onError: (error) => {
       toast.error(error.message || 'حدث خطأ');
+    },
+  });
+
+  // طلب حذف زيارة
+  const deletionMutation = trpc.loyalty.requestVisitDeletion.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success('تم إرسال طلب الحذف بنجاح - بانتظار موافقة الأدمن');
+        setShowDeleteDialog(false);
+        setDeletionReason('');
+        setDeleteVisitId(null);
+        utils.loyalty.branchVisits.invalidate();
+        utils.loyalty.pendingVisits.invalidate();
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || 'فشل إرسال طلب الحذف');
     },
   });
 
@@ -547,6 +567,7 @@ export default function Loyalty() {
                       <TableHead>الفرع</TableHead>
                       <TableHead>الحالة</TableHead>
                       <TableHead>صورة الفاتورة</TableHead>
+                      <TableHead>الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -589,6 +610,20 @@ export default function Loyalty() {
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 hover:bg-red-50"
+                              onClick={() => {
+                                setDeleteVisitId(visit.id);
+                                setShowDeleteDialog(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 ml-1" />
+                              طلب حذف
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))
@@ -747,6 +782,69 @@ export default function Loyalty() {
                 className="max-w-full max-h-[70vh] object-contain rounded-lg"
               />
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* نافذة طلب حذف الزيارة */}
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="h-5 w-5" />
+                طلب حذف زيارة
+              </DialogTitle>
+              <DialogDescription>
+                سيتم إرسال طلب الحذف للأدمن للموافقة عليه. يرجى كتابة سبب الحذف.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>سبب طلب الحذف <span className="text-red-500">*</span></Label>
+                <Textarea
+                  placeholder="أدخل سبب طلب الحذف (على الأقل 10 أحرف)..."
+                  value={deletionReason}
+                  onChange={(e) => setDeletionReason(e.target.value)}
+                  rows={4}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  مثال: زيارة مكررة بالخطأ، العميل طلب الإلغاء، إلخ.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowDeleteDialog(false);
+                  setDeletionReason('');
+                  setDeleteVisitId(null);
+                }}
+              >
+                إلغاء
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => {
+                  if (deleteVisitId && deletionReason.trim().length >= 10) {
+                    deletionMutation.mutate({
+                      visitId: deleteVisitId,
+                      deletionReason: deletionReason.trim(),
+                    });
+                  }
+                }}
+                disabled={deletionMutation.isPending || deletionReason.trim().length < 10}
+              >
+                {deletionMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                    جاري الإرسال...
+                  </>
+                ) : (
+                  'إرسال طلب الحذف'
+                )}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

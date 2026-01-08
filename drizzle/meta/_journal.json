@@ -232,6 +232,13 @@
       "when": 1767738563932,
       "tag": "0032_giant_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1767886451758,
+      "tag": "0033_dizzy_nebula",
+      "breakpoints": true
     }
   ]
 }

@@ -48,6 +48,7 @@ import LoyaltyRegister from "./pages/LoyaltyRegister";
 import LoyaltyVisit from "./pages/LoyaltyVisit";
 import LoyaltySettings from "./pages/LoyaltySettings";
 import LoyaltyReport from "./pages/LoyaltyReport";
+import LoyaltyDeletionRequests from "./pages/LoyaltyDeletionRequests";
 import MonitoringDashboard from "./pages/MonitoringDashboard";
 import SchedulerDashboard from "./pages/SchedulerDashboard";
 import SmartAlerts from "./pages/SmartAlerts";
@@ -274,6 +275,12 @@ function Router() {
       <Route path="/loyalty/report">
         <DashboardLayout>
           <LoyaltyReport />
+        </DashboardLayout>
+      </Route>
+      {/* Loyalty Deletion Requests - Admin Only */}
+      <Route path="/loyalty/deletion-requests">
+        <DashboardLayout>
+          <LoyaltyDeletionRequests />
         </DashboardLayout>
       </Route>
       {/* Loyalty Register - Public Page */}

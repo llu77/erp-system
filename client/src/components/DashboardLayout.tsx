@@ -61,6 +61,7 @@ import {
   ClipboardCheck,
   Heart,
   Brain,
+  Trash2,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -217,6 +218,7 @@ const menuStructure: MenuItem[] = [
       { icon: Brain, label: "لوحة المراقبة", path: "/monitoring", roles: ["admin"] },
       { icon: Settings, label: "الإعدادات", path: "/settings", roles: ["admin"] },
       { icon: Users, label: "إعدادات الولاء", path: "/loyalty/settings", roles: ["admin"] },
+      { icon: Trash2, label: "طلبات حذف الزيارات", path: "/loyalty/deletion-requests", roles: ["admin"] },
     ]
   },
 ];

@@ -34,6 +34,7 @@ import {
   InsertLoyaltyCustomer,
   InsertLoyaltyVisit,
   receiptVouchers,
+  loyaltyVisitDeletionRequests,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -6854,4 +6855,196 @@ export async function getReceiptVouchersStats(startDate: Date, endDate: Date, br
     count: Number(result[0]?.count || 0),
     totalAmount: parseFloat(result[0]?.totalAmount || '0'),
   };
+}
+
+
+// ==================== طلبات حذف زيارات الولاء ====================
+
+// إنشاء طلب حذف زيارة
+export async function createVisitDeletionRequest(data: {
+  visitId: number;
+  customerName: string;
+  customerPhone: string;
+  serviceType?: string;
+  visitDate?: Date;
+  branchId?: number;
+  branchName?: string;
+  deletionReason: string;
+  requestedBy: number;
+  requestedByName?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.insert(loyaltyVisitDeletionRequests).values({
+    visitId: data.visitId,
+    customerName: data.customerName,
+    customerPhone: data.customerPhone,
+    serviceType: data.serviceType,
+    visitDate: data.visitDate,
+    branchId: data.branchId,
+    branchName: data.branchName,
+    deletionReason: data.deletionReason,
+    requestedBy: data.requestedBy,
+    requestedByName: data.requestedByName,
+    status: 'pending',
+  });
+  
+  return Number((result as any)[0]?.insertId || 0);
+}
+
+// الحصول على طلبات الحذف المعلقة
+export async function getPendingDeletionRequests() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(loyaltyVisitDeletionRequests)
+    .where(eq(loyaltyVisitDeletionRequests.status, 'pending'))
+    .orderBy(desc(loyaltyVisitDeletionRequests.requestedAt));
+}
+
+// الحصول على جميع طلبات الحذف
+export async function getAllDeletionRequests(limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(loyaltyVisitDeletionRequests)
+    .orderBy(desc(loyaltyVisitDeletionRequests.requestedAt))
+    .limit(limit);
+}
+
+// الحصول على طلبات الحذف حسب الفرع
+export async function getDeletionRequestsByBranch(branchId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(loyaltyVisitDeletionRequests)
+    .where(eq(loyaltyVisitDeletionRequests.branchId, branchId))
+    .orderBy(desc(loyaltyVisitDeletionRequests.requestedAt));
+}
+
+// الحصول على طلب حذف بواسطة ID
+export async function getDeletionRequestById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const results = await db.select()
+    .from(loyaltyVisitDeletionRequests)
+    .where(eq(loyaltyVisitDeletionRequests.id, id))
+    .limit(1);
+  
+  return results[0] || null;
+}
+
+// التحقق من وجود طلب حذف معلق للزيارة
+export async function hasPendingDeletionRequest(visitId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  
+  const results = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(loyaltyVisitDeletionRequests)
+    .where(and(
+      eq(loyaltyVisitDeletionRequests.visitId, visitId),
+      eq(loyaltyVisitDeletionRequests.status, 'pending')
+    ));
+  
+  return Number(results[0]?.count || 0) > 0;
+}
+
+// الموافقة على طلب الحذف
+export async function approveDeletionRequest(
+  requestId: number,
+  processedBy: number,
+  processedByName: string,
+  adminNotes?: string
+) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+  
+  // الحصول على طلب الحذف
+  const request = await getDeletionRequestById(requestId);
+  if (!request) {
+    return { success: false, error: 'طلب الحذف غير موجود' };
+  }
+  
+  if (request.status !== 'pending') {
+    return { success: false, error: 'تم معالجة هذا الطلب مسبقاً' };
+  }
+  
+  // تحديث حالة الطلب
+  await db.update(loyaltyVisitDeletionRequests)
+    .set({
+      status: 'approved',
+      processedBy,
+      processedByName,
+      processedAt: new Date(),
+      adminNotes,
+    })
+    .where(eq(loyaltyVisitDeletionRequests.id, requestId));
+  
+  // حذف الزيارة من جدول الزيارات
+  await db.delete(loyaltyVisits)
+    .where(eq(loyaltyVisits.id, request.visitId));
+  
+  return { success: true };
+}
+
+// رفض طلب الحذف
+export async function rejectDeletionRequest(
+  requestId: number,
+  processedBy: number,
+  processedByName: string,
+  adminNotes?: string
+) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'Database not available' };
+  
+  // الحصول على طلب الحذف
+  const request = await getDeletionRequestById(requestId);
+  if (!request) {
+    return { success: false, error: 'طلب الحذف غير موجود' };
+  }
+  
+  if (request.status !== 'pending') {
+    return { success: false, error: 'تم معالجة هذا الطلب مسبقاً' };
+  }
+  
+  // تحديث حالة الطلب
+  await db.update(loyaltyVisitDeletionRequests)
+    .set({
+      status: 'rejected',
+      processedBy,
+      processedByName,
+      processedAt: new Date(),
+      adminNotes,
+    })
+    .where(eq(loyaltyVisitDeletionRequests.id, requestId));
+  
+  return { success: true };
+}
+
+// إحصائيات طلبات الحذف
+export async function getDeletionRequestsStats() {
+  const db = await getDb();
+  if (!db) return { pending: 0, approved: 0, rejected: 0, total: 0 };
+  
+  const results = await db.select({
+    status: loyaltyVisitDeletionRequests.status,
+    count: sql<number>`COUNT(*)`,
+  })
+    .from(loyaltyVisitDeletionRequests)
+    .groupBy(loyaltyVisitDeletionRequests.status);
+  
+  const stats = { pending: 0, approved: 0, rejected: 0, total: 0 };
+  results.forEach(r => {
+    if (r.status === 'pending') stats.pending = Number(r.count);
+    else if (r.status === 'approved') stats.approved = Number(r.count);
+    else if (r.status === 'rejected') stats.rejected = Number(r.count);
+    stats.total += Number(r.count);
+  });
+  
+  return stats;
 }

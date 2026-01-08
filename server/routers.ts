@@ -5590,6 +5590,127 @@ ${discrepancyRows}
           });
         }
       }),
+
+    // ==================== طلبات حذف الزيارات ====================
+    
+    // طلب حذف زيارة
+    requestVisitDeletion: supervisorInputProcedure
+      .input(z.object({
+        visitId: z.number(),
+        deletionReason: z.string().min(10, 'سبب الحذف يجب أن يكون 10 أحرف على الأقل'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { getVisitById, createVisitDeletionRequest, hasPendingDeletionRequest } = await import('./db');
+        
+        // الحصول على الزيارة
+        const visit = await getVisitById(input.visitId);
+        if (!visit) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الزيارة غير موجودة' });
+        }
+        
+        // التحقق من الصلاحية (الأدمن يمكنه طلب حذف أي زيارة)
+        if (ctx.user.role !== 'admin' && visit.branchId !== ctx.user.branchId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك طلب حذف زيارات فروع أخرى' });
+        }
+        
+        // التحقق من عدم وجود طلب حذف معلق لنفس الزيارة
+        const hasPending = await hasPendingDeletionRequest(input.visitId);
+        if (hasPending) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'يوجد طلب حذف معلق لهذه الزيارة' });
+        }
+        
+        // إنشاء طلب الحذف
+        const requestId = await createVisitDeletionRequest({
+          visitId: input.visitId,
+          customerName: visit.customerName,
+          customerPhone: visit.customerPhone,
+          serviceType: visit.serviceType,
+          visitDate: visit.visitDate,
+          branchId: visit.branchId ?? undefined,
+          branchName: visit.branchName ?? undefined,
+          deletionReason: input.deletionReason,
+          requestedBy: ctx.user.id,
+          requestedByName: ctx.user.name ?? undefined,
+        });
+        
+        return { success: true, requestId };
+      }),
+
+    // الحصول على طلبات الحذف المعلقة (للأدمن)
+    pendingDeletionRequests: adminProcedure
+      .query(async () => {
+        const { getPendingDeletionRequests } = await import('./db');
+        return await getPendingDeletionRequests();
+      }),
+
+    // الحصول على جميع طلبات الحذف (للأدمن)
+    allDeletionRequests: adminProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        const { getAllDeletionRequests } = await import('./db');
+        return await getAllDeletionRequests(input?.limit || 50);
+      }),
+
+    // إحصائيات طلبات الحذف
+    deletionRequestsStats: adminProcedure
+      .query(async () => {
+        const { getDeletionRequestsStats } = await import('./db');
+        return await getDeletionRequestsStats();
+      }),
+
+    // الموافقة على طلب الحذف (للأدمن فقط)
+    approveDeletionRequest: adminProcedure
+      .input(z.object({
+        requestId: z.number(),
+        adminNotes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { approveDeletionRequest } = await import('./db');
+        
+        const result = await approveDeletionRequest(
+          input.requestId,
+          ctx.user.id,
+          ctx.user.name || 'أدمن',
+          input.adminNotes
+        );
+        
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل الموافقة' });
+        }
+        
+        return result;
+      }),
+
+    // رفض طلب الحذف (للأدمن فقط)
+    rejectDeletionRequest: adminProcedure
+      .input(z.object({
+        requestId: z.number(),
+        adminNotes: z.string().min(5, 'يجب كتابة سبب الرفض'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { rejectDeletionRequest } = await import('./db');
+        
+        const result = await rejectDeletionRequest(
+          input.requestId,
+          ctx.user.id,
+          ctx.user.name || 'أدمن',
+          input.adminNotes
+        );
+        
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل الرفض' });
+        }
+        
+        return result;
+      }),
+
+    // التحقق من وجود طلب حذف معلق لزيارة
+    hasPendingDeletion: supervisorInputProcedure
+      .input(z.object({ visitId: z.number() }))
+      .query(async ({ input }) => {
+        const { hasPendingDeletionRequest } = await import('./db');
+        return await hasPendingDeletionRequest(input.visitId);
+      }),
   }),
 
   // ═══════════════════════════════════════════════════════════════════════════════
