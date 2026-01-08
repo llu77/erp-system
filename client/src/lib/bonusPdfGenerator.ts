@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 // تعريف الأنواع
 interface BonusEmployee {
@@ -195,7 +195,7 @@ export function generateBonusPDF(request: BonusRequest): void {
     formatCurrency(request.totalAmount),
   ]);
 
-  (doc as any).autoTable({
+  autoTable(doc, {
     startY: yPos,
     head: [['#', 'Employee', 'Code', 'Weekly Revenue', 'Tier', 'Bonus']],
     body: tableData,
@@ -236,7 +236,7 @@ export function generateBonusPDF(request: BonusRequest): void {
   });
 
   // الحصول على موضع Y بعد الجدول
-  const finalY = (doc as any).lastAutoTable.finalY || yPos + 100;
+  const finalY = (doc as any).lastAutoTable?.finalY || yPos + 100;
 
   // ذيل التقرير
   doc.setFillColor(245, 245, 245);
