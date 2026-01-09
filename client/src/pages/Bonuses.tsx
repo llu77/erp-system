@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useIsMobile } from "@/hooks/useMobile";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -69,8 +69,19 @@ export default function Bonuses() {
   // جلب الفروع
   const { data: branches, isLoading: branchesLoading } = trpc.branches.list.useQuery();
 
-  // الفرع الفعال
-  const effectiveBranchId = selectedBranchId || (branches && branches.length > 0 ? branches[0].id : null);
+  // الفرع الفعال - استخدام فرع المشرف إذا كان مرتبطاً بفرع
+  const effectiveBranchId = useMemo(() => {
+    // إذا كان المستخدم مشرف أو مشاهد ومرتبط بفرع، استخدم فرعه
+    if ((user?.role === 'supervisor' || user?.role === 'viewer') && user?.branchId) {
+      return user.branchId;
+    }
+    // إذا تم اختيار فرع يدوياً
+    if (selectedBranchId) {
+      return selectedBranchId;
+    }
+    // الافتراضي: أول فرع في القائمة
+    return branches && branches.length > 0 ? branches[0].id : null;
+  }, [user?.role, user?.branchId, selectedBranchId, branches]);
 
   // جلب البونص الحالي
   const { data: currentBonus, isLoading: bonusLoading, refetch: refetchBonus } = trpc.bonuses.current.useQuery(

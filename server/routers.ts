@@ -1457,8 +1457,13 @@ export const appRouter = router({
 
   // ==================== إدارة الفروع ====================
   branches: router({
-    list: protectedProcedure.query(async () => {
-      return await db.getBranches();
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const branches = await db.getBranches();
+      // المشرف يرى فرعه فقط
+      if ((ctx.user.role === 'supervisor' || ctx.user.role === 'viewer') && ctx.user.branchId) {
+        return branches.filter(b => b.id === ctx.user.branchId);
+      }
+      return branches;
     }),
 
     create: adminProcedure
