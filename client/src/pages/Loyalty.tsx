@@ -31,6 +31,7 @@ export default function Loyalty() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteVisitId, setDeleteVisitId] = useState<number | null>(null);
   const [deletionReason, setDeletionReason] = useState('');
+  const [invoiceAmount, setInvoiceAmount] = useState<string>('');
 
   const utils = trpc.useUtils();
 
@@ -362,6 +363,60 @@ export default function Loyalty() {
             </CardContent>
           </Card>
         </div>
+
+        {/* حاسبة الخصم */}
+        <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Gift className="h-5 w-5 text-primary" />
+              حاسبة الخصم (60%)
+            </CardTitle>
+            <CardDescription>
+              أدخل مبلغ الفاتورة لحساب المبلغ المطلوب بعد الخصم
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="invoiceAmount">مبلغ الفاتورة (ر.س)</Label>
+                <Input
+                  id="invoiceAmount"
+                  type="number"
+                  placeholder="أدخل مبلغ الفاتورة..."
+                  value={invoiceAmount}
+                  onChange={(e) => setInvoiceAmount(e.target.value)}
+                  className="text-lg font-semibold"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div className="flex-1 p-4 bg-green-500/10 rounded-lg border border-green-500/20">
+                <p className="text-sm text-muted-foreground mb-1">المبلغ بعد الخصم (40%)</p>
+                <p className="text-3xl font-bold text-green-600">
+                  {invoiceAmount && !isNaN(parseFloat(invoiceAmount))
+                    ? (parseFloat(invoiceAmount) * 0.4).toFixed(2)
+                    : '0.00'}
+                  <span className="text-lg mr-1">ر.س</span>
+                </p>
+                {invoiceAmount && !isNaN(parseFloat(invoiceAmount)) && parseFloat(invoiceAmount) > 0 && (
+                  <p className="text-sm text-red-500 mt-1">
+                    الخصم: {(parseFloat(invoiceAmount) * 0.6).toFixed(2)} ر.س
+                  </p>
+                )}
+              </div>
+              {invoiceAmount && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setInvoiceAmount('')}
+                  className="shrink-0"
+                >
+                  مسح
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* التبويبات */}
         <Tabs defaultValue="pending" className="space-y-4">
