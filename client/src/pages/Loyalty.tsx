@@ -35,6 +35,192 @@ export default function Loyalty() {
 
   const utils = trpc.useUtils();
 
+  // دالة طباعة إيصال الخصم
+  const handlePrintReceipt = () => {
+    const amount = parseFloat(invoiceAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('يرجى إدخال مبلغ صحيح');
+      return;
+    }
+
+    const discountAmount = amount * 0.6;
+    const finalAmount = amount * 0.4;
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ar-SA', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      calendar: 'islamic-umalqura'
+    });
+    const timeStr = now.toLocaleTimeString('ar-SA', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+      toast.error('تعذر فتح نافذة الطباعة');
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>إيصال خصم - Symbol AI</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Tajawal', sans-serif;
+            padding: 20px;
+            background: #fff;
+            color: #000;
+            max-width: 350px;
+            margin: 0 auto;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+          }
+          .logo {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f97316;
+            margin-bottom: 5px;
+          }
+          .subtitle {
+            font-size: 14px;
+            color: #666;
+          }
+          .receipt-title {
+            text-align: center;
+            font-size: 20px;
+            font-weight: 700;
+            margin: 15px 0;
+            padding: 10px;
+            background: #f97316;
+            color: #fff;
+            border-radius: 8px;
+          }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+          }
+          .info-label {
+            color: #666;
+            font-size: 14px;
+          }
+          .info-value {
+            font-weight: 700;
+            font-size: 16px;
+          }
+          .amount-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+          }
+          .amount-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+          }
+          .amount-row.original {
+            color: #666;
+            text-decoration: line-through;
+          }
+          .amount-row.discount {
+            color: #dc2626;
+          }
+          .amount-row.final {
+            font-size: 24px;
+            font-weight: 700;
+            color: #16a34a;
+            border-top: 2px solid #000;
+            padding-top: 15px;
+            margin-top: 10px;
+          }
+          .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px dashed #000;
+            font-size: 12px;
+            color: #666;
+          }
+          .discount-badge {
+            display: inline-block;
+            background: #dc2626;
+            color: #fff;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 700;
+            margin: 10px 0;
+          }
+          @media print {
+            body { padding: 10px; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="logo">Symbol AI</div>
+          <div class="subtitle">نظام إدارة الأعمال الذكي</div>
+        </div>
+        
+        <div class="receipt-title">إيصال خصم برنامج الولاء</div>
+        
+        <div style="text-align: center;">
+          <span class="discount-badge">خصم 60%</span>
+        </div>
+        
+        <div class="info-row">
+          <span class="info-label">التاريخ:</span>
+          <span class="info-value">${dateStr}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">الوقت:</span>
+          <span class="info-value">${timeStr}</span>
+        </div>
+        
+        <div class="amount-section">
+          <div class="amount-row original">
+            <span>المبلغ الأصلي:</span>
+            <span>${amount.toFixed(2)} ر.س</span>
+          </div>
+          <div class="amount-row discount">
+            <span>قيمة الخصم (60%):</span>
+            <span>- ${discountAmount.toFixed(2)} ر.س</span>
+          </div>
+          <div class="amount-row final">
+            <span>المبلغ المطلوب:</span>
+            <span>${finalAmount.toFixed(2)} ر.س</span>
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p>شكراً لولائكم الكريم</p>
+          <p style="margin-top: 5px;">نتمنى لكم يوماً سعيداً</p>
+        </div>
+        
+        <script>
+          window.onload = function() {
+            window.print();
+          }
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   // جلب البيانات
   const { data: stats, isLoading: statsLoading } = trpc.loyalty.stats.useQuery();
   
@@ -404,15 +590,25 @@ export default function Loyalty() {
                   </p>
                 )}
               </div>
-              {invoiceAmount && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setInvoiceAmount('')}
-                  className="shrink-0"
-                >
-                  مسح
-                </Button>
+              {invoiceAmount && parseFloat(invoiceAmount) > 0 && (
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => handlePrintReceipt()}
+                    className="gap-1"
+                  >
+                    <Printer className="h-4 w-4" />
+                    طباعة الإيصال
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setInvoiceAmount('')}
+                  >
+                    مسح
+                  </Button>
+                </div>
               )}
             </div>
           </CardContent>
