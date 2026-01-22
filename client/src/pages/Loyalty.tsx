@@ -35,8 +35,11 @@ export default function Loyalty() {
 
   const utils = trpc.useUtils();
 
+  // حالة اسم العميل للإيصال
+  const [customerNameForReceipt, setCustomerNameForReceipt] = useState<string>('');
+
   // دالة طباعة إيصال الخصم
-  const handlePrintReceipt = () => {
+  const handlePrintReceipt = async () => {
     const amount = parseFloat(invoiceAmount);
     if (isNaN(amount) || amount <= 0) {
       toast.error('يرجى إدخال مبلغ صحيح');
@@ -57,11 +60,27 @@ export default function Loyalty() {
       minute: '2-digit' 
     });
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    // حفظ سجل الخصم في قاعدة البيانات
+    try {
+      await createDiscountRecordMutation.mutateAsync({
+        customerName: customerNameForReceipt || undefined,
+        originalAmount: amount,
+        discountPercentage: 60,
+        discountAmount: discountAmount,
+        finalAmount: finalAmount,
+        isPrinted: true,
+      });
+    } catch (error) {
+      console.error('فشل حفظ سجل الخصم:', error);
+    }
+
+    const printWindow = window.open('', '_blank', 'width=400,height=700');
     if (!printWindow) {
       toast.error('تعذر فتح نافذة الطباعة');
       return;
     }
+
+    const customerDisplay = customerNameForReceipt ? `<div class="customer-name">العميل: ${customerNameForReceipt}</div>` : '';
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -86,6 +105,12 @@ export default function Loyalty() {
             padding-bottom: 15px;
             margin-bottom: 15px;
           }
+          .logo-img {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 10px;
+            display: block;
+          }
           .logo {
             font-size: 28px;
             font-weight: 700;
@@ -95,6 +120,16 @@ export default function Loyalty() {
           .subtitle {
             font-size: 14px;
             color: #666;
+          }
+          .customer-name {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e40af;
+            padding: 10px;
+            margin: 10px 0;
+            background: #eff6ff;
+            border-radius: 8px;
           }
           .receipt-title {
             text-align: center;
@@ -171,11 +206,14 @@ export default function Loyalty() {
       </head>
       <body>
         <div class="header">
+          <img src="/logo.png" alt="Symbol AI Logo" class="logo-img" onerror="this.style.display='none'" />
           <div class="logo">Symbol AI</div>
           <div class="subtitle">نظام إدارة الأعمال الذكي</div>
         </div>
         
         <div class="receipt-title">إيصال خصم برنامج الولاء</div>
+        
+        ${customerDisplay}
         
         <div style="text-align: center;">
           <span class="discount-badge">خصم 60%</span>
@@ -267,6 +305,16 @@ export default function Loyalty() {
     },
     onError: (error) => {
       toast.error(error.message || 'حدث خطأ');
+    },
+  });
+
+  // إنشاء سجل خصم
+  const createDiscountRecordMutation = trpc.loyalty.createDiscountRecord.useMutation({
+    onSuccess: () => {
+      toast.success('تم حفظ سجل الخصم بنجاح');
+    },
+    onError: (error) => {
+      console.error('فشل حفظ سجل الخصم:', error);
     },
   });
 
@@ -562,20 +610,34 @@ export default function Loyalty() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="invoiceAmount">مبلغ الفاتورة (ر.س)</Label>
-                <Input
-                  id="invoiceAmount"
-                  type="number"
-                  placeholder="أدخل مبلغ الفاتورة..."
-                  value={invoiceAmount}
-                  onChange={(e) => setInvoiceAmount(e.target.value)}
-                  className="text-lg font-semibold"
-                  min="0"
-                  step="0.01"
-                />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="customerNameReceipt">اسم العميل (اختياري)</Label>
+                  <Input
+                    id="customerNameReceipt"
+                    type="text"
+                    placeholder="أدخل اسم العميل..."
+                    value={customerNameForReceipt}
+                    onChange={(e) => setCustomerNameForReceipt(e.target.value)}
+                    className="text-lg"
+                  />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="invoiceAmount">مبلغ الفاتورة (ر.س)</Label>
+                  <Input
+                    id="invoiceAmount"
+                    type="number"
+                    placeholder="أدخل مبلغ الفاتورة..."
+                    value={invoiceAmount}
+                    onChange={(e) => setInvoiceAmount(e.target.value)}
+                    className="text-lg font-semibold"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
               </div>
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
               <div className="flex-1 p-4 bg-green-500/10 rounded-lg border border-green-500/20">
                 <p className="text-sm text-muted-foreground mb-1">المبلغ بعد الخصم (40%)</p>
                 <p className="text-3xl font-bold text-green-600">
@@ -604,12 +666,13 @@ export default function Loyalty() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setInvoiceAmount('')}
+                    onClick={() => { setInvoiceAmount(''); setCustomerNameForReceipt(''); }}
                   >
                     مسح
                   </Button>
                 </div>
               )}
+              </div>
             </div>
           </CardContent>
         </Card>

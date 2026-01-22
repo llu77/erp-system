@@ -7131,3 +7131,213 @@ export async function deleteLoyaltyVisit(visitId: number): Promise<{ success: bo
     return { success: false, error: 'فشل حذف الزيارة' };
   }
 }
+
+
+
+// ==================== دوال سجل الخصومات ====================
+
+// إنشاء سجل خصم جديد
+export async function createDiscountRecord(data: {
+  customerId?: number;
+  customerName?: string;
+  customerPhone?: string;
+  branchId?: number;
+  branchName?: string;
+  originalAmount: number;
+  discountPercentage: number;
+  discountAmount: number;
+  finalAmount: number;
+  visitId?: number;
+  isPrinted?: boolean;
+  createdBy: number;
+  createdByName: string;
+  notes?: string;
+}): Promise<{ success: boolean; id?: number; recordId?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false };
+  
+  const { loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  // إنشاء معرف فريد للسجل
+  const year = new Date().getFullYear();
+  const countResult = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(loyaltyDiscountRecords);
+  const count = Number(countResult[0]?.count || 0) + 1;
+  const recordId = `DR-${year}-${String(count).padStart(4, '0')}`;
+  
+  const result = await db.insert(loyaltyDiscountRecords).values({
+    recordId,
+    customerId: data.customerId || null,
+    customerName: data.customerName || null,
+    customerPhone: data.customerPhone || null,
+    branchId: data.branchId || null,
+    branchName: data.branchName || null,
+    originalAmount: String(data.originalAmount),
+    discountPercentage: String(data.discountPercentage),
+    discountAmount: String(data.discountAmount),
+    finalAmount: String(data.finalAmount),
+    visitId: data.visitId || null,
+    isPrinted: data.isPrinted || false,
+    printedAt: data.isPrinted ? new Date() : null,
+    createdBy: data.createdBy,
+    createdByName: data.createdByName,
+    notes: data.notes || null,
+  });
+  
+  return { success: true, id: Number((result as any)[0]?.insertId || 0), recordId };
+}
+
+// الحصول على سجلات الخصومات
+export async function getDiscountRecords(filters?: {
+  branchId?: number;
+  customerId?: number;
+  startDate?: Date;
+  endDate?: Date;
+  limit?: number;
+}): Promise<Array<{
+  id: number;
+  recordId: string;
+  customerId: number | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  branchId: number | null;
+  branchName: string | null;
+  originalAmount: number;
+  discountPercentage: number;
+  discountAmount: number;
+  finalAmount: number;
+  visitId: number | null;
+  isPrinted: boolean;
+  printedAt: Date | null;
+  createdBy: number;
+  createdByName: string;
+  notes: string | null;
+  createdAt: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  const conditions: any[] = [];
+  
+  if (filters?.branchId) {
+    conditions.push(eq(loyaltyDiscountRecords.branchId, filters.branchId));
+  }
+  if (filters?.customerId) {
+    conditions.push(eq(loyaltyDiscountRecords.customerId, filters.customerId));
+  }
+  if (filters?.startDate) {
+    conditions.push(gte(loyaltyDiscountRecords.createdAt, filters.startDate));
+  }
+  if (filters?.endDate) {
+    conditions.push(lte(loyaltyDiscountRecords.createdAt, filters.endDate));
+  }
+  
+  let query = db.select()
+    .from(loyaltyDiscountRecords)
+    .orderBy(desc(loyaltyDiscountRecords.createdAt))
+    .limit(filters?.limit || 100);
+  
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as typeof query;
+  }
+  
+  const results = await query;
+  
+  return results.map(r => ({
+    id: r.id,
+    recordId: r.recordId,
+    customerId: r.customerId,
+    customerName: r.customerName,
+    customerPhone: r.customerPhone,
+    branchId: r.branchId,
+    branchName: r.branchName,
+    originalAmount: parseFloat(r.originalAmount),
+    discountPercentage: parseFloat(r.discountPercentage),
+    discountAmount: parseFloat(r.discountAmount),
+    finalAmount: parseFloat(r.finalAmount),
+    visitId: r.visitId,
+    isPrinted: r.isPrinted,
+    printedAt: r.printedAt,
+    createdBy: r.createdBy,
+    createdByName: r.createdByName,
+    notes: r.notes,
+    createdAt: r.createdAt,
+  }));
+}
+
+// الحصول على إحصائيات الخصومات
+export async function getDiscountStats(filters?: {
+  branchId?: number;
+  startDate?: Date;
+  endDate?: Date;
+}): Promise<{
+  totalRecords: number;
+  totalOriginalAmount: number;
+  totalDiscountAmount: number;
+  totalFinalAmount: number;
+  averageDiscount: number;
+}> {
+  const db = await getDb();
+  if (!db) return {
+    totalRecords: 0,
+    totalOriginalAmount: 0,
+    totalDiscountAmount: 0,
+    totalFinalAmount: 0,
+    averageDiscount: 0,
+  };
+  
+  const { loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  const conditions: any[] = [];
+  
+  if (filters?.branchId) {
+    conditions.push(eq(loyaltyDiscountRecords.branchId, filters.branchId));
+  }
+  if (filters?.startDate) {
+    conditions.push(gte(loyaltyDiscountRecords.createdAt, filters.startDate));
+  }
+  if (filters?.endDate) {
+    conditions.push(lte(loyaltyDiscountRecords.createdAt, filters.endDate));
+  }
+  
+  let query = db.select({
+    count: sql<number>`COUNT(*)`,
+    totalOriginal: sql<string>`COALESCE(SUM(${loyaltyDiscountRecords.originalAmount}), 0)`,
+    totalDiscount: sql<string>`COALESCE(SUM(${loyaltyDiscountRecords.discountAmount}), 0)`,
+    totalFinal: sql<string>`COALESCE(SUM(${loyaltyDiscountRecords.finalAmount}), 0)`,
+    avgDiscount: sql<string>`COALESCE(AVG(${loyaltyDiscountRecords.discountPercentage}), 0)`,
+  }).from(loyaltyDiscountRecords);
+  
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as typeof query;
+  }
+  
+  const result = await query;
+  
+  return {
+    totalRecords: Number(result[0]?.count || 0),
+    totalOriginalAmount: parseFloat(result[0]?.totalOriginal || '0'),
+    totalDiscountAmount: parseFloat(result[0]?.totalDiscount || '0'),
+    totalFinalAmount: parseFloat(result[0]?.totalFinal || '0'),
+    averageDiscount: parseFloat(result[0]?.avgDiscount || '0'),
+  };
+}
+
+// تحديث سجل الخصم كمطبوع
+export async function markDiscountAsPrinted(id: number): Promise<{ success: boolean }> {
+  const db = await getDb();
+  if (!db) return { success: false };
+  
+  const { loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  await db.update(loyaltyDiscountRecords)
+    .set({
+      isPrinted: true,
+      printedAt: new Date(),
+    })
+    .where(eq(loyaltyDiscountRecords.id, id));
+  
+  return { success: true };
+}

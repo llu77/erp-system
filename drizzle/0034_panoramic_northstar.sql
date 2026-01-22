@@ -1,0 +1,23 @@
+CREATE TABLE `loyaltyDiscountRecords` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`recordId` varchar(50) NOT NULL,
+	`customerId` int,
+	`customerName` varchar(255),
+	`customerPhone` varchar(20),
+	`branchId` int,
+	`branchName` varchar(255),
+	`originalAmount` decimal(12,2) NOT NULL,
+	`discountPercentage` decimal(5,2) NOT NULL,
+	`discountAmount` decimal(12,2) NOT NULL,
+	`finalAmount` decimal(12,2) NOT NULL,
+	`visitId` int,
+	`isPrinted` boolean NOT NULL DEFAULT false,
+	`printedAt` timestamp,
+	`createdBy` int NOT NULL,
+	`createdByName` varchar(255) NOT NULL,
+	`notes` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `loyaltyDiscountRecords_id` PRIMARY KEY(`id`),
+	CONSTRAINT `loyaltyDiscountRecords_recordId_unique` UNIQUE(`recordId`)
+);

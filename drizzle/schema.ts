@@ -1918,3 +1918,51 @@ export const loyaltyVisitDeletionRequests = mysqlTable("loyaltyVisitDeletionRequ
 
 export type LoyaltyVisitDeletionRequest = typeof loyaltyVisitDeletionRequests.$inferSelect;
 export type InsertLoyaltyVisitDeletionRequest = typeof loyaltyVisitDeletionRequests.$inferInsert;
+
+
+// ==================== جدول سجل الخصومات ====================
+/**
+ * LoyaltyDiscountRecords - سجل الخصومات الممنوحة لعملاء الولاء
+ * يحفظ كل عملية خصم تمت طباعتها أو منحها
+ */
+export const loyaltyDiscountRecords = mysqlTable("loyaltyDiscountRecords", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // معرف السجل الفريد
+  recordId: varchar("recordId", { length: 50 }).notNull().unique(), // DR-2026-001
+  
+  // بيانات العميل
+  customerId: int("customerId"), // معرف العميل (إذا كان مسجل)
+  customerName: varchar("customerName", { length: 255 }),
+  customerPhone: varchar("customerPhone", { length: 20 }),
+  
+  // بيانات الفرع
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // تفاصيل الخصم
+  originalAmount: decimal("originalAmount", { precision: 12, scale: 2 }).notNull(), // المبلغ الأصلي
+  discountPercentage: decimal("discountPercentage", { precision: 5, scale: 2 }).notNull(), // نسبة الخصم (60%)
+  discountAmount: decimal("discountAmount", { precision: 12, scale: 2 }).notNull(), // قيمة الخصم
+  finalAmount: decimal("finalAmount", { precision: 12, scale: 2 }).notNull(), // المبلغ النهائي
+  
+  // معرف الزيارة المرتبطة (إذا وجد)
+  visitId: int("visitId"),
+  
+  // هل تم طباعة الإيصال
+  isPrinted: boolean("isPrinted").default(false).notNull(),
+  printedAt: timestamp("printedAt"),
+  
+  // المستخدم الذي أجرى العملية
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }).notNull(),
+  
+  // ملاحظات
+  notes: text("notes"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LoyaltyDiscountRecord = typeof loyaltyDiscountRecords.$inferSelect;
+export type InsertLoyaltyDiscountRecord = typeof loyaltyDiscountRecords.$inferInsert;

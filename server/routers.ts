@@ -5755,6 +5755,74 @@ ${discrepancyRows}
         
         return { success: true, message: 'تم حذف الزيارة بنجاح' };
       }),
+
+    // ==================== سجل الخصومات ====================
+    
+    // إنشاء سجل خصم جديد
+    createDiscountRecord: supervisorInputProcedure
+      .input(z.object({
+        customerId: z.number().optional(),
+        customerName: z.string().optional(),
+        customerPhone: z.string().optional(),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+        originalAmount: z.number().min(0),
+        discountPercentage: z.number().min(0).max(100),
+        discountAmount: z.number().min(0),
+        finalAmount: z.number().min(0),
+        visitId: z.number().optional(),
+        isPrinted: z.boolean().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { createDiscountRecord } = await import('./db');
+        
+        const result = await createDiscountRecord({
+          ...input,
+          createdBy: ctx.user.id,
+          createdByName: ctx.user.name || 'مستخدم',
+        });
+        
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل حفظ سجل الخصم' });
+        }
+        
+        return result;
+      }),
+
+    // الحصول على سجلات الخصومات
+    getDiscountRecords: supervisorInputProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+        customerId: z.number().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+        limit: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const { getDiscountRecords } = await import('./db');
+        return await getDiscountRecords(input || {});
+      }),
+
+    // الحصول على إحصائيات الخصومات
+    getDiscountStats: supervisorInputProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const { getDiscountStats } = await import('./db');
+        return await getDiscountStats(input || {});
+      }),
+
+    // تحديث سجل الخصم كمطبوع
+    markDiscountPrinted: supervisorInputProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const { markDiscountAsPrinted } = await import('./db');
+        return await markDiscountAsPrinted(input.id);
+      }),
   }),
 
   // ═══════════════════════════════════════════════════════════════════════════════
