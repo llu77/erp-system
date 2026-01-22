@@ -74,183 +74,401 @@ export default function Loyalty() {
       console.error('فشل حفظ سجل الخصم:', error);
     }
 
-    const printWindow = window.open('', '_blank', 'width=400,height=700');
+    const printWindow = window.open('', '_blank', 'width=420,height=800');
     if (!printWindow) {
       toast.error('تعذر فتح نافذة الطباعة');
       return;
     }
 
-    const customerDisplay = customerNameForReceipt ? `<div class="customer-name">العميل: ${customerNameForReceipt}</div>` : '';
+    const customerDisplay = customerNameForReceipt 
+      ? `<div class="customer-section">
+           <div class="customer-label">العميل الكريم</div>
+           <div class="customer-name">${customerNameForReceipt}</div>
+         </div>` 
+      : '';
+
+    // رقم الإيصال الفريد
+    const receiptNumber = `DR-${Date.now().toString(36).toUpperCase()}`;
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>إيصال خصم - Symbol AI</title>
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+          
           * { margin: 0; padding: 0; box-sizing: border-box; }
+          
           body {
             font-family: 'Tajawal', sans-serif;
-            padding: 20px;
+            padding: 0;
             background: #fff;
             color: #000;
-            max-width: 350px;
+            max-width: 380px;
             margin: 0 auto;
-          }
-          .header {
-            text-align: center;
-            border-bottom: 2px dashed #000;
-            padding-bottom: 15px;
-            margin-bottom: 15px;
-          }
-          .logo-img {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 10px;
-            display: block;
-          }
-          .logo {
-            font-size: 28px;
-            font-weight: 700;
-            color: #f97316;
-            margin-bottom: 5px;
-          }
-          .subtitle {
             font-size: 14px;
-            color: #666;
+            line-height: 1.5;
           }
-          .customer-name {
-            text-align: center;
-            font-size: 18px;
-            font-weight: 700;
-            color: #1e40af;
-            padding: 10px;
-            margin: 10px 0;
-            background: #eff6ff;
-            border-radius: 8px;
+          
+          .receipt-container {
+            border: 3px solid #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 10px;
           }
-          .receipt-title {
+          
+          /* الهيدر */
+          .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            padding: 20px;
             text-align: center;
-            font-size: 20px;
-            font-weight: 700;
-            margin: 15px 0;
-            padding: 10px;
+          }
+          
+          .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 10px;
+          }
+          
+          .logo-img {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            background: #fff;
+            padding: 5px;
+          }
+          
+          .logo-text {
+            text-align: right;
+          }
+          
+          .logo-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: #f97316;
+            letter-spacing: 1px;
+          }
+          
+          .logo-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 2px;
+          }
+          
+          /* عنوان الإيصال */
+          .receipt-header {
             background: #f97316;
             color: #fff;
-            border-radius: 8px;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
           }
+          
+          .receipt-title {
+            font-size: 18px;
+            font-weight: 700;
+          }
+          
+          .receipt-number {
+            font-size: 11px;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 10px;
+            border-radius: 20px;
+          }
+          
+          /* قسم العميل */
+          .customer-section {
+            background: #f8fafc;
+            padding: 15px 20px;
+            border-bottom: 2px dashed #e2e8f0;
+          }
+          
+          .customer-label {
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 4px;
+          }
+          
+          .customer-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+          }
+          
+          /* قسم الخصم */
+          .discount-section {
+            padding: 20px;
+            text-align: center;
+            background: #fef2f2;
+            border-bottom: 2px dashed #e2e8f0;
+          }
+          
+          .discount-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            color: #fff;
+            padding: 10px 30px;
+            border-radius: 30px;
+            font-size: 24px;
+            font-weight: 800;
+            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3);
+          }
+          
+          .discount-text {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #991b1b;
+          }
+          
+          /* قسم المعلومات */
+          .info-section {
+            padding: 15px 20px;
+            background: #fff;
+          }
+          
           .info-row {
             display: flex;
             justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #eee;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9;
           }
+          
+          .info-row:last-child {
+            border-bottom: none;
+          }
+          
           .info-label {
-            color: #666;
-            font-size: 14px;
+            color: #64748b;
+            font-size: 13px;
           }
+          
           .info-value {
             font-weight: 700;
-            font-size: 16px;
+            font-size: 14px;
+            color: #000;
           }
+          
+          /* قسم المبالغ */
           .amount-section {
-            margin: 20px 0;
-            padding: 15px;
-            background: #f5f5f5;
-            border-radius: 8px;
+            padding: 20px;
+            background: #f8fafc;
           }
+          
           .amount-row {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
+            align-items: center;
+            padding: 10px 0;
           }
-          .amount-row.original {
-            color: #666;
+          
+          .amount-label {
+            font-size: 14px;
+            color: #000;
+          }
+          
+          .amount-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #000;
+          }
+          
+          .amount-row.original .amount-value {
             text-decoration: line-through;
+            color: #94a3b8;
           }
+          
           .amount-row.discount {
             color: #dc2626;
           }
+          
+          .amount-row.discount .amount-value {
+            color: #dc2626;
+          }
+          
           .amount-row.final {
-            font-size: 24px;
-            font-weight: 700;
-            color: #16a34a;
-            border-top: 2px solid #000;
-            padding-top: 15px;
-            margin-top: 10px;
-          }
-          .footer {
-            text-align: center;
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 2px dashed #000;
-            font-size: 12px;
-            color: #666;
-          }
-          .discount-badge {
-            display: inline-block;
-            background: #dc2626;
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
             color: #fff;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-weight: 700;
-            margin: 10px 0;
+            margin: 15px -20px -20px;
+            padding: 20px;
+            border-radius: 0 0 9px 9px;
           }
+          
+          .amount-row.final .amount-label {
+            font-size: 16px;
+            color: #fff;
+          }
+          
+          .amount-row.final .amount-value {
+            font-size: 32px;
+            font-weight: 800;
+            color: #fff;
+          }
+          
+          /* قسم الختم */
+          .stamp-section {
+            padding: 20px;
+            text-align: center;
+            background: #fff;
+            border-top: 2px dashed #e2e8f0;
+          }
+          
+          .stamp {
+            display: inline-block;
+            border: 3px solid #16a34a;
+            border-radius: 50%;
+            padding: 15px 25px;
+            color: #16a34a;
+            font-size: 18px;
+            font-weight: 800;
+            transform: rotate(-5deg);
+            position: relative;
+          }
+          
+          .stamp::before {
+            content: '✓';
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #16a34a;
+            color: #fff;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+          }
+          
+          /* الفوتر */
+          .footer {
+            background: #1a1a2e;
+            color: #94a3b8;
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 12px;
+          }
+          
+          .footer-thanks {
+            color: #f97316;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 5px;
+          }
+          
+          .footer-contact {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #334155;
+            font-size: 11px;
+          }
+          
+          /* طباعة */
           @media print {
-            body { padding: 10px; }
+            body { 
+              padding: 0; 
+              margin: 0;
+            }
+            .receipt-container {
+              margin: 0;
+              border: 2px solid #000;
+            }
             .no-print { display: none; }
+          }
+          
+          /* متجاوب للجوال */
+          @media screen and (max-width: 400px) {
+            body {
+              max-width: 100%;
+            }
+            .receipt-container {
+              margin: 5px;
+              border-radius: 8px;
+            }
           }
         </style>
       </head>
       <body>
-        <div class="header">
-          <img src="/logo.png" alt="Symbol AI Logo" class="logo-img" onerror="this.style.display='none'" />
-          <div class="logo">Symbol AI</div>
-          <div class="subtitle">نظام إدارة الأعمال الذكي</div>
-        </div>
-        
-        <div class="receipt-title">إيصال خصم برنامج الولاء</div>
-        
-        ${customerDisplay}
-        
-        <div style="text-align: center;">
-          <span class="discount-badge">خصم 60%</span>
-        </div>
-        
-        <div class="info-row">
-          <span class="info-label">التاريخ:</span>
-          <span class="info-value">${dateStr}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">الوقت:</span>
-          <span class="info-value">${timeStr}</span>
-        </div>
-        
-        <div class="amount-section">
-          <div class="amount-row original">
-            <span>المبلغ الأصلي:</span>
-            <span>${amount.toFixed(2)} ر.س</span>
+        <div class="receipt-container">
+          <!-- الهيدر مع الشعار -->
+          <div class="header">
+            <div class="logo-container">
+              <img src="/symbol-ai-logo.png" alt="Symbol AI" class="logo-img" onerror="this.style.display='none'" />
+              <div class="logo-text">
+                <div class="logo-title">Symbol AI</div>
+                <div class="logo-subtitle">نظام إدارة الأعمال الذكي</div>
+              </div>
+            </div>
           </div>
-          <div class="amount-row discount">
-            <span>قيمة الخصم (60%):</span>
-            <span>- ${discountAmount.toFixed(2)} ر.س</span>
+          
+          <!-- عنوان الإيصال -->
+          <div class="receipt-header">
+            <div class="receipt-title">إيصال خصم برنامج الولاء</div>
+            <div class="receipt-number">${receiptNumber}</div>
           </div>
-          <div class="amount-row final">
-            <span>المبلغ المطلوب:</span>
-            <span>${finalAmount.toFixed(2)} ر.س</span>
+          
+          <!-- قسم العميل -->
+          ${customerDisplay}
+          
+          <!-- قسم الخصم -->
+          <div class="discount-section">
+            <div class="discount-badge">خصم 60%</div>
+            <div class="discount-text">خصم خاص لعملاء برنامج الولاء</div>
           </div>
-        </div>
-        
-        <div class="footer">
-          <p>شكراً لولائكم الكريم</p>
-          <p style="margin-top: 5px;">نتمنى لكم يوماً سعيداً</p>
+          
+          <!-- قسم المعلومات -->
+          <div class="info-section">
+            <div class="info-row">
+              <span class="info-label">التاريخ:</span>
+              <span class="info-value">${dateStr}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">الوقت:</span>
+              <span class="info-value">${timeStr}</span>
+            </div>
+          </div>
+          
+          <!-- قسم المبالغ -->
+          <div class="amount-section">
+            <div class="amount-row original">
+              <span class="amount-label">المبلغ الأصلي:</span>
+              <span class="amount-value">${amount.toFixed(2)} ر.س</span>
+            </div>
+            <div class="amount-row discount">
+              <span class="amount-label">قيمة الخصم (60%):</span>
+              <span class="amount-value">- ${discountAmount.toFixed(2)} ر.س</span>
+            </div>
+            <div class="amount-row final">
+              <span class="amount-label">المبلغ المطلوب:</span>
+              <span class="amount-value">${finalAmount.toFixed(2)} ر.س</span>
+            </div>
+          </div>
+          
+          <!-- قسم الختم -->
+          <div class="stamp-section">
+            <div class="stamp">معتمد</div>
+          </div>
+          
+          <!-- الفوتر -->
+          <div class="footer">
+            <div class="footer-thanks">شكراً لولائكم الكريم</div>
+            <div>نتمنى لكم يوماً سعيداً</div>
+            <div class="footer-contact">Symbol AI - نظام إدارة الأعمال الذكي</div>
+          </div>
         </div>
         
         <script>
           window.onload = function() {
-            window.print();
+            setTimeout(function() {
+              window.print();
+            }, 500);
           }
         </script>
       </body>
