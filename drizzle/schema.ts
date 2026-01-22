@@ -1960,6 +1960,19 @@ export const loyaltyDiscountRecords = mysqlTable("loyaltyDiscountRecords", {
   // ملاحظات
   notes: text("notes"),
   
+  // التحقق من الأهلية (نظام مكافحة التلاعب)
+  isVerified: boolean("isVerified").default(false).notNull(), // هل تم التحقق من أهلية العميل؟
+  eligibilityVerified: boolean("eligibilityVerified").default(false).notNull(), // هل العميل مؤهل فعلاً؟
+  verificationMethod: varchar("verificationMethod", { length: 50 }), // طريقة التحقق: 'system' | 'manual'
+  
+  // نظام الذكاء الاصطناعي للكشف عن التلاعب
+  aiRiskScore: decimal("aiRiskScore", { precision: 5, scale: 2 }), // درجة المخاطرة (0-100)
+  aiRiskLevel: mysqlEnum("aiRiskLevel", ["low", "medium", "high", "critical"]), // مستوى المخاطرة
+  aiAnalysisNotes: text("aiAnalysisNotes"), // ملاحظات تحليل الذكاء الاصطناعي
+  
+  // عدد الزيارات الموافق عليها عند إنشاء الخصم
+  approvedVisitsCount: int("approvedVisitsCount"), // عدد الزيارات الموافق عليها
+  
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

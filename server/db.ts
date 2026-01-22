@@ -7341,3 +7341,470 @@ export async function markDiscountAsPrinted(id: number): Promise<{ success: bool
   
   return { success: true };
 }
+
+
+// ==================== نظام حاسبة الخصم الذكي ====================
+
+/**
+ * الحصول على العملاء المؤهلين للخصم
+ * 
+ * شروط الأهلية:
+ * 1. العميل أتم 3 زيارات موافق عليها (approved) هذا الشهر
+ * 2. العميل لم يحصل على خصم سابق هذا الشهر
+ * 3. العميل نشط في النظام
+ * 
+ * @returns قائمة العملاء المؤهلين مع بياناتهم
+ */
+export async function getEligibleCustomersForDiscount(branchId?: number): Promise<Array<{
+  id: number;
+  customerId: string;
+  name: string;
+  phone: string;
+  approvedVisitsThisMonth: number;
+  lastVisitDate: Date | null;
+  hasUsedDiscountThisMonth: boolean;
+  isEligible: boolean;
+  eligibilityReason: string;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { loyaltyCustomers, loyaltyVisits, loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  
+  // جلب جميع العملاء النشطين
+  let customersQuery = db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.isActive, true));
+  
+  // تصفية حسب الفرع إذا تم تحديده
+  if (branchId) {
+    customersQuery = db.select()
+      .from(loyaltyCustomers)
+      .where(and(
+        eq(loyaltyCustomers.isActive, true),
+        eq(loyaltyCustomers.branchId, branchId)
+      ));
+  }
+  
+  const customers = await customersQuery;
+  
+  const eligibleCustomers: Array<{
+    id: number;
+    customerId: string;
+    name: string;
+    phone: string;
+    approvedVisitsThisMonth: number;
+    lastVisitDate: Date | null;
+    hasUsedDiscountThisMonth: boolean;
+    isEligible: boolean;
+    eligibilityReason: string;
+  }> = [];
+  
+  for (const customer of customers) {
+    // 1. حساب الزيارات الموافق عليها هذا الشهر
+    const approvedVisits = await db.select()
+      .from(loyaltyVisits)
+      .where(and(
+        eq(loyaltyVisits.customerId, customer.id),
+        eq(loyaltyVisits.status, 'approved'),
+        gte(loyaltyVisits.visitDate, startOfMonth),
+        lte(loyaltyVisits.visitDate, endOfMonth)
+      ))
+      .orderBy(desc(loyaltyVisits.visitDate));
+    
+    const approvedVisitsCount = approvedVisits.length;
+    const lastVisitDate = approvedVisits.length > 0 ? approvedVisits[0].visitDate : null;
+    
+    // 2. التحقق من عدم استخدام خصم هذا الشهر
+    const discountsThisMonth = await db.select()
+      .from(loyaltyDiscountRecords)
+      .where(and(
+        eq(loyaltyDiscountRecords.customerId, customer.id),
+        gte(loyaltyDiscountRecords.createdAt, startOfMonth),
+        lte(loyaltyDiscountRecords.createdAt, endOfMonth)
+      ));
+    
+    const hasUsedDiscountThisMonth = discountsThisMonth.length > 0;
+    
+    // 3. تحديد الأهلية والسبب
+    let isEligible = false;
+    let eligibilityReason = '';
+    
+    if (approvedVisitsCount < 3) {
+      eligibilityReason = `العميل أتم ${approvedVisitsCount} زيارات فقط من أصل 3 زيارات مطلوبة`;
+    } else if (hasUsedDiscountThisMonth) {
+      eligibilityReason = 'العميل حصل على خصم سابق هذا الشهر';
+    } else {
+      isEligible = true;
+      eligibilityReason = `العميل مؤهل للخصم - أتم ${approvedVisitsCount} زيارات موافق عليها`;
+    }
+    
+    eligibleCustomers.push({
+      id: customer.id,
+      customerId: customer.customerId,
+      name: customer.name,
+      phone: customer.phone,
+      approvedVisitsThisMonth: approvedVisitsCount,
+      lastVisitDate,
+      hasUsedDiscountThisMonth,
+      isEligible,
+      eligibilityReason,
+    });
+  }
+  
+  // ترتيب: المؤهلون أولاً، ثم حسب عدد الزيارات
+  return eligibleCustomers.sort((a, b) => {
+    if (a.isEligible && !b.isEligible) return -1;
+    if (!a.isEligible && b.isEligible) return 1;
+    return b.approvedVisitsThisMonth - a.approvedVisitsThisMonth;
+  });
+}
+
+/**
+ * التحقق من أهلية عميل محدد للخصم
+ * 
+ * @param customerId معرف العميل
+ * @returns نتيجة التحقق مع التفاصيل
+ */
+export async function verifyCustomerDiscountEligibility(customerId: number): Promise<{
+  isEligible: boolean;
+  customer: {
+    id: number;
+    name: string;
+    phone: string;
+  } | null;
+  approvedVisitsThisMonth: number;
+  hasUsedDiscountThisMonth: boolean;
+  lastDiscountDate: Date | null;
+  eligibilityReason: string;
+  visitDetails: Array<{
+    visitId: string;
+    visitDate: Date;
+    serviceType: string;
+    status: string;
+  }>;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      isEligible: false,
+      customer: null,
+      approvedVisitsThisMonth: 0,
+      hasUsedDiscountThisMonth: false,
+      lastDiscountDate: null,
+      eligibilityReason: 'خطأ في الاتصال بقاعدة البيانات',
+      visitDetails: [],
+    };
+  }
+  
+  const { loyaltyCustomers, loyaltyVisits, loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  // جلب بيانات العميل
+  const customerResult = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.id, customerId))
+    .limit(1);
+  
+  if (customerResult.length === 0) {
+    return {
+      isEligible: false,
+      customer: null,
+      approvedVisitsThisMonth: 0,
+      hasUsedDiscountThisMonth: false,
+      lastDiscountDate: null,
+      eligibilityReason: 'العميل غير موجود',
+      visitDetails: [],
+    };
+  }
+  
+  const customer = customerResult[0];
+  
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  
+  // جلب الزيارات الموافق عليها هذا الشهر
+  const approvedVisits = await db.select()
+    .from(loyaltyVisits)
+    .where(and(
+      eq(loyaltyVisits.customerId, customerId),
+      eq(loyaltyVisits.status, 'approved'),
+      gte(loyaltyVisits.visitDate, startOfMonth),
+      lte(loyaltyVisits.visitDate, endOfMonth)
+    ))
+    .orderBy(desc(loyaltyVisits.visitDate));
+  
+  // جلب الخصومات هذا الشهر
+  const discountsThisMonth = await db.select()
+    .from(loyaltyDiscountRecords)
+    .where(and(
+      eq(loyaltyDiscountRecords.customerId, customerId),
+      gte(loyaltyDiscountRecords.createdAt, startOfMonth),
+      lte(loyaltyDiscountRecords.createdAt, endOfMonth)
+    ))
+    .orderBy(desc(loyaltyDiscountRecords.createdAt));
+  
+  const approvedVisitsCount = approvedVisits.length;
+  const hasUsedDiscountThisMonth = discountsThisMonth.length > 0;
+  const lastDiscountDate = discountsThisMonth.length > 0 ? discountsThisMonth[0].createdAt : null;
+  
+  // تحديد الأهلية
+  let isEligible = false;
+  let eligibilityReason = '';
+  
+  if (!customer.isActive) {
+    eligibilityReason = 'حساب العميل غير نشط';
+  } else if (approvedVisitsCount < 3) {
+    eligibilityReason = `العميل أتم ${approvedVisitsCount} زيارات فقط من أصل 3 زيارات مطلوبة`;
+  } else if (hasUsedDiscountThisMonth) {
+    eligibilityReason = `العميل حصل على خصم بتاريخ ${lastDiscountDate?.toLocaleDateString('ar-SA')}`;
+  } else {
+    isEligible = true;
+    eligibilityReason = `العميل مؤهل للخصم - أتم ${approvedVisitsCount} زيارات موافق عليها`;
+  }
+  
+  return {
+    isEligible,
+    customer: {
+      id: customer.id,
+      name: customer.name,
+      phone: customer.phone,
+    },
+    approvedVisitsThisMonth: approvedVisitsCount,
+    hasUsedDiscountThisMonth,
+    lastDiscountDate,
+    eligibilityReason,
+    visitDetails: approvedVisits.map(v => ({
+      visitId: v.visitId,
+      visitDate: v.visitDate,
+      serviceType: v.serviceType,
+      status: v.status,
+    })),
+  };
+}
+
+/**
+ * إنشاء سجل خصم مع التحقق من الأهلية
+ * 
+ * @param data بيانات الخصم
+ * @returns نتيجة العملية
+ */
+export async function createVerifiedDiscountRecord(data: {
+  customerId: number;
+  originalAmount: number;
+  discountPercentage: number;
+  discountAmount: number;
+  finalAmount: number;
+  branchId?: number;
+  branchName?: string;
+  createdBy: number;
+  createdByName: string;
+  notes?: string;
+}): Promise<{
+  success: boolean;
+  recordId?: string;
+  error?: string;
+  aiRiskScore?: number;
+  aiRiskLevel?: string;
+  aiAnalysisNotes?: string;
+}> {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'خطأ في الاتصال بقاعدة البيانات' };
+  
+  // التحقق من أهلية العميل
+  const eligibility = await verifyCustomerDiscountEligibility(data.customerId);
+  
+  if (!eligibility.isEligible) {
+    return {
+      success: false,
+      error: `العميل غير مؤهل للخصم: ${eligibility.eligibilityReason}`,
+    };
+  }
+  
+  const { loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  // حساب درجة المخاطرة بالذكاء الاصطناعي
+  const aiAnalysis = await analyzeDiscountRisk({
+    customerId: data.customerId,
+    customerName: eligibility.customer?.name || '',
+    originalAmount: data.originalAmount,
+    approvedVisitsCount: eligibility.approvedVisitsThisMonth,
+    createdBy: data.createdBy,
+    branchId: data.branchId,
+  });
+  
+  // إنشاء معرف فريد للسجل
+  const year = new Date().getFullYear();
+  const countResult = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(loyaltyDiscountRecords);
+  const count = Number(countResult[0]?.count || 0) + 1;
+  const recordId = `DR-${year}-${String(count).padStart(4, '0')}`;
+  
+  // إنشاء السجل
+  await db.insert(loyaltyDiscountRecords).values({
+    recordId,
+    customerId: data.customerId,
+    customerName: eligibility.customer?.name || null,
+    customerPhone: eligibility.customer?.phone || null,
+    branchId: data.branchId || null,
+    branchName: data.branchName || null,
+    originalAmount: String(data.originalAmount),
+    discountPercentage: String(data.discountPercentage),
+    discountAmount: String(data.discountAmount),
+    finalAmount: String(data.finalAmount),
+    isPrinted: true,
+    printedAt: new Date(),
+    createdBy: data.createdBy,
+    createdByName: data.createdByName,
+    notes: data.notes || null,
+    // حقول التحقق
+    isVerified: true,
+    eligibilityVerified: true,
+    verificationMethod: 'system',
+    // حقول الذكاء الاصطناعي
+    aiRiskScore: String(aiAnalysis.riskScore),
+    aiRiskLevel: aiAnalysis.riskLevel as any,
+    aiAnalysisNotes: aiAnalysis.notes,
+    approvedVisitsCount: eligibility.approvedVisitsThisMonth,
+  });
+  
+  // إذا كانت درجة المخاطرة عالية، إرسال تنبيه للأدمن
+  if (aiAnalysis.riskLevel === 'high' || aiAnalysis.riskLevel === 'critical') {
+    // سيتم إرسال التنبيه من خلال نظام الإشعارات
+    console.log(`[AI Alert] High risk discount detected: ${recordId}, Score: ${aiAnalysis.riskScore}`);
+  }
+  
+  return {
+    success: true,
+    recordId,
+    aiRiskScore: aiAnalysis.riskScore,
+    aiRiskLevel: aiAnalysis.riskLevel,
+    aiAnalysisNotes: aiAnalysis.notes,
+  };
+}
+
+/**
+ * تحليل مخاطر الخصم بالذكاء الاصطناعي
+ * 
+ * يحلل عدة عوامل:
+ * 1. تكرار الخصومات للعميل
+ * 2. مبلغ الخصم مقارنة بالمتوسط
+ * 3. نمط استخدام الخصومات
+ * 4. توقيت الخصم
+ */
+async function analyzeDiscountRisk(data: {
+  customerId: number;
+  customerName: string;
+  originalAmount: number;
+  approvedVisitsCount: number;
+  createdBy: number;
+  branchId?: number;
+}): Promise<{
+  riskScore: number;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  notes: string;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return { riskScore: 0, riskLevel: 'low', notes: 'لم يتم التحليل' };
+  }
+  
+  const { loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  let riskScore = 0;
+  const riskFactors: string[] = [];
+  
+  // 1. تحليل تاريخ الخصومات للعميل (آخر 6 أشهر)
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  
+  const customerDiscountHistory = await db.select()
+    .from(loyaltyDiscountRecords)
+    .where(and(
+      eq(loyaltyDiscountRecords.customerId, data.customerId),
+      gte(loyaltyDiscountRecords.createdAt, sixMonthsAgo)
+    ));
+  
+  // إذا كان العميل حصل على أكثر من 3 خصومات في 6 أشهر
+  if (customerDiscountHistory.length >= 3) {
+    riskScore += 15;
+    riskFactors.push(`العميل حصل على ${customerDiscountHistory.length} خصومات في آخر 6 أشهر`);
+  }
+  
+  // 2. تحليل مبلغ الخصم
+  // الحصول على متوسط مبالغ الخصومات
+  const avgResult = await db.select({
+    avg: sql<string>`COALESCE(AVG(${loyaltyDiscountRecords.originalAmount}), 0)`,
+  }).from(loyaltyDiscountRecords);
+  
+  const avgAmount = parseFloat(avgResult[0]?.avg || '0');
+  
+  if (avgAmount > 0 && data.originalAmount > avgAmount * 2) {
+    riskScore += 20;
+    riskFactors.push(`مبلغ الفاتورة (${data.originalAmount}) أعلى من ضعف المتوسط (${avgAmount.toFixed(2)})`);
+  }
+  
+  // 3. تحليل توقيت الخصم
+  const now = new Date();
+  const hour = now.getHours();
+  
+  // خصومات في أوقات غير اعتيادية (قبل 8 صباحاً أو بعد 10 مساءً)
+  if (hour < 8 || hour > 22) {
+    riskScore += 10;
+    riskFactors.push(`خصم في وقت غير اعتيادي (${hour}:00)`);
+  }
+  
+  // 4. تحليل نمط المستخدم (الموظف الذي أجرى الخصم)
+  const userDiscountsToday = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(loyaltyDiscountRecords)
+    .where(and(
+      eq(loyaltyDiscountRecords.createdBy, data.createdBy),
+      gte(loyaltyDiscountRecords.createdAt, new Date(now.getFullYear(), now.getMonth(), now.getDate()))
+    ));
+  
+  const userDiscountCount = Number(userDiscountsToday[0]?.count || 0);
+  
+  if (userDiscountCount >= 5) {
+    riskScore += 25;
+    riskFactors.push(`الموظف أجرى ${userDiscountCount} خصومات اليوم`);
+  } else if (userDiscountCount >= 3) {
+    riskScore += 10;
+    riskFactors.push(`الموظف أجرى ${userDiscountCount} خصومات اليوم`);
+  }
+  
+  // 5. التحقق من عدد الزيارات (يجب أن يكون 3 بالضبط للخصم الأول)
+  if (data.approvedVisitsCount === 3) {
+    // طبيعي - لا خطر إضافي
+  } else if (data.approvedVisitsCount > 3 && data.approvedVisitsCount < 6) {
+    // بين 3 و 6 - طبيعي
+  } else if (data.approvedVisitsCount >= 6) {
+    riskScore += 5;
+    riskFactors.push(`عدد زيارات مرتفع (${data.approvedVisitsCount}) - قد يكون خصم متأخر`);
+  }
+  
+  // تحديد مستوى المخاطرة
+  let riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  if (riskScore >= 50) {
+    riskLevel = 'critical';
+  } else if (riskScore >= 35) {
+    riskLevel = 'high';
+  } else if (riskScore >= 20) {
+    riskLevel = 'medium';
+  } else {
+    riskLevel = 'low';
+  }
+  
+  const notes = riskFactors.length > 0 
+    ? `عوامل الخطر: ${riskFactors.join(' | ')}`
+    : 'لا توجد عوامل خطر ملحوظة';
+  
+  return {
+    riskScore,
+    riskLevel,
+    notes,
+  };
+}

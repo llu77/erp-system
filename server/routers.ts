@@ -5823,6 +5823,94 @@ ${discrepancyRows}
         const { markDiscountAsPrinted } = await import('./db');
         return await markDiscountAsPrinted(input.id);
       }),
+
+    // ==================== نظام حاسبة الخصم الذكي ====================
+    
+    // الحصول على العملاء المؤهلين للخصم
+    getEligibleCustomers: supervisorInputProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const { getEligibleCustomersForDiscount } = await import('./db');
+        // إذا كان المستخدم مشرف فرع، يرى عملاء فرعه فقط
+        const branchId = ctx.user.role === 'supervisor' && ctx.user.branchId 
+          ? ctx.user.branchId 
+          : input?.branchId;
+        return await getEligibleCustomersForDiscount(branchId);
+      }),
+
+    // التحقق من أهلية عميل محدد
+    verifyCustomerEligibility: supervisorInputProcedure
+      .input(z.object({
+        customerId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const { verifyCustomerDiscountEligibility } = await import('./db');
+        return await verifyCustomerDiscountEligibility(input.customerId);
+      }),
+
+    // إنشاء سجل خصم مع التحقق من الأهلية (النظام الذكي)
+    createVerifiedDiscount: supervisorInputProcedure
+      .input(z.object({
+        customerId: z.number(),
+        originalAmount: z.number().min(0),
+        discountPercentage: z.number().min(0).max(100),
+        discountAmount: z.number().min(0),
+        finalAmount: z.number().min(0),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { createVerifiedDiscountRecord } = await import('./db');
+        
+        const result = await createVerifiedDiscountRecord({
+          ...input,
+          createdBy: ctx.user.id,
+          createdByName: ctx.user.name || 'مستخدم',
+        });
+        
+        if (!result.success) {
+          throw new TRPCError({ 
+            code: 'BAD_REQUEST', 
+            message: result.error || 'فشل إنشاء سجل الخصم' 
+          });
+        }
+        
+        // إرسال تنبيه إذا كانت درجة المخاطرة عالية
+        if (result.aiRiskLevel === 'high' || result.aiRiskLevel === 'critical') {
+          const { getAdminsAndSupervisors } = await import('./db');
+          const { sendEmail } = await import('./email/emailService');
+          
+          const admins = await getAdminsAndSupervisors();
+          for (const admin of admins) {
+            if (admin.email && admin.role === 'admin') {
+              await sendEmail({
+                to: admin.email,
+                subject: `⚠️ تنبيه أمني: خصم بدرجة مخاطرة ${result.aiRiskLevel === 'critical' ? 'حرجة' : 'عالية'}`,
+                html: `
+                  <div dir="rtl" style="font-family: Arial, sans-serif;">
+                    <h2 style="color: #dc2626;">⚠️ تنبيه أمني - نظام الذكاء الاصطناعي</h2>
+                    <p>تم رصد عملية خصم بدرجة مخاطرة ${result.aiRiskLevel === 'critical' ? 'حرجة' : 'عالية'}:</p>
+                    <ul>
+                      <li><strong>رقم الإيصال:</strong> ${result.recordId}</li>
+                      <li><strong>درجة المخاطرة:</strong> ${result.aiRiskScore}/100</li>
+                      <li><strong>المبلغ الأصلي:</strong> ${input.originalAmount} ر.س</li>
+                      <li><strong>الموظف:</strong> ${ctx.user.name}</li>
+                    </ul>
+                    <p><strong>ملاحظات التحليل:</strong></p>
+                    <p style="background: #fef2f2; padding: 10px; border-radius: 5px;">${result.aiAnalysisNotes}</p>
+                    <p>يرجى مراجعة هذه العملية في أقرب وقت.</p>
+                  </div>
+                `,
+              });
+            }
+          }
+        }
+        
+        return result;
+      }),
   }),
 
   // ═══════════════════════════════════════════════════════════════════════════════

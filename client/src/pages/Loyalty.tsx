@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { trpc } from '@/lib/trpc';
-import { QrCode, Users, Gift, Calendar, Search, Eye, Printer, CheckCircle, XCircle, Clock, Image as ImageIcon, BarChart3, Settings, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
+import { QrCode, Users, Gift, Calendar, Search, Eye, Printer, CheckCircle, XCircle, Clock, Image as ImageIcon, BarChart3, Settings, Trash2, AlertTriangle, Loader2, ShieldCheck, Brain, Phone, User } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Link } from 'wouter';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
@@ -37,6 +38,18 @@ export default function Loyalty() {
 
   // حالة اسم العميل للإيصال
   const [customerNameForReceipt, setCustomerNameForReceipt] = useState<string>('');
+  
+  // حالات نظام حاسبة الخصم الذكي
+  const [selectedEligibleCustomerId, setSelectedEligibleCustomerId] = useState<string>('');
+  const [selectedEligibleCustomer, setSelectedEligibleCustomer] = useState<{
+    id: number;
+    customerId: string;
+    name: string;
+    phone: string;
+    approvedVisitsThisMonth: number;
+    isEligible: boolean;
+    eligibilityReason: string;
+  } | null>(null);
 
   // دالة طباعة إيصال الخصم
   const handlePrintReceipt = async () => {
@@ -477,6 +490,498 @@ export default function Loyalty() {
     printWindow.document.close();
   };
 
+  // دالة طباعة إيصال الخصم الذكي (مع التحقق من الأهلية)
+  const handleSmartPrintReceipt = async () => {
+    if (!selectedEligibleCustomer) {
+      toast.error('يجب اختيار عميل مؤهل للخصم');
+      return;
+    }
+
+    const amount = parseFloat(invoiceAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('يرجى إدخال مبلغ صحيح');
+      return;
+    }
+
+    const discountAmount = amount * 0.6;
+    const finalAmount = amount * 0.4;
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ar-SA', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      calendar: 'islamic-umalqura'
+    });
+    const timeStr = now.toLocaleTimeString('ar-SA', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+
+    // حفظ سجل الخصم مع التحقق من الأهلية
+    let savedRecordId = '';
+    try {
+      const result = await createVerifiedDiscountMutation.mutateAsync({
+        customerId: selectedEligibleCustomer.id,
+        originalAmount: amount,
+        discountPercentage: 60,
+        discountAmount: discountAmount,
+        finalAmount: finalAmount,
+      });
+      savedRecordId = result.recordId || '';
+    } catch (error: any) {
+      toast.error(error.message || 'فشل حفظ سجل الخصم');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=420,height=900');
+    if (!printWindow) {
+      toast.error('تعذر فتح نافذة الطباعة');
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>إيصال خصم - Symbol AI</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+          
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          
+          body {
+            font-family: 'Tajawal', sans-serif;
+            padding: 0;
+            background: #fff;
+            color: #000;
+            max-width: 380px;
+            margin: 0 auto;
+            font-size: 14px;
+            line-height: 1.5;
+          }
+          
+          .receipt-container {
+            border: 3px solid #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 10px;
+          }
+          
+          .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+          }
+          
+          .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 10px;
+          }
+          
+          .logo-img {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            background: #fff;
+            padding: 5px;
+          }
+          
+          .logo-text {
+            text-align: right;
+          }
+          
+          .logo-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: #f97316;
+            letter-spacing: 1px;
+          }
+          
+          .logo-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 2px;
+          }
+          
+          .receipt-header {
+            background: #f97316;
+            color: #fff;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          
+          .receipt-title {
+            font-size: 18px;
+            font-weight: 700;
+          }
+          
+          .receipt-number {
+            font-size: 11px;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 10px;
+            border-radius: 20px;
+          }
+          
+          .verified-badge {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            color: #fff;
+            padding: 8px 15px;
+            text-align: center;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+          }
+          
+          .verified-badge svg {
+            width: 16px;
+            height: 16px;
+          }
+          
+          .customer-section {
+            background: #f8fafc;
+            padding: 15px 20px;
+            border-bottom: 2px dashed #e2e8f0;
+          }
+          
+          .customer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+          
+          .customer-item {
+            display: flex;
+            flex-direction: column;
+          }
+          
+          .customer-label {
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 2px;
+          }
+          
+          .customer-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1e293b;
+          }
+          
+          .customer-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+            grid-column: span 2;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 10px;
+          }
+          
+          .discount-section {
+            padding: 20px;
+            text-align: center;
+            background: #fef2f2;
+            border-bottom: 2px dashed #e2e8f0;
+          }
+          
+          .discount-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            color: #fff;
+            padding: 10px 30px;
+            border-radius: 30px;
+            font-size: 24px;
+            font-weight: 800;
+            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3);
+          }
+          
+          .discount-text {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #991b1b;
+          }
+          
+          .info-section {
+            padding: 15px 20px;
+            background: #fff;
+          }
+          
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9;
+          }
+          
+          .info-row:last-child {
+            border-bottom: none;
+          }
+          
+          .info-label {
+            color: #64748b;
+            font-size: 13px;
+          }
+          
+          .info-value {
+            font-weight: 700;
+            font-size: 14px;
+            color: #000;
+          }
+          
+          .amount-section {
+            padding: 20px;
+            background: #f8fafc;
+          }
+          
+          .amount-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+          }
+          
+          .amount-label {
+            font-size: 14px;
+            color: #000;
+          }
+          
+          .amount-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #000;
+          }
+          
+          .amount-row.original .amount-value {
+            text-decoration: line-through;
+            color: #94a3b8;
+          }
+          
+          .amount-row.discount {
+            color: #dc2626;
+          }
+          
+          .amount-row.discount .amount-value {
+            color: #dc2626;
+          }
+          
+          .amount-row.final {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            color: #fff;
+            margin: 15px -20px -20px;
+            padding: 20px;
+            border-radius: 0 0 9px 9px;
+          }
+          
+          .amount-row.final .amount-label {
+            font-size: 16px;
+            color: #fff;
+          }
+          
+          .amount-row.final .amount-value {
+            font-size: 32px;
+            font-weight: 800;
+            color: #fff;
+          }
+          
+          .stamp-section {
+            padding: 20px;
+            text-align: center;
+            background: #fff;
+            border-top: 2px dashed #e2e8f0;
+          }
+          
+          .stamp {
+            display: inline-block;
+            border: 3px solid #16a34a;
+            border-radius: 50%;
+            padding: 15px 25px;
+            color: #16a34a;
+            font-size: 18px;
+            font-weight: 800;
+            transform: rotate(-5deg);
+            position: relative;
+          }
+          
+          .stamp::before {
+            content: '✓';
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #16a34a;
+            color: #fff;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+          }
+          
+          .ai-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 10px;
+            font-size: 11px;
+            color: #3b82f6;
+          }
+          
+          .footer {
+            background: #1a1a2e;
+            color: #94a3b8;
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 12px;
+          }
+          
+          .footer-thanks {
+            color: #f97316;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 5px;
+          }
+          
+          .footer-contact {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #334155;
+            font-size: 11px;
+          }
+          
+          @media print {
+            body { 
+              padding: 0; 
+              margin: 0;
+            }
+            .receipt-container {
+              margin: 0;
+              border: 2px solid #000;
+            }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt-container">
+          <div class="header">
+            <div class="logo-container">
+              <img src="/symbol-ai-logo.png" alt="Symbol AI" class="logo-img" onerror="this.style.display='none'" />
+              <div class="logo-text">
+                <div class="logo-title">Symbol AI</div>
+                <div class="logo-subtitle">نظام إدارة الأعمال الذكي</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="receipt-header">
+            <div class="receipt-title">إيصال خصم برنامج الولاء</div>
+            <div class="receipt-number">${savedRecordId}</div>
+          </div>
+          
+          <div class="verified-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+            <span>تم التحقق من أهلية العميل بواسطة النظام الذكي</span>
+          </div>
+          
+          <div class="customer-section">
+            <div class="customer-grid">
+              <div class="customer-name">${selectedEligibleCustomer.name}</div>
+              <div class="customer-item">
+                <span class="customer-label">رقم العميل</span>
+                <span class="customer-value">${selectedEligibleCustomer.customerId}</span>
+              </div>
+              <div class="customer-item">
+                <span class="customer-label">رقم الجوال</span>
+                <span class="customer-value" dir="ltr">${selectedEligibleCustomer.phone}</span>
+              </div>
+              <div class="customer-item" style="grid-column: span 2; text-align: center; margin-top: 5px;">
+                <span class="customer-label">الزيارات الموافق عليها هذا الشهر</span>
+                <span class="customer-value" style="color: #16a34a;">${selectedEligibleCustomer.approvedVisitsThisMonth} زيارات</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="discount-section">
+            <div class="discount-badge">خصم 60%</div>
+            <div class="discount-text">خصم خاص لعملاء برنامج الولاء</div>
+          </div>
+          
+          <div class="info-section">
+            <div class="info-row">
+              <span class="info-label">التاريخ:</span>
+              <span class="info-value">${dateStr}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">الوقت:</span>
+              <span class="info-value">${timeStr}</span>
+            </div>
+          </div>
+          
+          <div class="amount-section">
+            <div class="amount-row original">
+              <span class="amount-label">المبلغ الأصلي:</span>
+              <span class="amount-value">${amount.toFixed(2)} ر.س</span>
+            </div>
+            <div class="amount-row discount">
+              <span class="amount-label">قيمة الخصم (60%):</span>
+              <span class="amount-value">- ${discountAmount.toFixed(2)} ر.س</span>
+            </div>
+            <div class="amount-row final">
+              <span class="amount-label">المبلغ المطلوب:</span>
+              <span class="amount-value">${finalAmount.toFixed(2)} ر.س</span>
+            </div>
+          </div>
+          
+          <div class="stamp-section">
+            <div class="stamp">معتمد</div>
+            <div class="ai-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+              </svg>
+              <span>تم التحقق بواسطة الذكاء الاصطناعي</span>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <div class="footer-thanks">شكراً لولائكم الكريم</div>
+            <div>نتمنى لكم يوماً سعيداً</div>
+            <div class="footer-contact">Symbol AI - نظام إدارة الأعمال الذكي</div>
+          </div>
+        </div>
+        
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 500);
+          }
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    
+    // مسح الحقول بعد الطباعة
+    setInvoiceAmount('');
+    setSelectedEligibleCustomerId('');
+    setSelectedEligibleCustomer(null);
+    setCustomerNameForReceipt('');
+  };
+
   // جلب البيانات
   const { data: stats, isLoading: statsLoading } = trpc.loyalty.stats.useQuery();
   
@@ -489,6 +994,9 @@ export default function Loyalty() {
     { customerId: selectedCustomer?.id || 0 },
     { enabled: !!selectedCustomer }
   );
+  
+  // استعلام العملاء المؤهلين للخصم (النظام الذكي)
+  const { data: eligibleCustomers, isLoading: eligibleLoading } = trpc.loyalty.getEligibleCustomers.useQuery();
 
   // الموافقة على زيارة
   const approveMutation = trpc.loyalty.approveVisit.useMutation({
@@ -533,6 +1041,22 @@ export default function Loyalty() {
     },
     onError: (error) => {
       console.error('فشل حفظ سجل الخصم:', error);
+    },
+  });
+
+  // إنشاء سجل خصم مع التحقق (النظام الذكي)
+  const createVerifiedDiscountMutation = trpc.loyalty.createVerifiedDiscount.useMutation({
+    onSuccess: (data) => {
+      toast.success(`تم حفظ سجل الخصم بنجاح - رقم الإيصال: ${data.recordId}`);
+      // إعادة تحميل قائمة العملاء المؤهلين
+      utils.loyalty.getEligibleCustomers.invalidate();
+      // عرض تنبيه إذا كانت درجة المخاطرة عالية
+      if (data.aiRiskLevel === 'high' || data.aiRiskLevel === 'critical') {
+        toast.warning(`⚠️ تنبيه: درجة المخاطرة ${data.aiRiskLevel === 'critical' ? 'حرجة' : 'عالية'} (${data.aiRiskScore}/100)`);
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || 'فشل حفظ سجل الخصم');
     },
   });
 
@@ -816,31 +1340,112 @@ export default function Loyalty() {
           </Card>
         </div>
 
-        {/* حاسبة الخصم */}
+        {/* حاسبة الخصم الذكية */}
         <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Gift className="h-5 w-5 text-primary" />
-              حاسبة الخصم (60%)
+              <div className="flex items-center gap-2">
+                <Gift className="h-5 w-5 text-primary" />
+                <span>حاسبة الخصم الذكية (60%)</span>
+              </div>
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 gap-1">
+                <Brain className="h-3 w-3" />
+                AI
+              </Badge>
             </CardTitle>
             <CardDescription>
-              أدخل مبلغ الفاتورة لحساب المبلغ المطلوب بعد الخصم
+              اختر العميل المؤهل للخصم وأدخل مبلغ الفاتورة - النظام يتحقق تلقائياً من أهلية العميل
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="customerNameReceipt">اسم العميل (اختياري)</Label>
-                  <Input
-                    id="customerNameReceipt"
-                    type="text"
-                    placeholder="أدخل اسم العميل..."
-                    value={customerNameForReceipt}
-                    onChange={(e) => setCustomerNameForReceipt(e.target.value)}
-                    className="text-lg"
-                  />
+              {/* اختيار العميل المؤهل */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-primary" />
+                  اختر العميل المؤهل للخصم
+                </Label>
+                <Select
+                  value={selectedEligibleCustomerId}
+                  onValueChange={(value) => {
+                    setSelectedEligibleCustomerId(value);
+                    const customer = eligibleCustomers?.find(c => c.id.toString() === value);
+                    setSelectedEligibleCustomer(customer || null);
+                    if (customer) {
+                      setCustomerNameForReceipt(customer.name);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={eligibleLoading ? "جاري التحميل..." : "اختر العميل..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eligibleCustomers?.filter(c => c.isEligible).length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground">
+                        <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
+                        <p>لا يوجد عملاء مؤهلين للخصم حالياً</p>
+                        <p className="text-xs mt-1">يجب أن يكون العميل قد أتم 3 زيارات موافق عليها</p>
+                      </div>
+                    ) : (
+                      eligibleCustomers?.filter(c => c.isEligible).map((customer) => (
+                        <SelectItem key={customer.id} value={customer.id.toString()}>
+                          <div className="flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4 text-green-500" />
+                            <span className="font-medium">{customer.name}</span>
+                            <span className="text-muted-foreground">({customer.phone})</span>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 text-xs">
+                              {customer.approvedVisitsThisMonth} زيارات
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* عرض بيانات العميل المختار */}
+              {selectedEligibleCustomer && (
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ShieldCheck className="h-5 w-5 text-green-600" />
+                    <span className="font-semibold text-green-800">عميل مؤهل للخصم</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">اسم العميل</p>
+                        <p className="font-semibold">{selectedEligibleCustomer.name}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">رقم الجوال</p>
+                        <p className="font-semibold" dir="ltr">{selectedEligibleCustomer.phone}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">الزيارات هذا الشهر</p>
+                        <p className="font-semibold">{selectedEligibleCustomer.approvedVisitsThisMonth} زيارات موافق عليها</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">حالة الأهلية</p>
+                        <p className="font-semibold text-green-600">مؤهل للخصم</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {/* إدخال المبلغ */}
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
                 <div className="flex-1 space-y-2">
                   <Label htmlFor="invoiceAmount">مبلغ الفاتورة (ر.س)</Label>
                   <Input
@@ -852,45 +1457,68 @@ export default function Loyalty() {
                     className="text-lg font-semibold"
                     min="0"
                     step="0.01"
+                    disabled={!selectedEligibleCustomer}
                   />
                 </div>
               </div>
+
+              {/* عرض النتيجة */}
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
-              <div className="flex-1 p-4 bg-green-500/10 rounded-lg border border-green-500/20">
-                <p className="text-sm text-muted-foreground mb-1">المبلغ بعد الخصم (40%)</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {invoiceAmount && !isNaN(parseFloat(invoiceAmount))
-                    ? (parseFloat(invoiceAmount) * 0.4).toFixed(2)
-                    : '0.00'}
-                  <span className="text-lg mr-1">ر.س</span>
-                </p>
-                {invoiceAmount && !isNaN(parseFloat(invoiceAmount)) && parseFloat(invoiceAmount) > 0 && (
-                  <p className="text-sm text-red-500 mt-1">
-                    الخصم: {(parseFloat(invoiceAmount) * 0.6).toFixed(2)} ر.س
+                <div className="flex-1 p-4 bg-green-500/10 rounded-lg border border-green-500/20">
+                  <p className="text-sm text-muted-foreground mb-1">المبلغ بعد الخصم (40%)</p>
+                  <p className="text-3xl font-bold text-green-600">
+                    {invoiceAmount && !isNaN(parseFloat(invoiceAmount))
+                      ? (parseFloat(invoiceAmount) * 0.4).toFixed(2)
+                      : '0.00'}
+                    <span className="text-lg mr-1">ر.س</span>
                   </p>
+                  {invoiceAmount && !isNaN(parseFloat(invoiceAmount)) && parseFloat(invoiceAmount) > 0 && (
+                    <p className="text-sm text-red-500 mt-1">
+                      الخصم: {(parseFloat(invoiceAmount) * 0.6).toFixed(2)} ر.س
+                    </p>
+                  )}
+                </div>
+                {selectedEligibleCustomer && invoiceAmount && parseFloat(invoiceAmount) > 0 && (
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => handleSmartPrintReceipt()}
+                      className="gap-1"
+                      disabled={createVerifiedDiscountMutation.isPending}
+                    >
+                      {createVerifiedDiscountMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Printer className="h-4 w-4" />
+                      )}
+                      طباعة الإيصال
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { 
+                        setInvoiceAmount(''); 
+                        setSelectedEligibleCustomerId('');
+                        setSelectedEligibleCustomer(null);
+                        setCustomerNameForReceipt('');
+                      }}
+                    >
+                      مسح
+                    </Button>
+                  </div>
                 )}
               </div>
-              {invoiceAmount && parseFloat(invoiceAmount) > 0 && (
-                <div className="flex gap-2 shrink-0">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => handlePrintReceipt()}
-                    className="gap-1"
-                  >
-                    <Printer className="h-4 w-4" />
-                    طباعة الإيصال
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => { setInvoiceAmount(''); setCustomerNameForReceipt(''); }}
-                  >
-                    مسح
-                  </Button>
+
+              {/* تنبيه إذا لم يتم اختيار عميل */}
+              {!selectedEligibleCustomer && (
+                <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <p className="text-sm text-yellow-800">
+                    يجب اختيار عميل مؤهل من القائمة لإتمام عملية الخصم - لا يمكن إدخال عميل وهمي
+                  </p>
                 </div>
               )}
-              </div>
             </div>
           </CardContent>
         </Card>
