@@ -4919,10 +4919,13 @@ export async function getCustomerVisitsThisMonth(customerId: number): Promise<Lo
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
   
+  // مهم: نحسب الزيارات الموافق عليها فقط (approved)
+  // الزيارات المعلقة (pending) والمرفوضة (rejected) لا تُحتسب
   return await db.select()
     .from(loyaltyVisits)
     .where(and(
       eq(loyaltyVisits.customerId, customerId),
+      eq(loyaltyVisits.status, 'approved'),
       gte(loyaltyVisits.visitDate, startOfMonth),
       lte(loyaltyVisits.visitDate, endOfMonth)
     ))
@@ -5003,21 +5006,9 @@ export async function registerLoyaltyVisit(data: {
     visitNumberInMonth,
   });
   
-  // تحديث عدد الزيارات للعميل
-  if (isDiscountVisit) {
-    await db.update(loyaltyCustomers)
-      .set({ 
-        totalVisits: sql`${loyaltyCustomers.totalVisits} + 1`,
-        totalDiscountsUsed: sql`${loyaltyCustomers.totalDiscountsUsed} + 1`
-      })
-      .where(eq(loyaltyCustomers.id, data.customerId));
-  } else {
-    await db.update(loyaltyCustomers)
-      .set({ 
-        totalVisits: sql`${loyaltyCustomers.totalVisits} + 1`
-      })
-      .where(eq(loyaltyCustomers.id, data.customerId));
-  }
+  // ملاحظة مهمة: لا نحدّث totalVisits هنا
+  // سيتم التحديث فقط عند الموافقة على الزيارة (approveVisit)
+  // إذا تم رفض الزيارة، لن تُحتسب في الإجمالي أبداً
   
   const visit = await db.select()
     .from(loyaltyVisits)
@@ -5071,20 +5062,30 @@ export async function getLoyaltyStats(): Promise<{
   const customers = await db.select({ count: sql<number>`count(*)` })
     .from(loyaltyCustomers);
   
+  // مهم: نحسب الزيارات الموافق عليها فقط (approved)
   const visits = await db.select({ count: sql<number>`count(*)` })
-    .from(loyaltyVisits);
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.status, 'approved'));
   
+  // الخصومات الموافق عليها فقط
   const discounts = await db.select({ count: sql<number>`count(*)` })
     .from(loyaltyVisits)
-    .where(eq(loyaltyVisits.isDiscountVisit, true));
+    .where(and(
+      eq(loyaltyVisits.isDiscountVisit, true),
+      eq(loyaltyVisits.status, 'approved')
+    ));
   
   const customersThisMonth = await db.select({ count: sql<number>`count(*)` })
     .from(loyaltyCustomers)
     .where(gte(loyaltyCustomers.createdAt, startOfMonth));
   
+  // زيارات الشهر الموافق عليها فقط
   const visitsThisMonth = await db.select({ count: sql<number>`count(*)` })
     .from(loyaltyVisits)
-    .where(gte(loyaltyVisits.visitDate, startOfMonth));
+    .where(and(
+      gte(loyaltyVisits.visitDate, startOfMonth),
+      eq(loyaltyVisits.status, 'approved')
+    ));
   
   return {
     totalCustomers: Number(customers[0]?.count || 0),
@@ -5326,6 +5327,19 @@ export async function approveVisit(visitId: number, approvedBy: number): Promise
   const db = await getDb();
   if (!db) return { success: false, error: "خطأ في الاتصال بقاعدة البيانات" };
   
+  // الحصول على بيانات الزيارة قبل التحديث
+  const visit = await db.select()
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.id, visitId))
+    .limit(1);
+  
+  if (!visit || visit.length === 0) {
+    return { success: false, error: "الزيارة غير موجودة" };
+  }
+  
+  const visitData = visit[0];
+  
+  // تحديث حالة الزيارة
   await db.update(loyaltyVisits)
     .set({
       status: 'approved',
@@ -5333,6 +5347,22 @@ export async function approveVisit(visitId: number, approvedBy: number): Promise
       approvedAt: new Date(),
     })
     .where(eq(loyaltyVisits.id, visitId));
+  
+  // تحديث عدد الزيارات للعميل عند الموافقة فقط
+  if (visitData.isDiscountVisit) {
+    await db.update(loyaltyCustomers)
+      .set({ 
+        totalVisits: sql`${loyaltyCustomers.totalVisits} + 1`,
+        totalDiscountsUsed: sql`${loyaltyCustomers.totalDiscountsUsed} + 1`
+      })
+      .where(eq(loyaltyCustomers.id, visitData.customerId));
+  } else {
+    await db.update(loyaltyCustomers)
+      .set({ 
+        totalVisits: sql`${loyaltyCustomers.totalVisits} + 1`
+      })
+      .where(eq(loyaltyCustomers.id, visitData.customerId));
+  }
   
   return { success: true };
 }
@@ -5342,6 +5372,8 @@ export async function rejectVisit(visitId: number, approvedBy: number, reason: s
   const db = await getDb();
   if (!db) return { success: false, error: "خطأ في الاتصال بقاعدة البيانات" };
   
+  // ملاحظة: لا نحدث totalVisits عند الرفض
+  // الزيارة المرفوضة لم تُحتسب أصلاً (كانت pending فقط)
   await db.update(loyaltyVisits)
     .set({
       status: 'rejected',
@@ -5480,21 +5512,30 @@ export async function getLoyaltyDetailedStats(filters?: {
   const totalCustomersResult = await customersQuery;
   const totalCustomers = Number(totalCustomersResult[0]?.count || 0);
 
-  // إجمالي الزيارات
-  let visitsQuery = db.select({ count: sql<number>`count(*)` }).from(loyaltyVisits);
-  if (filters?.branchId) {
-    visitsQuery = visitsQuery.where(eq(loyaltyVisits.branchId, filters.branchId)) as any;
-  }
-  const totalVisitsResult = await visitsQuery;
+  // إجمالي الزيارات (الموافق عليها فقط)
+  const totalVisitsConditions = filters?.branchId
+    ? and(
+        eq(loyaltyVisits.status, 'approved'),
+        eq(loyaltyVisits.branchId, filters.branchId)
+      )
+    : eq(loyaltyVisits.status, 'approved');
+  
+  const totalVisitsResult = await db.select({ count: sql<number>`count(*)` })
+    .from(loyaltyVisits)
+    .where(totalVisitsConditions);
   const totalVisits = Number(totalVisitsResult[0]?.count || 0);
 
-  // إجمالي الخصومات
+  // إجمالي الخصومات (الموافق عليها فقط)
   const discountsConditions = filters?.branchId
     ? and(
         eq(loyaltyVisits.isDiscountVisit, true),
+        eq(loyaltyVisits.status, 'approved'),
         eq(loyaltyVisits.branchId, filters.branchId)
       )
-    : eq(loyaltyVisits.isDiscountVisit, true);
+    : and(
+        eq(loyaltyVisits.isDiscountVisit, true),
+        eq(loyaltyVisits.status, 'approved')
+      );
   
   const totalDiscountsResult = await db.select({ count: sql<number>`count(*)` })
     .from(loyaltyVisits)
@@ -5518,14 +5559,16 @@ export async function getLoyaltyDetailedStats(filters?: {
     .where(periodCustomersConditions);
   const periodCustomers = Number(periodCustomersResult[0]?.count || 0);
 
-  // زيارات الفترة الحالية
+  // زيارات الفترة الحالية (الموافق عليها فقط)
   const periodVisitsConditions = filters?.branchId
     ? and(
+        eq(loyaltyVisits.status, 'approved'),
         gte(loyaltyVisits.visitDate, periodStart),
         lte(loyaltyVisits.visitDate, periodEnd),
         eq(loyaltyVisits.branchId, filters.branchId)
       )
     : and(
+        eq(loyaltyVisits.status, 'approved'),
         gte(loyaltyVisits.visitDate, periodStart),
         lte(loyaltyVisits.visitDate, periodEnd)
       );
@@ -5535,16 +5578,18 @@ export async function getLoyaltyDetailedStats(filters?: {
     .where(periodVisitsConditions);
   const periodVisits = Number(periodVisitsResult[0]?.count || 0);
 
-  // خصومات الفترة الحالية
+  // خصومات الفترة الحالية (الموافق عليها فقط)
   const periodDiscountsConditions = filters?.branchId
     ? and(
         eq(loyaltyVisits.isDiscountVisit, true),
+        eq(loyaltyVisits.status, 'approved'),
         gte(loyaltyVisits.visitDate, periodStart),
         lte(loyaltyVisits.visitDate, periodEnd),
         eq(loyaltyVisits.branchId, filters.branchId)
       )
     : and(
         eq(loyaltyVisits.isDiscountVisit, true),
+        eq(loyaltyVisits.status, 'approved'),
         gte(loyaltyVisits.visitDate, periodStart),
         lte(loyaltyVisits.visitDate, periodEnd)
       );
@@ -5571,14 +5616,16 @@ export async function getLoyaltyDetailedStats(filters?: {
     .where(prevPeriodCustomersConditions);
   const previousPeriodCustomers = Number(prevPeriodCustomersResult[0]?.count || 0);
 
-  // زيارات الفترة السابقة
+  // زيارات الفترة السابقة (الموافق عليها فقط)
   const prevPeriodVisitsConditions = filters?.branchId
     ? and(
+        eq(loyaltyVisits.status, 'approved'),
         gte(loyaltyVisits.visitDate, previousPeriodStart),
         lte(loyaltyVisits.visitDate, previousPeriodEnd),
         eq(loyaltyVisits.branchId, filters.branchId)
       )
     : and(
+        eq(loyaltyVisits.status, 'approved'),
         gte(loyaltyVisits.visitDate, previousPeriodStart),
         lte(loyaltyVisits.visitDate, previousPeriodEnd)
       );
@@ -5588,16 +5635,18 @@ export async function getLoyaltyDetailedStats(filters?: {
     .where(prevPeriodVisitsConditions);
   const previousPeriodVisits = Number(prevPeriodVisitsResult[0]?.count || 0);
 
-  // خصومات الفترة السابقة
+  // خصومات الفترة السابقة (الموافق عليها فقط)
   const prevPeriodDiscountsConditions = filters?.branchId
     ? and(
         eq(loyaltyVisits.isDiscountVisit, true),
+        eq(loyaltyVisits.status, 'approved'),
         gte(loyaltyVisits.visitDate, previousPeriodStart),
         lte(loyaltyVisits.visitDate, previousPeriodEnd),
         eq(loyaltyVisits.branchId, filters.branchId)
       )
     : and(
         eq(loyaltyVisits.isDiscountVisit, true),
+        eq(loyaltyVisits.status, 'approved'),
         gte(loyaltyVisits.visitDate, previousPeriodStart),
         lte(loyaltyVisits.visitDate, previousPeriodEnd)
       );
@@ -5637,16 +5686,22 @@ export async function getLoyaltyDetailedStats(filters?: {
       .from(loyaltyCustomers)
       .where(eq(loyaltyCustomers.branchId, branch.id));
     
+    // زيارات الفرع (الموافق عليها فقط)
     const branchVisits = await db.select({ count: sql<number>`count(*)` })
       .from(loyaltyVisits)
-      .where(eq(loyaltyVisits.branchId, branch.id));
+      .where(and(
+        eq(loyaltyVisits.branchId, branch.id),
+        eq(loyaltyVisits.status, 'approved')
+      ));
     
+    // خصومات الفرع (الموافق عليها فقط)
     const branchDiscounts = await db.select({ count: sql<number>`count(*)` })
       .from(loyaltyVisits)
       .where(
         and(
           eq(loyaltyVisits.branchId, branch.id),
-          eq(loyaltyVisits.isDiscountVisit, true)
+          eq(loyaltyVisits.isDiscountVisit, true),
+          eq(loyaltyVisits.status, 'approved')
         )
       );
     
@@ -5670,13 +5725,14 @@ export async function getLoyaltyDetailedStats(filters?: {
   }
 
   // ============================================
-  // 3. إحصائيات حسب نوع الخدمة
+  // 3. إحصائيات حسب نوع الخدمة (الموافق عليها فقط)
   // ============================================
   const serviceStats = await db.select({
     serviceType: loyaltyVisits.serviceType,
     count: sql<number>`count(*)`,
   })
     .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.status, 'approved'))
     .groupBy(loyaltyVisits.serviceType)
     .orderBy(sql`count(*) DESC`);
 
@@ -5709,20 +5765,24 @@ export async function getLoyaltyDetailedStats(filters?: {
         )
       );
     
+    // زيارات الشهر (الموافق عليها فقط)
     const monthVisits = await db.select({ count: sql<number>`count(*)` })
       .from(loyaltyVisits)
       .where(
         and(
+          eq(loyaltyVisits.status, 'approved'),
           gte(loyaltyVisits.visitDate, monthStart),
           lte(loyaltyVisits.visitDate, monthEnd)
         )
       );
     
+    // خصومات الشهر (الموافق عليها فقط)
     const monthDiscounts = await db.select({ count: sql<number>`count(*)` })
       .from(loyaltyVisits)
       .where(
         and(
           eq(loyaltyVisits.isDiscountVisit, true),
+          eq(loyaltyVisits.status, 'approved'),
           gte(loyaltyVisits.visitDate, monthStart),
           lte(loyaltyVisits.visitDate, monthEnd)
         )
@@ -5831,16 +5891,22 @@ export async function getBranchLoyaltyStats(branchId: number): Promise<{
     .from(loyaltyCustomers)
     .where(eq(loyaltyCustomers.branchId, branchId));
 
+  // الزيارات الموافق عليها فقط
   const visitsResult = await db.select({ count: sql<number>`count(*)` })
     .from(loyaltyVisits)
-    .where(eq(loyaltyVisits.branchId, branchId));
+    .where(and(
+      eq(loyaltyVisits.branchId, branchId),
+      eq(loyaltyVisits.status, 'approved')
+    ));
 
+  // الخصومات الموافق عليها فقط
   const discountsResult = await db.select({ count: sql<number>`count(*)` })
     .from(loyaltyVisits)
     .where(
       and(
         eq(loyaltyVisits.branchId, branchId),
-        eq(loyaltyVisits.isDiscountVisit, true)
+        eq(loyaltyVisits.isDiscountVisit, true),
+        eq(loyaltyVisits.status, 'approved')
       )
     );
 
