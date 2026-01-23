@@ -1,5 +1,6 @@
 import { eq, desc, sql, and, gte, lte, lt, like, or, isNotNull, inArray, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import type { SQL } from "drizzle-orm";
 import {
   InsertUser, users,
   InsertCategory, categories,
@@ -7806,5 +7807,295 @@ async function analyzeDiscountRisk(data: {
     riskScore,
     riskLevel,
     notes,
+  };
+}
+
+
+/**
+ * جلب إحصائيات المخاطر الشاملة للوحة التحكم
+ */
+export async function getDiscountRiskAnalytics(filters?: {
+  startDate?: Date;
+  endDate?: Date;
+  branchId?: number;
+}): Promise<{
+  totalDiscounts: number;
+  totalAmount: number;
+  averageRiskScore: number;
+  riskDistribution: {
+    low: number;
+    medium: number;
+    high: number;
+    critical: number;
+  };
+  monthlyTrend: Array<{
+    month: string;
+    count: number;
+    avgRiskScore: number;
+  }>;
+  topRiskFactors: Array<{
+    factor: string;
+    count: number;
+  }>;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      totalDiscounts: 0,
+      totalAmount: 0,
+      averageRiskScore: 0,
+      riskDistribution: { low: 0, medium: 0, high: 0, critical: 0 },
+      monthlyTrend: [],
+      topRiskFactors: [],
+    };
+  }
+  
+  const { loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  // بناء الشروط
+  const conditions: SQL[] = [];
+  
+  if (filters?.startDate) {
+    conditions.push(gte(loyaltyDiscountRecords.createdAt, filters.startDate));
+  }
+  if (filters?.endDate) {
+    conditions.push(lte(loyaltyDiscountRecords.createdAt, filters.endDate));
+  }
+  if (filters?.branchId) {
+    conditions.push(eq(loyaltyDiscountRecords.branchId, filters.branchId));
+  }
+  
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  
+  // جلب جميع السجلات
+  const allRecords = await db.select()
+    .from(loyaltyDiscountRecords)
+    .where(whereClause)
+    .orderBy(desc(loyaltyDiscountRecords.createdAt));
+  
+  // حساب الإحصائيات
+  const totalDiscounts = allRecords.length;
+  const totalAmount = allRecords.reduce((sum, r) => sum + parseFloat(r.originalAmount || '0'), 0);
+  
+  // حساب متوسط درجة المخاطرة
+  const riskScores = allRecords
+    .filter(r => r.aiRiskScore)
+    .map(r => parseFloat(r.aiRiskScore || '0'));
+  const averageRiskScore = riskScores.length > 0 
+    ? riskScores.reduce((a, b) => a + b, 0) / riskScores.length 
+    : 0;
+  
+  // توزيع المخاطر
+  const riskDistribution = {
+    low: allRecords.filter(r => r.aiRiskLevel === 'low').length,
+    medium: allRecords.filter(r => r.aiRiskLevel === 'medium').length,
+    high: allRecords.filter(r => r.aiRiskLevel === 'high').length,
+    critical: allRecords.filter(r => r.aiRiskLevel === 'critical').length,
+  };
+  
+  // الاتجاه الشهري
+  const monthlyMap = new Map<string, { count: number; totalRisk: number }>();
+  allRecords.forEach(r => {
+    const date = new Date(r.createdAt!);
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const existing = monthlyMap.get(monthKey) || { count: 0, totalRisk: 0 };
+    existing.count++;
+    existing.totalRisk += parseFloat(r.aiRiskScore || '0');
+    monthlyMap.set(monthKey, existing);
+  });
+  
+  const monthlyTrend = Array.from(monthlyMap.entries())
+    .map(([month, data]) => ({
+      month,
+      count: data.count,
+      avgRiskScore: data.count > 0 ? data.totalRisk / data.count : 0,
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+  
+  // تحليل عوامل الخطر الأكثر شيوعاً
+  const factorCounts = new Map<string, number>();
+  allRecords.forEach(r => {
+    if (r.aiAnalysisNotes) {
+      const factors = r.aiAnalysisNotes.replace('عوامل الخطر: ', '').split(' | ');
+      factors.forEach(f => {
+        if (f && f !== 'لا توجد عوامل خطر ملحوظة') {
+          factorCounts.set(f, (factorCounts.get(f) || 0) + 1);
+        }
+      });
+    }
+  });
+  
+  const topRiskFactors = Array.from(factorCounts.entries())
+    .map(([factor, count]) => ({ factor, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+  
+  return {
+    totalDiscounts,
+    totalAmount,
+    averageRiskScore,
+    riskDistribution,
+    monthlyTrend,
+    topRiskFactors,
+  };
+}
+
+/**
+ * جلب الخصومات ذات المخاطرة العالية والحرجة
+ */
+export async function getHighRiskDiscounts(options?: {
+  limit?: number;
+  offset?: number;
+  minRiskLevel?: 'medium' | 'high' | 'critical';
+  branchId?: number;
+  startDate?: Date;
+  endDate?: Date;
+}): Promise<{
+  records: Array<{
+    id: number;
+    recordId: string;
+    customerId: number | null;
+    customerName: string | null;
+    customerPhone: string | null;
+    branchId: number | null;
+    branchName: string | null;
+    originalAmount: string;
+    discountAmount: string;
+    finalAmount: string;
+    aiRiskScore: string | null;
+    aiRiskLevel: string | null;
+    aiAnalysisNotes: string | null;
+    createdBy: number | null;
+    createdByName: string | null;
+    createdAt: Date | null;
+    approvedVisitsCount: number | null;
+  }>;
+  total: number;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return { records: [], total: 0 };
+  }
+  
+  const { loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  const limit = options?.limit || 50;
+  const offset = options?.offset || 0;
+  const minRiskLevel = options?.minRiskLevel || 'high';
+  
+  // تحديد مستويات المخاطرة المطلوبة
+  const riskLevels: string[] = [];
+  if (minRiskLevel === 'medium') {
+    riskLevels.push('medium', 'high', 'critical');
+  } else if (minRiskLevel === 'high') {
+    riskLevels.push('high', 'critical');
+  } else {
+    riskLevels.push('critical');
+  }
+  
+  // بناء الشروط
+  const conditions: SQL[] = [
+    inArray(loyaltyDiscountRecords.aiRiskLevel as any, riskLevels as any)
+  ];
+  
+  if (options?.branchId) {
+    conditions.push(eq(loyaltyDiscountRecords.branchId, options.branchId));
+  }
+  if (options?.startDate) {
+    conditions.push(gte(loyaltyDiscountRecords.createdAt, options.startDate));
+  }
+  if (options?.endDate) {
+    conditions.push(lte(loyaltyDiscountRecords.createdAt, options.endDate));
+  }
+  
+  const whereClause = and(...conditions);
+  
+  // جلب السجلات
+  const records = await db.select()
+    .from(loyaltyDiscountRecords)
+    .where(whereClause)
+    .orderBy(desc(sql`CAST(${loyaltyDiscountRecords.aiRiskScore} AS DECIMAL)`))
+    .limit(limit)
+    .offset(offset);
+  
+  // حساب الإجمالي
+  const countResult = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(loyaltyDiscountRecords)
+    .where(whereClause);
+  
+  const total = Number(countResult[0]?.count || 0);
+  
+  return { records, total };
+}
+
+/**
+ * جلب تفاصيل خصم معين مع تحليل المخاطر الكامل
+ */
+export async function getDiscountRiskDetails(recordId: string): Promise<{
+  record: any;
+  customerHistory: Array<{
+    recordId: string;
+    originalAmount: string;
+    aiRiskScore: string | null;
+    aiRiskLevel: string | null;
+    createdAt: Date | null;
+  }>;
+  employeeHistory: Array<{
+    recordId: string;
+    customerName: string | null;
+    originalAmount: string;
+    aiRiskScore: string | null;
+    createdAt: Date | null;
+  }>;
+} | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const { loyaltyDiscountRecords } = await import('../drizzle/schema');
+  
+  // جلب السجل الأساسي
+  const records = await db.select()
+    .from(loyaltyDiscountRecords)
+    .where(eq(loyaltyDiscountRecords.recordId, recordId))
+    .limit(1);
+  
+  if (records.length === 0) return null;
+  
+  const record = records[0];
+  
+  // جلب تاريخ خصومات العميل
+  const customerHistory = record.customerId 
+    ? await db.select({
+        recordId: loyaltyDiscountRecords.recordId,
+        originalAmount: loyaltyDiscountRecords.originalAmount,
+        aiRiskScore: loyaltyDiscountRecords.aiRiskScore,
+        aiRiskLevel: loyaltyDiscountRecords.aiRiskLevel,
+        createdAt: loyaltyDiscountRecords.createdAt,
+      })
+      .from(loyaltyDiscountRecords)
+      .where(eq(loyaltyDiscountRecords.customerId, record.customerId))
+      .orderBy(desc(loyaltyDiscountRecords.createdAt))
+      .limit(10)
+    : [];
+  
+  // جلب تاريخ خصومات الموظف
+  const employeeHistory = record.createdBy
+    ? await db.select({
+        recordId: loyaltyDiscountRecords.recordId,
+        customerName: loyaltyDiscountRecords.customerName,
+        originalAmount: loyaltyDiscountRecords.originalAmount,
+        aiRiskScore: loyaltyDiscountRecords.aiRiskScore,
+        createdAt: loyaltyDiscountRecords.createdAt,
+      })
+      .from(loyaltyDiscountRecords)
+      .where(eq(loyaltyDiscountRecords.createdBy, record.createdBy))
+      .orderBy(desc(loyaltyDiscountRecords.createdAt))
+      .limit(10)
+    : [];
+  
+  return {
+    record,
+    customerHistory,
+    employeeHistory,
   };
 }

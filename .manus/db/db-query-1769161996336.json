@@ -1,0 +1,9 @@
+{
+  "query": "SELECT \n  er.employeeId,\n  e.name as employee_name,\n  e.code as employee_code,\n  SUM(er.total) as weekly_revenue,\n  dr.date\nFROM employeeRevenues er\nJOIN dailyRevenues dr ON er.dailyRevenueId = dr.id\nJOIN employees e ON er.employeeId = e.id\nJOIN branches b ON dr.branchId = b.id\nWHERE b.name LIKE '%طويق%'\nAND dr.date BETWEEN '2026-01-15' AND '2026-01-21'\nGROUP BY er.employeeId, e.name, e.code, dr.date\nORDER BY dr.date, e.name;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  er.employeeId,\n  e.name as employee_name,\n  e.code as employee_code,\n  SUM(er.total) as weekly_revenue,\n  dr.date\nFROM employeeRevenues er\nJOIN dailyRevenues dr ON er.dailyRevenueId = dr.id\nJOIN employees e ON er.employeeId = e.id\nJOIN branches b ON dr.branchId = b.id\nWHERE b.name LIKE '%طويق%'\nAND dr.date BETWEEN '2026-01-15' AND '2026-01-21'\nGROUP BY er.employeeId, e.name, e.code, dr.date\nORDER BY dr.date, e.name;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1516
+}

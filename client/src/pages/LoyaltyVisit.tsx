@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
-import { Gift, CheckCircle, Loader2, Calendar, PartyPopper, Camera, X, AlertCircle, Upload, Image as ImageIcon } from 'lucide-react';
+import { Gift, CheckCircle, Loader2, Calendar, PartyPopper, Camera, X, AlertCircle, Upload, Image as ImageIcon, Clock, Sparkles, BadgePercent, History } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { Progress } from '@/components/ui/progress';
@@ -20,6 +21,13 @@ interface VisitResult {
   discountPercentage?: number;
   visitNumberInMonth?: number;
   message?: string;
+  visitsDetails?: Array<{
+    id: number;
+    visitDate: Date | string;
+    serviceType: string;
+    branchName?: string | null;
+  }>;
+  currentMonth?: string;
 }
 
 interface UploadState {
@@ -152,6 +160,15 @@ export default function LoyaltyVisit() {
   const { data: serviceTypes } = trpc.loyalty.getServiceTypes.useQuery();
   const { data: settings } = trpc.loyalty.getSettings.useQuery();
   
+  // استعلام بيانات العميل وزياراته السابقة
+  const { data: customerData, isLoading: customerLoading } = trpc.loyalty.findByPhone.useQuery(
+    { phone: phone.trim() },
+    { 
+      enabled: phone.trim().length >= 10,
+      staleTime: 30000, // تحديث كل 30 ثانية
+    }
+  );
+  
   // رفع الصورة
   const uploadMutation = trpc.loyalty.uploadInvoiceImage.useMutation();
   
@@ -159,6 +176,9 @@ export default function LoyaltyVisit() {
   const visitMutation = trpc.loyalty.recordVisit.useMutation({
     onSuccess: (data) => {
       if (data.success) {
+        // جلب تفاصيل الزيارات من customerData إذا كانت متاحة
+        const visitsInfo = customerData?.visitsDetails || [];
+        
         setResult({
           success: true,
           customerName: data.customer?.name,
@@ -166,6 +186,8 @@ export default function LoyaltyVisit() {
           discountPercentage: data.discountPercentage,
           visitNumberInMonth: data.visitNumberInMonth,
           message: data.message,
+          visitsDetails: visitsInfo,
+          currentMonth: customerData?.currentMonth,
         });
         
         // إطلاق الكونفيتي عند الحصول على خصم
@@ -407,7 +429,7 @@ export default function LoyaltyVisit() {
                 </div>
                 <CardTitle className="text-2xl text-orange-600">🎉 مبروك!</CardTitle>
                 <CardDescription className="text-lg mt-2">
-                  حصلت على خصم {result.discountPercentage}%!
+                  حصلت على خصم <Badge className="bg-red-500 text-white text-lg px-2">{result.discountPercentage}%</Badge>
                 </CardDescription>
               </>
             ) : (
@@ -426,12 +448,50 @@ export default function LoyaltyVisit() {
                 <Calendar className="w-4 h-4" />
                 <span>الزيارة رقم {result.visitNumberInMonth} هذا الشهر</span>
               </div>
+              {result.currentMonth && (
+                <p className="text-xs text-muted-foreground mt-1">شهر: {result.currentMonth}</p>
+              )}
             </div>
+            
+            {/* عرض تفاصيل الزيارات الثلاث مع التواريخ */}
+            {result.isDiscountVisit && result.visitsDetails && result.visitsDetails.length > 0 && (
+              <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <History className="w-5 h-5 text-orange-500" />
+                  <span className="font-medium text-orange-700 dark:text-orange-300">زياراتك الثلاث المؤهلة للخصم</span>
+                </div>
+                <div className="space-y-2">
+                  {result.visitsDetails.slice(0, 3).map((visit, index) => (
+                    <div key={visit.id} className="flex items-center justify-between text-sm bg-white dark:bg-gray-700 rounded-lg px-3 py-2 shadow-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 text-white flex items-center justify-center text-xs font-bold">
+                          {index + 1}
+                        </span>
+                        <span className="text-gray-700 dark:text-gray-300">{visit.serviceType}</span>
+                      </span>
+                      <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-xs">
+                        <Clock className="w-3 h-3" />
+                        {new Date(visit.visitDate).toLocaleDateString('ar-SA', { 
+                          day: 'numeric', 
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 pt-3 border-t border-yellow-200 dark:border-yellow-700">
+                  <p className="text-xs text-orange-600 dark:text-orange-400">
+                    ✨ أكملت 3 زيارات في نفس الشهر وحصلت على الخصم!
+                  </p>
+                </div>
+              </div>
+            )}
             
             {!result.isDiscountVisit && (
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
                 <p className="text-blue-700 dark:text-blue-300 text-sm">
-                  باقي {visitsRequired - (result.visitNumberInMonth || 0)} زيارات للحصول على خصم {discountPercentage}%
+                  باقي <span className="font-bold text-lg">{visitsRequired - (result.visitNumberInMonth || 0)}</span> زيارات للحصول على خصم {discountPercentage}%
                 </p>
               </div>
             )}
@@ -476,6 +536,95 @@ export default function LoyaltyVisit() {
                 className="text-left"
               />
             </div>
+
+            {/* عرض بيانات العميل وزياراته السابقة */}
+            {phone.trim().length >= 10 && (
+              <div className="space-y-3">
+                {customerLoading ? (
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-blue-500" />
+                    <p className="text-sm text-muted-foreground mt-1">جاري البحث...</p>
+                  </div>
+                ) : customerData?.found ? (
+                  <div className="space-y-3">
+                    {/* بيانات العميل */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                        <span className="font-semibold text-green-700 dark:text-green-400">مرحباً {customerData.customer?.name}!</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="w-4 h-4" />
+                        <span>شهر: {customerData.currentMonth}</span>
+                      </div>
+                    </div>
+
+                    {/* عرض الزيارات السابقة مع التواريخ */}
+                    {customerData.visitsDetails && customerData.visitsDetails.length > 0 && (
+                      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <History className="w-4 h-4 text-blue-500" />
+                          <span className="text-sm font-medium">زياراتك هذا الشهر ({customerData.visitsThisMonth})</span>
+                        </div>
+                        <div className="space-y-1">
+                          {customerData.visitsDetails.map((visit: any, index: number) => (
+                            <div key={visit.id} className="flex items-center justify-between text-xs text-muted-foreground bg-white dark:bg-gray-700 rounded px-2 py-1">
+                              <span className="flex items-center gap-1">
+                                <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold">
+                                  {index + 1}
+                                </span>
+                                <span>{visit.serviceType}</span>
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {new Date(visit.visitDate).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* رسالة الخصم المتوقع */}
+                    {customerData.isEligibleForDiscount ? (
+                      <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-lg p-3 border-2 border-yellow-400 dark:border-yellow-600 animate-pulse">
+                        <div className="flex items-center gap-2">
+                          <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
+                            <Sparkles className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-orange-600 dark:text-orange-400">
+                              🎉 هذه زيارتك الثالثة!
+                            </p>
+                            <p className="text-sm text-orange-700 dark:text-orange-300">
+                              ستحصل على خصم <Badge className="bg-red-500 text-white mx-1">{discountPercentage}%</Badge> عند تسجيل هذه الزيارة!
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (customerData.visitsUntilDiscount ?? 0) > 0 ? (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                        <div className="flex items-center gap-2">
+                          <BadgePercent className="w-5 h-5 text-blue-500" />
+                          <p className="text-sm text-blue-700 dark:text-blue-300">
+                            باقي <span className="font-bold text-lg">{customerData.visitsUntilDiscount}</span> زيارة للحصول على خصم {discountPercentage}%
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : customerData && !customerData.found ? (
+                  <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-800">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                      <p className="text-sm text-red-700 dark:text-red-300">
+                        رقم الجوال غير مسجل في برنامج الولاء. يرجى التسجيل أولاً.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
 
             {/* نوع الخدمة */}
             <div className="space-y-2">

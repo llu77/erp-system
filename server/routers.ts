@@ -5210,14 +5210,40 @@ ${discrepancyRows}
           return { found: false };
         }
         
+        // جلب الزيارات الموافق عليها فقط هذا الشهر مع التفاصيل
         const visitsThisMonth = await getCustomerVisitsThisMonth(customer.id);
-        const nextDiscountAt = 4 - (visitsThisMonth.length % 3);
+        const approvedVisits = visitsThisMonth.filter(v => v.status === 'approved');
+        const approvedCount = approvedVisits.length;
+        
+        // حساب الزيارات المتبقية للخصم
+        const visitsUntilDiscount = approvedCount >= 3 ? 0 : (3 - approvedCount);
+        const isEligibleForDiscount = approvedCount >= 2; // سيحصل على الخصم في الزيارة القادمة
+        
+        // تفاصيل الزيارات مع التواريخ
+        const visitsDetails = approvedVisits.map(v => ({
+          id: v.id,
+          visitDate: v.visitDate,
+          serviceType: v.serviceType,
+          branchName: v.branchName,
+          visitNumber: v.visitNumberInMonth,
+        }));
+        
+        // الشهر الحالي
+        const currentMonth = new Date().toLocaleDateString('ar-SA', { 
+          month: 'long', 
+          year: 'numeric',
+          calendar: 'islamic-umalqura'
+        });
         
         return {
           found: true,
           customer,
-          visitsThisMonth: visitsThisMonth.length,
-          nextDiscountAt: nextDiscountAt > 3 ? 1 : nextDiscountAt,
+          visitsThisMonth: approvedCount,
+          visitsDetails,
+          visitsUntilDiscount,
+          isEligibleForDiscount,
+          currentMonth,
+          nextDiscountAt: approvedCount >= 3 ? 3 : (3 - approvedCount),
         };
       }),
 

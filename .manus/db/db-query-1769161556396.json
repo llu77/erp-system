@@ -1,0 +1,226 @@
+{
+  "query": "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() LIMIT 80;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() LIMIT 80;",
+  "rows": [
+    {
+      "TABLE_NAME": "__drizzle_migrations"
+    },
+    {
+      "TABLE_NAME": "users"
+    },
+    {
+      "TABLE_NAME": "activityLogs"
+    },
+    {
+      "TABLE_NAME": "categories"
+    },
+    {
+      "TABLE_NAME": "customers"
+    },
+    {
+      "TABLE_NAME": "inventoryMovements"
+    },
+    {
+      "TABLE_NAME": "invoiceItems"
+    },
+    {
+      "TABLE_NAME": "invoices"
+    },
+    {
+      "TABLE_NAME": "notifications"
+    },
+    {
+      "TABLE_NAME": "products"
+    },
+    {
+      "TABLE_NAME": "purchaseOrderItems"
+    },
+    {
+      "TABLE_NAME": "purchaseOrders"
+    },
+    {
+      "TABLE_NAME": "suppliers"
+    },
+    {
+      "TABLE_NAME": "bonusAuditLog"
+    },
+    {
+      "TABLE_NAME": "bonusDetails"
+    },
+    {
+      "TABLE_NAME": "branches"
+    },
+    {
+      "TABLE_NAME": "dailyRevenues"
+    },
+    {
+      "TABLE_NAME": "employeeRevenues"
+    },
+    {
+      "TABLE_NAME": "employees"
+    },
+    {
+      "TABLE_NAME": "monthlyRecords"
+    },
+    {
+      "TABLE_NAME": "systemLogs"
+    },
+    {
+      "TABLE_NAME": "weeklyBonuses"
+    },
+    {
+      "TABLE_NAME": "employeeRequestLogs"
+    },
+    {
+      "TABLE_NAME": "employeeRequests"
+    },
+    {
+      "TABLE_NAME": "employeeSalarySettings"
+    },
+    {
+      "TABLE_NAME": "expenseLogs"
+    },
+    {
+      "TABLE_NAME": "expenses"
+    },
+    {
+      "TABLE_NAME": "payrollDetails"
+    },
+    {
+      "TABLE_NAME": "payrolls"
+    },
+    {
+      "TABLE_NAME": "company_settings"
+    },
+    {
+      "TABLE_NAME": "financialKpis"
+    },
+    {
+      "TABLE_NAME": "inventoryCountItems"
+    },
+    {
+      "TABLE_NAME": "inventoryCounts"
+    },
+    {
+      "TABLE_NAME": "loginAttempts"
+    },
+    {
+      "TABLE_NAME": "permissions"
+    },
+    {
+      "TABLE_NAME": "priceChangeLogs"
+    },
+    {
+      "TABLE_NAME": "productBatches"
+    },
+    {
+      "TABLE_NAME": "securityAlerts"
+    },
+    {
+      "TABLE_NAME": "suggestedPurchaseOrders"
+    },
+    {
+      "TABLE_NAME": "userPermissions"
+    },
+    {
+      "TABLE_NAME": "monitorSettings"
+    },
+    {
+      "TABLE_NAME": "scheduledTasks"
+    },
+    {
+      "TABLE_NAME": "systemAlerts"
+    },
+    {
+      "TABLE_NAME": "taskExecutionLogs"
+    },
+    {
+      "TABLE_NAME": "notificationRecipients"
+    },
+    {
+      "TABLE_NAME": "sentNotifications"
+    },
+    {
+      "TABLE_NAME": "deletedRecords"
+    },
+    {
+      "TABLE_NAME": "employeeInvoices"
+    },
+    {
+      "TABLE_NAME": "taskLogs"
+    },
+    {
+      "TABLE_NAME": "tasks"
+    },
+    {
+      "TABLE_NAME": "loyaltyCustomers"
+    },
+    {
+      "TABLE_NAME": "loyaltyVisits"
+    },
+    {
+      "TABLE_NAME": "loyaltyServiceTypes"
+    },
+    {
+      "TABLE_NAME": "loyaltySettings"
+    },
+    {
+      "TABLE_NAME": "loyalty_customers"
+    },
+    {
+      "TABLE_NAME": "loyalty_visits"
+    },
+    {
+      "TABLE_NAME": "loyalty_settings"
+    },
+    {
+      "TABLE_NAME": "loyalty_service_types"
+    },
+    {
+      "TABLE_NAME": "loyaltySettingsAuditLog"
+    },
+    {
+      "TABLE_NAME": "bonusTierAuditLog"
+    },
+    {
+      "TABLE_NAME": "bonusTierSettings"
+    },
+    {
+      "TABLE_NAME": "receiptVoucherItems"
+    },
+    {
+      "TABLE_NAME": "receiptVouchers"
+    },
+    {
+      "TABLE_NAME": "aiAnalytics"
+    },
+    {
+      "TABLE_NAME": "aiRecommendations"
+    },
+    {
+      "TABLE_NAME": "customDashboards"
+    },
+    {
+      "TABLE_NAME": "customerSegments"
+    },
+    {
+      "TABLE_NAME": "reportExecutionLogs"
+    },
+    {
+      "TABLE_NAME": "reportSchedules"
+    },
+    {
+      "TABLE_NAME": "savedReports"
+    },
+    {
+      "TABLE_NAME": "loyaltyVisitDeletionRequests"
+    },
+    {
+      "TABLE_NAME": "loyaltyDiscountRecords"
+    }
+  ],
+  "messages": [],
+  "stdout": "TABLE_NAME\n__drizzle_migrations\nusers\nactivityLogs\ncategories\ncustomers\ninventoryMovements\ninvoiceItems\ninvoices\nnotifications\nproducts\npurchaseOrderItems\npurchaseOrders\nsuppliers\nbonusAuditLog\nbonusDetails\nbranches\ndailyRevenues\nemployeeRevenues\nemployees\nmonthlyRecords\nsystemLogs\nweeklyBonuses\nemployeeRequestLogs\nemployeeRequests\nemployeeSalarySettings\nexpenseLogs\nexpenses\npayrollDetails\npayrolls\ncompany_settings\nfinancialKpis\ninventoryCountItems\ninventoryCounts\nloginAttempts\npermissions\npriceChangeLogs\nproductBatches\nsecurityAlerts\nsuggestedPurchaseOrders\nuserPermissions\nmonitorSettings\nscheduledTasks\nsystemAlerts\ntaskExecutionLogs\nnotificationRecipients\nsentNotifications\ndeletedRecords\nemployeeInvoices\ntaskLogs\ntasks\nloyaltyCustomers\nloyaltyVisits\nloyaltyServiceTypes\nloyaltySettings\nloyalty_customers\nloyalty_visits\nloyalty_settings\nloyalty_service_types\nloyaltySettingsAuditLog\nbonusTierAuditLog\nbonusTierSettings\nreceiptVoucherItems\nreceiptVouchers\naiAnalytics\naiRecommendations\ncustomDashboards\ncustomerSegments\nreportExecutionLogs\nreportSchedules\nsavedReports\nloyaltyVisitDeletionRequests\nloyaltyDiscountRecords\n",
+  "stderr": "",
+  "execution_time_ms": 1569
+}

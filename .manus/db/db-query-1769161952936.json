@@ -1,0 +1,163 @@
+{
+  "query": "SELECT \n  wb.id,\n  wb.branchId,\n  wb.weekNumber,\n  wb.month,\n  wb.year,\n  wb.totalAmount,\n  wb.status\nFROM weeklyBonuses wb\nORDER BY wb.id DESC\nLIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  wb.id,\n  wb.branchId,\n  wb.weekNumber,\n  wb.month,\n  wb.year,\n  wb.totalAmount,\n  wb.status\nFROM weeklyBonuses wb\nORDER BY wb.id DESC\nLIMIT 20;",
+  "rows": [
+    {
+      "id": "360001",
+      "branchId": "1",
+      "weekNumber": "4",
+      "month": "1",
+      "year": "2026",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "330001",
+      "branchId": "30001",
+      "weekNumber": "4",
+      "month": "1",
+      "year": "2026",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "300002",
+      "branchId": "30001",
+      "weekNumber": "3",
+      "month": "1",
+      "year": "2026",
+      "totalAmount": "90.00",
+      "status": "requested"
+    },
+    {
+      "id": "300001",
+      "branchId": "1",
+      "weekNumber": "3",
+      "month": "1",
+      "year": "2026",
+      "totalAmount": "250.00",
+      "status": "requested"
+    },
+    {
+      "id": "270002",
+      "branchId": "30001",
+      "weekNumber": "2",
+      "month": "1",
+      "year": "2026",
+      "totalAmount": "35.00",
+      "status": "approved"
+    },
+    {
+      "id": "270001",
+      "branchId": "1",
+      "weekNumber": "2",
+      "month": "1",
+      "year": "2026",
+      "totalAmount": "220.00",
+      "status": "approved"
+    },
+    {
+      "id": "240004",
+      "branchId": "30001",
+      "weekNumber": "1",
+      "month": "1",
+      "year": "2026",
+      "totalAmount": "90.00",
+      "status": "approved"
+    },
+    {
+      "id": "240003",
+      "branchId": "1",
+      "weekNumber": "1",
+      "month": "1",
+      "year": "2026",
+      "totalAmount": "300.00",
+      "status": "approved"
+    },
+    {
+      "id": "150002",
+      "branchId": "1",
+      "weekNumber": "1",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "1140.00",
+      "status": "pending"
+    },
+    {
+      "id": "150001",
+      "branchId": "30001",
+      "weekNumber": "1",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "760.00",
+      "status": "pending"
+    },
+    {
+      "id": "120002",
+      "branchId": "1",
+      "weekNumber": "5",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "190.00",
+      "status": "pending"
+    },
+    {
+      "id": "120001",
+      "branchId": "30001",
+      "weekNumber": "5",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "90002",
+      "branchId": "30001",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "120.00",
+      "status": "pending"
+    },
+    {
+      "id": "90001",
+      "branchId": "1",
+      "weekNumber": "4",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "275.00",
+      "status": "pending"
+    },
+    {
+      "id": "60001",
+      "branchId": "30001",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "30001",
+      "branchId": "30003",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "0.00",
+      "status": "pending"
+    },
+    {
+      "id": "1",
+      "branchId": "1",
+      "weekNumber": "3",
+      "month": "12",
+      "year": "2025",
+      "totalAmount": "0.00",
+      "status": "pending"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tbranchId\tweekNumber\tmonth\tyear\ttotalAmount\tstatus\n360001\t1\t4\t1\t2026\t0.00\tpending\n330001\t30001\t4\t1\t2026\t0.00\tpending\n300002\t30001\t3\t1\t2026\t90.00\trequested\n300001\t1\t3\t1\t2026\t250.00\trequested\n270002\t30001\t2\t1\t2026\t35.00\tapproved\n270001\t1\t2\t1\t2026\t220.00\tapproved\n240004\t30001\t1\t1\t2026\t90.00\tapproved\n240003\t1\t1\t1\t2026\t300.00\tapproved\n150002\t1\t1\t12\t2025\t1140.00\tpending\n150001\t30001\t1\t12\t2025\t760.00\tpending\n120002\t1\t5\t12\t2025\t190.00\tpending\n120001\t30001\t5\t12\t2025\t0.00\tpending\n90002\t30001\t4\t12\t2025\t120.00\tpending\n90001\t1\t4\t12\t2025\t275.00\tpending\n60001\t30001\t3\t12\t2025\t0.00\tpending\n30001\t30003\t3\t12\t2025\t0.00\tpending\n1\t1\t3\t12\t2025\t0.00\tpending\n",
+  "stderr": "",
+  "execution_time_ms": 1513
+}
