@@ -1438,6 +1438,11 @@ export const loyaltyCustomers = mysqlTable("loyaltyCustomers", {
   // الحالة
   isActive: boolean("isActive").default(true).notNull(),
   
+  // دورة الولاء (30 يوم لكل عميل)
+  cycleStartDate: timestamp("cycleStartDate"), // تاريخ بداية دورة الـ 30 يوم
+  cycleVisitsCount: int("cycleVisitsCount").default(0).notNull(), // عدد الزيارات في الدورة الحالية
+  cycleDiscountUsed: boolean("cycleDiscountUsed").default(false).notNull(), // هل تم استخدام الخصم في هذه الدورة
+  
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -27,7 +27,15 @@ interface VisitResult {
     serviceType: string;
     branchName?: string | null;
   }>;
-  currentMonth?: string;
+  cycleInfo?: {
+    hasCycle: boolean;
+    startDate: Date | string | null;
+    endDate: Date | string | null;
+    endDateFormatted: string | null;
+    daysRemaining: number;
+    isExpired: boolean;
+    discountUsed: boolean;
+  };
 }
 
 interface UploadState {
@@ -187,7 +195,7 @@ export default function LoyaltyVisit() {
           visitNumberInMonth: data.visitNumberInMonth,
           message: data.message,
           visitsDetails: visitsInfo,
-          currentMonth: customerData?.currentMonth,
+          cycleInfo: customerData?.cycleInfo,
         });
         
         // إطلاق الكونفيتي عند الحصول على خصم
@@ -448,8 +456,11 @@ export default function LoyaltyVisit() {
                 <Calendar className="w-4 h-4" />
                 <span>الزيارة رقم {result.visitNumberInMonth} هذا الشهر</span>
               </div>
-              {result.currentMonth && (
-                <p className="text-xs text-muted-foreground mt-1">شهر: {result.currentMonth}</p>
+              {result.cycleInfo?.hasCycle && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  باقي {result.cycleInfo.daysRemaining} يوم لإكمال الدورة
+                  {result.cycleInfo.endDateFormatted && ` (قبل ${result.cycleInfo.endDateFormatted})`}
+                </p>
               )}
             </div>
             
@@ -555,7 +566,12 @@ export default function LoyaltyVisit() {
                       </div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="w-4 h-4" />
-                        <span>شهر: {customerData.currentMonth}</span>
+                        <span>
+                          {customerData.cycleInfo?.hasCycle 
+                            ? `باقي ${customerData.cycleInfo.daysRemaining} يوم لإكمال الدورة`
+                            : 'لم تبدأ دورة بعد'
+                          }
+                        </span>
                       </div>
                     </div>
 
@@ -614,11 +630,14 @@ export default function LoyaltyVisit() {
                               🎁 ستحصل على خصم {discountPercentage}% في زيارتك القادمة!
                             </p>
                             <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-                              سجّل زيارتك الثالثة قبل نهاية الشهر (
+                              سجّل زيارتك الثالثة خلال 
                               <span className="font-bold">
-                                {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toLocaleDateString('ar-SA', { day: 'numeric', month: 'long' })}
+                                {customerData.cycleInfo?.daysRemaining || 30} يوم
                               </span>
-                              ) للحصول على الخصم!
+                              {customerData.cycleInfo?.endDateFormatted && (
+                                <span> (قبل {customerData.cycleInfo.endDateFormatted})</span>
+                              )}
+                              {' '}للحصول على الخصم!
                             </p>
                           </div>
                         </div>

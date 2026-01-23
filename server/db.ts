@@ -8099,3 +8099,530 @@ export async function getDiscountRiskDetails(recordId: string): Promise<{
     employeeHistory,
   };
 }
+
+
+// ==================== نظام دورة الولاء (30 يوم لكل عميل) ====================
+
+/**
+ * التحقق من حالة دورة الولاء للعميل
+ * - إذا لم تبدأ الدورة بعد، تُرجع null
+ * - إذا انتهت الدورة (مرّ 30 يوم)، تُرجع expired: true
+ * - إذا الدورة نشطة، تُرجع المعلومات الكاملة
+ */
+export async function getCustomerCycleStatus(customerId: number): Promise<{
+  hasCycle: boolean;
+  cycleStartDate: Date | null;
+  cycleEndDate: Date | null;
+  daysRemaining: number;
+  isExpired: boolean;
+  visitsInCycle: number;
+  discountUsed: boolean;
+  visitsDetails: Array<{
+    id: number;
+    visitDate: Date;
+    serviceType: string;
+    status: string;
+  }>;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      hasCycle: false,
+      cycleStartDate: null,
+      cycleEndDate: null,
+      daysRemaining: 0,
+      isExpired: false,
+      visitsInCycle: 0,
+      discountUsed: false,
+      visitsDetails: [],
+    };
+  }
+
+  // جلب بيانات العميل
+  const customer = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.id, customerId))
+    .limit(1);
+
+  if (!customer[0]) {
+    return {
+      hasCycle: false,
+      cycleStartDate: null,
+      cycleEndDate: null,
+      daysRemaining: 0,
+      isExpired: false,
+      visitsInCycle: 0,
+      discountUsed: false,
+      visitsDetails: [],
+    };
+  }
+
+  const customerData = customer[0];
+  const now = new Date();
+
+  // إذا لم تبدأ الدورة بعد
+  if (!customerData.cycleStartDate) {
+    return {
+      hasCycle: false,
+      cycleStartDate: null,
+      cycleEndDate: null,
+      daysRemaining: 30,
+      isExpired: false,
+      visitsInCycle: 0,
+      discountUsed: false,
+      visitsDetails: [],
+    };
+  }
+
+  const cycleStartDate = new Date(customerData.cycleStartDate);
+  const cycleEndDate = new Date(cycleStartDate);
+  cycleEndDate.setDate(cycleEndDate.getDate() + 30);
+
+  // حساب الأيام المتبقية
+  const timeDiff = cycleEndDate.getTime() - now.getTime();
+  const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+  const isExpired = daysRemaining <= 0;
+
+  // جلب الزيارات الموافق عليها في الدورة الحالية
+  const visitsInCycle = await db.select({
+    id: loyaltyVisits.id,
+    visitDate: loyaltyVisits.visitDate,
+    serviceType: loyaltyVisits.serviceType,
+    status: loyaltyVisits.status,
+  })
+    .from(loyaltyVisits)
+    .where(and(
+      eq(loyaltyVisits.customerId, customerId),
+      eq(loyaltyVisits.status, 'approved'),
+      gte(loyaltyVisits.visitDate, cycleStartDate),
+      lte(loyaltyVisits.visitDate, cycleEndDate)
+    ))
+    .orderBy(loyaltyVisits.visitDate);
+
+  return {
+    hasCycle: true,
+    cycleStartDate,
+    cycleEndDate,
+    daysRemaining: Math.max(0, daysRemaining),
+    isExpired,
+    visitsInCycle: visitsInCycle.length,
+    discountUsed: customerData.cycleDiscountUsed,
+    visitsDetails: visitsInCycle.map(v => ({
+      id: v.id,
+      visitDate: v.visitDate,
+      serviceType: v.serviceType,
+      status: v.status,
+    })),
+  };
+}
+
+/**
+ * بدء دورة ولاء جديدة للعميل
+ * تُستدعى عند تسجيل أول زيارة أو عند انتهاء الدورة السابقة
+ */
+export async function startNewLoyaltyCycle(customerId: number): Promise<{
+  success: boolean;
+  cycleStartDate: Date;
+  cycleEndDate: Date;
+}> {
+  const db = await getDb();
+  if (!db) return { success: false, cycleStartDate: new Date(), cycleEndDate: new Date() };
+
+  const now = new Date();
+  const cycleEndDate = new Date(now);
+  cycleEndDate.setDate(cycleEndDate.getDate() + 30);
+
+  await db.update(loyaltyCustomers)
+    .set({
+      cycleStartDate: now,
+      cycleVisitsCount: 0,
+      cycleDiscountUsed: false,
+    })
+    .where(eq(loyaltyCustomers.id, customerId));
+
+  return {
+    success: true,
+    cycleStartDate: now,
+    cycleEndDate,
+  };
+}
+
+/**
+ * تحديث عداد زيارات الدورة
+ * تُستدعى عند الموافقة على زيارة
+ */
+export async function incrementCycleVisits(customerId: number): Promise<{
+  success: boolean;
+  newCount: number;
+  isDiscountEligible: boolean;
+}> {
+  const db = await getDb();
+  if (!db) return { success: false, newCount: 0, isDiscountEligible: false };
+
+  // جلب العدد الحالي
+  const customer = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.id, customerId))
+    .limit(1);
+
+  if (!customer[0]) return { success: false, newCount: 0, isDiscountEligible: false };
+
+  const newCount = (customer[0].cycleVisitsCount || 0) + 1;
+  const isDiscountEligible = newCount >= 3 && !customer[0].cycleDiscountUsed;
+
+  await db.update(loyaltyCustomers)
+    .set({ cycleVisitsCount: newCount })
+    .where(eq(loyaltyCustomers.id, customerId));
+
+  return {
+    success: true,
+    newCount,
+    isDiscountEligible,
+  };
+}
+
+/**
+ * تعليم الخصم كمستخدم في الدورة الحالية
+ */
+export async function markCycleDiscountUsed(customerId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  await db.update(loyaltyCustomers)
+    .set({ cycleDiscountUsed: true })
+    .where(eq(loyaltyCustomers.id, customerId));
+
+  return true;
+}
+
+/**
+ * الحصول على زيارات العميل في دورته الحالية (30 يوم)
+ * بديل عن getCustomerVisitsThisMonth
+ */
+export async function getCustomerVisitsInCycle(customerId: number): Promise<{
+  visits: LoyaltyVisit[];
+  cycleInfo: {
+    startDate: Date | null;
+    endDate: Date | null;
+    daysRemaining: number;
+    isExpired: boolean;
+  };
+}> {
+  const db = await getDb();
+  if (!db) return { 
+    visits: [], 
+    cycleInfo: { startDate: null, endDate: null, daysRemaining: 0, isExpired: false } 
+  };
+
+  // جلب بيانات العميل
+  const customer = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.id, customerId))
+    .limit(1);
+
+  if (!customer[0] || !customer[0].cycleStartDate) {
+    return { 
+      visits: [], 
+      cycleInfo: { startDate: null, endDate: null, daysRemaining: 30, isExpired: false } 
+    };
+  }
+
+  const cycleStartDate = new Date(customer[0].cycleStartDate);
+  const cycleEndDate = new Date(cycleStartDate);
+  cycleEndDate.setDate(cycleEndDate.getDate() + 30);
+
+  const now = new Date();
+  const timeDiff = cycleEndDate.getTime() - now.getTime();
+  const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+  const isExpired = daysRemaining <= 0;
+
+  // جلب الزيارات الموافق عليها في الدورة
+  const visits = await db.select()
+    .from(loyaltyVisits)
+    .where(and(
+      eq(loyaltyVisits.customerId, customerId),
+      eq(loyaltyVisits.status, 'approved'),
+      gte(loyaltyVisits.visitDate, cycleStartDate),
+      lte(loyaltyVisits.visitDate, cycleEndDate)
+    ))
+    .orderBy(loyaltyVisits.visitDate);
+
+  return {
+    visits,
+    cycleInfo: {
+      startDate: cycleStartDate,
+      endDate: cycleEndDate,
+      daysRemaining: Math.max(0, daysRemaining),
+      isExpired,
+    },
+  };
+}
+
+/**
+ * تسجيل زيارة جديدة مع نظام الدورة (30 يوم)
+ * بديل محسّن عن registerLoyaltyVisit
+ */
+export async function registerLoyaltyVisitWithCycle(data: {
+  customerId: number;
+  customerName: string;
+  customerPhone: string;
+  serviceType: string;
+  branchId?: number;
+  branchName?: string;
+  invoiceImageUrl?: string;
+  invoiceImageKey?: string;
+}): Promise<{ 
+  success: boolean; 
+  visit?: LoyaltyVisit; 
+  isDiscountVisit: boolean;
+  discountPercentage: number;
+  visitNumberInCycle: number;
+  cycleInfo: {
+    startDate: Date | null;
+    endDate: Date | null;
+    daysRemaining: number;
+    isNewCycle: boolean;
+  };
+  error?: string;
+}> {
+  const db = await getDb();
+  if (!db) return { 
+    success: false, 
+    isDiscountVisit: false, 
+    discountPercentage: 0, 
+    visitNumberInCycle: 0,
+    cycleInfo: { startDate: null, endDate: null, daysRemaining: 0, isNewCycle: false },
+    error: "خطأ في الاتصال بقاعدة البيانات" 
+  };
+
+  // التحقق من عدم وجود زيارة سابقة في نفس اليوم
+  const today = new Date();
+  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+
+  const existingVisitToday = await db.select()
+    .from(loyaltyVisits)
+    .where(
+      and(
+        eq(loyaltyVisits.customerId, data.customerId),
+        gte(loyaltyVisits.visitDate, startOfDay),
+        lt(loyaltyVisits.visitDate, endOfDay)
+      )
+    )
+    .limit(1);
+
+  if (existingVisitToday.length > 0) {
+    return { 
+      success: false, 
+      isDiscountVisit: false, 
+      discountPercentage: 0, 
+      visitNumberInCycle: 0,
+      cycleInfo: { startDate: null, endDate: null, daysRemaining: 0, isNewCycle: false },
+      error: "لقد سجلت زيارة اليوم بالفعل. يمكنك تسجيل زيارة جديدة غداً." 
+    };
+  }
+
+  // التحقق من حالة الدورة
+  const cycleStatus = await getCustomerCycleStatus(data.customerId);
+  let isNewCycle = false;
+
+  // إذا لم تبدأ الدورة أو انتهت، نبدأ دورة جديدة
+  if (!cycleStatus.hasCycle || cycleStatus.isExpired) {
+    await startNewLoyaltyCycle(data.customerId);
+    isNewCycle = true;
+  }
+
+  // جلب حالة الدورة المحدثة
+  const updatedCycleStatus = isNewCycle 
+    ? await getCustomerCycleStatus(data.customerId)
+    : cycleStatus;
+
+  // حساب رقم الزيارة في الدورة
+  const visitNumberInCycle = updatedCycleStatus.visitsInCycle + 1;
+
+  // التحقق من استحقاق الخصم (الزيارة الثالثة)
+  const isDiscountVisit = visitNumberInCycle === 3 && !updatedCycleStatus.discountUsed;
+  const discountPercentage = isDiscountVisit ? 60 : 0;
+
+  const visitId = await generateLoyaltyVisitId();
+
+  await db.insert(loyaltyVisits).values({
+    visitId,
+    customerId: data.customerId,
+    customerName: data.customerName,
+    customerPhone: data.customerPhone,
+    serviceType: data.serviceType,
+    visitDate: new Date(),
+    branchId: data.branchId || null,
+    branchName: data.branchName || null,
+    invoiceImageUrl: data.invoiceImageUrl || null,
+    invoiceImageKey: data.invoiceImageKey || null,
+    status: 'pending',
+    isDiscountVisit,
+    discountPercentage,
+    visitNumberInMonth: visitNumberInCycle, // نستخدم نفس الحقل لتوافق البيانات
+  });
+
+  const visit = await db.select()
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.visitId, visitId))
+    .limit(1);
+
+  return { 
+    success: true, 
+    visit: visit[0], 
+    isDiscountVisit, 
+    discountPercentage,
+    visitNumberInCycle,
+    cycleInfo: {
+      startDate: updatedCycleStatus.cycleStartDate,
+      endDate: updatedCycleStatus.cycleEndDate,
+      daysRemaining: updatedCycleStatus.daysRemaining,
+      isNewCycle,
+    },
+  };
+}
+
+/**
+ * الموافقة على زيارة مع تحديث دورة الولاء
+ * بديل محسّن عن approveVisit
+ */
+export async function approveVisitWithCycle(visitId: number, approvedBy: number): Promise<{
+  success: boolean;
+  visit?: LoyaltyVisit;
+  cycleInfo?: {
+    visitsInCycle: number;
+    isDiscountEligible: boolean;
+    daysRemaining: number;
+  };
+  error?: string;
+}> {
+  const db = await getDb();
+  if (!db) return { success: false, error: "خطأ في الاتصال بقاعدة البيانات" };
+
+  // جلب الزيارة
+  const visit = await db.select()
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.id, visitId))
+    .limit(1);
+
+  if (!visit[0]) {
+    return { success: false, error: "الزيارة غير موجودة" };
+  }
+
+  if (visit[0].status === 'approved') {
+    return { success: false, error: "الزيارة موافق عليها مسبقاً" };
+  }
+
+  // تحديث حالة الزيارة
+  await db.update(loyaltyVisits)
+    .set({
+      status: 'approved',
+      approvedBy,
+      approvedAt: new Date(),
+    })
+    .where(eq(loyaltyVisits.id, visitId));
+
+  // تحديث إحصائيات العميل
+  await db.update(loyaltyCustomers)
+    .set({
+      totalVisits: sql`${loyaltyCustomers.totalVisits} + 1`,
+    })
+    .where(eq(loyaltyCustomers.id, visit[0].customerId));
+
+  // تحديث عداد زيارات الدورة
+  const cycleUpdate = await incrementCycleVisits(visit[0].customerId);
+
+  // جلب حالة الدورة المحدثة
+  const cycleStatus = await getCustomerCycleStatus(visit[0].customerId);
+
+  // جلب الزيارة المحدثة
+  const updatedVisit = await db.select()
+    .from(loyaltyVisits)
+    .where(eq(loyaltyVisits.id, visitId))
+    .limit(1);
+
+  return {
+    success: true,
+    visit: updatedVisit[0],
+    cycleInfo: {
+      visitsInCycle: cycleUpdate.newCount,
+      isDiscountEligible: cycleUpdate.isDiscountEligible,
+      daysRemaining: cycleStatus.daysRemaining,
+    },
+  };
+}
+
+/**
+ * البحث عن عميل بالجوال مع معلومات الدورة
+ */
+export async function findCustomerByPhoneWithCycle(phone: string): Promise<{
+  customer: LoyaltyCustomer | null;
+  cycleInfo: {
+    hasCycle: boolean;
+    startDate: Date | null;
+    endDate: Date | null;
+    daysRemaining: number;
+    isExpired: boolean;
+    visitsInCycle: number;
+    discountUsed: boolean;
+    visitsDetails: Array<{
+      id: number;
+      visitDate: Date;
+      serviceType: string;
+      status: string;
+    }>;
+  };
+}> {
+  const db = await getDb();
+  if (!db) return { 
+    customer: null, 
+    cycleInfo: {
+      hasCycle: false,
+      startDate: null,
+      endDate: null,
+      daysRemaining: 0,
+      isExpired: false,
+      visitsInCycle: 0,
+      discountUsed: false,
+      visitsDetails: [],
+    }
+  };
+
+  const customer = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.phone, phone))
+    .limit(1);
+
+  if (!customer[0]) {
+    return { 
+      customer: null, 
+      cycleInfo: {
+        hasCycle: false,
+        startDate: null,
+        endDate: null,
+        daysRemaining: 0,
+        isExpired: false,
+        visitsInCycle: 0,
+        discountUsed: false,
+        visitsDetails: [],
+      }
+    };
+  }
+
+  const cycleStatus = await getCustomerCycleStatus(customer[0].id);
+
+  return {
+    customer: customer[0],
+    cycleInfo: {
+      hasCycle: cycleStatus.hasCycle,
+      startDate: cycleStatus.cycleStartDate,
+      endDate: cycleStatus.cycleEndDate,
+      daysRemaining: cycleStatus.daysRemaining,
+      isExpired: cycleStatus.isExpired,
+      visitsInCycle: cycleStatus.visitsInCycle,
+      discountUsed: cycleStatus.discountUsed,
+      visitsDetails: cycleStatus.visitsDetails,
+    },
+  };
+}

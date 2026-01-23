@@ -5115,6 +5115,7 @@ ${discrepancyRows}
       }),
 
     // تسجيل زيارة لعميل مسجل (عام - بدون تسجيل دخول)
+    // تسجيل زيارة لعميل مسجل (نظام دورة 30 يوم)
     recordVisit: publicProcedure
       .input(z.object({
         phone: z.string().min(10, 'رقم الجوال غير صحيح'),
@@ -5125,7 +5126,7 @@ ${discrepancyRows}
         invoiceImageKey: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        const { getLoyaltyCustomerByPhone, registerLoyaltyVisit, getCustomerVisitsThisMonth, getAdminsAndSupervisors } = await import('./db');
+        const { getLoyaltyCustomerByPhone, registerLoyaltyVisitWithCycle, getCustomerVisitsInCycle, getAdminsAndSupervisors } = await import('./db');
         const { sendEmail } = await import('./email/emailService');
         
         // البحث عن العميل
@@ -5134,8 +5135,8 @@ ${discrepancyRows}
           return { success: false, error: 'رقم الجوال غير مسجل في برنامج الولاء' };
         }
         
-        // تسجيل الزيارة
-        const result = await registerLoyaltyVisit({
+        // تسجيل الزيارة بنظام الدورة الجديد (30 يوم)
+        const result = await registerLoyaltyVisitWithCycle({
           customerId: customer.id,
           customerName: customer.name,
           customerPhone: customer.phone,
@@ -5153,7 +5154,7 @@ ${discrepancyRows}
         // إذا كانت زيارة خصم، إرسال إشعار للمشرفين
         if (result.isDiscountVisit) {
           const admins = await getAdminsAndSupervisors();
-          const visits = await getCustomerVisitsThisMonth(customer.id);
+          const { visits } = await getCustomerVisitsInCycle(customer.id);
           
           // إعداد تفاصيل الزيارات
           const visitsDetails = visits.map((v, i) => 
@@ -5172,10 +5173,11 @@ ${discrepancyRows}
                     <p><strong>اسم العميل:</strong> ${customer.name}</p>
                     <p><strong>رقم الجوال:</strong> ${customer.phone}</p>
                     <p><strong>نسبة الخصم:</strong> 60%</p>
-                    <p><strong>رقم الزيارة في الشهر:</strong> ${result.visitNumberInMonth}</p>
+                    <p><strong>رقم الزيارة في الدورة:</strong> ${result.visitNumberInCycle}</p>
                     <p><strong>الفرع:</strong> ${input.branchName || 'غير محدد'}</p>
+                    <p><strong>الأيام المتبقية في الدورة:</strong> ${result.cycleInfo.daysRemaining} يوم</p>
                     <hr/>
-                    <h3>📋 تفاصيل الزيارات هذا الشهر:</h3>
+                    <h3>📋 تفاصيل الزيارات في الدورة:</h3>
                     <pre style="background: #f5f5f5; padding: 10px;">${visitsDetails}</pre>
                   </div>
                 `,
@@ -5184,66 +5186,82 @@ ${discrepancyRows}
           }
         }
         
+        // رسالة مخصصة حسب حالة الدورة
+        let message = '';
+        if (result.isDiscountVisit) {
+          message = `🎉 لقد حصلت على خصم 60%! يومك سعيد ${customer.name}`;
+        } else if (result.cycleInfo.isNewCycle) {
+          message = `مرحباً ${customer.name}! بدأت دورة جديدة لك. هذه زيارتك الأولى. باقي ${result.cycleInfo.daysRemaining} يوم لإكمال 3 زيارات والحصول على خصم 60%.`;
+        } else {
+          message = `شكراً لزيارتك ${customer.name}! هذه زيارتك رقم ${result.visitNumberInCycle}. باقي ${result.cycleInfo.daysRemaining} يوم لإكمال الدورة.`;
+        }
+        
         return {
           success: true,
           customer,
           visit: result.visit,
           isDiscountVisit: result.isDiscountVisit,
           discountPercentage: result.discountPercentage,
-          visitNumberInMonth: result.visitNumberInMonth,
-          message: result.isDiscountVisit 
-            ? `🎉 لقد حصلت على خصم 60%! يومك سعيد ${customer.name}`
-            : `شكراً لزيارتك ${customer.name}! هذه زيارتك رقم ${result.visitNumberInMonth} هذا الشهر.`,
+          visitNumberInCycle: result.visitNumberInCycle,
+          visitNumberInMonth: result.visitNumberInCycle, // للتوافق مع الواجهة الحالية
+          cycleInfo: result.cycleInfo,
+          message,
         };
       }),
 
-    // البحث عن عميل برقم الجوال (عام)
+    // البحث عن عميل برقم الجوال (نظام دورة 30 يوم)
     findByPhone: publicProcedure
       .input(z.object({
         phone: z.string().min(10),
       }))
       .query(async ({ input }) => {
-        const { getLoyaltyCustomerByPhone, getCustomerVisitsThisMonth } = await import('./db');
+        const { findCustomerByPhoneWithCycle } = await import('./db');
         
-        const customer = await getLoyaltyCustomerByPhone(input.phone);
+        const { customer, cycleInfo } = await findCustomerByPhoneWithCycle(input.phone);
         if (!customer) {
           return { found: false };
         }
         
-        // جلب الزيارات الموافق عليها فقط هذا الشهر مع التفاصيل
-        const visitsThisMonth = await getCustomerVisitsThisMonth(customer.id);
-        const approvedVisits = visitsThisMonth.filter(v => v.status === 'approved');
-        const approvedCount = approvedVisits.length;
-        
         // حساب الزيارات المتبقية للخصم
-        const visitsUntilDiscount = approvedCount >= 3 ? 0 : (3 - approvedCount);
-        const isEligibleForDiscount = approvedCount >= 2; // سيحصل على الخصم في الزيارة القادمة
+        const visitsUntilDiscount = cycleInfo.visitsInCycle >= 3 ? 0 : (3 - cycleInfo.visitsInCycle);
+        const isEligibleForDiscount = cycleInfo.visitsInCycle >= 2 && !cycleInfo.discountUsed;
         
         // تفاصيل الزيارات مع التواريخ
-        const visitsDetails = approvedVisits.map(v => ({
+        const visitsDetails = cycleInfo.visitsDetails.map((v, index) => ({
           id: v.id,
           visitDate: v.visitDate,
           serviceType: v.serviceType,
-          branchName: v.branchName,
-          visitNumber: v.visitNumberInMonth,
+          branchName: '',
+          visitNumber: index + 1,
         }));
         
-        // الشهر الحالي
-        const currentMonth = new Date().toLocaleDateString('ar-SA', { 
-          month: 'long', 
-          year: 'numeric',
-          calendar: 'islamic-umalqura'
-        });
+        // تاريخ انتهاء الدورة
+        const cycleEndDateFormatted = cycleInfo.endDate 
+          ? new Date(cycleInfo.endDate).toLocaleDateString('ar-SA', { 
+              day: 'numeric',
+              month: 'long', 
+              year: 'numeric',
+            })
+          : null;
         
         return {
           found: true,
           customer,
-          visitsThisMonth: approvedCount,
+          visitsInCycle: cycleInfo.visitsInCycle,
+          visitsThisMonth: cycleInfo.visitsInCycle, // للتوافق مع الواجهة الحالية
           visitsDetails,
           visitsUntilDiscount,
           isEligibleForDiscount,
-          currentMonth,
-          nextDiscountAt: approvedCount >= 3 ? 3 : (3 - approvedCount),
+          cycleInfo: {
+            hasCycle: cycleInfo.hasCycle,
+            startDate: cycleInfo.startDate,
+            endDate: cycleInfo.endDate,
+            endDateFormatted: cycleEndDateFormatted,
+            daysRemaining: cycleInfo.daysRemaining,
+            isExpired: cycleInfo.isExpired,
+            discountUsed: cycleInfo.discountUsed,
+          },
+          nextDiscountAt: cycleInfo.visitsInCycle >= 3 ? 0 : (3 - cycleInfo.visitsInCycle),
         };
       }),
 
