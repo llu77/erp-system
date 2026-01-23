@@ -638,6 +638,12 @@ export const payrollDetails = mysqlTable("payrollDetails", {
   // السلف المخصومة
   advanceDeduction: decimal("advanceDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
   
+  // الإجازات المعتمدة (من طلبات الموظفين)
+  leaveDays: int("leaveDays").default(0).notNull(),
+  leaveDeduction: decimal("leaveDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  leaveType: varchar("leaveType", { length: 50 }), // نوع الإجازة: سنوية، مرضية، طارئة، بدون راتب
+  leaveDetails: text("leaveDetails"), // تفاصيل الإجازات (JSON: [{startDate, endDate, days, type}])
+  
   // الإجمالي
   grossSalary: decimal("grossSalary", { precision: 12, scale: 2 }).default("0.00").notNull(),
   totalDeductions: decimal("totalDeductions", { precision: 12, scale: 2 }).default("0.00").notNull(),

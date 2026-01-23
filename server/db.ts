@@ -2011,26 +2011,60 @@ export async function createPayrollWithDetails(
     throw new Error("فشل في إنشاء مسيرة الرواتب");
   }
   
-  // إضافة التفاصيل
-  const detailsWithPayrollId = details.map(d => ({
-    payrollId: newPayroll.id,
-    employeeId: d.employeeId,
-    employeeName: d.employeeName,
-    employeeCode: d.employeeCode,
-    position: d.position || '',
-    baseSalary: d.baseSalary,
-    overtimeEnabled: d.overtimeEnabled,
-    overtimeAmount: d.overtimeAmount,
-    workDays: d.workDays,
-    absentDays: d.absentDays,
-    absentDeduction: d.absentDeduction,
-    incentiveAmount: d.incentiveAmount,
-    deductionAmount: d.deductionAmount,
-    advanceDeduction: d.advanceDeduction,
-    grossSalary: d.grossSalary,
-    totalDeductions: d.totalDeductions,
-    netSalary: d.netSalary,
-  }));
+  // جلب الإجازات المعتمدة لجميع موظفي الفرع
+  const branchLeaves = await getApprovedLeavesForBranch(branchId, year, month);
+  
+  // إضافة التفاصيل مع الإجازات
+  const detailsWithPayrollId = details.map(d => {
+    const empLeaves = branchLeaves.get(d.employeeId);
+    let leaveDays = 0;
+    let leaveDeduction = 0;
+    let leaveType = '';
+    let leaveDetails = '';
+    
+    if (empLeaves && empLeaves.totalDays > 0) {
+      leaveDays = empLeaves.totalDays;
+      // حساب الخصم لكل إجازة
+      const baseSalaryNum = parseFloat(d.baseSalary) || 2000;
+      for (const leave of empLeaves.leaves) {
+        leaveDeduction += calculateLeaveDeduction(baseSalaryNum, leave.days, leave.type, d.workDays || 30);
+      }
+      // تجميع أنواع الإجازات
+      const types = Array.from(new Set(empLeaves.leaves.map(l => l.type)));
+      leaveType = types.join('، ');
+      leaveDetails = JSON.stringify(empLeaves.leaves);
+    }
+    
+    // تحديث الخصومات والصافي
+    const currentTotalDeductions = parseFloat(d.totalDeductions) || 0;
+    const currentNetSalary = parseFloat(d.netSalary) || 0;
+    const newTotalDeductions = currentTotalDeductions + leaveDeduction;
+    const newNetSalary = currentNetSalary - leaveDeduction;
+    
+    return {
+      payrollId: newPayroll.id,
+      employeeId: d.employeeId,
+      employeeName: d.employeeName,
+      employeeCode: d.employeeCode,
+      position: d.position || '',
+      baseSalary: d.baseSalary,
+      overtimeEnabled: d.overtimeEnabled,
+      overtimeAmount: d.overtimeAmount,
+      workDays: d.workDays,
+      absentDays: d.absentDays,
+      absentDeduction: d.absentDeduction,
+      incentiveAmount: d.incentiveAmount,
+      deductionAmount: d.deductionAmount,
+      advanceDeduction: d.advanceDeduction,
+      leaveDays,
+      leaveDeduction: leaveDeduction.toFixed(2),
+      leaveType: leaveType || null,
+      leaveDetails: leaveDetails || null,
+      grossSalary: d.grossSalary,
+      totalDeductions: newTotalDeductions.toFixed(2),
+      netSalary: newNetSalary.toFixed(2),
+    };
+  });
   
   await createPayrollDetails(detailsWithPayrollId);
   
@@ -8625,4 +8659,188 @@ export async function findCustomerByPhoneWithCycle(phone: string): Promise<{
       visitsDetails: cycleStatus.visitsDetails,
     },
   };
+}
+
+
+// ==================== دوال ربط الإجازات بمسير الرواتب ====================
+
+// جلب الإجازات المعتمدة لموظف في شهر معين
+export async function getApprovedLeavesForEmployee(
+  employeeId: number,
+  year: number,
+  month: number
+): Promise<{
+  totalDays: number;
+  totalDeduction: number;
+  leaves: Array<{
+    id: number;
+    startDate: string;
+    endDate: string;
+    days: number;
+    type: string;
+    reason: string;
+  }>;
+}> {
+  const db = await getDb();
+  if (!db) return { totalDays: 0, totalDeduction: 0, leaves: [] };
+
+  // حساب بداية ونهاية الشهر
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0);
+
+  // جلب طلبات الإجازة المعتمدة للموظف في هذا الشهر
+  const leaveRequests = await db.select()
+    .from(employeeRequests)
+    .where(and(
+      eq(employeeRequests.employeeId, employeeId),
+      eq(employeeRequests.requestType, 'vacation'),
+      eq(employeeRequests.status, 'approved'),
+      // الإجازة تتقاطع مع الشهر المطلوب
+      lte(employeeRequests.vacationStartDate!, monthEnd),
+      gte(employeeRequests.vacationEndDate!, monthStart)
+    ));
+
+  if (leaveRequests.length === 0) {
+    return { totalDays: 0, totalDeduction: 0, leaves: [] };
+  }
+
+  // حساب أيام الإجازة في هذا الشهر فقط
+  let totalDays = 0;
+  const leaves: Array<{
+    id: number;
+    startDate: string;
+    endDate: string;
+    days: number;
+    type: string;
+    reason: string;
+  }> = [];
+
+  for (const leave of leaveRequests) {
+    if (!leave.vacationStartDate || !leave.vacationEndDate) continue;
+
+    const leaveStart = new Date(leave.vacationStartDate);
+    const leaveEnd = new Date(leave.vacationEndDate);
+
+    // حساب التقاطع مع الشهر
+    const effectiveStart = leaveStart < monthStart ? monthStart : leaveStart;
+    const effectiveEnd = leaveEnd > monthEnd ? monthEnd : leaveEnd;
+
+    // حساب عدد الأيام
+    const days = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    
+    if (days > 0) {
+      totalDays += days;
+      leaves.push({
+        id: leave.id,
+        startDate: effectiveStart.toISOString().split('T')[0],
+        endDate: effectiveEnd.toISOString().split('T')[0],
+        days,
+        type: leave.vacationType || 'بدون راتب',
+        reason: leave.description || '',
+      });
+    }
+  }
+
+  return { totalDays, totalDeduction: 0, leaves };
+}
+
+// جلب الإجازات المعتمدة لجميع موظفي فرع في شهر معين
+export async function getApprovedLeavesForBranch(
+  branchId: number,
+  year: number,
+  month: number
+): Promise<Map<number, {
+  totalDays: number;
+  totalDeduction: number;
+  leaves: Array<{
+    id: number;
+    startDate: string;
+    endDate: string;
+    days: number;
+    type: string;
+    reason: string;
+  }>;
+}>> {
+  const db = await getDb();
+  const result = new Map();
+  if (!db) return result;
+
+  // جلب موظفي الفرع
+  const branchEmployees = await db.select()
+    .from(employees)
+    .where(eq(employees.branchId, branchId));
+
+  // جلب الإجازات لكل موظف
+  for (const emp of branchEmployees) {
+    const empLeaves = await getApprovedLeavesForEmployee(emp.id, year, month);
+    if (empLeaves.totalDays > 0) {
+      result.set(emp.id, empLeaves);
+    }
+  }
+
+  return result;
+}
+
+// حساب خصم الإجازة بناءً على الراتب الأساسي
+export function calculateLeaveDeduction(
+  baseSalary: number,
+  leaveDays: number,
+  leaveType: string,
+  workDays: number = 30
+): number {
+  // الراتب اليومي
+  const dailySalary = baseSalary / workDays;
+
+  // حساب الخصم حسب نوع الإجازة
+  switch (leaveType) {
+    case 'سنوية':
+    case 'مرضية':
+      // إجازة مدفوعة - لا خصم
+      return 0;
+    case 'طارئة':
+      // إجازة طارئة - خصم 50%
+      return dailySalary * leaveDays * 0.5;
+    case 'بدون راتب':
+    default:
+      // إجازة بدون راتب - خصم كامل
+      return dailySalary * leaveDays;
+  }
+}
+
+// تحديث تفاصيل الراتب بالإجازات
+export async function updatePayrollDetailWithLeaves(
+  payrollDetailId: number,
+  leaveDays: number,
+  leaveDeduction: number,
+  leaveType: string,
+  leaveDetails: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // جلب تفاصيل الراتب الحالية
+  const detail = await db.select().from(payrollDetails)
+    .where(eq(payrollDetails.id, payrollDetailId))
+    .limit(1);
+
+  if (detail.length === 0) return;
+
+  const currentDetail = detail[0];
+  const currentTotalDeductions = parseFloat(currentDetail.totalDeductions as string) || 0;
+  const currentNetSalary = parseFloat(currentDetail.netSalary as string) || 0;
+
+  // تحديث الخصومات والصافي
+  const newTotalDeductions = currentTotalDeductions + leaveDeduction;
+  const newNetSalary = currentNetSalary - leaveDeduction;
+
+  await db.update(payrollDetails)
+    .set({
+      leaveDays,
+      leaveDeduction: leaveDeduction.toFixed(2),
+      leaveType,
+      leaveDetails,
+      totalDeductions: newTotalDeductions.toFixed(2),
+      netSalary: newNetSalary.toFixed(2),
+    })
+    .where(eq(payrollDetails.id, payrollDetailId));
 }

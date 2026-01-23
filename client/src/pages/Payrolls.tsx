@@ -1896,6 +1896,7 @@ export default function Payrolls() {
                         <TableHead className="text-center">حوافز</TableHead>
                         <TableHead className="text-center">خصومات</TableHead>
                         <TableHead className="text-center">سلف</TableHead>
+                        <TableHead className="text-center">إجازات</TableHead>
                         <TableHead className="text-center">الصافي</TableHead>
                         <TableHead className="text-center">طباعة</TableHead>
                       </TableRow>
@@ -1927,6 +1928,17 @@ export default function Payrolls() {
                           <TableCell className="text-center text-red-500">
                             {parseFloat(detail.advanceDeduction) > 0 ? `-${formatAmount(detail.advanceDeduction)}` : '-'}
                           </TableCell>
+                          <TableCell className="text-center">
+                            {(detail as any).leaveDays > 0 ? (
+                              <div className="flex flex-col items-center">
+                                <span className="text-orange-500 font-medium">{(detail as any).leaveDays} يوم</span>
+                                <span className="text-red-500 text-[10px]">-{formatAmount((detail as any).leaveDeduction || '0')}</span>
+                                {(detail as any).leaveType && (
+                                  <span className="text-muted-foreground text-[9px]">{(detail as any).leaveType}</span>
+                                )}
+                              </div>
+                            ) : '-'}
+                          </TableCell>
                           <TableCell className="text-center font-bold text-green-500">
                             {formatAmount(detail.netSalary)}
                           </TableCell>
@@ -1953,7 +1965,7 @@ export default function Payrolls() {
                 </div>
                 {/* إجماليات التفاصيل */}
                 <div className="bg-muted/50 rounded-lg p-3">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
                     <div className="text-center">
                       <div className="text-muted-foreground text-xs">إجمالي الأساسي</div>
                       <div className="font-bold">{formatAmount(payrollDetails.reduce((sum, d) => sum + parseFloat(d.baseSalary), 0))}</div>
@@ -1965,6 +1977,10 @@ export default function Payrolls() {
                     <div className="text-center">
                       <div className="text-muted-foreground text-xs">إجمالي الخصومات</div>
                       <div className="font-bold text-red-500">{formatAmount(payrollDetails.reduce((sum, d) => sum + parseFloat(d.totalDeductions), 0))}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-muted-foreground text-xs">خصم الإجازات</div>
+                      <div className="font-bold text-orange-500">{formatAmount(payrollDetails.reduce((sum, d) => sum + parseFloat((d as any).leaveDeduction || '0'), 0))}</div>
                     </div>
                     <div className="text-center">
                       <div className="text-muted-foreground text-xs">صافي المسيرة</div>
