@@ -1498,8 +1498,8 @@ export const loyaltySettings = mysqlTable("loyaltySettings", {
   id: int("id").autoincrement().primaryKey(),
   
   // إعدادات الخصم
-  requiredVisitsForDiscount: int("requiredVisitsForDiscount").default(4).notNull(), // عدد الزيارات المطلوبة للخصم
-  discountPercentage: int("discountPercentage").default(50).notNull(), // نسبة الخصم
+  requiredVisitsForDiscount: int("requiredVisitsForDiscount").default(3).notNull(), // عدد الزيارات المطلوبة للخصم
+  discountPercentage: int("discountPercentage").default(60).notNull(), // نسبة الخصم
   
   // إعدادات أخرى
   isActive: boolean("isActive").default(true).notNull(),

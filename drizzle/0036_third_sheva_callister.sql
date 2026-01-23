@@ -1,0 +1,2 @@
+ALTER TABLE `loyaltySettings` MODIFY COLUMN `requiredVisitsForDiscount` int NOT NULL DEFAULT 3;--> statement-breakpoint
+ALTER TABLE `loyaltySettings` MODIFY COLUMN `discountPercentage` int NOT NULL DEFAULT 60;
