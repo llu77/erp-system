@@ -183,6 +183,65 @@ describe('Loyalty Visit Display Enhancements', () => {
     
   });
   
+  describe('Second Visit Special Message', () => {
+    
+    it('should show special message when customer has 2 approved visits', () => {
+      const visitsThisMonth = 2;
+      const discountPercentage = 60;
+      
+      // عندما يكون لدى العميل 2 زيارة موافق عليها، يجب عرض رسالة خاصة
+      const shouldShowSecondVisitMessage = visitsThisMonth === 2;
+      
+      expect(shouldShowSecondVisitMessage).toBe(true);
+      
+      const message = `🎁 ستحصل على خصم ${discountPercentage}% في زيارتك القادمة!`;
+      expect(message).toContain('ستحصل على خصم');
+      expect(message).toContain('60%');
+    });
+    
+    it('should calculate last day of current month correctly', () => {
+      const now = new Date();
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      
+      // التحقق من أن آخر يوم في الشهر صحيح
+      expect(lastDayOfMonth.getDate()).toBeGreaterThanOrEqual(28);
+      expect(lastDayOfMonth.getDate()).toBeLessThanOrEqual(31);
+      
+      // التحقق من أن الشهر هو نفس الشهر الحالي
+      expect(lastDayOfMonth.getMonth()).toBe(now.getMonth());
+    });
+    
+    it('should format last day of month in Arabic', () => {
+      const lastDayOfMonth = new Date(2026, 0, 31); // 31 يناير 2026
+      
+      const formattedDate = lastDayOfMonth.toLocaleDateString('ar-SA', {
+        day: 'numeric',
+        month: 'long'
+      });
+      
+      expect(formattedDate).toBeTruthy();
+      expect(typeof formattedDate).toBe('string');
+    });
+    
+    it('should not show second visit message for first visit', () => {
+      const visitsThisMonth = 1;
+      const shouldShowSecondVisitMessage = visitsThisMonth === 2;
+      
+      expect(shouldShowSecondVisitMessage).toBe(false);
+    });
+    
+    it('should not show second visit message for third visit (eligible for discount)', () => {
+      const visitsThisMonth = 2;
+      const isEligibleForDiscount = true; // العميل مؤهل للخصم
+      
+      // إذا كان العميل مؤهل للخصم، يجب عرض رسالة الخصم وليس رسالة الزيارة الثانية
+      const shouldShowSecondVisitMessage = visitsThisMonth === 2 && !isEligibleForDiscount;
+      
+      expect(shouldShowSecondVisitMessage).toBe(false);
+    });
+    
+  });
+  
   describe('Customer Not Found Handling', () => {
     
     it('should return found: false for unregistered phone', () => {

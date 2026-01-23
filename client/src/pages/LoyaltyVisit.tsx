@@ -602,6 +602,27 @@ export default function LoyaltyVisit() {
                           </div>
                         </div>
                       </div>
+                    ) : customerData.visitsThisMonth === 2 ? (
+                      // رسالة خاصة للزيارة الثانية - ستحصل على خصم في الزيارة القادمة
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-3 border-2 border-green-400 dark:border-green-600">
+                        <div className="flex items-center gap-2">
+                          <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
+                            <Gift className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-green-600 dark:text-green-400">
+                              🎁 ستحصل على خصم {discountPercentage}% في زيارتك القادمة!
+                            </p>
+                            <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                              سجّل زيارتك الثالثة قبل نهاية الشهر (
+                              <span className="font-bold">
+                                {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toLocaleDateString('ar-SA', { day: 'numeric', month: 'long' })}
+                              </span>
+                              ) للحصول على الخصم!
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     ) : (customerData.visitsUntilDiscount ?? 0) > 0 ? (
                       <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
                         <div className="flex items-center gap-2">
