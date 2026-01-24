@@ -5135,6 +5135,24 @@ ${discrepancyRows}
           return { success: false, error: 'رقم الجوال غير مسجل في برنامج الولاء' };
         }
         
+        // التحقق من أن الزيارة الثالثة (زيارة الخصم) لا تحتوي على عرض
+        const { visits: currentVisits, cycleInfo } = await getCustomerVisitsInCycle(customer.id);
+        const { getLoyaltySettings } = await import('./db');
+        const settings = await getLoyaltySettings();
+        const requiredVisits = settings?.requiredVisitsForDiscount || 3;
+        
+        // إذا كانت الزيارة القادمة هي زيارة الخصم (الثالثة)
+        const nextVisitNumber = currentVisits.length + 1;
+        const isDiscountVisit = nextVisitNumber === requiredVisits;
+        
+        // منع اختيار العروض في زيارة الخصم
+        if (isDiscountVisit && input.serviceType.includes('عرض')) {
+          return { 
+            success: false, 
+            error: 'لا يمكن اختيار عرض في زيارة الخصم. الخصم 60% متاح فقط على الخدمات العادية وليس العروض.' 
+          };
+        }
+        
         // تسجيل الزيارة بنظام الدورة الجديد (30 يوم)
         const result = await registerLoyaltyVisitWithCycle({
           customerId: customer.id,
