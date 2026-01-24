@@ -6624,8 +6624,22 @@ ${discrepancyRows}
         const { invokeLLM } = await import('./_core/llm');
         const { assistantTools, executeAssistantTool } = await import('./ai/assistantTools');
 
-        // بناء رسالة النظام
+        // بناء رسالة النظام مع التاريخ الحالي
+        const now = new Date();
+        const currentDate = now.toLocaleDateString('ar-SA', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+        const currentMonth = now.toLocaleDateString('ar-SA', { month: 'long' });
+        const currentYear = now.getFullYear();
+        
         const systemPrompt = `أنت مساعد ذكي للموظفين في شركة Symbol AI. مهمتك مساعدة الموظفين في:
+
+**التاريخ الحالي:** ${currentDate}
+**الشهر الحالي:** ${currentMonth} ${currentYear}
+
 
 1. **التعرف على الموظف**: إذا لم تعرف الموظف بعد، اسأله عن اسمه أولاً واستخدم أداة identify_employee للتعرف عليه.
 

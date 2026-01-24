@@ -193,7 +193,7 @@ export async function submitEmployeeRequest(input: EmployeeRequestInput): Promis
 export interface ReportInput {
   employeeId: number;
   reportType: 'revenue' | 'bonus' | 'requests' | 'summary';
-  period?: 'today' | 'week' | 'month';
+  period?: 'today' | 'week' | 'month' | 'last_week' | 'last_month';
 }
 
 export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
@@ -221,17 +221,34 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
     const emp = employee[0];
     const now = new Date();
     
-    // حساب بداية الفترة
+    // حساب بداية ونهاية الفترة
     let startDate: Date;
+    let endDate: Date = now;
+    
     switch (input.period || 'week') {
       case 'today':
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         break;
       case 'week':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        // الأسبوع الحالي (من الأحد)
+        const dayOfWeek = now.getDay();
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+        break;
+      case 'last_week':
+        // الأسبوع الماضي
+        const lastWeekDayOfWeek = now.getDay();
+        const lastWeekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - lastWeekDayOfWeek - 1);
+        const lastWeekStart = new Date(lastWeekEnd.getFullYear(), lastWeekEnd.getMonth(), lastWeekEnd.getDate() - 6);
+        startDate = lastWeekStart;
+        endDate = lastWeekEnd;
         break;
       case 'month':
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'last_month':
+        // الشهر الماضي
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0); // آخر يوم في الشهر الماضي
         break;
       default:
         startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -243,13 +260,24 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
         .from(dailyRevenues)
         .where(and(
           eq(dailyRevenues.branchId, emp.branchId!),
-          gte(dailyRevenues.date, startDate)
+          gte(dailyRevenues.date, startDate),
+          lte(dailyRevenues.date, endDate)
         ));
 
       const totalCash = revenues.reduce((sum: number, r: any) => sum + Number(r.cash || 0), 0);
       const totalNetwork = revenues.reduce((sum: number, r: any) => sum + Number(r.network || 0), 0);
       const totalBalance = revenues.reduce((sum: number, r: any) => sum + Number(r.balance || 0), 0);
       const total = totalCash + totalNetwork + totalBalance;
+
+      // أسماء الفترات
+      const periodNames: Record<string, string> = {
+        'today': 'اليوم',
+        'week': 'هذا الأسبوع',
+        'last_week': 'الأسبوع الماضي',
+        'month': 'هذا الشهر',
+        'last_month': 'الشهر الماضي'
+      };
+      const periodName = periodNames[input.period || 'week'] || 'هذا الأسبوع';
 
       return {
         success: true,
@@ -258,9 +286,12 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
           totalNetwork,
           totalBalance,
           total,
-          count: revenues.length
+          count: revenues.length,
+          period: input.period,
+          startDate: startDate.toISOString().split('T')[0],
+          endDate: endDate.toISOString().split('T')[0]
         },
-        message: `📊 تقرير إيرادات الفرع (${input.period === 'today' ? 'اليوم' : input.period === 'week' ? 'هذا الأسبوع' : 'هذا الشهر'}):\n\n💵 نقدي: ${totalCash.toLocaleString()} ر.س\n💳 شبكة: ${totalNetwork.toLocaleString()} ر.س\n🏧 رصيد: ${totalBalance.toLocaleString()} ر.س\n━━━━━━━━━━━━\n💰 الإجمالي: ${total.toLocaleString()} ر.س\n📝 عدد الأيام: ${revenues.length}`
+        message: `📊 تقرير إيرادات الفرع (${periodName}):\n📅 من ${startDate.toLocaleDateString('ar-SA')} إلى ${endDate.toLocaleDateString('ar-SA')}\n\n💵 نقدي: ${totalCash.toLocaleString()} ر.س\n💳 شبكة: ${totalNetwork.toLocaleString()} ر.س\n🏧 رصيد: ${totalBalance.toLocaleString()} ر.س\n━━━━━━━━━━━━\n💰 الإجمالي: ${total.toLocaleString()} ر.س\n📝 عدد الأيام: ${revenues.length}`
       };
     }
 
@@ -558,8 +589,8 @@ export const assistantTools = [
           },
           period: {
             type: "string",
-            enum: ["today", "week", "month"],
-            description: "الفترة الزمنية"
+            enum: ["today", "week", "last_week", "month", "last_month"],
+            description: "الفترة الزمنية: اليوم (today)، هذا الأسبوع (week)، الأسبوع الماضي (last_week)، هذا الشهر (month)، الشهر الماضي (last_month)"
           }
         },
         required: ["employeeId", "reportType"]
