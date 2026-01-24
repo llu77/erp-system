@@ -274,6 +274,13 @@
       "when": 1769197439100,
       "tag": "0038_faulty_the_hood",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "5",
+      "when": 1769284498444,
+      "tag": "0039_fancy_meltdown",
+      "breakpoints": true
     }
   ]
 }

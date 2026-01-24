@@ -62,6 +62,7 @@ import {
   Heart,
   Brain,
   Trash2,
+  Key,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -182,6 +183,8 @@ const menuStructure: MenuItem[] = [
       { icon: UserCircle, label: "الموظفين", path: "/employees", roles: ["admin", "manager", "viewer"] },
       { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager", "viewer"] },
       { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee", "supervisor"] },
+      { icon: Brain, label: "Symbol AI", path: "/employee-assistant", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: Key, label: "حسابات الموظفين", path: "/employee-accounts", roles: ["admin"] },
       { icon: Heart, label: "برنامج الولاء", path: "/loyalty", roles: ["admin", "manager", "supervisor", "viewer"] },
     ]
   },

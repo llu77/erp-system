@@ -6600,6 +6600,198 @@ ${discrepancyRows}
         return aiChat.getWelcomeMessage();
       }),
   }),
+
+  // ==================== مساعد AI للموظفين ====================
+  employeeAssistant: router({
+    // محادثة مع المساعد
+    chat: publicProcedure
+      .input(z.object({
+        message: z.string().min(1),
+        conversationHistory: z.array(z.object({
+          role: z.enum(['user', 'assistant', 'system', 'tool']),
+          content: z.string(),
+          toolCallId: z.string().optional(),
+          name: z.string().optional(),
+        })).optional(),
+        employeeContext: z.object({
+          employeeId: z.number().optional(),
+          employeeName: z.string().optional(),
+          branchId: z.number().optional(),
+          branchName: z.string().optional(),
+        }).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { invokeLLM } = await import('./_core/llm');
+        const { assistantTools, executeAssistantTool } = await import('./ai/assistantTools');
+
+        // بناء رسالة النظام
+        const systemPrompt = `أنت مساعد ذكي للموظفين في شركة Symbol AI. مهمتك مساعدة الموظفين في:
+
+1. **التعرف على الموظف**: إذا لم تعرف الموظف بعد، اسأله عن اسمه أولاً واستخدم أداة identify_employee للتعرف عليه.
+
+2. **رفع الطلبات**: يمكنك مساعدة الموظف في رفع طلبات (سلفة، إجازة، استئذان، متأخرات، اعتراض، استقالة). اجمع المعلومات المطلوبة ثم استخدم أداة submit_request.
+
+3. **التقارير السريعة**: يمكنك عرض تقارير الإيرادات والبونص والطلبات باستخدام أداة get_report.
+
+4. **حساب الأسعار**: يمكنك حساب أسعار الخدمات مع الخصومات باستخدام أداة calculate_price.
+
+**قواعد مهمة:**
+- تحدث بالعربية دائماً
+- كن ودوداً ومهنياً
+- اسأل عن المعلومات الناقصة قبل تنفيذ أي طلب
+- أنت لا تملك صلاحية الموافقة على الطلبات، فقط رفعها للمشرف
+- إذا لم تعرف الموظف، اطلب اسمه أولاً
+
+${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.employeeContext.employeeName} (رقم: ${input.employeeContext.employeeId}) - فرع: ${input.employeeContext.branchName}` : '**الموظف غير معروف بعد - اسأل عن اسمه**'}`;
+
+        // بناء الرسائل
+        const messages: any[] = [
+          { role: 'system', content: systemPrompt },
+          ...(input.conversationHistory || []).map(m => ({
+            role: m.role,
+            content: m.content,
+            ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}),
+            ...(m.name ? { name: m.name } : {}),
+          })),
+          { role: 'user', content: input.message },
+        ];
+
+        // استدعاء LLM مع الأدوات
+        const response = await invokeLLM({
+          messages,
+          tools: assistantTools,
+          tool_choice: 'auto',
+          temperature: 0.7,
+        });
+
+        const assistantMessage = response.choices[0]?.message;
+        
+        // إذا كان هناك tool calls
+        if (assistantMessage?.tool_calls && assistantMessage.tool_calls.length > 0) {
+          const toolResults: any[] = [];
+          let employeeContext = input.employeeContext;
+
+          for (const toolCall of assistantMessage.tool_calls) {
+            const args = JSON.parse(toolCall.function.arguments);
+            const result = await executeAssistantTool(toolCall.function.name, args);
+            
+            // تحديث سياق الموظف إذا تم التعرف عليه
+            if (toolCall.function.name === 'identify_employee' && result.success && result.data && !Array.isArray(result.data)) {
+              employeeContext = {
+                employeeId: result.data.id,
+                employeeName: result.data.name,
+                branchId: result.data.branchId,
+                branchName: result.data.branchName,
+              };
+            }
+
+            toolResults.push({
+              toolCallId: toolCall.id,
+              name: toolCall.function.name,
+              result,
+            });
+          }
+
+          // استدعاء LLM مرة أخرى مع نتائج الأدوات
+          const messagesWithToolResults: any[] = [
+            ...messages,
+            {
+              role: 'assistant',
+              content: assistantMessage.content || '',
+              tool_calls: assistantMessage.tool_calls,
+            },
+            ...toolResults.map(tr => ({
+              role: 'tool',
+              tool_call_id: tr.toolCallId,
+              name: tr.name,
+              content: JSON.stringify(tr.result),
+            })),
+          ];
+
+          const finalResponse = await invokeLLM({
+            messages: messagesWithToolResults,
+            temperature: 0.7,
+          });
+
+          return {
+            message: finalResponse.choices[0]?.message?.content || 'حدث خطأ',
+            employeeContext,
+            toolResults,
+          };
+        }
+
+        return {
+          message: assistantMessage?.content || 'حدث خطأ',
+          employeeContext: input.employeeContext,
+          toolResults: [],
+        };
+      }),
+
+    // رسالة الترحيب
+    getWelcomeMessage: publicProcedure
+      .query(() => {
+        return {
+          message: `مرحباً! 👋\n\nأنا مساعدك الذكي في Symbol AI.\n\nيمكنني مساعدتك في:\n• 📝 رفع طلبات (إجازة، سلفة، استئذان...)\n• 📊 عرض تقاريرك (إيرادات، بونص، طلبات)\n• 💰 حساب الأسعار والخصومات\n\nمن فضلك، أخبرني باسمك حتى أتمكن من مساعدتك بشكل أفضل.`,
+          suggestedQuestions: [
+            'أريد رفع طلب إجازة',
+            'كم بونصي هذا الأسبوع؟',
+            'احسب لي سعر قص شعر مع صبغة',
+            'أريد طلب سلفة',
+            'ما حالة طلباتي؟',
+          ],
+        };
+      }),
+  }),
+
+  // ========== مصادقة الموظفين ==========
+  employeeAuth: router({
+    // تسجيل دخول الموظف
+    login: publicProcedure
+      .input(z.object({
+        username: z.string().min(1, 'اسم المستخدم مطلوب'),
+        password: z.string().min(1, 'كلمة المرور مطلوبة'),
+      }))
+      .mutation(async ({ input }) => {
+        const { employeeLogin } = await import('./auth/employeeAuth');
+        return employeeLogin(input.username, input.password);
+      }),
+
+    // إنشاء حسابات الموظفين (للأدمن فقط)
+    createAccounts: adminProcedure
+      .mutation(async () => {
+        const { createEmployeeAccounts } = await import('./auth/employeeAuth');
+        return createEmployeeAccounts();
+      }),
+
+    // جلب حسابات الموظفين
+    getAccounts: adminProcedure
+      .query(async () => {
+        const { getEmployeeAccounts } = await import('./auth/employeeAuth');
+        return getEmployeeAccounts();
+      }),
+
+    // إعادة تعيين كلمة مرور موظف
+    resetPassword: adminProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        const { resetEmployeePassword } = await import('./auth/employeeAuth');
+        return resetEmployeePassword(input.employeeId);
+      }),
+
+    // تغيير كلمة مرور الموظف (للموظف نفسه)
+    changePassword: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        oldPassword: z.string().min(1),
+        newPassword: z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
+      }))
+      .mutation(async ({ input }) => {
+        const { changeEmployeePassword } = await import('./auth/employeeAuth');
+        return changeEmployeePassword(input.employeeId, input.oldPassword, input.newPassword);
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

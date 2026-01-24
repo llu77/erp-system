@@ -57,12 +57,30 @@ import ReceiptVoucherReports from "./pages/ReceiptVoucherReports";
 import BIDashboard from "./pages/BIDashboard";
 import ReportBuilder from "./pages/ReportBuilder";
 import AIAnalytics from "./pages/AIAnalytics";
+import EmployeeAssistant from "./pages/EmployeeAssistant";
+import EmployeePortal from "./pages/EmployeePortal";
+import EmployeeLogin from "./pages/EmployeeLogin";
+import EmployeeAccounts from "./pages/EmployeeAccounts";
 
 function Router() {
   return (
     <Switch>
       {/* صفحة تسجيل الدخول */}
       <Route path="/login" component={Login} />
+      
+      {/* بوابة الموظفين */}
+      <Route path="/employee-login" component={EmployeeLogin} />
+      <Route path="/employee-portal" component={EmployeePortal} />
+      
+      {/* إدارة حسابات الموظفين */}
+      <Route path="/employee-accounts">
+        <DashboardLayout>
+          <EmployeeAccounts />
+        </DashboardLayout>
+      </Route>
+      
+      {/* مساعد الموظفين - صفحة مستقلة بدون DashboardLayout */}
+      <Route path="/employee-assistant" component={EmployeeAssistant} />
       
       {/* Dashboard Routes - All protected with DashboardLayout */}
       <Route path="/">

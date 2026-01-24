@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Lock, User, Building2 } from "lucide-react";
+import { Loader2, Lock, User, Building2, Users } from "lucide-react";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -115,7 +115,15 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-slate-700">
+          <div className="mt-6 pt-6 border-t border-slate-700 space-y-4">
+            <Button
+              variant="outline"
+              className="w-full border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white"
+              onClick={() => setLocation('/employee-login')}
+            >
+              <Users className="ml-2 h-4 w-4" />
+              بوابة الموظفين
+            </Button>
             <p className="text-center text-sm text-slate-500">
               Symbol AI - جميع الحقوق محفوظة
             </p>

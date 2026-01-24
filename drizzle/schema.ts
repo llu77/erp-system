@@ -274,6 +274,11 @@ export const employees = mysqlTable("employees", {
   phone: varchar("phone", { length: 50 }),
   email: varchar("email", { length: 255 }),
   position: varchar("position", { length: 100 }),
+  // حقول تسجيل الدخول
+  username: varchar("username", { length: 50 }).unique(),
+  password: varchar("password", { length: 255 }),
+  hasPortalAccess: boolean("hasPortalAccess").default(false).notNull(),
+  lastLogin: timestamp("lastLogin"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
