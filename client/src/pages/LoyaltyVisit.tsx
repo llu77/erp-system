@@ -669,29 +669,72 @@ export default function LoyaltyVisit() {
             {/* نوع الخدمة */}
             <div className="space-y-2">
               <Label htmlFor="serviceType">نوع الخدمة *</Label>
-              <Select value={serviceType} onValueChange={setServiceType} disabled={isSubmitting}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر نوع الخدمة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {serviceTypes && serviceTypes.length > 0 ? (
-                    serviceTypes.map((type) => (
-                      <SelectItem key={type.id} value={type.name}>
-                        {type.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <>
-                      <SelectItem value="حلاقة شعر">حلاقة شعر</SelectItem>
-                      <SelectItem value="حلاقة ذقن">حلاقة ذقن</SelectItem>
-                      <SelectItem value="حلاقة كاملة">حلاقة كاملة</SelectItem>
-                      <SelectItem value="حلاقة رأس + شعر">حلاقة رأس + شعر</SelectItem>
-                      <SelectItem value="صبغة">صبغة</SelectItem>
-                      <SelectItem value="علاج شعر">علاج شعر</SelectItem>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
+              {/* تحقق من أن هذه الزيارة الثالثة (زيارة الخصم) */}
+              {(() => {
+                const visitsRequired = settings?.requiredVisitsForDiscount || 3;
+                const currentVisits = customerData?.visitsDetails?.length || 0;
+                const isThirdVisit = currentVisits === visitsRequired - 1; // الزيارة القادمة ستكون الثالثة
+                
+                // دالة للتحقق من أن الخدمة تحتوي على كلمة "عرض"
+                const isOfferService = (name: string) => name.includes('عرض');
+                
+                // معالجة اختيار الخدمة مع التحقق
+                const handleServiceChange = (value: string) => {
+                  if (isThirdVisit && isOfferService(value)) {
+                    toast.error('⚠️ لا يمكن اختيار العروض في الزيارة الثالثة - الخصم 60% لا يشمل العروض');
+                    return;
+                  }
+                  setServiceType(value);
+                };
+                
+                return (
+                  <>
+                    <Select value={serviceType} onValueChange={handleServiceChange} disabled={isSubmitting}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر نوع الخدمة" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {serviceTypes && serviceTypes.length > 0 ? (
+                          serviceTypes.map((type) => {
+                            const isOffer = isOfferService(type.name);
+                            const isDisabled = isThirdVisit && isOffer;
+                            return (
+                              <SelectItem 
+                                key={type.id} 
+                                value={type.name}
+                                disabled={isDisabled}
+                                className={isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
+                              >
+                                {type.name}
+                                {isDisabled && ' (غير متاح للخصم)'}
+                              </SelectItem>
+                            );
+                          })
+                        ) : (
+                          <>
+                            <SelectItem value="حلاقة شعر">حلاقة شعر</SelectItem>
+                            <SelectItem value="حلاقة ذقن">حلاقة ذقن</SelectItem>
+                            <SelectItem value="حلاقة كاملة">حلاقة كاملة</SelectItem>
+                            <SelectItem value="حلاقة رأس + شعر">حلاقة رأس + شعر</SelectItem>
+                            <SelectItem value="صبغة">صبغة</SelectItem>
+                            <SelectItem value="علاج شعر">علاج شعر</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    
+                    {/* رسالة تنبيه عند الزيارة الثالثة */}
+                    {isThirdVisit && (
+                      <div className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 mt-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          هذه زيارة الخصم 60% - العروض غير متاحة للاختيار
+                        </p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* الفرع */}
