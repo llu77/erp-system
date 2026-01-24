@@ -1,6 +1,10 @@
 /**
- * أدوات مساعد AI للموظفين
- * يوفر أدوات للتعرف على الموظف، رفع الطلبات، التقارير، وحساب الأسعار
+ * أدوات مساعد AI للموظفين - النسخة المحسنة
+ * 
+ * مبادئ التصميم:
+ * 1. الصدق المطلق - لا نختلق بيانات أبداً
+ * 2. التحقق الصارم - نتحقق من وجود البيانات قبل عرضها
+ * 3. الشفافية - نوضح مصدر البيانات والفترة الزمنية
  */
 
 import { getDb } from "../db";
@@ -16,12 +20,41 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 
-// أنواع الأدوات
+// ========== أنواع محسنة ==========
 export interface ToolResult {
   success: boolean;
+  hasData: boolean;        // هل توجد بيانات فعلية؟
+  dataCount: number;       // عدد السجلات
   data?: any;
   error?: string;
-  message?: string;
+  message: string;         // رسالة واضحة للمستخدم
+  source?: string;         // مصدر البيانات
+  period?: {               // الفترة الزمنية
+    start: string;
+    end: string;
+  };
+}
+
+// دالة مساعدة لإنشاء نتيجة فارغة
+function noDataResult(message: string, period?: { start: string; end: string }): ToolResult {
+  return {
+    success: true,
+    hasData: false,
+    dataCount: 0,
+    message,
+    period
+  };
+}
+
+// دالة مساعدة لإنشاء نتيجة خطأ
+function errorResult(error: string): ToolResult {
+  return {
+    success: false,
+    hasData: false,
+    dataCount: 0,
+    error,
+    message: error
+  };
 }
 
 // ========== أداة التعرف على الموظف ==========
@@ -29,7 +62,7 @@ export async function identifyEmployee(name: string): Promise<ToolResult> {
   try {
     const db = await getDb();
     if (!db) {
-      return { success: false, error: 'قاعدة البيانات غير متاحة' };
+      return errorResult('قاعدة البيانات غير متاحة');
     }
 
     // البحث عن الموظف بالاسم (جزئي)
@@ -55,7 +88,10 @@ export async function identifyEmployee(name: string): Promise<ToolResult> {
     if (matchedEmployees.length === 0) {
       return {
         success: false,
-        error: `لم أجد موظف باسم "${name}". هل يمكنك التأكد من الاسم؟`
+        hasData: false,
+        dataCount: 0,
+        message: `لم أجد موظف باسم "${name}" في قاعدة البيانات. تأكد من كتابة الاسم بشكل صحيح.`,
+        source: 'جدول الموظفين'
       };
     }
 
@@ -63,22 +99,25 @@ export async function identifyEmployee(name: string): Promise<ToolResult> {
       const emp = matchedEmployees[0];
       return {
         success: true,
+        hasData: true,
+        dataCount: 1,
         data: emp,
-        message: `مرحباً ${emp.name}! أنت تعمل في فرع ${emp.branchName || 'غير محدد'} كـ ${emp.position || 'موظف'}. كيف يمكنني مساعدتك اليوم؟`
+        message: `تم التعرف عليك: ${emp.name}، تعمل في فرع ${emp.branchName || 'غير محدد'} كـ ${emp.position || 'موظف'}.`,
+        source: 'جدول الموظفين'
       };
     }
 
     // أكثر من موظف بنفس الاسم
     return {
       success: true,
+      hasData: true,
+      dataCount: matchedEmployees.length,
       data: matchedEmployees,
-      message: `وجدت ${matchedEmployees.length} موظفين بهذا الاسم. أي فرع تعمل فيه؟\n${matchedEmployees.map((e: any) => `- ${e.name} (${e.branchName})`).join('\n')}`
+      message: `وجدت ${matchedEmployees.length} موظفين بهذا الاسم:\n${matchedEmployees.map((e: any) => `- ${e.name} (${e.branchName})`).join('\n')}\n\nأي فرع تعمل فيه؟`,
+      source: 'جدول الموظفين'
     };
   } catch (error) {
-    return {
-      success: false,
-      error: `حدث خطأ أثناء البحث: ${error}`
-    };
+    return errorResult(`حدث خطأ أثناء البحث: ${error}`);
   }
 }
 
@@ -89,7 +128,7 @@ export interface EmployeeRequestInput {
   employeeId: number;
   type: RequestType;
   description: string;
-  amount?: number; // للسلفة والمتأخرات
+  amount?: number;
   vacationStartDate?: Date;
   vacationEndDate?: Date;
   vacationDays?: number;
@@ -103,13 +142,19 @@ export async function submitEmployeeRequest(input: EmployeeRequestInput): Promis
   try {
     const db = await getDb();
     if (!db) {
-      return { success: false, error: 'قاعدة البيانات غير متاحة' };
+      return errorResult('قاعدة البيانات غير متاحة');
     }
 
     // التحقق من وجود الموظف
     const employee = await db.select().from(employees).where(eq(employees.id, input.employeeId)).limit(1);
     if (employee.length === 0) {
-      return { success: false, error: 'الموظف غير موجود' };
+      return {
+        success: false,
+        hasData: false,
+        dataCount: 0,
+        message: `الموظف رقم ${input.employeeId} غير موجود في قاعدة البيانات.`,
+        source: 'جدول الموظفين'
+      };
     }
 
     const emp = employee[0];
@@ -137,7 +182,7 @@ export async function submitEmployeeRequest(input: EmployeeRequestInput): Promis
     const now = new Date();
     const requestNumber = `REQ-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Date.now().toString().slice(-6)}`;
 
-    // إنشاء الطلب بالهيكل الصحيح
+    // إنشاء الطلب
     const requestData: any = {
       requestNumber,
       employeeId: input.employeeId,
@@ -178,14 +223,14 @@ export async function submitEmployeeRequest(input: EmployeeRequestInput): Promis
 
     return {
       success: true,
+      hasData: true,
+      dataCount: 1,
       data: { requestId: result[0]?.insertId, requestNumber },
-      message: `✅ تم رفع طلب ${typeNames[input.type]} بنجاح!\n\nرقم الطلب: ${requestNumber}\nسيتم مراجعته من قبل المشرف وإبلاغك بالنتيجة.`
+      message: `✅ تم رفع طلب ${typeNames[input.type]} بنجاح!\n\n📋 رقم الطلب: ${requestNumber}\n👤 الموظف: ${emp.name}\n🏢 الفرع: ${branchName}\n📝 الحالة: قيد المراجعة\n\nسيتم مراجعته من قبل المشرف وإبلاغك بالنتيجة.`,
+      source: 'جدول طلبات الموظفين'
     };
   } catch (error) {
-    return {
-      success: false,
-      error: `حدث خطأ أثناء رفع الطلب: ${error}`
-    };
+    return errorResult(`حدث خطأ أثناء رفع الطلب: ${error}`);
   }
 }
 
@@ -200,7 +245,7 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
   try {
     const db = await getDb();
     if (!db) {
-      return { success: false, error: 'قاعدة البيانات غير متاحة' };
+      return errorResult('قاعدة البيانات غير متاحة');
     }
 
     const employee = await db.select({
@@ -215,7 +260,13 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
     .limit(1);
 
     if (employee.length === 0) {
-      return { success: false, error: 'الموظف غير موجود' };
+      return {
+        success: false,
+        hasData: false,
+        dataCount: 0,
+        message: `الموظف رقم ${input.employeeId} غير موجود في قاعدة البيانات.`,
+        source: 'جدول الموظفين'
+      };
     }
 
     const emp = employee[0];
@@ -224,79 +275,97 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
     // حساب بداية ونهاية الفترة
     let startDate: Date;
     let endDate: Date = now;
+    let periodName: string;
     
     switch (input.period || 'week') {
       case 'today':
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        periodName = 'اليوم';
         break;
       case 'week':
-        // الأسبوع الحالي (من الأحد)
         const dayOfWeek = now.getDay();
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+        periodName = 'هذا الأسبوع';
         break;
       case 'last_week':
-        // الأسبوع الماضي
         const lastWeekDayOfWeek = now.getDay();
         const lastWeekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - lastWeekDayOfWeek - 1);
         const lastWeekStart = new Date(lastWeekEnd.getFullYear(), lastWeekEnd.getMonth(), lastWeekEnd.getDate() - 6);
         startDate = lastWeekStart;
         endDate = lastWeekEnd;
+        periodName = 'الأسبوع الماضي';
         break;
       case 'month':
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodName = 'هذا الشهر';
         break;
       case 'last_month':
-        // الشهر الماضي
         startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        endDate = new Date(now.getFullYear(), now.getMonth(), 0); // آخر يوم في الشهر الماضي
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+        periodName = 'الشهر الماضي';
         break;
       default:
         startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        periodName = 'آخر 7 أيام';
     }
 
+    const periodInfo = {
+      start: startDate.toLocaleDateString('ar-SA'),
+      end: endDate.toLocaleDateString('ar-SA')
+    };
+
+    // ========== تقرير الإيرادات ==========
     if (input.reportType === 'revenue') {
-      // تقرير الإيرادات - استخدام branchId بدلاً من employeeId
+      if (!emp.branchId) {
+        return noDataResult(
+          `الموظف ${emp.name} غير مرتبط بفرع محدد، لذلك لا يمكن عرض تقرير الإيرادات.`,
+          periodInfo
+        );
+      }
+
       const revenues = await db.select()
         .from(dailyRevenues)
         .where(and(
-          eq(dailyRevenues.branchId, emp.branchId!),
+          eq(dailyRevenues.branchId, emp.branchId),
           gte(dailyRevenues.date, startDate),
           lte(dailyRevenues.date, endDate)
         ));
+
+      if (revenues.length === 0) {
+        return {
+          success: true,
+          hasData: false,
+          dataCount: 0,
+          message: `📊 تقرير إيرادات فرع ${emp.branchName} (${periodName}):\n\n⚠️ لا توجد بيانات إيرادات مسجلة للفترة من ${periodInfo.start} إلى ${periodInfo.end}.\n\nقد يكون السبب:\n- لم يتم إدخال الإيرادات لهذه الفترة بعد\n- الفرع جديد ولم تبدأ عملياته`,
+          source: 'جدول الإيرادات اليومية',
+          period: periodInfo
+        };
+      }
 
       const totalCash = revenues.reduce((sum: number, r: any) => sum + Number(r.cash || 0), 0);
       const totalNetwork = revenues.reduce((sum: number, r: any) => sum + Number(r.network || 0), 0);
       const totalBalance = revenues.reduce((sum: number, r: any) => sum + Number(r.balance || 0), 0);
       const total = totalCash + totalNetwork + totalBalance;
 
-      // أسماء الفترات
-      const periodNames: Record<string, string> = {
-        'today': 'اليوم',
-        'week': 'هذا الأسبوع',
-        'last_week': 'الأسبوع الماضي',
-        'month': 'هذا الشهر',
-        'last_month': 'الشهر الماضي'
-      };
-      const periodName = periodNames[input.period || 'week'] || 'هذا الأسبوع';
-
       return {
         success: true,
+        hasData: true,
+        dataCount: revenues.length,
         data: {
           totalCash,
           totalNetwork,
           totalBalance,
           total,
-          count: revenues.length,
-          period: input.period,
-          startDate: startDate.toISOString().split('T')[0],
-          endDate: endDate.toISOString().split('T')[0]
+          count: revenues.length
         },
-        message: `📊 تقرير إيرادات الفرع (${periodName}):\n📅 من ${startDate.toLocaleDateString('ar-SA')} إلى ${endDate.toLocaleDateString('ar-SA')}\n\n💵 نقدي: ${totalCash.toLocaleString()} ر.س\n💳 شبكة: ${totalNetwork.toLocaleString()} ر.س\n🏧 رصيد: ${totalBalance.toLocaleString()} ر.س\n━━━━━━━━━━━━\n💰 الإجمالي: ${total.toLocaleString()} ر.س\n📝 عدد الأيام: ${revenues.length}`
+        message: `📊 تقرير إيرادات فرع ${emp.branchName} (${periodName}):\n📅 من ${periodInfo.start} إلى ${periodInfo.end}\n\n💵 نقدي: ${totalCash.toLocaleString()} ر.س\n💳 شبكة: ${totalNetwork.toLocaleString()} ر.س\n🏧 رصيد: ${totalBalance.toLocaleString()} ر.س\n━━━━━━━━━━━━\n💰 الإجمالي: ${total.toLocaleString()} ر.س\n📝 عدد الأيام المسجلة: ${revenues.length}`,
+        source: 'جدول الإيرادات اليومية',
+        period: periodInfo
       };
     }
 
+    // ========== تقرير البونص ==========
     if (input.reportType === 'bonus') {
-      // تقرير البونص
       const currentWeekStart = getWeekStart(now);
       
       const bonusDetail = await db.select({
@@ -313,9 +382,46 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
       .limit(1);
 
       if (bonusDetail.length === 0) {
+        // البحث عن آخر بونص مسجل
+        const lastBonus = await db.select({
+          revenue: bonusDetails.weeklyRevenue,
+          bonusAmount: bonusDetails.bonusAmount,
+          tier: bonusDetails.bonusTier,
+          weekStart: weeklyBonuses.weekStart,
+        })
+        .from(bonusDetails)
+        .innerJoin(weeklyBonuses, eq(bonusDetails.weeklyBonusId, weeklyBonuses.id))
+        .where(eq(bonusDetails.employeeId, input.employeeId))
+        .orderBy(desc(weeklyBonuses.weekStart))
+        .limit(1);
+
+        if (lastBonus.length === 0) {
+          return {
+            success: true,
+            hasData: false,
+            dataCount: 0,
+            message: `📊 تقرير البونص للموظف ${emp.name}:\n\n⚠️ لا يوجد أي بونص مسجل لك في قاعدة البيانات.\n\nقد يكون السبب:\n- لم يتم حساب البونص بعد\n- لم تصل الإيرادات للحد الأدنى المطلوب`,
+            source: 'جدول تفاصيل البونص'
+          };
+        }
+
+        const bonus = lastBonus[0];
+        const tierNames: Record<string, string> = {
+          'none': 'لم يصل للحد الأدنى',
+          'tier_1': 'المستوى الأول',
+          'tier_2': 'المستوى الثاني',
+          'tier_3': 'المستوى الثالث',
+          'tier_4': 'المستوى الرابع',
+          'tier_5': 'المستوى الخامس'
+        };
+
         return {
           success: true,
-          message: `📊 لا يوجد بونص مسجل لك هذا الأسبوع بعد.\n\nاستمر في العمل الجاد! 💪`
+          hasData: true,
+          dataCount: 1,
+          data: bonus,
+          message: `📊 تقرير البونص للموظف ${emp.name}:\n\n⚠️ لا يوجد بونص مسجل لهذا الأسبوع بعد.\n\n📌 آخر بونص مسجل (${new Date(bonus.weekStart).toLocaleDateString('ar-SA')}):\n💰 الإيرادات: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierNames[bonus.tier || 'none']}\n💵 البونص: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`,
+          source: 'جدول تفاصيل البونص'
         };
       }
 
@@ -331,23 +437,29 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
 
       return {
         success: true,
+        hasData: true,
+        dataCount: 1,
         data: bonus,
-        message: `🎯 تقرير البونص الأسبوعي:\n\n💰 إيراداتك: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierNames[bonus.tier || 'none']}\n💵 البونص: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`
+        message: `📊 تقرير البونص الأسبوعي للموظف ${emp.name}:\n\n💰 إيراداتك هذا الأسبوع: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierNames[bonus.tier || 'none']}\n💵 البونص المستحق: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`,
+        source: 'جدول تفاصيل البونص'
       };
     }
 
+    // ========== تقرير الطلبات ==========
     if (input.reportType === 'requests') {
-      // تقرير الطلبات
       const requests = await db.select()
         .from(employeeRequests)
         .where(eq(employeeRequests.employeeId, input.employeeId))
         .orderBy(desc(employeeRequests.createdAt))
-        .limit(5);
+        .limit(10);
 
       if (requests.length === 0) {
         return {
           success: true,
-          message: `📋 لا يوجد لديك طلبات مسجلة.`
+          hasData: false,
+          dataCount: 0,
+          message: `📋 سجل طلبات الموظف ${emp.name}:\n\n⚠️ لا توجد أي طلبات مسجلة لك في النظام.\n\nيمكنك تقديم طلب جديد (إجازة، سلفة، استئذان، إلخ).`,
+          source: 'جدول طلبات الموظفين'
         };
       }
 
@@ -366,53 +478,74 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
         'resignation': 'استقالة'
       };
 
-      const requestsList = requests.map((r: any) => 
-        `• ${typeNames[r.type as keyof typeof typeNames] || r.type} - ${statusNames[r.status as keyof typeof statusNames] || r.status}`
-      ).join('\n');
+      const requestsList = requests.map((r: any, index: number) => {
+        const typeName = typeNames[r.requestType as keyof typeof typeNames] || r.requestType;
+        const statusName = statusNames[r.status as keyof typeof statusNames] || r.status;
+        const date = r.createdAt ? new Date(r.createdAt).toLocaleDateString('ar-SA') : 'غير محدد';
+        return `${index + 1}. ${typeName} - ${statusName} (${date})`;
+      }).join('\n');
+
+      // حساب الإحصائيات
+      const pending = requests.filter((r: any) => r.status === 'pending').length;
+      const approved = requests.filter((r: any) => r.status === 'approved').length;
+      const rejected = requests.filter((r: any) => r.status === 'rejected').length;
 
       return {
         success: true,
+        hasData: true,
+        dataCount: requests.length,
         data: requests,
-        message: `📋 آخر طلباتك:\n\n${requestsList}`
+        message: `📋 سجل طلبات الموظف ${emp.name}:\n\n📊 الإحصائيات:\n- إجمالي الطلبات: ${requests.length}\n- قيد المراجعة: ${pending}\n- موافق عليها: ${approved}\n- مرفوضة: ${rejected}\n\n📝 آخر الطلبات:\n${requestsList}`,
+        source: 'جدول طلبات الموظفين'
       };
     }
 
-    // ملخص شامل
+    // ========== ملخص شامل ==========
     return {
       success: true,
-      message: `👋 مرحباً ${emp.name}!\n\nأنت تعمل في فرع ${emp.branchName}.\n\nيمكنني مساعدتك في:\n• 📊 تقرير الإيرادات\n• 🎯 تقرير البونص\n• 📋 حالة الطلبات\n• 💰 حساب الأسعار والخصومات\n• 📝 رفع طلب جديد`
+      hasData: true,
+      dataCount: 1,
+      data: emp,
+      message: `👋 معلومات الموظف ${emp.name}:\n\n🏢 الفرع: ${emp.branchName}\n\nيمكنني مساعدتك في:\n• 📊 تقرير الإيرادات\n• 🎯 تقرير البونص\n• 📋 سجل الطلبات\n• 💰 حساب الأسعار والخصومات\n• 📝 رفع طلب جديد`,
+      source: 'جدول الموظفين'
     };
   } catch (error) {
-    return {
-      success: false,
-      error: `حدث خطأ: ${error}`
-    };
+    return errorResult(`حدث خطأ: ${error}`);
   }
 }
 
 // ========== أداة حساب الأسعار والخصومات ==========
 export interface PriceCalculationInput {
-  services: string[]; // أسماء الخدمات
-  discountPercent?: number; // نسبة الخصم
-  isLoyaltyDiscount?: boolean; // هل هو خصم ولاء؟
+  services: string[];
+  discountPercent?: number;
+  isLoyaltyDiscount?: boolean;
 }
 
 export async function calculatePrice(input: PriceCalculationInput): Promise<ToolResult> {
   try {
     const db = await getDb();
     if (!db) {
-      return { success: false, error: 'قاعدة البيانات غير متاحة' };
+      return errorResult('قاعدة البيانات غير متاحة');
     }
 
     // جلب قائمة المنتجات/الخدمات
     const allProducts = await db.select().from(products);
     
+    if (allProducts.length === 0) {
+      return {
+        success: true,
+        hasData: false,
+        dataCount: 0,
+        message: `⚠️ لا توجد منتجات أو خدمات مسجلة في قاعدة البيانات.\n\nيجب إضافة المنتجات أولاً من لوحة التحكم.`,
+        source: 'جدول المنتجات'
+      };
+    }
+
     let totalOriginal = 0;
     const foundServices: { name: string; price: number }[] = [];
     const notFoundServices: string[] = [];
 
     for (const serviceName of input.services) {
-      // البحث عن الخدمة (جزئي)
       const product = allProducts.find((p: any) => 
         p.name.toLowerCase().includes(serviceName.toLowerCase()) ||
         serviceName.toLowerCase().includes(p.name.toLowerCase())
@@ -426,38 +559,41 @@ export async function calculatePrice(input: PriceCalculationInput): Promise<Tool
       }
     }
 
+    if (foundServices.length === 0) {
+      return {
+        success: true,
+        hasData: false,
+        dataCount: 0,
+        message: `⚠️ لم أجد أي من الخدمات المطلوبة في قاعدة البيانات:\n${input.services.map(s => `- ${s}`).join('\n')}\n\nتأكد من كتابة أسماء الخدمات بشكل صحيح.`,
+        source: 'جدول المنتجات'
+      };
+    }
+
     // حساب الخصم
     let discountPercent = input.discountPercent || 0;
     
-    // إذا كان خصم ولاء، جلب النسبة من الإعدادات
     if (input.isLoyaltyDiscount) {
       const settings = await db.select().from(loyaltySettings).limit(1);
       if (settings.length > 0) {
         discountPercent = settings[0].discountPercentage;
       } else {
-        discountPercent = 60; // القيمة الافتراضية
+        discountPercent = 60;
       }
     }
 
     const discountAmount = totalOriginal * (discountPercent / 100);
     const finalTotal = totalOriginal - discountAmount;
 
-    let message = `💰 حساب الأسعار:\n\n`;
-    
-    if (foundServices.length > 0) {
-      message += `📋 الخدمات:\n`;
-      foundServices.forEach(s => {
-        message += `• ${s.name}: ${s.price.toLocaleString()} ر.س\n`;
-      });
-      message += `\n`;
-    }
+    let message = `💰 حساب الأسعار:\n\n📋 الخدمات الموجودة:\n`;
+    foundServices.forEach(s => {
+      message += `• ${s.name}: ${s.price.toLocaleString()} ر.س\n`;
+    });
 
     if (notFoundServices.length > 0) {
-      message += `⚠️ خدمات غير موجودة: ${notFoundServices.join(', ')}\n\n`;
+      message += `\n⚠️ خدمات غير موجودة في النظام:\n${notFoundServices.map(s => `• ${s}`).join('\n')}\n`;
     }
 
-    message += `━━━━━━━━━━━━\n`;
-    message += `💵 المجموع الأصلي: ${totalOriginal.toLocaleString()} ر.س\n`;
+    message += `\n━━━━━━━━━━━━\n💵 المجموع الأصلي: ${totalOriginal.toLocaleString()} ر.س\n`;
     
     if (discountPercent > 0) {
       message += `🏷️ الخصم (${discountPercent}%): ${discountAmount.toLocaleString()} ر.س\n`;
@@ -466,6 +602,8 @@ export async function calculatePrice(input: PriceCalculationInput): Promise<Tool
 
     return {
       success: true,
+      hasData: true,
+      dataCount: foundServices.length,
       data: {
         services: foundServices,
         notFound: notFoundServices,
@@ -474,13 +612,11 @@ export async function calculatePrice(input: PriceCalculationInput): Promise<Tool
         discountAmount,
         finalTotal
       },
-      message
+      message,
+      source: 'جدول المنتجات'
     };
   } catch (error) {
-    return {
-      success: false,
-      error: `حدث خطأ: ${error}`
-    };
+    return errorResult(`حدث خطأ: ${error}`);
   }
 }
 
@@ -488,8 +624,24 @@ export async function calculatePrice(input: PriceCalculationInput): Promise<Tool
 function getWeekStart(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // الاثنين
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   return new Date(d.setDate(diff));
+}
+
+// ========== دوال مساعدة للتصدير (للاختبارات) ==========
+export function generateUsername(name: string): string {
+  const normalized = name.toLowerCase().replace(/\s+/g, '');
+  const randomSuffix = Math.random().toString(36).substring(2, 4);
+  return `${normalized}${randomSuffix}`;
+}
+
+export function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let password = '';
+  for (let i = 0; i < 8; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
 }
 
 // ========== تعريف الأدوات للـ LLM ==========
@@ -498,13 +650,13 @@ export const assistantTools = [
     type: "function" as const,
     function: {
       name: "identify_employee",
-      description: "التعرف على الموظف من خلال اسمه والحصول على معلوماته وفرعه",
+      description: "التعرف على الموظف من خلال اسمه. يجب استخدام هذه الأداة أولاً قبل أي عملية أخرى.",
       parameters: {
         type: "object",
         properties: {
           name: {
             type: "string",
-            description: "اسم الموظف للبحث عنه"
+            description: "اسم الموظف للبحث عنه في قاعدة البيانات"
           }
         },
         required: ["name"]
@@ -515,13 +667,13 @@ export const assistantTools = [
     type: "function" as const,
     function: {
       name: "submit_request",
-      description: "رفع طلب موظف (سلفة، إجازة، استئذان، متأخرات، اعتراض، استقالة)",
+      description: "رفع طلب موظف (سلفة، إجازة، استئذان، متأخرات، اعتراض، استقالة). يجب التعرف على الموظف أولاً.",
       parameters: {
         type: "object",
         properties: {
           employeeId: {
             type: "number",
-            description: "رقم الموظف"
+            description: "رقم الموظف (يتم الحصول عليه من identify_employee)"
           },
           type: {
             type: "string",
@@ -534,7 +686,7 @@ export const assistantTools = [
           },
           amount: {
             type: "number",
-            description: "المبلغ (للسلفة والمتأخرات)"
+            description: "المبلغ (للسلفة والمتأخرات فقط)"
           },
           vacationStartDate: {
             type: "string",
@@ -574,23 +726,23 @@ export const assistantTools = [
     type: "function" as const,
     function: {
       name: "get_report",
-      description: "الحصول على تقرير سريع (إيرادات، بونص، طلبات، ملخص)",
+      description: "الحصول على تقرير من قاعدة البيانات. الأداة تعيد البيانات الفعلية الموجودة فقط، وإذا لم توجد بيانات ستوضح ذلك.",
       parameters: {
         type: "object",
         properties: {
           employeeId: {
             type: "number",
-            description: "رقم الموظف"
+            description: "رقم الموظف (يتم الحصول عليه من identify_employee)"
           },
           reportType: {
             type: "string",
             enum: ["revenue", "bonus", "requests", "summary"],
-            description: "نوع التقرير"
+            description: "نوع التقرير: revenue (إيرادات الفرع)، bonus (بونص الموظف)، requests (طلبات الموظف)، summary (ملخص)"
           },
           period: {
             type: "string",
             enum: ["today", "week", "last_week", "month", "last_month"],
-            description: "الفترة الزمنية: اليوم (today)، هذا الأسبوع (week)، الأسبوع الماضي (last_week)، هذا الشهر (month)، الشهر الماضي (last_month)"
+            description: "الفترة الزمنية"
           }
         },
         required: ["employeeId", "reportType"]
@@ -601,14 +753,14 @@ export const assistantTools = [
     type: "function" as const,
     function: {
       name: "calculate_price",
-      description: "حساب أسعار الخدمات مع الخصومات",
+      description: "حساب أسعار الخدمات من قاعدة البيانات مع الخصومات. يعرض فقط الخدمات الموجودة فعلياً.",
       parameters: {
         type: "object",
         properties: {
           services: {
             type: "array",
             items: { type: "string" },
-            description: "قائمة أسماء الخدمات"
+            description: "قائمة أسماء الخدمات للبحث عنها"
           },
           discountPercent: {
             type: "number",
@@ -661,9 +813,6 @@ export async function executeAssistantTool(toolName: string, args: any): Promise
       });
     
     default:
-      return {
-        success: false,
-        error: `أداة غير معروفة: ${toolName}`
-      };
+      return errorResult(`أداة غير معروفة: ${toolName}`);
   }
 }
