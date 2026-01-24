@@ -6815,6 +6815,36 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         return await db.getEmployeeRequestsByEmployeeId(input.employeeId);
       }),
   }),
+
+  // ========== تحويل الصوت إلى نص ==========
+  voice: router({
+    // تحويل الصوت إلى نص
+    transcribe: publicProcedure
+      .input(z.object({
+        audioUrl: z.string().url(),
+        language: z.string().optional(),
+        prompt: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { transcribeAudio } = await import('./_core/voiceTranscription');
+        
+        const result = await transcribeAudio({
+          audioUrl: input.audioUrl,
+          language: input.language,
+          prompt: input.prompt,
+        });
+        
+        // التحقق من الخطأ
+        if ('error' in result) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: result.error,
+          });
+        }
+        
+        return result;
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

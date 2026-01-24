@@ -26,8 +26,10 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  History
+  History,
+  Mic
 } from 'lucide-react';
+import { VoiceRecorder } from '@/components/VoiceRecorder';
 
 interface Message {
   id: string;
@@ -422,10 +424,71 @@ export default function EmployeePortal() {
                       }}
                       className="flex gap-3"
                     >
+                      {/* زر التسجيل الصوتي */}
+                      <VoiceRecorder
+                        onTranscription={(text) => {
+                          setInput(text);
+                          // إرسال تلقائي بعد التحويل
+                          setTimeout(() => {
+                            const userMessage: Message = {
+                              id: Date.now().toString(),
+                              role: 'user',
+                              content: text,
+                              timestamp: new Date(),
+                            };
+                            setMessages(prev => [...prev, userMessage]);
+                            setInput('');
+                            setIsLoading(true);
+                            
+                            chatMutation.mutateAsync({
+                              message: text,
+                              employeeContext: {
+                                employeeId: employeeInfo!.id,
+                                employeeName: employeeInfo!.name,
+                                branchId: employeeInfo!.branchId,
+                                branchName: employeeInfo!.branchName,
+                              },
+                              conversationHistory: [...messages, userMessage].map(m => ({
+                                role: m.role as 'user' | 'assistant' | 'system' | 'tool',
+                                content: m.content,
+                              })),
+                            }).then(response => {
+                              const assistantMessage: Message = {
+                                id: (Date.now() + 1).toString(),
+                                role: 'assistant',
+                                content: typeof response.message === 'string' ? response.message : 'حدث خطأ',
+                                timestamp: new Date(),
+                              };
+                              setMessages(prev => [...prev, assistantMessage]);
+                              refetchRequests();
+                            }).catch(() => {
+                              const errorMessage: Message = {
+                                id: (Date.now() + 1).toString(),
+                                role: 'assistant',
+                                content: 'عذراً، حدث خطأ أثناء معالجة طلبك.',
+                                timestamp: new Date(),
+                              };
+                              setMessages(prev => [...prev, errorMessage]);
+                            }).finally(() => {
+                              setIsLoading(false);
+                            });
+                          }, 100);
+                        }}
+                        onError={(error) => {
+                          const errorMessage: Message = {
+                            id: Date.now().toString(),
+                            role: 'assistant',
+                            content: `خطأ في التسجيل الصوتي: ${error}`,
+                            timestamp: new Date(),
+                          };
+                          setMessages(prev => [...prev, errorMessage]);
+                        }}
+                        disabled={isLoading}
+                      />
                       <Input
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="اكتب رسالتك هنا..."
+                        placeholder="اكتب رسالتك هنا أو اضغط على الميكروفون..."
                         className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-amber-500"
                         disabled={isLoading}
                       />

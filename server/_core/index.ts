@@ -44,6 +44,31 @@ async function startServer() {
   
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  
+  // Audio upload endpoint for voice transcription
+  const multerModule = await import('multer');
+  const multer = multerModule.default;
+  const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 16 * 1024 * 1024 } // 16MB limit
+  });
+  
+  app.post('/api/upload-audio', upload.single('file'), async (req: any, res: any) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'لم يتم رفع ملف صوتي' });
+      }
+      
+      const { storagePut } = await import('../storage');
+      const fileName = `audio/${Date.now()}-${Math.random().toString(36).substring(7)}.webm`;
+      const { url } = await storagePut(fileName, req.file.buffer, req.file.mimetype || 'audio/webm');
+      
+      res.json({ url, key: fileName });
+    } catch (error) {
+      console.error('Audio upload error:', error);
+      res.status(500).json({ error: 'فشل رفع الملف الصوتي' });
+    }
+  });
   // tRPC API
   app.use(
     "/api/trpc",
