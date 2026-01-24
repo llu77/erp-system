@@ -6791,6 +6791,15 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         const { changeEmployeePassword } = await import('./auth/employeeAuth');
         return changeEmployeePassword(input.employeeId, input.oldPassword, input.newPassword);
       }),
+
+    // جلب طلبات الموظف (لبوابة الموظفين)
+    getMyRequests: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getEmployeeRequestsByEmployeeId(input.employeeId);
+      }),
   }),
 });
 
