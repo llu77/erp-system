@@ -36,6 +36,8 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  hasPendingRequest?: boolean;
+  pendingRequestType?: string;
 }
 
 interface EmployeeInfo {
@@ -161,6 +163,8 @@ export default function EmployeePortal() {
         role: 'assistant',
         content: typeof response.message === 'string' ? response.message : 'حدث خطأ',
         timestamp: new Date(),
+        hasPendingRequest: response.hasPendingRequest,
+        pendingRequestType: response.pendingRequestType,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -385,6 +389,44 @@ export default function EmployeePortal() {
                             <p className="whitespace-pre-wrap text-sm leading-relaxed">
                               {message.content}
                             </p>
+                            
+                            {/* أزرار التأكيد/الإلغاء عند وجود طلب معلق */}
+                            {message.role === 'assistant' && message.hasPendingRequest && (
+                              <div className="flex gap-2 mt-3 pt-3 border-t border-slate-600">
+                                <Button
+                                  size="sm"
+                                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  onClick={() => {
+                                    setInput('نعم');
+                                    setTimeout(() => {
+                                      const form = document.querySelector('form');
+                                      if (form) form.dispatchEvent(new Event('submit', { bubbles: true }));
+                                    }, 100);
+                                  }}
+                                  disabled={isLoading}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 ml-1" />
+                                  نعم، أكد الطلب
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1 border-red-500/50 text-red-400 hover:bg-red-500/10"
+                                  onClick={() => {
+                                    setInput('لا، ألغي الطلب');
+                                    setTimeout(() => {
+                                      const form = document.querySelector('form');
+                                      if (form) form.dispatchEvent(new Event('submit', { bubbles: true }));
+                                    }, 100);
+                                  }}
+                                  disabled={isLoading}
+                                >
+                                  <XCircle className="h-4 w-4 ml-1" />
+                                  لا، ألغي
+                                </Button>
+                              </div>
+                            )}
+                            
                             <p className={`text-xs mt-2 ${
                               message.role === 'user' ? 'text-amber-200' : 'text-slate-400'
                             }`}>

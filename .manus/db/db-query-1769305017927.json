@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, requestNumber, requestType, status, createdAt \nFROM employeeRequests \nWHERE employeeId = 30002 \nORDER BY createdAt DESC \nLIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, requestNumber, requestType, status, createdAt \nFROM employeeRequests \nWHERE employeeId = 30002 \nORDER BY createdAt DESC \nLIMIT 5;",
+  "rows": [
+    {
+      "id": "690004",
+      "requestNumber": "REQ-20260124-935125",
+      "requestType": "advance",
+      "status": "pending",
+      "createdAt": "2026-01-25 01:35:35"
+    },
+    {
+      "id": "690003",
+      "requestNumber": "REQ-20260124-208996",
+      "requestType": "advance",
+      "status": "pending",
+      "createdAt": "2026-01-25 01:23:29"
+    },
+    {
+      "id": "690002",
+      "requestNumber": "REQ-20260124-282006",
+      "requestType": "advance",
+      "status": "pending",
+      "createdAt": "2026-01-25 01:08:02"
+    },
+    {
+      "id": "660001",
+      "requestNumber": "REQ-260123-6102",
+      "requestType": "vacation",
+      "status": "approved",
+      "createdAt": "2026-01-23 18:44:17"
+    },
+    {
+      "id": "510003",
+      "requestNumber": "REQ-260104-4932",
+      "requestType": "arrears",
+      "status": "approved",
+      "createdAt": "2026-01-04 11:38:43"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trequestNumber\trequestType\tstatus\tcreatedAt\n690004\tREQ-20260124-935125\tadvance\tpending\t2026-01-25 01:35:35\n690003\tREQ-20260124-208996\tadvance\tpending\t2026-01-25 01:23:29\n690002\tREQ-20260124-282006\tadvance\tpending\t2026-01-25 01:08:02\n660001\tREQ-260123-6102\tvacation\tapproved\t2026-01-23 18:44:17\n510003\tREQ-260104-4932\tarrears\tapproved\t2026-01-04 11:38:43\n",
+  "stderr": "",
+  "execution_time_ms": 1492
+}

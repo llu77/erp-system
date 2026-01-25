@@ -6847,11 +6847,28 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
             }
           }
 
+          // التحقق من وجود طلب معلق بعد تنفيذ الأدوات
+          let hasPendingRequest = false;
+          let pendingRequestType = '';
+          if (sessionId && employeeContext?.employeeId) {
+            try {
+              const pendingReqs = await getPendingRequests(sessionId);
+              if (pendingReqs.length > 0) {
+                hasPendingRequest = true;
+                pendingRequestType = pendingReqs[0].requestType;
+              }
+            } catch (e) {
+              console.error('خطأ في التحقق من الطلبات المعلقة:', e);
+            }
+          }
+
           return {
             message: responseContent,
             sessionId,
             employeeContext,
             toolResults,
+            hasPendingRequest,
+            pendingRequestType,
           };
         }
 
@@ -6869,11 +6886,28 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           }
         }
 
+        // التحقق من وجود طلب معلق
+        let hasPendingReq = false;
+        let pendingReqType = '';
+        if (sessionId && input.employeeContext?.employeeId) {
+          try {
+            const pendingReqs = await getPendingRequests(sessionId);
+            if (pendingReqs.length > 0) {
+              hasPendingReq = true;
+              pendingReqType = pendingReqs[0].requestType;
+            }
+          } catch (e) {
+            console.error('خطأ في التحقق من الطلبات المعلقة:', e);
+          }
+        }
+
         return {
           message: responseContent,
           sessionId,
           employeeContext: input.employeeContext,
           toolResults: [],
+          hasPendingRequest: hasPendingReq,
+          pendingRequestType: pendingReqType,
         };
       }),
 

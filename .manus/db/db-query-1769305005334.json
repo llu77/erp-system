@@ -1,0 +1,22 @@
+{
+  "query": "SHOW TABLES LIKE '%request%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SHOW TABLES LIKE '%request%';",
+  "rows": [
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8 (%request%)": "employeeRequestLogs"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8 (%request%)": "employeeRequests"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8 (%request%)": "loyaltyVisitDeletionRequests"
+    },
+    {
+      "Tables_in_dsLtTk22LX4iB7jABiF6k8 (%request%)": "pending_requests"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_dsLtTk22LX4iB7jABiF6k8 (%request%)\nemployeeRequestLogs\nemployeeRequests\nloyaltyVisitDeletionRequests\npending_requests\n",
+  "stderr": "",
+  "execution_time_ms": 1537
+}
