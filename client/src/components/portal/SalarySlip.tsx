@@ -12,10 +12,20 @@ import {
   Download,
   TrendingUp,
   TrendingDown,
-  Minus,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Printer
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+// تعريف نوع jsPDF مع autoTable
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+    lastAutoTable: { finalY: number };
+  }
+}
 
 interface SalarySlipProps {
   employeeId: number;
@@ -23,24 +33,25 @@ interface SalarySlipProps {
 }
 
 const MONTHS = [
-  { value: 1, label: 'يناير' },
-  { value: 2, label: 'فبراير' },
-  { value: 3, label: 'مارس' },
-  { value: 4, label: 'أبريل' },
-  { value: 5, label: 'مايو' },
-  { value: 6, label: 'يونيو' },
-  { value: 7, label: 'يوليو' },
-  { value: 8, label: 'أغسطس' },
-  { value: 9, label: 'سبتمبر' },
-  { value: 10, label: 'أكتوبر' },
-  { value: 11, label: 'نوفمبر' },
-  { value: 12, label: 'ديسمبر' },
+  { value: 1, label: 'يناير', labelEn: 'January' },
+  { value: 2, label: 'فبراير', labelEn: 'February' },
+  { value: 3, label: 'مارس', labelEn: 'March' },
+  { value: 4, label: 'أبريل', labelEn: 'April' },
+  { value: 5, label: 'مايو', labelEn: 'May' },
+  { value: 6, label: 'يونيو', labelEn: 'June' },
+  { value: 7, label: 'يوليو', labelEn: 'July' },
+  { value: 8, label: 'أغسطس', labelEn: 'August' },
+  { value: 9, label: 'سبتمبر', labelEn: 'September' },
+  { value: 10, label: 'أكتوبر', labelEn: 'October' },
+  { value: 11, label: 'نوفمبر', labelEn: 'November' },
+  { value: 12, label: 'ديسمبر', labelEn: 'December' },
 ];
 
 export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // جلب كشف الراتب
   const { data: salarySlip, isLoading, error } = trpc.employeePortal.getSalarySlip.useQuery(
@@ -61,12 +72,274 @@ export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
     }).format(amount) + ' ر.س';
   };
 
+  const formatCurrencyPDF = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'decimal',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
   const getMonthName = (month: number) => {
     return MONTHS.find(m => m.value === month)?.label || '';
   };
 
+  const getMonthNameEn = (month: number) => {
+    return MONTHS.find(m => m.value === month)?.labelEn || '';
+  };
+
   // توليد سنوات للاختيار (آخر 3 سنوات)
   const years = Array.from({ length: 3 }, (_, i) => currentDate.getFullYear() - i);
+
+  // دالة توليد PDF احترافي
+  const generatePDF = async () => {
+    if (!salarySlip) return;
+    
+    setIsGeneratingPDF(true);
+    
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      // إعداد الخط العربي
+      doc.setFont('helvetica');
+      
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 15;
+      
+      // ==================== الهيدر ====================
+      // خلفية الهيدر
+      doc.setFillColor(30, 41, 59); // slate-800
+      doc.rect(0, 0, pageWidth, 45, 'F');
+      
+      // شريط ذهبي
+      doc.setFillColor(245, 158, 11); // amber-500
+      doc.rect(0, 45, pageWidth, 3, 'F');
+      
+      // عنوان الشركة
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.text('Symbol AI', pageWidth / 2, 20, { align: 'center' });
+      
+      doc.setFontSize(12);
+      doc.text('Salary Slip', pageWidth / 2, 32, { align: 'center' });
+      
+      doc.setFontSize(10);
+      doc.text(`${getMonthNameEn(selectedMonth)} ${selectedYear}`, pageWidth / 2, 40, { align: 'center' });
+      
+      // ==================== معلومات الموظف ====================
+      let yPos = 58;
+      
+      doc.setFillColor(241, 245, 249); // slate-100
+      doc.roundedRect(margin, yPos, pageWidth - (margin * 2), 35, 3, 3, 'F');
+      
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(11);
+      
+      // الصف الأول
+      doc.text(`Employee Name: ${salarySlip.employeeName}`, pageWidth - margin - 5, yPos + 10, { align: 'right' });
+      doc.text(`Code: ${salarySlip.employeeCode}`, margin + 5, yPos + 10);
+      
+      // الصف الثاني
+      doc.text(`Position: ${salarySlip.position || '-'}`, pageWidth - margin - 5, yPos + 20, { align: 'right' });
+      doc.text(`Work Days: ${salarySlip.workDays}`, margin + 5, yPos + 20);
+      
+      // الصف الثالث
+      doc.text(`Payroll No: ${salarySlip.payrollNumber}`, pageWidth - margin - 5, yPos + 30, { align: 'right' });
+      const statusText = salarySlip.status === 'approved' ? 'Approved' : 'Pending';
+      doc.text(`Status: ${statusText}`, margin + 5, yPos + 30);
+      
+      yPos += 45;
+      
+      // ==================== جدول الاستحقاقات ====================
+      doc.setFontSize(12);
+      doc.setTextColor(16, 185, 129); // emerald-500
+      doc.text('Earnings', pageWidth / 2, yPos, { align: 'center' });
+      yPos += 5;
+      
+      const earningsData: any[][] = [];
+      earningsData.push(['Basic Salary', formatCurrencyPDF(salarySlip.baseSalary)]);
+      
+      if (salarySlip.overtimeEnabled && salarySlip.overtimeAmount > 0) {
+        earningsData.push(['Overtime', formatCurrencyPDF(salarySlip.overtimeAmount)]);
+      }
+      
+      if (salarySlip.incentiveAmount > 0) {
+        const incentiveLabel = salarySlip.isSupervisor ? 'Incentive (Supervisor)' : 'Incentive';
+        earningsData.push([incentiveLabel, formatCurrencyPDF(salarySlip.incentiveAmount)]);
+      }
+      
+      earningsData.push(['Total Earnings', formatCurrencyPDF(salarySlip.totalEarnings)]);
+      
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Description', 'Amount (SAR)']],
+        body: earningsData,
+        theme: 'grid',
+        styles: {
+          fontSize: 10,
+          cellPadding: 4,
+          halign: 'center',
+          textColor: [30, 41, 59],
+        },
+        headStyles: {
+          fillColor: [16, 185, 129],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+        },
+        footStyles: {
+          fillColor: [209, 250, 229],
+          textColor: [16, 185, 129],
+          fontStyle: 'bold',
+        },
+        columnStyles: {
+          0: { halign: 'right' },
+          1: { halign: 'left' },
+        },
+        margin: { left: margin, right: margin },
+      });
+      
+      yPos = (doc as any).lastAutoTable.finalY + 10;
+      
+      // ==================== جدول الخصومات ====================
+      doc.setFontSize(12);
+      doc.setTextColor(239, 68, 68); // red-500
+      doc.text('Deductions', pageWidth / 2, yPos, { align: 'center' });
+      yPos += 5;
+      
+      const deductionsData: any[][] = [];
+      
+      if (salarySlip.absentDays > 0) {
+        deductionsData.push([`Absent Deduction (${salarySlip.absentDays} days)`, formatCurrencyPDF(salarySlip.absentDeduction)]);
+      }
+      
+      if (salarySlip.leaveDays > 0 && salarySlip.leaveDeduction > 0) {
+        deductionsData.push([`Leave Deduction (${salarySlip.leaveDays} days)`, formatCurrencyPDF(salarySlip.leaveDeduction)]);
+      }
+      
+      if (salarySlip.advanceDeduction > 0) {
+        deductionsData.push(['Advance Deduction', formatCurrencyPDF(salarySlip.advanceDeduction)]);
+      }
+      
+      if (salarySlip.negativeInvoicesDeduction > 0) {
+        deductionsData.push(['Negative Invoices', formatCurrencyPDF(salarySlip.negativeInvoicesDeduction)]);
+      }
+      
+      if (salarySlip.deductionAmount > 0) {
+        const deductionLabel = salarySlip.deductionReason 
+          ? `Other Deductions (${salarySlip.deductionReason})`
+          : 'Other Deductions';
+        deductionsData.push([deductionLabel, formatCurrencyPDF(salarySlip.deductionAmount)]);
+      }
+      
+      if (deductionsData.length === 0) {
+        deductionsData.push(['No Deductions', '0.00']);
+      }
+      
+      deductionsData.push(['Total Deductions', formatCurrencyPDF(salarySlip.totalDeductions)]);
+      
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Description', 'Amount (SAR)']],
+        body: deductionsData,
+        theme: 'grid',
+        styles: {
+          fontSize: 10,
+          cellPadding: 4,
+          halign: 'center',
+          textColor: [30, 41, 59],
+        },
+        headStyles: {
+          fillColor: [239, 68, 68],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+        },
+        footStyles: {
+          fillColor: [254, 226, 226],
+          textColor: [239, 68, 68],
+          fontStyle: 'bold',
+        },
+        columnStyles: {
+          0: { halign: 'right' },
+          1: { halign: 'left' },
+        },
+        margin: { left: margin, right: margin },
+      });
+      
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+      
+      // ==================== صافي الراتب ====================
+      doc.setFillColor(245, 158, 11); // amber-500
+      doc.roundedRect(margin, yPos, pageWidth - (margin * 2), 25, 3, 3, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.text('Net Salary', pageWidth / 2, yPos + 10, { align: 'center' });
+      
+      doc.setFontSize(18);
+      doc.text(`${formatCurrencyPDF(salarySlip.netSalary)} SAR`, pageWidth / 2, yPos + 20, { align: 'center' });
+      
+      yPos += 35;
+      
+      // ==================== التوقيعات ====================
+      if (salarySlip.status === 'approved') {
+        doc.setFillColor(209, 250, 229); // emerald-100
+        doc.roundedRect(margin, yPos, pageWidth - (margin * 2), 8, 2, 2, 'F');
+        doc.setTextColor(16, 185, 129);
+        doc.setFontSize(10);
+        doc.text('APPROVED', pageWidth / 2, yPos + 5.5, { align: 'center' });
+        yPos += 15;
+      }
+      
+      // خطوط التوقيع
+      doc.setDrawColor(148, 163, 184); // slate-400
+      doc.setLineWidth(0.5);
+      
+      const signWidth = 50;
+      const signY = yPos + 15;
+      
+      // توقيع المدير
+      doc.line(margin + 10, signY, margin + 10 + signWidth, signY);
+      doc.setTextColor(71, 85, 105);
+      doc.setFontSize(9);
+      doc.text('Manager Signature', margin + 10 + (signWidth / 2), signY + 7, { align: 'center' });
+      
+      // توقيع الموظف
+      doc.line(pageWidth - margin - 10 - signWidth, signY, pageWidth - margin - 10, signY);
+      doc.text('Employee Signature', pageWidth - margin - 10 - (signWidth / 2), signY + 7, { align: 'center' });
+      
+      // ==================== الفوتر ====================
+      doc.setFillColor(30, 41, 59);
+      doc.rect(0, pageHeight - 20, pageWidth, 20, 'F');
+      
+      doc.setTextColor(148, 163, 184);
+      doc.setFontSize(8);
+      const printDate = new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      doc.text(`Printed: ${printDate}`, pageWidth / 2, pageHeight - 12, { align: 'center' });
+      doc.text('Symbol AI - Employee Portal', pageWidth / 2, pageHeight - 6, { align: 'center' });
+      
+      // حفظ الملف
+      const fileName = `SalarySlip_${salarySlip.employeeCode}_${selectedYear}_${selectedMonth}.pdf`;
+      doc.save(fileName);
+      
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Error generating PDF:', errorMessage, error);
+      alert(`حدث خطأ أثناء إنشاء ملف PDF: ${errorMessage}`);
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -150,19 +423,36 @@ export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
                   رقم المسير: {salarySlip.payrollNumber}
                 </p>
               </div>
-              <Badge 
-                className={
-                  salarySlip.status === 'approved' 
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                    : salarySlip.status === 'pending'
-                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                    : 'bg-slate-500/20 text-slate-400 border-slate-500/30'
-                }
-              >
-                {salarySlip.status === 'approved' ? 'معتمد' : 
-                 salarySlip.status === 'pending' ? 'قيد المراجعة' : 
-                 salarySlip.status === 'draft' ? 'مسودة' : salarySlip.status}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge 
+                  className={
+                    salarySlip.status === 'approved' 
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                      : salarySlip.status === 'pending'
+                      ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                      : 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+                  }
+                >
+                  {salarySlip.status === 'approved' ? 'معتمد' : 
+                   salarySlip.status === 'pending' ? 'قيد المراجعة' : 
+                   salarySlip.status === 'draft' ? 'مسودة' : salarySlip.status}
+                </Badge>
+                {/* زر تحميل PDF */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={generatePDF}
+                  disabled={isGeneratingPDF}
+                  className="bg-amber-500/20 border-amber-500/30 text-amber-400 hover:bg-amber-500/30"
+                >
+                  {isGeneratingPDF ? (
+                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  ) : (
+                    <Download className="h-4 w-4 ml-2" />
+                  )}
+                  تحميل PDF
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-6">

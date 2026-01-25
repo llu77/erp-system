@@ -9639,3 +9639,144 @@ export async function initializeEmployeeLeaveBalance(employeeId: number, year: n
   
   return { success: true };
 }
+
+
+// ==================== دوال إشعارات الموظفين ====================
+
+/**
+ * إنشاء إشعار جديد للموظف
+ */
+export async function createEmployeeNotification(data: {
+  employeeId: number;
+  type: 'request_status' | 'salary_ready' | 'task_assigned' | 'leave_balance' | 'bonus_ready' | 'general';
+  title: string;
+  message: string;
+  relatedType?: string;
+  relatedId?: number;
+}) {
+  const { employeeNotifications } = await import('../drizzle/schema');
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  const result = await db.insert(employeeNotifications).values({
+    employeeId: data.employeeId,
+    type: data.type,
+    title: data.title,
+    message: data.message,
+    relatedType: data.relatedType,
+    relatedId: data.relatedId,
+    isRead: false,
+  });
+  
+  return result;
+}
+
+/**
+ * جلب إشعارات الموظف
+ */
+export async function getEmployeeNotifications(employeeId: number, limit = 50) {
+  const { employeeNotifications } = await import('../drizzle/schema');
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  return await db.select()
+    .from(employeeNotifications)
+    .where(eq(employeeNotifications.employeeId, employeeId))
+    .orderBy(desc(employeeNotifications.createdAt))
+    .limit(limit);
+}
+
+/**
+ * جلب عدد الإشعارات غير المقروءة
+ */
+export async function getUnreadNotificationCount(employeeId: number) {
+  const { employeeNotifications } = await import('../drizzle/schema');
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  const result = await db.select({ count: sql<number>`count(*)` })
+    .from(employeeNotifications)
+    .where(and(
+      eq(employeeNotifications.employeeId, employeeId),
+      eq(employeeNotifications.isRead, false)
+    ));
+  
+  return result[0]?.count || 0;
+}
+
+/**
+ * تحديد إشعار كمقروء
+ */
+export async function markEmployeeNotificationAsRead(notificationId: number, employeeId: number) {
+  const { employeeNotifications } = await import('../drizzle/schema');
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  await db.update(employeeNotifications)
+    .set({ isRead: true, readAt: new Date() })
+    .where(and(
+      eq(employeeNotifications.id, notificationId),
+      eq(employeeNotifications.employeeId, employeeId)
+    ));
+  
+  return { success: true };
+}
+
+/**
+ * تحديد جميع الإشعارات كمقروءة
+ */
+export async function markAllEmployeeNotificationsAsRead(employeeId: number) {
+  const { employeeNotifications } = await import('../drizzle/schema');
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  await db.update(employeeNotifications)
+    .set({ isRead: true, readAt: new Date() })
+    .where(and(
+      eq(employeeNotifications.employeeId, employeeId),
+      eq(employeeNotifications.isRead, false)
+    ));
+  
+  return { success: true };
+}
+
+/**
+ * إرسال إشعار تغيير حالة الطلب للموظف
+ */
+export async function notifyEmployeeRequestStatusChange(data: {
+  employeeId: number;
+  requestId: number;
+  requestType: string;
+  requestTitle: string;
+  oldStatus: string;
+  newStatus: string;
+  reviewerName?: string;
+  rejectionReason?: string;
+}) {
+  const statusMap: Record<string, string> = {
+    'approved': 'تمت الموافقة',
+    'rejected': 'تم الرفض',
+    'cancelled': 'تم الإلغاء',
+    'pending': 'قيد المراجعة',
+  };
+  
+  const statusText = statusMap[data.newStatus] || data.newStatus;
+  let message = `${statusText} على طلبك: ${data.requestTitle}`;
+  
+  if (data.rejectionReason) {
+    message += `\nسبب الرفض: ${data.rejectionReason}`;
+  }
+  
+  if (data.reviewerName) {
+    message += `\nبواسطة: ${data.reviewerName}`;
+  }
+  
+  return await createEmployeeNotification({
+    employeeId: data.employeeId,
+    type: 'request_status',
+    title: `${statusText} - ${data.requestType}`,
+    message,
+    relatedType: 'employee_request',
+    relatedId: data.requestId,
+  });
+}

@@ -7427,6 +7427,46 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       .mutation(async ({ input }) => {
         return await db.initializeEmployeeLeaveBalance(input.employeeId, input.year);
       }),
+
+    // ==================== APIs إشعارات الموظفين ====================
+    
+    // جلب إشعارات الموظف
+    getNotifications: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        limit: z.number().optional().default(50),
+      }))
+      .query(async ({ input }) => {
+        return await db.getEmployeeNotifications(input.employeeId, input.limit);
+      }),
+
+    // جلب عدد الإشعارات غير المقروءة
+    getUnreadCount: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getUnreadNotificationCount(input.employeeId);
+      }),
+
+    // تحديد إشعار كمقروء
+    markAsRead: publicProcedure
+      .input(z.object({
+        notificationId: z.number(),
+        employeeId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        return await db.markEmployeeNotificationAsRead(input.notificationId, input.employeeId);
+      }),
+
+    // تحديد جميع الإشعارات كمقروءة
+    markAllAsRead: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        return await db.markAllEmployeeNotificationsAsRead(input.employeeId);
+      }),
   }),
 });
 

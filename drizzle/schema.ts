@@ -2119,3 +2119,32 @@ export const employeeLeaveBalance = mysqlTable("employeeLeaveBalance", {
 
 export type EmployeeLeaveBalance = typeof employeeLeaveBalance.$inferSelect;
 export type InsertEmployeeLeaveBalance = typeof employeeLeaveBalance.$inferInsert;
+
+
+// ==================== جدول إشعارات الموظفين ====================
+/**
+ * EmployeeNotifications - إشعارات خاصة بالموظفين في البوابة
+ * تتبع الإشعارات المرسلة لكل موظف
+ */
+export const employeeNotifications = mysqlTable("employeeNotifications", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  type: mysqlEnum("type", [
+    "request_status",    // تغيير حالة طلب
+    "salary_ready",      // كشف الراتب جاهز
+    "task_assigned",     // مهمة جديدة
+    "leave_balance",     // تحديث رصيد الإجازات
+    "bonus_ready",       // البونص جاهز
+    "general"            // إشعار عام
+  ]).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  message: text("message").notNull(),
+  relatedType: varchar("relatedType", { length: 50 }), // نوع العنصر المرتبط
+  relatedId: int("relatedId"), // معرف العنصر المرتبط
+  isRead: boolean("isRead").default(false).notNull(),
+  readAt: timestamp("readAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EmployeeNotification = typeof employeeNotifications.$inferSelect;
+export type InsertEmployeeNotification = typeof employeeNotifications.$inferInsert;
