@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, name, code, username, hasPortalAccess, emailVerified FROM employees WHERE hasPortalAccess = 1 LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, name, code, username, hasPortalAccess, emailVerified FROM employees WHERE hasPortalAccess = 1 LIMIT 5;",
+  "rows": [
+    {
+      "id": "30002",
+      "name": "علاء ناصر",
+      "code": "EMP-002",
+      "username": "alaa",
+      "hasPortalAccess": "1",
+      "emailVerified": "0"
+    },
+    {
+      "id": "30004",
+      "name": "عبدالحي جلال",
+      "code": "EMP-004",
+      "username": "عبدالحيجemp-004",
+      "hasPortalAccess": "1",
+      "emailVerified": "0"
+    },
+    {
+      "id": "30007",
+      "name": "السيد محمد",
+      "code": "EMP-007",
+      "username": "elsayed",
+      "hasPortalAccess": "1",
+      "emailVerified": "0"
+    },
+    {
+      "id": "30012",
+      "name": "محمود عماره ",
+      "code": "EMP-012",
+      "username": "mahmoud",
+      "hasPortalAccess": "1",
+      "emailVerified": "0"
+    },
+    {
+      "id": "60001",
+      "name": "محمد ناصر",
+      "code": "EMP100",
+      "username": "mohamed",
+      "hasPortalAccess": "1",
+      "emailVerified": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcode\tusername\thasPortalAccess\temailVerified\n30002\tعلاء ناصر\tEMP-002\talaa\t1\t0\n30004\tعبدالحي جلال\tEMP-004\tعبدالحيجemp-004\t1\t0\n30007\tالسيد محمد\tEMP-007\telsayed\t1\t0\n30012\tمحمود عماره \tEMP-012\tmahmoud\t1\t0\n60001\tمحمد ناصر\tEMP100\tmohamed\t1\t0\n",
+  "stderr": "",
+  "execution_time_ms": 1989
+}

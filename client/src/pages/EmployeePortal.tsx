@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
 import { SalarySlip, LeaveBalance, EmployeeProfile, BonusReport, RequestTimeline, RequestAttachments } from '@/components/portal';
+import { EmailSetupModal } from '@/components/portal/EmailSetupModal';
 
 interface Message {
   id: string;
@@ -52,6 +53,8 @@ interface EmployeeInfo {
   branchId: number;
   branchName: string;
   position: string | null;
+  email: string | null;
+  emailVerified: boolean;
 }
 
 // أنواع الطلبات بالعربية
@@ -789,6 +792,21 @@ export default function EmployeePortal() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* نموذج إدخال البريد الإلكتروني الإجباري */}
+      {employeeInfo && !employeeInfo.emailVerified && (
+        <EmailSetupModal
+          isOpen={true}
+          employeeId={employeeInfo.id}
+          employeeName={employeeInfo.name}
+          onSuccess={() => {
+            // تحديث معلومات الموظف في localStorage
+            const updatedInfo = { ...employeeInfo, emailVerified: true };
+            localStorage.setItem('employeeInfo', JSON.stringify(updatedInfo));
+            setEmployeeInfo(updatedInfo);
+          }}
+        />
+      )}
     </div>
   );
 }

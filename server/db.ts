@@ -8922,6 +8922,7 @@ export async function getEmployeeProfile(employeeId: number) {
     branchId: employees.branchId,
     phone: employees.phone,
     email: employees.email,
+    emailVerified: employees.emailVerified,
     position: employees.position,
     username: employees.username,
     hasPortalAccess: employees.hasPortalAccess,
@@ -9340,6 +9341,22 @@ export async function updateEmployeeProfile(
     .set({
       phone: data.phone,
       email: data.email,
+      updatedAt: new Date(),
+    })
+    .where(eq(employees.id, employeeId));
+
+  return true;
+}
+
+// حفظ البريد الإلكتروني عند أول تسجيل دخول
+export async function setupEmployeeEmail(employeeId: number, email: string) {
+  const db = await getDb();
+  if (!db) return false;
+
+  await db.update(employees)
+    .set({
+      email: email,
+      emailVerified: true,
       updatedAt: new Date(),
     })
     .where(eq(employees.id, employeeId));

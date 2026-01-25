@@ -273,6 +273,7 @@ export const employees = mysqlTable("employees", {
   branchId: int("branchId").notNull(),
   phone: varchar("phone", { length: 50 }),
   email: varchar("email", { length: 255 }),
+  emailVerified: boolean("emailVerified").default(false).notNull(),
   position: varchar("position", { length: 100 }),
   // حقول تسجيل الدخول
   username: varchar("username", { length: 50 }).unique(),

@@ -1,0 +1,1 @@
+ALTER TABLE `employees` ADD `emailVerified` boolean DEFAULT false NOT NULL;

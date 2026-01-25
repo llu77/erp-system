@@ -88,6 +88,8 @@ export async function employeeLogin(username: string, password: string): Promise
     branchId: number;
     branchName: string;
     position: string | null;
+    email: string | null;
+    emailVerified: boolean;
   };
   error?: string;
 }> {
@@ -151,6 +153,8 @@ export async function employeeLogin(username: string, password: string): Promise
         branchId: employee.branchId,
         branchName,
         position: employee.position,
+        email: employee.email,
+        emailVerified: employee.emailVerified,
       },
     };
   } catch (error) {

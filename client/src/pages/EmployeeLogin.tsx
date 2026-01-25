@@ -29,8 +29,12 @@ export default function EmployeeLogin() {
       });
 
       if (result.success && result.employee) {
-        // حفظ معلومات الموظف في localStorage
-        localStorage.setItem('employeeInfo', JSON.stringify(result.employee));
+        // حفظ معلومات الموظف في localStorage مع email و emailVerified
+        localStorage.setItem('employeeInfo', JSON.stringify({
+          ...result.employee,
+          email: result.employee.email || null,
+          emailVerified: result.employee.emailVerified || false,
+        }));
         localStorage.setItem('employeeToken', 'employee-session');
         
         // التوجيه لبوابة الموظفين

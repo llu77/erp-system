@@ -7210,6 +7210,20 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         return { success: true };
       }),
 
+    // حفظ البريد الإلكتروني عند أول تسجيل دخول
+    setupEmail: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        email: z.string().email({ message: 'الرجاء إدخال بريد إلكتروني صحيح' }),
+      }))
+      .mutation(async ({ input }) => {
+        const success = await db.setupEmployeeEmail(input.employeeId, input.email);
+        if (!success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في حفظ البريد الإلكتروني' });
+        }
+        return { success: true, message: 'تم حفظ البريد الإلكتروني بنجاح' };
+      }),
+
     // جلب كشف الراتب لشهر محدد
     getSalarySlip: publicProcedure
       .input(z.object({

@@ -316,6 +316,13 @@
       "when": 1769354938073,
       "tag": "0044_cute_wiccan",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "5",
+      "when": 1769365421046,
+      "tag": "0045_powerful_tigra",
+      "breakpoints": true
     }
   ]
 }
