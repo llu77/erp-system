@@ -6607,6 +6607,7 @@ ${discrepancyRows}
     chat: publicProcedure
       .input(z.object({
         message: z.string().min(1),
+        sessionId: z.string().optional(), // معرف الجلسة للذاكرة
         conversationHistory: z.array(z.object({
           role: z.enum(['user', 'assistant', 'system', 'tool']),
           content: z.string(),
@@ -6623,6 +6624,27 @@ ${discrepancyRows}
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
         const { assistantTools, executeAssistantTool } = await import('./ai/assistantTools');
+        const { getOrCreateActiveSession, saveMessage, getConversationContext, getPendingRequests } = await import('./ai/conversationMemory');
+
+        // إدارة الجلسة والذاكرة
+        let sessionId = input.sessionId;
+        let conversationContext: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
+        
+        // إذا كان لدينا معلومات الموظف، نستخدم الذاكرة
+        if (input.employeeContext?.employeeId) {
+          try {
+            sessionId = await getOrCreateActiveSession(
+              input.employeeContext.employeeId,
+              input.employeeContext.employeeName || '',
+              input.employeeContext.branchId,
+              input.employeeContext.branchName
+            );
+            // تحميل آخر 10 رسائل كسياق
+            conversationContext = await getConversationContext(sessionId, 10);
+          } catch (e) {
+            console.error('خطأ في إدارة الجلسة:', e);
+          }
+        }
 
         // بناء رسالة النظام مع التاريخ الحالي
         const now = new Date();
@@ -6643,7 +6665,14 @@ ${discrepancyRows}
 
 1. **التعرف على الموظف**: إذا لم تعرف الموظف بعد، اسأله عن اسمه أولاً واستخدم أداة identify_employee للتعرف عليه.
 
-2. **رفع الطلبات**: يمكنك مساعدة الموظف في رفع طلبات (سلفة، إجازة، استئذان، متأخرات، اعتراض، استقالة). اجمع المعلومات المطلوبة ثم استخدم أداة submit_request.
+2. **رفع الطلبات**: يمكنك مساعدة الموظف في رفع طلبات (سلفة، إجازة، استئذان، متأخرات، اعتراض، استقالة). اجمع المعلومات المطلوبة ثم استخدم أداة prepare_request لإنشاء طلب معلق للتأكيد.
+
+**نظام التأكيد (مهم جداً):**
+- عند رفع أي طلب، استخدم أولاً prepare_request لإنشاء طلب معلق
+- اعرض ملخص الطلب واطلب من الموظف التأكيد
+- إذا قال "نعم" أو "أكد"، استخدم confirm_request لتنفيذ الطلب
+- إذا قال "لا" أو "إلغاء"، استخدم cancel_request لإلغاء الطلب
+- لا ترفع أي طلب مباشرة بدون تأكيد الموظف
 
 3. **التقارير السريعة**: يمكنك عرض تقارير الإيرادات والبونص والطلبات باستخدام أداة get_report.
 
@@ -6665,15 +6694,17 @@ ${discrepancyRows}
 
 ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.employeeContext.employeeName} (رقم: ${input.employeeContext.employeeId}) - فرع: ${input.employeeContext.branchName}` : '**الموظف غير معروف بعد - اسأل عن اسمه**'}`;
 
-        // بناء الرسائل
+        // بناء الرسائل - دمج سياق الذاكرة مع المحادثة الحالية
+        const historyMessages = conversationContext.length > 0 
+          ? conversationContext 
+          : (input.conversationHistory || []).map(m => ({
+              role: m.role as 'user' | 'assistant' | 'system',
+              content: m.content,
+            }));
+        
         const messages: any[] = [
           { role: 'system', content: systemPrompt },
-          ...(input.conversationHistory || []).map(m => ({
-            role: m.role,
-            content: m.content,
-            ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}),
-            ...(m.name ? { name: m.name } : {}),
-          })),
+          ...historyMessages,
           { role: 'user', content: input.message },
         ];
 
@@ -6734,18 +6765,97 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
             temperature: 0.7,
           });
 
+          const responseContent = typeof finalResponse.choices[0]?.message?.content === 'string' 
+            ? finalResponse.choices[0].message.content 
+            : 'حدث خطأ';
+          
+          // حفظ الرسائل في الذاكرة
+          if (sessionId && employeeContext?.employeeId) {
+            try {
+              await saveMessage(sessionId, { role: 'user', content: input.message });
+              await saveMessage(sessionId, { 
+                role: 'assistant', 
+                content: responseContent,
+                toolCalls: JSON.stringify(toolResults.map(t => t.name)),
+                toolResults: JSON.stringify(toolResults.map(t => t.result)),
+              });
+            } catch (e) {
+              console.error('خطأ في حفظ الرسائل:', e);
+            }
+          }
+
           return {
-            message: finalResponse.choices[0]?.message?.content || 'حدث خطأ',
+            message: responseContent,
+            sessionId,
             employeeContext,
             toolResults,
           };
         }
 
+        const responseContent = typeof assistantMessage?.content === 'string' 
+          ? assistantMessage.content 
+          : 'حدث خطأ';
+        
+        // حفظ الرسائل في الذاكرة
+        if (sessionId && input.employeeContext?.employeeId) {
+          try {
+            await saveMessage(sessionId, { role: 'user', content: input.message });
+            await saveMessage(sessionId, { role: 'assistant', content: responseContent });
+          } catch (e) {
+            console.error('خطأ في حفظ الرسائل:', e);
+          }
+        }
+
         return {
-          message: assistantMessage?.content || 'حدث خطأ',
+          message: responseContent,
+          sessionId,
           employeeContext: input.employeeContext,
           toolResults: [],
         };
+      }),
+
+    // بدء محادثة جديدة
+    startNewConversation: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        employeeName: z.string(),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { createSession, closeSession, getOrCreateActiveSession } = await import('./ai/conversationMemory');
+        
+        try {
+          // إغلاق الجلسة الحالية إن وجدت
+          const currentSession = await getOrCreateActiveSession(
+            input.employeeId,
+            input.employeeName,
+            input.branchId,
+            input.branchName
+          );
+          await closeSession(currentSession);
+          
+          // إنشاء جلسة جديدة
+          const newSessionId = await createSession(
+            input.employeeId,
+            input.employeeName,
+            input.branchId,
+            input.branchName
+          );
+          
+          return {
+            success: true,
+            sessionId: newSessionId,
+            message: 'تم بدء محادثة جديدة',
+          };
+        } catch (e) {
+          console.error('خطأ في بدء محادثة جديدة:', e);
+          return {
+            success: false,
+            sessionId: null,
+            message: 'حدث خطأ في بدء المحادثة',
+          };
+        }
       }),
 
     // رسالة الترحيب

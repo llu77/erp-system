@@ -1995,3 +1995,55 @@ export const loyaltyDiscountRecords = mysqlTable("loyaltyDiscountRecords", {
 
 export type LoyaltyDiscountRecord = typeof loyaltyDiscountRecords.$inferSelect;
 export type InsertLoyaltyDiscountRecord = typeof loyaltyDiscountRecords.$inferInsert;
+
+
+// ==================== جدول جلسات المحادثات ====================
+export const conversationSessions = mysqlTable("conversation_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: varchar("sessionId", { length: 64 }).notNull().unique(),
+  employeeId: int("employeeId").notNull(),
+  employeeName: varchar("employeeName", { length: 100 }),
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 100 }),
+  status: mysqlEnum("status", ["active", "closed"]).default("active").notNull(),
+  messageCount: int("messageCount").default(0).notNull(),
+  lastMessageAt: timestamp("lastMessageAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  closedAt: timestamp("closedAt"),
+});
+
+export type ConversationSession = typeof conversationSessions.$inferSelect;
+export type InsertConversationSession = typeof conversationSessions.$inferInsert;
+
+// ==================== جدول سجل المحادثات ====================
+export const conversationHistory = mysqlTable("conversation_history", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: varchar("sessionId", { length: 64 }).notNull(),
+  role: mysqlEnum("role", ["user", "assistant", "system"]).notNull(),
+  content: text("content").notNull(),
+  toolCalls: text("toolCalls"), // JSON array of tool calls made
+  toolResults: text("toolResults"), // JSON array of tool results
+  metadata: text("metadata"), // Additional metadata (tokens, latency, etc.)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ConversationHistoryRecord = typeof conversationHistory.$inferSelect;
+export type InsertConversationHistoryRecord = typeof conversationHistory.$inferInsert;
+
+// ==================== جدول الطلبات المعلقة للتأكيد ====================
+export const pendingRequests = mysqlTable("pending_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: varchar("sessionId", { length: 64 }).notNull(),
+  employeeId: int("employeeId").notNull(),
+  requestType: varchar("requestType", { length: 50 }).notNull(),
+  requestData: text("requestData").notNull(), // JSON data of the request
+  summary: text("summary").notNull(), // Human-readable summary for confirmation
+  status: mysqlEnum("status", ["pending", "confirmed", "cancelled", "expired"]).default("pending").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  confirmedAt: timestamp("confirmedAt"),
+  cancelledAt: timestamp("cancelledAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PendingRequest = typeof pendingRequests.$inferSelect;
+export type InsertPendingRequest = typeof pendingRequests.$inferInsert;

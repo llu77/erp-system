@@ -19,6 +19,12 @@ import {
   products
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { 
+  createConfirmationRequest, 
+  handleConfirmationResponse,
+  type ConfirmationRequest 
+} from "./confirmationSystem";
+import { cancelPendingRequest, getPendingRequests } from "./conversationMemory";
 
 // ========== أنواع محسنة ==========
 export interface ToolResult {
@@ -752,6 +758,107 @@ export const assistantTools = [
   {
     type: "function" as const,
     function: {
+      name: "prepare_request",
+      description: "إنشاء طلب معلق للتأكيد قبل الرفع. يجب استخدام هذه الأداة بدلاً من submit_request لإعطاء الموظف فرصة للتأكيد.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "معرف الجلسة"
+          },
+          employeeId: {
+            type: "number",
+            description: "رقم الموظف"
+          },
+          type: {
+            type: "string",
+            enum: ["advance", "vacation", "arrears", "permission", "objection", "resignation"],
+            description: "نوع الطلب"
+          },
+          description: {
+            type: "string",
+            description: "وصف الطلب"
+          },
+          amount: {
+            type: "number",
+            description: "المبلغ (للسلفة والمتأخرات)"
+          },
+          vacationStartDate: {
+            type: "string",
+            description: "تاريخ بداية الإجازة (YYYY-MM-DD)"
+          },
+          vacationEndDate: {
+            type: "string",
+            description: "تاريخ نهاية الإجازة (YYYY-MM-DD)"
+          },
+          vacationDays: {
+            type: "number",
+            description: "عدد أيام الإجازة"
+          },
+          vacationType: {
+            type: "string",
+            enum: ["annual", "sick", "emergency", "unpaid"],
+            description: "نوع الإجازة"
+          },
+          permissionDate: {
+            type: "string",
+            description: "تاريخ الاستئذان (YYYY-MM-DD)"
+          },
+          permissionStartTime: {
+            type: "string",
+            description: "وقت بداية الاستئذان (HH:MM)"
+          },
+          permissionEndTime: {
+            type: "string",
+            description: "وقت نهاية الاستئذان (HH:MM)"
+          }
+        },
+        required: ["sessionId", "employeeId", "type", "description"]
+      }
+    }
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "confirm_request",
+      description: "تأكيد وتنفيذ الطلب المعلق. يُستخدم عندما يقول الموظف 'نعم' أو 'أكد' أو 'موافق'.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "معرف الجلسة"
+          },
+          employeeId: {
+            type: "number",
+            description: "رقم الموظف"
+          }
+        },
+        required: ["sessionId", "employeeId"]
+      }
+    }
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "cancel_request",
+      description: "إلغاء الطلب المعلق. يُستخدم عندما يقول الموظف 'لا' أو 'إلغاء' أو 'تراجع'.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "معرف الجلسة"
+          }
+        },
+        required: ["sessionId"]
+      }
+    }
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "calculate_price",
       description: "حساب أسعار الخدمات من قاعدة البيانات مع الخصومات. يعرض فقط الخدمات الموجودة فعلياً.",
       parameters: {
@@ -812,7 +919,151 @@ export async function executeAssistantTool(toolName: string, args: any): Promise
         isLoyaltyDiscount: args.isLoyaltyDiscount,
       });
     
+    case 'prepare_request':
+      return prepareRequest(args);
+    
+    case 'confirm_request':
+      return confirmRequest(args.sessionId, args.employeeId);
+    
+    case 'cancel_request':
+      return cancelRequest(args.sessionId);
+    
     default:
       return errorResult(`أداة غير معروفة: ${toolName}`);
+  }
+}
+
+
+// ========== دوال نظام التأكيد ==========
+
+/**
+ * إنشاء طلب معلق للتأكيد
+ */
+async function prepareRequest(args: {
+  sessionId: string;
+  employeeId: number;
+  type: 'advance' | 'vacation' | 'arrears' | 'permission' | 'objection' | 'resignation';
+  description: string;
+  amount?: number;
+  vacationStartDate?: string;
+  vacationEndDate?: string;
+  vacationDays?: number;
+  vacationType?: string;
+  permissionDate?: string;
+  permissionStartTime?: string;
+  permissionEndTime?: string;
+}): Promise<ToolResult> {
+  try {
+    const confirmationRequest: ConfirmationRequest = {
+      sessionId: args.sessionId,
+      employeeId: args.employeeId,
+      requestType: args.type,
+      requestData: {
+        description: args.description,
+        amount: args.amount,
+        vacationStartDate: args.vacationStartDate,
+        vacationEndDate: args.vacationEndDate,
+        vacationDays: args.vacationDays,
+        vacationType: args.vacationType,
+        permissionDate: args.permissionDate,
+        permissionStartTime: args.permissionStartTime,
+        permissionEndTime: args.permissionEndTime,
+      },
+    };
+
+    const result = await createConfirmationRequest(confirmationRequest);
+
+    if (result.success) {
+      return {
+        success: true,
+        hasData: true,
+        dataCount: 1,
+        data: {
+          pendingRequestId: result.pendingRequestId,
+          expiresAt: result.expiresAt,
+        },
+        message: result.message,
+        source: 'نظام التأكيد',
+      };
+    } else {
+      return errorResult(result.message);
+    }
+  } catch (error) {
+    return errorResult(`حدث خطأ أثناء إنشاء طلب التأكيد: ${error}`);
+  }
+}
+
+/**
+ * تأكيد وتنفيذ الطلب المعلق
+ */
+async function confirmRequest(sessionId: string, employeeId: number): Promise<ToolResult> {
+  try {
+    const result = await handleConfirmationResponse(sessionId, employeeId, 'نعم');
+
+    if (result.action === 'confirmed' && result.result) {
+      return result.result;
+    } else if (result.action === 'no_pending') {
+      return {
+        success: true,
+        hasData: false,
+        dataCount: 0,
+        message: 'لا توجد طلبات معلقة للتأكيد. إذا كنت تريد رفع طلب جديد، أخبرني بالتفاصيل.',
+        source: 'نظام التأكيد',
+      };
+    } else {
+      return {
+        success: false,
+        hasData: false,
+        dataCount: 0,
+        message: result.message,
+        source: 'نظام التأكيد',
+      };
+    }
+  } catch (error) {
+    return errorResult(`حدث خطأ أثناء تأكيد الطلب: ${error}`);
+  }
+}
+
+/**
+ * إلغاء الطلب المعلق
+ */
+async function cancelRequest(sessionId: string): Promise<ToolResult> {
+  try {
+    const pendingRequests = await getPendingRequests(sessionId);
+
+    if (pendingRequests.length === 0) {
+      return {
+        success: true,
+        hasData: false,
+        dataCount: 0,
+        message: 'لا توجد طلبات معلقة للإلغاء.',
+        source: 'نظام التأكيد',
+      };
+    }
+
+    // إلغاء آخر طلب معلق
+    const latestRequest = pendingRequests[0];
+    await cancelPendingRequest(latestRequest.id);
+
+    const typeNames: Record<string, string> = {
+      advance: 'سلفة',
+      vacation: 'إجازة',
+      arrears: 'صرف متأخرات',
+      permission: 'استئذان',
+      objection: 'اعتراض',
+      resignation: 'استقالة',
+    };
+
+    const typeName = typeNames[latestRequest.requestType] || latestRequest.requestType;
+
+    return {
+      success: true,
+      hasData: true,
+      dataCount: 1,
+      message: `❌ تم إلغاء طلب ${typeName}.\n\nإذا كنت تريد رفع طلب جديد، أخبرني بالتفاصيل.`,
+      source: 'نظام التأكيد',
+    };
+  } catch (error) {
+    return errorResult(`حدث خطأ أثناء إلغاء الطلب: ${error}`);
   }
 }

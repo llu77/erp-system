@@ -281,6 +281,13 @@
       "when": 1769284498444,
       "tag": "0039_fancy_meltdown",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "5",
+      "when": 1769298728853,
+      "tag": "0040_tired_thena",
+      "breakpoints": true
     }
   ]
 }
