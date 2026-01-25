@@ -3331,6 +3331,8 @@ ${discrepancyRows}
           incentiveAmount: z.string(),
           deductionAmount: z.string(),
           advanceDeduction: z.string(),
+          negativeInvoicesDeduction: z.string().optional(),
+          unpaidLeaveDeduction: z.string().optional(),
           grossSalary: z.string(),
           totalDeductions: z.string(),
           netSalary: z.string(),
@@ -3357,6 +3359,33 @@ ${discrepancyRows}
         } catch (error: any) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
         }
+      }),
+    // جلب الفواتير السالبة والإجازات بدون راتب للفرع في شهر معين
+    getDeductionsPreview: supervisorInputProcedure
+      .input(z.object({
+        branchId: z.number(),
+        year: z.number(),
+        month: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const negativeInvoices = await db.getNegativeInvoicesForMonth(input.branchId, input.year, input.month);
+        const leaves = await db.getApprovedLeavesForBranch(input.branchId, input.year, input.month);
+        
+        // تحويل Map إلى Object للإرسال
+        const invoicesObj: Record<number, { total: number; invoices: any[] }> = {};
+        negativeInvoices.forEach((value, key) => {
+          invoicesObj[key] = value;
+        });
+        
+        const leavesObj: Record<number, { totalDays: number; totalDeduction: number; leaves: any[] }> = {};
+        leaves.forEach((value, key) => {
+          leavesObj[key] = value;
+        });
+        
+        return {
+          negativeInvoices: invoicesObj,
+          leaves: leavesObj,
+        };
       }),
   }),
 

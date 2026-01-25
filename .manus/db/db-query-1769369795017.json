@@ -1,0 +1,20 @@
+{
+  "query": "SELECT ei.id, ei.employeeId, e.name as employee_name, ei.type, ei.amount, ei.invoiceDate, ei.reason, ei.branchId\nFROM employeeInvoices ei\nJOIN employees e ON ei.employeeId = e.id\nWHERE ei.type = 'negative'\nORDER BY ei.invoiceDate DESC\nLIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT ei.id, ei.employeeId, e.name as employee_name, ei.type, ei.amount, ei.invoiceDate, ei.reason, ei.branchId\nFROM employeeInvoices ei\nJOIN employees e ON ei.employeeId = e.id\nWHERE ei.type = 'negative'\nORDER BY ei.invoiceDate DESC\nLIMIT 10;",
+  "rows": [
+    {
+      "id": "240001",
+      "employeeId": "90003",
+      "employee_name": "محمد اسماعيل",
+      "type": "negative",
+      "amount": "20.00",
+      "invoiceDate": "2026-01-24 21:48:39",
+      "reason": "بعد عملية دفع مرفوضة قال بجيب فيزا تانيه ومشي ",
+      "branchId": "30001"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temployeeId\temployee_name\ttype\tamount\tinvoiceDate\treason\tbranchId\n240001\t90003\tمحمد اسماعيل\tnegative\t20.00\t2026-01-24 21:48:39\tبعد عملية دفع مرفوضة قال بجيب فيزا تانيه ومشي \t30001\n",
+  "stderr": "",
+  "execution_time_ms": 1532
+}

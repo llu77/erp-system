@@ -91,6 +91,8 @@ interface EmployeePayrollData {
   advanceDeduction: number;
   negativeInvoicesDeduction: number;
   negativeInvoicesDetails: string | null;
+  unpaidLeaveDeduction: number;
+  unpaidLeaveDays: number;
   grossSalary: number;
   totalDeductions: number;
   netSalary: number;
@@ -131,8 +133,14 @@ export default function Payrolls() {
     { branchId: selectedBranch! },
     { enabled: !!selectedBranch && step === 'form' }
   );
+  
+  // جلب الفواتير السالبة والإجازات بدون راتب
+  const { data: deductionsPreview, isLoading: deductionsLoading } = trpc.payrolls.getDeductionsPreview.useQuery(
+    { branchId: selectedBranch!, year: selectedYear, month: selectedMonth },
+    { enabled: !!selectedBranch && step === 'form' }
+  );
 
-  // تهيئة بيانات الموظفين عند تحميلهم مع السلف تلقائياً
+  // تهيئة بيانات الموظفين عند تحميلهم مع السلف والفواتير السالبة والإجازات تلقائياً
   useEffect(() => {
     if (branchEmployees && branchEmployees.length > 0) {
       const initialData: EmployeePayrollData[] = branchEmployees.map((emp: any) => {
@@ -149,8 +157,19 @@ export default function Payrolls() {
         const employeeAdvances = branchAdvances?.find(a => a.employeeId === emp.id);
         const advanceDeduction = employeeAdvances?.totalAdvances || 0;
         
+        // جلب الفواتير السالبة للموظف تلقائياً
+        const employeeNegativeInvoices = deductionsPreview?.negativeInvoices?.[emp.id];
+        const negativeInvoicesDeduction = employeeNegativeInvoices?.total || 0;
+        const negativeInvoicesDetails = employeeNegativeInvoices?.invoices?.length 
+          ? `فواتير سالبة: ${employeeNegativeInvoices.invoices.map((inv: any) => `${inv.amount} ر.س (${inv.note || 'بدون ملاحظة'})`).join(' | ')}`
+          : null;
+        
+        // جلب الإجازات بدون راتب للموظف تلقائياً
+        const employeeLeaves = deductionsPreview?.leaves?.[emp.id];
+        const unpaidLeaveDeduction = employeeLeaves?.totalDeduction || 0;
+        
         const grossSalary = baseSalary;
-        const totalDeductions = advanceDeduction;
+        const totalDeductions = advanceDeduction + negativeInvoicesDeduction + unpaidLeaveDeduction;
         const netSalary = baseSalary - totalDeductions;
 
         return {
@@ -167,8 +186,10 @@ export default function Payrolls() {
           incentiveAmount,
           deductionAmount,
           advanceDeduction,
-          negativeInvoicesDeduction: 0,
-          negativeInvoicesDetails: null,
+          negativeInvoicesDeduction,
+          negativeInvoicesDetails,
+          unpaidLeaveDeduction: unpaidLeaveDeduction,
+          unpaidLeaveDays: employeeLeaves?.totalDays || 0,
           grossSalary,
           totalDeductions,
           netSalary,
@@ -176,7 +197,7 @@ export default function Payrolls() {
       });
       setEmployeesData(initialData);
     }
-  }, [branchEmployees, branchAdvances]);
+  }, [branchEmployees, branchAdvances, deductionsPreview]);
 
   // حساب الراتب لموظف معين
   const calculateSalary = (data: EmployeePayrollData): EmployeePayrollData => {
@@ -186,7 +207,8 @@ export default function Payrolls() {
     const absentDeduction = absentDays > 0 ? dailyRate * absentDays : 0;
     const grossSalary = data.baseSalary + overtime + data.incentiveAmount;
     const negativeInvoicesDeduction = data.negativeInvoicesDeduction || 0;
-    const totalDeductions = data.deductionAmount + data.advanceDeduction + absentDeduction + negativeInvoicesDeduction;
+    const unpaidLeaveDeduction = data.unpaidLeaveDeduction || 0;
+    const totalDeductions = data.deductionAmount + data.advanceDeduction + absentDeduction + negativeInvoicesDeduction + unpaidLeaveDeduction;
     const netSalary = grossSalary - totalDeductions;
 
     return {
@@ -295,6 +317,8 @@ export default function Payrolls() {
         incentiveAmount: emp.incentiveAmount.toFixed(2),
         deductionAmount: emp.deductionAmount.toFixed(2),
         advanceDeduction: emp.advanceDeduction.toFixed(2),
+        negativeInvoicesDeduction: emp.negativeInvoicesDeduction.toFixed(2),
+        unpaidLeaveDeduction: emp.unpaidLeaveDeduction.toFixed(2),
         grossSalary: emp.grossSalary.toFixed(2),
         totalDeductions: emp.totalDeductions.toFixed(2),
         netSalary: emp.netSalary.toFixed(2),
@@ -1414,6 +1438,8 @@ export default function Payrolls() {
                             <TableHead className="text-center w-20">الحوافز</TableHead>
                             <TableHead className="text-center w-20">الخصومات</TableHead>
                             <TableHead className="text-center w-20">السلف</TableHead>
+                            <TableHead className="text-center w-20">فواتير سالبة</TableHead>
+                            <TableHead className="text-center w-20">إجازة بدون راتب</TableHead>
                             <TableHead className="text-center w-24">المتبقي</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -1480,6 +1506,24 @@ export default function Payrolls() {
                                   onChange={(e) => updateEmployeeData(index, 'advanceDeduction', parseFloat(e.target.value) || 0)}
                                   className="w-16 h-7 text-center text-xs p-1"
                                 />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {emp.negativeInvoicesDeduction > 0 ? (
+                                  <div className="text-red-500 font-medium" title={emp.negativeInvoicesDetails || ''}>
+                                    -{formatAmount(emp.negativeInvoicesDeduction)}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {emp.unpaidLeaveDeduction > 0 ? (
+                                  <div className="text-orange-500 font-medium" title={`${emp.unpaidLeaveDays} يوم`}>
+                                    -{formatAmount(emp.unpaidLeaveDeduction)}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
                               </TableCell>
                               <TableCell className="text-center font-bold text-green-500">
                                 {formatAmount(emp.netSalary)}
