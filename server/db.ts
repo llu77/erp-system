@@ -9902,32 +9902,37 @@ export async function getEmployeesWithExpiringDocuments() {
 export async function updateEmployeeDocumentImage(
   employeeId: number,
   documentType: 'iqama' | 'healthCert' | 'contract',
-  imageUrl: string
-) {
+  imageUrl: string | null
+): Promise<{ success: boolean; error?: string }> {
   const db = await getDb();
-  if (!db) return { success: false };
+  if (!db) return { success: false, error: 'فشل الاتصال بقاعدة البيانات' };
   
-  const { employees } = await import('../drizzle/schema');
-  const updateData: Record<string, string> = {};
-  
-  switch (documentType) {
-    case 'iqama':
-      updateData.iqamaImageUrl = imageUrl;
-      break;
-    case 'healthCert':
-      updateData.healthCertImageUrl = imageUrl;
-      break;
-    case 'contract':
-      updateData.contractImageUrl = imageUrl;
-      break;
+  try {
+    const { employees } = await import('../drizzle/schema');
+    const updateData: Record<string, string | null> = {};
+    
+    switch (documentType) {
+      case 'iqama':
+        updateData.iqamaImageUrl = imageUrl;
+        break;
+      case 'healthCert':
+        updateData.healthCertImageUrl = imageUrl;
+        break;
+      case 'contract':
+        updateData.contractImageUrl = imageUrl;
+        break;
+    }
+    
+    await db
+      .update(employees)
+      .set(updateData)
+      .where(eq(employees.id, employeeId));
+    
+    return { success: true };
+  } catch (error) {
+    console.error('خطأ في تحديث صورة الوثيقة:', error);
+    return { success: false, error: 'فشل في تحديث صورة الوثيقة' };
   }
-  
-  await db
-    .update(employees)
-    .set(updateData)
-    .where(eq(employees.id, employeeId));
-  
-  return { success: true };
 }
 
 // الحصول على جميع الموظفين مع بيانات الوثائق للتقرير
@@ -10059,8 +10064,11 @@ export async function getEmployeeDocumentInfo(employeeId: number) {
     branchId: employees.branchId,
     iqamaNumber: employees.iqamaNumber,
     iqamaExpiryDate: employees.iqamaExpiryDate,
+    iqamaImageUrl: employees.iqamaImageUrl,
     healthCertExpiryDate: employees.healthCertExpiryDate,
+    healthCertImageUrl: employees.healthCertImageUrl,
     contractExpiryDate: employees.contractExpiryDate,
+    contractImageUrl: employees.contractImageUrl,
     infoSubmittedAt: employees.infoSubmittedAt,
     infoSubmittedBy: employees.infoSubmittedBy,
   })
@@ -10081,3 +10089,4 @@ export async function getEmployeeDocumentInfo(employeeId: number) {
     branchName: branch.length > 0 ? branch[0].name : 'غير محدد',
   };
 }
+

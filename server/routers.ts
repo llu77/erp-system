@@ -7633,6 +7633,77 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         }
         return { success: true, message: 'تم تسجيل المعلومات بنجاح' };
       }),
+
+    // رفع صورة وثيقة
+    uploadDocumentImage: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        documentType: z.enum(['iqama', 'healthCert', 'contract']),
+        imageData: z.string(), // Base64 encoded image
+        fileName: z.string(),
+        mimeType: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { employeeId, documentType, imageData, fileName, mimeType } = input;
+        
+        // التحقق من أن الموظف لم يسجل معلوماته بعد (يمكنه رفع الصور فقط قبل التسجيل النهائي)
+        const hasSubmitted = await db.hasEmployeeSubmittedInfo(employeeId);
+        if (hasSubmitted) {
+          throw new TRPCError({ 
+            code: 'BAD_REQUEST', 
+            message: 'تم تسجيل المعلومات مسبقاً. لتعديل الصور يرجى التواصل مع الإدارة.' 
+          });
+        }
+        
+        // تحويل Base64 إلى Buffer
+        const base64Data = imageData.replace(/^data:[^;]+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        // إنشاء اسم ملف فريد
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const extension = fileName.split('.').pop() || 'jpg';
+        const fileKey = `employees/${employeeId}/documents/${documentType}-${timestamp}-${randomSuffix}.${extension}`;
+        
+        // رفع الصورة إلى S3
+        const { storagePut } = await import('./storage');
+        const { url } = await storagePut(fileKey, buffer, mimeType);
+        
+        // تحديث رابط الصورة في قاعدة البيانات
+        const result = await db.updateEmployeeDocumentImage(employeeId, documentType, url);
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في حفظ رابط الصورة' });
+        }
+        
+        return { success: true, url, message: 'تم رفع الصورة بنجاح' };
+      }),
+
+    // حذف صورة وثيقة
+    deleteDocumentImage: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        documentType: z.enum(['iqama', 'healthCert', 'contract']),
+      }))
+      .mutation(async ({ input }) => {
+        const { employeeId, documentType } = input;
+        
+        // التحقق من أن الموظف لم يسجل معلوماته بعد
+        const hasSubmitted = await db.hasEmployeeSubmittedInfo(employeeId);
+        if (hasSubmitted) {
+          throw new TRPCError({ 
+            code: 'BAD_REQUEST', 
+            message: 'تم تسجيل المعلومات مسبقاً. لحذف الصور يرجى التواصل مع الإدارة.' 
+          });
+        }
+        
+        // حذف رابط الصورة من قاعدة البيانات
+        const result = await db.updateEmployeeDocumentImage(employeeId, documentType, null);
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في حذف الصورة' });
+        }
+        
+        return { success: true, message: 'تم حذف الصورة بنجاح' };
+      }),
   }),
 });
 
