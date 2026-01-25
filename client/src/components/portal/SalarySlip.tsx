@@ -47,6 +47,28 @@ const MONTHS = [
   { value: 12, label: 'ديسمبر', labelEn: 'December' },
 ];
 
+// تحميل الشعار كـ base64
+async function loadLogoAsBase64(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } else {
+        reject(new Error('Could not get canvas context'));
+      }
+    };
+    img.onerror = () => reject(new Error('Could not load logo'));
+    img.src = '/symbol-ai-logo.png';
+  });
+}
+
 export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
@@ -91,7 +113,7 @@ export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
   // توليد سنوات للاختيار (آخر 3 سنوات)
   const years = Array.from({ length: 3 }, (_, i) => currentDate.getFullYear() - i);
 
-  // دالة توليد PDF احترافي
+  // دالة توليد PDF احترافي مع الشعار
   const generatePDF = async () => {
     if (!salarySlip) return;
     
@@ -104,41 +126,54 @@ export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
         format: 'a4',
       });
 
-      // إعداد الخط العربي
+      // إعداد الخط
       doc.setFont('helvetica');
       
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 15;
       
-      // ==================== الهيدر ====================
+      // ==================== الهيدر مع الشعار ====================
       // خلفية الهيدر
       doc.setFillColor(30, 41, 59); // slate-800
-      doc.rect(0, 0, pageWidth, 45, 'F');
+      doc.rect(0, 0, pageWidth, 50, 'F');
       
       // شريط ذهبي
       doc.setFillColor(245, 158, 11); // amber-500
-      doc.rect(0, 45, pageWidth, 3, 'F');
+      doc.rect(0, 50, pageWidth, 3, 'F');
       
-      // عنوان الشركة
+      // إضافة الشعار
+      try {
+        const logoBase64 = await loadLogoAsBase64();
+        // الشعار في المنتصف أعلى الهيدر
+        const logoWidth = 25;
+        const logoHeight = 25;
+        const logoX = (pageWidth - logoWidth) / 2;
+        doc.addImage(logoBase64, 'PNG', logoX, 5, logoWidth, logoHeight);
+      } catch (logoError) {
+        console.warn('Could not load logo, continuing without it');
+      }
+      
+      // عنوان الشركة تحت الشعار
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(24);
-      doc.text('Symbol AI', pageWidth / 2, 20, { align: 'center' });
+      doc.setFontSize(18);
+      doc.text('Symbol AI', pageWidth / 2, 37, { align: 'center' });
       
-      doc.setFontSize(12);
-      doc.text('Salary Slip', pageWidth / 2, 32, { align: 'center' });
+      doc.setFontSize(11);
+      doc.text('Salary Slip', pageWidth / 2, 44, { align: 'center' });
       
-      doc.setFontSize(10);
-      doc.text(`${getMonthNameEn(selectedMonth)} ${selectedYear}`, pageWidth / 2, 40, { align: 'center' });
+      doc.setFontSize(9);
+      doc.setTextColor(148, 163, 184); // slate-400
+      doc.text(`${getMonthNameEn(selectedMonth)} ${selectedYear}`, pageWidth / 2, 49, { align: 'center' });
       
       // ==================== معلومات الموظف ====================
-      let yPos = 58;
+      let yPos = 62;
       
       doc.setFillColor(241, 245, 249); // slate-100
       doc.roundedRect(margin, yPos, pageWidth - (margin * 2), 35, 3, 3, 'F');
       
       doc.setTextColor(30, 41, 59);
-      doc.setFontSize(11);
+      doc.setFontSize(10);
       
       // الصف الأول
       doc.text(`Employee Name: ${salarySlip.employeeName}`, pageWidth - margin - 5, yPos + 10, { align: 'right' });
@@ -360,32 +395,25 @@ export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
               <SelectTrigger className="flex-1 bg-slate-700 border-slate-600 text-white">
                 <SelectValue placeholder="الشهر" />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700">
+              <SelectContent>
                 {MONTHS.map((month) => (
-                  <SelectItem 
-                    key={month.value} 
-                    value={month.value.toString()}
-                    className="text-white hover:bg-slate-700"
-                  >
+                  <SelectItem key={month.value} value={month.value.toString()}>
                     {month.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            
             <Select
               value={selectedYear.toString()}
               onValueChange={(value) => setSelectedYear(parseInt(value))}
             >
-              <SelectTrigger className="w-32 bg-slate-700 border-slate-600 text-white">
+              <SelectTrigger className="w-24 bg-slate-700 border-slate-600 text-white">
                 <SelectValue placeholder="السنة" />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700">
+              <SelectContent>
                 {years.map((year) => (
-                  <SelectItem 
-                    key={year} 
-                    value={year.toString()}
-                    className="text-white hover:bg-slate-700"
-                  >
+                  <SelectItem key={year} value={year.toString()}>
                     {year}
                   </SelectItem>
                 ))}
@@ -398,92 +426,82 @@ export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
       {/* كشف الراتب */}
       {isLoading ? (
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardContent className="flex items-center justify-center py-12">
+          <CardContent className="py-12 flex justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
           </CardContent>
         </Card>
-      ) : error ? (
+      ) : error || !salarySlip ? (
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardContent className="text-center py-12">
-            <AlertCircle className="h-12 w-12 text-slate-600 mx-auto mb-4" />
+          <CardContent className="py-12 text-center">
+            <AlertCircle className="h-12 w-12 text-slate-500 mx-auto mb-4" />
             <p className="text-slate-400">لا يوجد كشف راتب لشهر {getMonthName(selectedMonth)} {selectedYear}</p>
             <p className="text-slate-500 text-sm mt-2">قد لا يكون المسير قد صدر بعد</p>
           </CardContent>
         </Card>
-      ) : salarySlip ? (
+      ) : (
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader className="border-b border-slate-700">
-            <div className="flex items-center justify-between">
+          <CardHeader className="pb-3">
+            <div className="flex justify-between items-start">
               <div>
                 <CardTitle className="text-white flex items-center gap-2">
                   <FileText className="h-5 w-5 text-amber-500" />
                   كشف راتب {getMonthName(selectedMonth)} {selectedYear}
                 </CardTitle>
-                <p className="text-sm text-slate-400 mt-1">
-                  رقم المسير: {salarySlip.payrollNumber}
-                </p>
+                <p className="text-slate-400 text-sm mt-1">رقم المسير: {salarySlip.payrollNumber}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Badge 
-                  className={
-                    salarySlip.status === 'approved' 
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                      : salarySlip.status === 'pending'
-                      ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                      : 'bg-slate-500/20 text-slate-400 border-slate-500/30'
-                  }
+                  variant={salarySlip.status === 'approved' ? 'default' : 'secondary'}
+                  className={salarySlip.status === 'approved' ? 'bg-emerald-500' : 'bg-amber-500'}
                 >
-                  {salarySlip.status === 'approved' ? 'معتمد' : 
-                   salarySlip.status === 'pending' ? 'قيد المراجعة' : 
-                   salarySlip.status === 'draft' ? 'مسودة' : salarySlip.status}
+                  {salarySlip.status === 'approved' ? 'معتمد' : salarySlip.status === 'paid' ? 'مدفوع' : 'قيد المراجعة'}
                 </Badge>
-                {/* زر تحميل PDF */}
                 <Button
-                  variant="outline"
                   size="sm"
+                  variant="outline"
+                  className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
                   onClick={generatePDF}
                   disabled={isGeneratingPDF}
-                  className="bg-amber-500/20 border-amber-500/30 text-amber-400 hover:bg-amber-500/30"
                 >
                   {isGeneratingPDF ? (
-                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                    <Loader2 className="h-4 w-4 animate-spin ml-1" />
                   ) : (
-                    <Download className="h-4 w-4 ml-2" />
+                    <Download className="h-4 w-4 ml-1" />
                   )}
                   تحميل PDF
                 </Button>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-6">
+          <CardContent className="space-y-4">
             {/* معلومات الموظف */}
-            <div className="bg-slate-700/30 rounded-lg p-4 mb-6">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <span className="text-slate-400">الاسم</span>
-                  <p className="text-white font-medium">{salarySlip.employeeName}</p>
-                </div>
-                <div>
-                  <span className="text-slate-400">الكود</span>
-                  <p className="text-white font-mono">{salarySlip.employeeCode}</p>
-                </div>
-                <div>
-                  <span className="text-slate-400">المنصب</span>
-                  <p className="text-white">{salarySlip.position || '-'}</p>
-                </div>
-                <div>
-                  <span className="text-slate-400">أيام العمل</span>
-                  <p className="text-white">{salarySlip.workDays} يوم</p>
-                </div>
+            <div className="grid grid-cols-3 gap-4 p-4 bg-slate-700/30 rounded-lg">
+              <div>
+                <p className="text-slate-400 text-xs">الاسم</p>
+                <p className="text-white font-medium">{salarySlip.employeeName}</p>
+              </div>
+              <div>
+                <p className="text-slate-400 text-xs">الكود</p>
+                <p className="text-white font-medium">{salarySlip.employeeCode}</p>
+              </div>
+              <div>
+                <p className="text-slate-400 text-xs">المنصب</p>
+                <p className="text-white font-medium">{salarySlip.position || '-'}</p>
+              </div>
+              <div>
+                <p className="text-slate-400 text-xs">أيام العمل</p>
+                <p className="text-white font-medium">{salarySlip.workDays} يوم</p>
               </div>
             </div>
 
+            <Separator className="bg-slate-700" />
+
             {/* الاستحقاقات */}
-            <div className="mb-6">
-              <h3 className="text-emerald-400 font-medium mb-3 flex items-center gap-2">
+            <div>
+              <h4 className="text-emerald-400 text-sm font-medium mb-3 flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
                 الاستحقاقات
-              </h3>
+              </h4>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">الراتب الأساسي</span>
@@ -491,30 +509,33 @@ export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
                 </div>
                 {salarySlip.overtimeEnabled && salarySlip.overtimeAmount > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">الساعات الإضافية</span>
+                    <span className="text-slate-400">ساعات إضافية</span>
                     <span className="text-white">{formatCurrency(salarySlip.overtimeAmount)}</span>
                   </div>
                 )}
                 {salarySlip.incentiveAmount > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">الحوافز {salarySlip.isSupervisor ? '(مشرف)' : ''}</span>
+                    <span className="text-slate-400">
+                      {salarySlip.isSupervisor ? 'حوافز (مشرف)' : 'حوافز'}
+                    </span>
                     <span className="text-white">{formatCurrency(salarySlip.incentiveAmount)}</span>
                   </div>
                 )}
-                <Separator className="bg-slate-700 my-2" />
-                <div className="flex justify-between font-medium">
+                <div className="flex justify-between text-sm font-medium pt-2 border-t border-slate-700">
                   <span className="text-emerald-400">إجمالي الاستحقاقات</span>
                   <span className="text-emerald-400">{formatCurrency(salarySlip.totalEarnings)}</span>
                 </div>
               </div>
             </div>
 
+            <Separator className="bg-slate-700" />
+
             {/* الخصومات */}
-            <div className="mb-6">
-              <h3 className="text-red-400 font-medium mb-3 flex items-center gap-2">
+            <div>
+              <h4 className="text-red-400 text-sm font-medium mb-3 flex items-center gap-2">
                 <TrendingDown className="h-4 w-4" />
                 الخصومات
-              </h3>
+              </h4>
               <div className="space-y-2">
                 {salarySlip.absentDays > 0 && (
                   <div className="flex justify-between text-sm">
@@ -524,101 +545,98 @@ export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
                 )}
                 {salarySlip.leaveDays > 0 && salarySlip.leaveDeduction > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">خصم الإجازات ({salarySlip.leaveDays} يوم - {salarySlip.leaveType})</span>
+                    <span className="text-slate-400">خصم الإجازات ({salarySlip.leaveDays} يوم)</span>
                     <span className="text-red-400">-{formatCurrency(salarySlip.leaveDeduction)}</span>
                   </div>
                 )}
                 {salarySlip.advanceDeduction > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">خصم السلف</span>
+                    <span className="text-slate-400">خصم السلفة</span>
                     <span className="text-red-400">-{formatCurrency(salarySlip.advanceDeduction)}</span>
                   </div>
                 )}
                 {salarySlip.negativeInvoicesDeduction > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">خصم الفواتير السالبة</span>
+                    <span className="text-slate-400">فواتير سالبة</span>
                     <span className="text-red-400">-{formatCurrency(salarySlip.negativeInvoicesDeduction)}</span>
                   </div>
                 )}
                 {salarySlip.deductionAmount > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">خصومات أخرى {salarySlip.deductionReason ? `(${salarySlip.deductionReason})` : ''}</span>
+                    <span className="text-slate-400">
+                      {salarySlip.deductionReason ? `خصومات أخرى (${salarySlip.deductionReason})` : 'خصومات أخرى'}
+                    </span>
                     <span className="text-red-400">-{formatCurrency(salarySlip.deductionAmount)}</span>
                   </div>
                 )}
                 {salarySlip.totalDeductions === 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">لا توجد خصومات</span>
-                    <span className="text-slate-500">-</span>
-                  </div>
+                  <p className="text-slate-500 text-sm">لا توجد خصومات</p>
                 )}
-                <Separator className="bg-slate-700 my-2" />
-                <div className="flex justify-between font-medium">
+                <div className="flex justify-between text-sm font-medium pt-2 border-t border-slate-700">
                   <span className="text-red-400">إجمالي الخصومات</span>
                   <span className="text-red-400">-{formatCurrency(salarySlip.totalDeductions)}</span>
                 </div>
               </div>
             </div>
 
-            {/* الصافي */}
-            <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-lg p-4 border border-amber-500/30">
+            <Separator className="bg-slate-700" />
+
+            {/* صافي الراتب */}
+            <div className="bg-amber-500/20 rounded-lg p-4">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-6 w-6 text-amber-500" />
-                  <span className="text-lg font-medium text-white">صافي الراتب</span>
+                  <DollarSign className="h-5 w-5 text-amber-500" />
+                  <span className="text-white font-medium">صافي الراتب</span>
                 </div>
-                <span className="text-2xl font-bold text-amber-400">
+                <span className="text-2xl font-bold text-amber-500">
                   {formatCurrency(salarySlip.netSalary)}
                 </span>
               </div>
             </div>
           </CardContent>
         </Card>
-      ) : null}
+      )}
 
-      {/* سجل الرواتب */}
+      {/* سجل الرواتب السابقة */}
       {salaryHistory && salaryHistory.length > 0 && (
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader className="border-b border-slate-700">
+          <CardHeader className="pb-3">
             <CardTitle className="text-white text-sm flex items-center gap-2">
               <DollarSign className="h-4 w-4 text-amber-500" />
               سجل الرواتب السابقة
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-slate-700">
+          <CardContent>
+            <div className="space-y-2">
               {salaryHistory.map((record, index) => (
-                <div 
+                <div
                   key={index}
-                  className="p-4 hover:bg-slate-700/30 transition-colors cursor-pointer"
+                  className="flex justify-between items-center p-3 bg-slate-700/30 rounded-lg cursor-pointer hover:bg-slate-700/50 transition-colors"
                   onClick={() => {
                     setSelectedYear(record.year);
                     setSelectedMonth(record.month);
                   }}
                 >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-white font-medium">
-                        {getMonthName(record.month)} {record.year}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        رقم المسير: {record.payrollNumber}
-                      </p>
-                    </div>
-                    <div className="text-left">
-                      <p className="text-amber-400 font-bold">
-                        {formatCurrency(record.netSalary)}
-                      </p>
-                      <Badge 
-                        className={
-                          record.status === 'approved' 
-                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs'
-                            : 'bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs'
-                        }
-                      >
-                        {record.status === 'approved' ? 'معتمد' : 'قيد المراجعة'}
-                      </Badge>
-                    </div>
+                  <div>
+                    <p className="text-white text-sm font-medium">
+                      {getMonthName(record.month)} {record.year}
+                    </p>
+                    <p className="text-slate-400 text-xs">رقم المسير: {record.payrollNumber}</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-amber-500 font-medium">{formatCurrency(record.netSalary)}</p>
+                    <Badge 
+                      variant="outline" 
+                      className={`text-xs ${
+                        record.status === 'approved' 
+                          ? 'border-emerald-500 text-emerald-500' 
+                          : record.status === 'paid'
+                          ? 'border-blue-500 text-blue-500'
+                          : 'border-amber-500 text-amber-500'
+                      }`}
+                    >
+                      {record.status === 'approved' ? 'معتمد' : record.status === 'paid' ? 'مدفوع' : 'قيد المراجعة'}
+                    </Badge>
                   </div>
                 </div>
               ))}
