@@ -13,6 +13,7 @@ import {
   branches, 
   employeeRequests, 
   dailyRevenues,
+  employeeRevenues,
   weeklyBonuses,
   bonusDetails,
   loyaltySettings,
@@ -881,6 +882,28 @@ export const assistantTools = [
         required: ["services"]
       }
     }
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_employee_revenue",
+      description: "الحصول على تقرير إيرادات الموظف الشخصية (ليس إيرادات الفرع). يعرض إيرادات الموظف اليومية والأسبوعية والشهرية.",
+      parameters: {
+        type: "object",
+        properties: {
+          employeeId: {
+            type: "number",
+            description: "رقم الموظف"
+          },
+          period: {
+            type: "string",
+            enum: ["today", "week", "last_week", "month", "last_month"],
+            description: "الفترة الزمنية: today (اليوم)، week (هذا الأسبوع)، last_week (الأسبوع الماضي)، month (هذا الشهر)، last_month (الشهر الماضي)"
+          }
+        },
+        required: ["employeeId"]
+      }
+    }
   }
 ];
 
@@ -927,6 +950,12 @@ export async function executeAssistantTool(toolName: string, args: any): Promise
     
     case 'cancel_request':
       return cancelRequest(args.sessionId);
+    
+    case 'get_employee_revenue':
+      return getEmployeeRevenue({
+        employeeId: args.employeeId,
+        period: args.period,
+      });
     
     default:
       return errorResult(`أداة غير معروفة: ${toolName}`);
@@ -1065,5 +1094,148 @@ async function cancelRequest(sessionId: string): Promise<ToolResult> {
     };
   } catch (error) {
     return errorResult(`حدث خطأ أثناء إلغاء الطلب: ${error}`);
+  }
+}
+
+
+// ========== أداة تقرير إيرادات الموظف الشخصية ==========
+export interface EmployeeRevenueInput {
+  employeeId: number;
+  period?: 'today' | 'week' | 'last_week' | 'month' | 'last_month';
+}
+
+export async function getEmployeeRevenue(input: EmployeeRevenueInput): Promise<ToolResult> {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return errorResult('قاعدة البيانات غير متاحة');
+    }
+
+    // جلب بيانات الموظف
+    const employee = await db.select({
+      id: employees.id,
+      name: employees.name,
+      branchId: employees.branchId,
+      branchName: branches.name,
+    })
+    .from(employees)
+    .leftJoin(branches, eq(employees.branchId, branches.id))
+    .where(eq(employees.id, input.employeeId))
+    .limit(1);
+
+    if (employee.length === 0) {
+      return {
+        success: false,
+        hasData: false,
+        dataCount: 0,
+        message: `الموظف رقم ${input.employeeId} غير موجود في قاعدة البيانات.`,
+        source: 'جدول الموظفين'
+      };
+    }
+
+    const emp = employee[0];
+    const now = new Date();
+    
+    // حساب بداية ونهاية الفترة
+    let startDate: Date;
+    let endDate: Date = now;
+    let periodName: string;
+    
+    switch (input.period || 'week') {
+      case 'today':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        periodName = 'اليوم';
+        break;
+      case 'week':
+        const dayOfWeek = now.getDay();
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+        periodName = 'هذا الأسبوع';
+        break;
+      case 'last_week':
+        const lastWeekDayOfWeek = now.getDay();
+        const lastWeekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - lastWeekDayOfWeek - 1);
+        const lastWeekStart = new Date(lastWeekEnd.getFullYear(), lastWeekEnd.getMonth(), lastWeekEnd.getDate() - 6);
+        startDate = lastWeekStart;
+        endDate = lastWeekEnd;
+        periodName = 'الأسبوع الماضي';
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodName = 'هذا الشهر';
+        break;
+      case 'last_month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+        periodName = 'الشهر الماضي';
+        break;
+      default:
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        periodName = 'آخر 7 أيام';
+    }
+
+    const periodInfo = {
+      start: startDate.toLocaleDateString('ar-SA'),
+      end: endDate.toLocaleDateString('ar-SA')
+    };
+
+    // جلب إيرادات الموظف الشخصية من جدول employeeRevenues
+    const revenues = await db.select({
+      id: employeeRevenues.id,
+      cash: employeeRevenues.cash,
+      network: employeeRevenues.network,
+      total: employeeRevenues.total,
+      date: dailyRevenues.date,
+    })
+    .from(employeeRevenues)
+    .innerJoin(dailyRevenues, eq(employeeRevenues.dailyRevenueId, dailyRevenues.id))
+    .where(and(
+      eq(employeeRevenues.employeeId, input.employeeId),
+      gte(dailyRevenues.date, startDate),
+      lte(dailyRevenues.date, endDate)
+    ))
+    .orderBy(desc(dailyRevenues.date));
+
+    if (revenues.length === 0) {
+      return {
+        success: true,
+        hasData: false,
+        dataCount: 0,
+        message: `📊 تقرير إيرادات الموظف ${emp.name} (${periodName}):\n\n⚠️ لا توجد إيرادات مسجلة لك في الفترة من ${periodInfo.start} إلى ${periodInfo.end}.\n\nقد يكون السبب:\n- لم يتم إدخال الإيرادات لهذه الفترة بعد\n- لم تعمل في هذه الفترة`,
+        source: 'جدول إيرادات الموظفين',
+        period: periodInfo
+      };
+    }
+
+    // حساب الإجماليات
+    const totalCash = revenues.reduce((sum: number, r: any) => sum + Number(r.cash || 0), 0);
+    const totalNetwork = revenues.reduce((sum: number, r: any) => sum + Number(r.network || 0), 0);
+    const totalRevenue = revenues.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
+    const daysCount = revenues.length;
+    const avgDaily = daysCount > 0 ? totalRevenue / daysCount : 0;
+
+    // تفاصيل الأيام (آخر 5 أيام فقط)
+    const recentDays = revenues.slice(0, 5).map((r: any) => {
+      const date = new Date(r.date).toLocaleDateString('ar-SA', { weekday: 'short', day: 'numeric', month: 'short' });
+      return `  • ${date}: ${Number(r.total).toLocaleString()} ر.س`;
+    }).join('\n');
+
+    return {
+      success: true,
+      hasData: true,
+      dataCount: revenues.length,
+      data: {
+        totalCash,
+        totalNetwork,
+        totalRevenue,
+        daysCount,
+        avgDaily,
+        revenues: revenues.slice(0, 10) // آخر 10 أيام
+      },
+      message: `📊 تقرير إيراداتك الشخصية (${periodName}):\n📅 من ${periodInfo.start} إلى ${periodInfo.end}\n\n💵 نقدي: ${totalCash.toLocaleString()} ر.س\n💳 شبكة: ${totalNetwork.toLocaleString()} ر.س\n━━━━━━━━━━━━\n💰 الإجمالي: ${totalRevenue.toLocaleString()} ر.س\n📝 عدد الأيام: ${daysCount}\n📈 المتوسط اليومي: ${avgDaily.toLocaleString(undefined, { maximumFractionDigits: 0 })} ر.س\n\n📋 آخر الأيام:\n${recentDays}`,
+      source: 'جدول إيرادات الموظفين',
+      period: periodInfo
+    };
+  } catch (error) {
+    return errorResult(`حدث خطأ أثناء جلب تقرير الإيرادات: ${error}`);
   }
 }
