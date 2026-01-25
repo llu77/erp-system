@@ -302,6 +302,13 @@
       "when": 1769344579629,
       "tag": "0042_goofy_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "5",
+      "when": 1769353283442,
+      "tag": "0043_daffy_shatterstar",
+      "breakpoints": true
     }
   ]
 }

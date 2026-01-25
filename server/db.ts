@@ -8906,3 +8906,736 @@ export async function updatePayrollDetailWithLeaves(
     })
     .where(eq(payrollDetails.id, payrollDetailId));
 }
+
+
+// ==================== دوال بوابة الموظفين ====================
+
+// جلب بيانات الموظف الكاملة للملف الشخصي
+export async function getEmployeeProfile(employeeId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select({
+    id: employees.id,
+    code: employees.code,
+    name: employees.name,
+    branchId: employees.branchId,
+    phone: employees.phone,
+    email: employees.email,
+    position: employees.position,
+    username: employees.username,
+    hasPortalAccess: employees.hasPortalAccess,
+    lastLogin: employees.lastLogin,
+    isActive: employees.isActive,
+    createdAt: employees.createdAt,
+  })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (result.length === 0) return null;
+
+  // جلب اسم الفرع
+  const branch = await db.select({ name: branches.name })
+    .from(branches)
+    .where(eq(branches.id, result[0].branchId))
+    .limit(1);
+
+  // جلب إعدادات الراتب للموظف
+  const salarySettings = await db.select({
+    baseSalary: employeeSalarySettings.baseSalary,
+    overtimeEnabled: employeeSalarySettings.overtimeEnabled,
+    isSupervisor: employeeSalarySettings.isSupervisor,
+  })
+    .from(employeeSalarySettings)
+    .where(eq(employeeSalarySettings.employeeId, employeeId))
+    .limit(1);
+
+  return {
+    ...result[0],
+    branchName: branch[0]?.name || 'غير محدد',
+    baseSalary: salarySettings[0]?.baseSalary || '2000.00',
+    overtimeEnabled: salarySettings[0]?.overtimeEnabled || false,
+    isSupervisor: salarySettings[0]?.isSupervisor || false,
+    hireDate: result[0].createdAt, // استخدام تاريخ الإنشاء كتاريخ تعيين
+    status: result[0].isActive ? 'active' : 'inactive',
+  };
+}
+
+// جلب كشف راتب الموظف لشهر محدد
+export async function getEmployeeSalarySlip(employeeId: number, year: number, month: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // جلب بيانات الموظف
+  const employee = await db.select()
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (employee.length === 0) return null;
+
+  // جلب مسير الرواتب للشهر المحدد
+  const payroll = await db.select()
+    .from(payrolls)
+    .where(
+      and(
+        eq(payrolls.branchId, employee[0].branchId),
+        eq(payrolls.year, year),
+        eq(payrolls.month, month)
+      )
+    )
+    .limit(1);
+
+  if (payroll.length === 0) return null;
+
+  // جلب تفاصيل راتب الموظف
+  const salaryDetail = await db.select()
+    .from(payrollDetails)
+    .where(
+      and(
+        eq(payrollDetails.payrollId, payroll[0].id),
+        eq(payrollDetails.employeeId, employeeId)
+      )
+    )
+    .limit(1);
+
+  if (salaryDetail.length === 0) return null;
+
+  const detail = salaryDetail[0];
+
+  return {
+    // معلومات الموظف
+    employeeId: employee[0].id,
+    employeeName: employee[0].name,
+    employeeCode: employee[0].code,
+    position: employee[0].position,
+    branchId: employee[0].branchId,
+    
+    // معلومات المسير
+    payrollId: payroll[0].id,
+    payrollNumber: payroll[0].payrollNumber,
+    year,
+    month,
+    status: payroll[0].status,
+    
+    // مكونات الراتب
+    baseSalary: parseFloat(detail.baseSalary as string) || 0,
+    overtimeEnabled: detail.overtimeEnabled,
+    overtimeAmount: parseFloat(detail.overtimeAmount as string) || 0,
+    
+    // أيام العمل
+    workDays: detail.workDays,
+    absentDays: detail.absentDays,
+    absentDeduction: parseFloat(detail.absentDeduction as string) || 0,
+    
+    // الحوافز
+    incentiveAmount: parseFloat(detail.incentiveAmount as string) || 0,
+    isSupervisor: detail.isSupervisor,
+    
+    // الخصومات
+    deductionAmount: parseFloat(detail.deductionAmount as string) || 0,
+    deductionReason: detail.deductionReason,
+    advanceDeduction: parseFloat(detail.advanceDeduction as string) || 0,
+    negativeInvoicesDeduction: parseFloat(detail.negativeInvoicesDeduction as string) || 0,
+    
+    // الإجازات
+    leaveDays: detail.leaveDays || 0,
+    leaveDeduction: parseFloat(detail.leaveDeduction as string) || 0,
+    leaveType: detail.leaveType,
+    
+    // الإجماليات
+    totalEarnings: parseFloat(detail.grossSalary as string) || 0,
+    totalDeductions: parseFloat(detail.totalDeductions as string) || 0,
+    netSalary: parseFloat(detail.netSalary as string) || 0,
+  };
+}
+
+// جلب سجل رواتب الموظف
+export async function getEmployeeSalaryHistory(employeeId: number, limit: number = 12) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // جلب بيانات الموظف
+  const employee = await db.select()
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (employee.length === 0) return [];
+
+  // جلب جميع تفاصيل الرواتب للموظف
+  const details = await db.select({
+    id: payrollDetails.id,
+    payrollId: payrollDetails.payrollId,
+    baseSalary: payrollDetails.baseSalary,
+    grossSalary: payrollDetails.grossSalary,
+    totalDeductions: payrollDetails.totalDeductions,
+    netSalary: payrollDetails.netSalary,
+  })
+    .from(payrollDetails)
+    .where(eq(payrollDetails.employeeId, employeeId))
+    .orderBy(desc(payrollDetails.id))
+    .limit(limit);
+
+  // جلب معلومات المسيرات
+  const result = [];
+  for (const detail of details) {
+    const payroll = await db.select({
+      payrollNumber: payrolls.payrollNumber,
+      year: payrolls.year,
+      month: payrolls.month,
+      status: payrolls.status,
+    })
+      .from(payrolls)
+      .where(eq(payrolls.id, detail.payrollId))
+      .limit(1);
+
+    if (payroll.length > 0) {
+      result.push({
+        ...detail,
+        ...payroll[0],
+        baseSalary: parseFloat(detail.baseSalary as string) || 0,
+        grossSalary: parseFloat(detail.grossSalary as string) || 0,
+        totalDeductions: parseFloat(detail.totalDeductions as string) || 0,
+        netSalary: parseFloat(detail.netSalary as string) || 0,
+      });
+    }
+  }
+
+  return result;
+}
+
+// جلب رصيد إجازات الموظف
+export async function getEmployeeLeaveBalance(employeeId: number, year: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // الرصيد الافتراضي للإجازات السنوية (21 يوم)
+  const defaultAnnualLeave = 21;
+  const defaultSickLeave = 30;
+  const defaultEmergencyLeave = 5;
+
+  // جلب الإجازات المستخدمة من طلبات الموظفين
+  const usedLeaves = await db.select({
+    vacationType: employeeRequests.vacationType,
+    vacationDays: employeeRequests.vacationDays,
+  })
+    .from(employeeRequests)
+    .where(
+      and(
+        eq(employeeRequests.employeeId, employeeId),
+        eq(employeeRequests.requestType, 'vacation'),
+        eq(employeeRequests.status, 'approved'),
+        sql`YEAR(${employeeRequests.vacationStartDate}) = ${year}`
+      )
+    );
+
+  // حساب الإجازات المستخدمة حسب النوع
+  let usedAnnual = 0;
+  let usedSick = 0;
+  let usedEmergency = 0;
+  let usedUnpaid = 0;
+
+  for (const leave of usedLeaves) {
+    const days = leave.vacationDays || 0;
+    switch (leave.vacationType) {
+      case 'سنوية':
+        usedAnnual += days;
+        break;
+      case 'مرضية':
+        usedSick += days;
+        break;
+      case 'طارئة':
+        usedEmergency += days;
+        break;
+      case 'بدون راتب':
+        usedUnpaid += days;
+        break;
+    }
+  }
+
+  return {
+    year,
+    annual: {
+      total: defaultAnnualLeave,
+      used: usedAnnual,
+      remaining: defaultAnnualLeave - usedAnnual,
+    },
+    sick: {
+      total: defaultSickLeave,
+      used: usedSick,
+      remaining: defaultSickLeave - usedSick,
+    },
+    emergency: {
+      total: defaultEmergencyLeave,
+      used: usedEmergency,
+      remaining: defaultEmergencyLeave - usedEmergency,
+    },
+    unpaid: {
+      used: usedUnpaid,
+    },
+    totalUsed: usedAnnual + usedSick + usedEmergency + usedUnpaid,
+  };
+}
+
+// جلب سجل إجازات الموظف
+export async function getEmployeeLeaveHistory(employeeId: number, year?: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [
+    eq(employeeRequests.employeeId, employeeId),
+    eq(employeeRequests.requestType, 'vacation'),
+  ];
+
+  if (year) {
+    conditions.push(sql`YEAR(${employeeRequests.vacationStartDate}) = ${year}`);
+  }
+
+  return await db.select({
+    id: employeeRequests.id,
+    requestNumber: employeeRequests.requestNumber,
+    vacationType: employeeRequests.vacationType,
+    vacationStartDate: employeeRequests.vacationStartDate,
+    vacationEndDate: employeeRequests.vacationEndDate,
+    vacationDays: employeeRequests.vacationDays,
+    status: employeeRequests.status,
+    description: employeeRequests.description,
+    reviewedAt: employeeRequests.reviewedAt,
+    reviewNotes: employeeRequests.reviewNotes,
+    createdAt: employeeRequests.createdAt,
+  })
+    .from(employeeRequests)
+    .where(and(...conditions))
+    .orderBy(desc(employeeRequests.createdAt));
+}
+
+// جلب تقرير البونص للموظف
+export async function getEmployeeBonusReport(employeeId: number, year: number, month: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  // جلب بيانات الموظف
+  const employee = await db.select()
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (employee.length === 0) return null;
+
+  // جلب سجلات البونص الأسبوعية للفرع في الشهر المحدد
+  const weeklyBonusRecords = await db.select()
+    .from(weeklyBonuses)
+    .where(
+      and(
+        eq(weeklyBonuses.branchId, employee[0].branchId),
+        eq(weeklyBonuses.year, year),
+        eq(weeklyBonuses.month, month)
+      )
+    );
+
+  // جلب تفاصيل البونص للموظف
+  const employeeBonusDetails: any[] = [];
+  for (const record of weeklyBonusRecords) {
+    const details = await db.select()
+      .from(bonusDetails)
+      .where(
+        and(
+          eq(bonusDetails.weeklyBonusId, record.id),
+          eq(bonusDetails.employeeId, employeeId)
+        )
+      );
+    employeeBonusDetails.push(...details.map(d => ({
+      ...d,
+      weekNumber: record.weekNumber,
+      weekStart: record.weekStart,
+      weekEnd: record.weekEnd,
+    })));
+  }
+
+  // حساب إجمالي البونص
+  let totalBonus = 0;
+  let totalRevenue = 0;
+  const weeklyDetailsResult = employeeBonusDetails.map((detail: any) => {
+    const bonus = parseFloat(detail.bonusAmount) || 0;
+    const revenue = parseFloat(detail.weeklyRevenue) || 0;
+    totalBonus += bonus;
+    totalRevenue += revenue;
+    return {
+      weekNumber: detail.weekNumber,
+      startDate: detail.weekStart,
+      endDate: detail.weekEnd,
+      revenue: revenue,
+      bonus: bonus,
+    };
+  });
+
+  return {
+    employeeId,
+    employeeName: employee[0].name,
+    year,
+    month,
+    totalRevenue,
+    totalBonus,
+    bonusPercentage: totalRevenue > 0 ? ((totalBonus / totalRevenue) * 100).toFixed(1) : '0',
+    weeksCount: weeklyDetailsResult.length,
+    weeks: weeklyDetailsResult,
+  };
+}
+
+// جلب سجل البونص للموظف
+export async function getEmployeeBonusHistory(employeeId: number, limit: number = 6) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // جلب بيانات الموظف
+  const employee = await db.select()
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (employee.length === 0) return [];
+
+  // جلب تفاصيل البونص للموظف مع بيانات الأسبوع
+  const details = await db.select({
+    bonusAmount: bonusDetails.bonusAmount,
+    weeklyRevenue: bonusDetails.weeklyRevenue,
+    year: weeklyBonuses.year,
+    month: weeklyBonuses.month,
+  })
+    .from(bonusDetails)
+    .innerJoin(weeklyBonuses, eq(bonusDetails.weeklyBonusId, weeklyBonuses.id))
+    .where(eq(bonusDetails.employeeId, employeeId))
+    .orderBy(desc(weeklyBonuses.year), desc(weeklyBonuses.month));
+
+  // تجميع حسب الشهر
+  const monthlyBonuses = new Map<string, { bonus: number; revenue: number }>();
+  for (const detail of details) {
+    const key = `${detail.year}-${detail.month}`;
+    const current = monthlyBonuses.get(key) || { bonus: 0, revenue: 0 };
+    monthlyBonuses.set(key, {
+      bonus: current.bonus + (parseFloat(detail.bonusAmount) || 0),
+      revenue: current.revenue + (parseFloat(detail.weeklyRevenue || '0') || 0),
+    });
+  }
+
+  return Array.from(monthlyBonuses.entries())
+    .map(([key, data]) => {
+      const [year, month] = key.split('-').map(Number);
+      return { year, month, totalBonus: data.bonus, totalRevenue: data.revenue };
+    })
+    .slice(0, limit);
+}
+
+// تحديث بيانات الموظف الشخصية
+export async function updateEmployeeProfile(
+  employeeId: number,
+  data: { phone?: string; email?: string }
+) {
+  const db = await getDb();
+  if (!db) return false;
+
+  await db.update(employees)
+    .set({
+      phone: data.phone,
+      email: data.email,
+      updatedAt: new Date(),
+    })
+    .where(eq(employees.id, employeeId));
+
+  return true;
+}
+
+// إلغاء طلب موظف (فقط إذا كان قيد المراجعة)
+export async function cancelEmployeeRequest(requestId: number, employeeId: number) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'خطأ في الاتصال بقاعدة البيانات' };
+
+  // التحقق من الطلب
+  const request = await db.select()
+    .from(employeeRequests)
+    .where(
+      and(
+        eq(employeeRequests.id, requestId),
+        eq(employeeRequests.employeeId, employeeId)
+      )
+    )
+    .limit(1);
+
+  if (request.length === 0) {
+    return { success: false, error: 'الطلب غير موجود' };
+  }
+
+  if (request[0].status !== 'pending') {
+    return { success: false, error: 'لا يمكن إلغاء الطلب بعد المراجعة' };
+  }
+
+  // إلغاء الطلب
+  await db.update(employeeRequests)
+    .set({
+      status: 'cancelled',
+      updatedAt: new Date(),
+    })
+    .where(eq(employeeRequests.id, requestId));
+
+  return { success: true };
+}
+
+// تحديث طلب موظف من بوابة الموظفين (فقط إذا كان قيد المراجعة)
+export async function updateEmployeeRequestFromPortal(
+  requestId: number,
+  employeeId: number,
+  data: {
+    description?: string;
+    advanceAmount?: string;
+    advanceReason?: string;
+    vacationStartDate?: Date;
+    vacationEndDate?: Date;
+    vacationDays?: number;
+    permissionDate?: Date;
+    permissionStartTime?: string;
+    permissionEndTime?: string;
+  }
+) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'خطأ في الاتصال بقاعدة البيانات' };
+
+  // التحقق من الطلب
+  const request = await db.select()
+    .from(employeeRequests)
+    .where(
+      and(
+        eq(employeeRequests.id, requestId),
+        eq(employeeRequests.employeeId, employeeId)
+      )
+    )
+    .limit(1);
+
+  if (request.length === 0) {
+    return { success: false, error: 'الطلب غير موجود' };
+  }
+
+  if (request[0].status !== 'pending') {
+    return { success: false, error: 'لا يمكن تعديل الطلب بعد المراجعة' };
+  }
+
+  // تحديث الطلب
+  await db.update(employeeRequests)
+    .set({
+      ...data,
+      updatedAt: new Date(),
+    })
+    .where(eq(employeeRequests.id, requestId));
+
+  return { success: true };
+}
+
+// جلب إحصائيات طلبات الموظف من بوابة الموظفين
+export async function getEmployeePortalRequestsStats(employeeId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const requests = await db.select({
+    status: employeeRequests.status,
+  })
+    .from(employeeRequests)
+    .where(eq(employeeRequests.employeeId, employeeId));
+
+  let total = 0;
+  let pending = 0;
+  let approved = 0;
+  let rejected = 0;
+  let cancelled = 0;
+
+  for (const req of requests) {
+    total++;
+    switch (req.status) {
+      case 'pending':
+        pending++;
+        break;
+      case 'approved':
+        approved++;
+        break;
+      case 'rejected':
+        rejected++;
+        break;
+      case 'cancelled':
+        cancelled++;
+        break;
+    }
+  }
+
+  return { total, pending, approved, rejected, cancelled };
+}
+
+
+// ==================== دوال مرفقات الطلبات ====================
+import { requestAttachments, requestTimeline, employeeLeaveBalance } from "../drizzle/schema";
+
+// إضافة مرفق لطلب
+export async function addRequestAttachment(data: {
+  requestId: number;
+  fileName: string;
+  fileUrl: string;
+  fileType?: string;
+  fileSize?: number;
+  uploadedBy: number;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(requestAttachments).values(data);
+  return result;
+}
+
+// جلب مرفقات طلب معين
+export async function getRequestAttachments(requestId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select()
+    .from(requestAttachments)
+    .where(eq(requestAttachments.requestId, requestId))
+    .orderBy(desc(requestAttachments.createdAt));
+}
+
+// حذف مرفق
+export async function deleteRequestAttachment(attachmentId: number, employeeId: number) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'خطأ في الاتصال بقاعدة البيانات' };
+  
+  // التحقق من أن المرفق يخص الموظف
+  const attachment = await db.select()
+    .from(requestAttachments)
+    .where(eq(requestAttachments.id, attachmentId))
+    .limit(1);
+  
+  if (attachment.length === 0 || attachment[0].uploadedBy !== employeeId) {
+    return { success: false, error: 'غير مصرح بحذف هذا المرفق' };
+  }
+  
+  await db.delete(requestAttachments).where(eq(requestAttachments.id, attachmentId));
+  return { success: true };
+}
+
+// ==================== دوال تتبع الطلبات ====================
+
+// إضافة مرحلة جديدة في تتبع الطلب
+export async function addRequestTimelineEntry(data: {
+  requestId: number;
+  status: "submitted" | "under_review" | "pending_approval" | "approved" | "rejected" | "cancelled" | "completed";
+  notes?: string;
+  actionBy?: number;
+  actionByName?: string;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(requestTimeline).values(data);
+  return result;
+}
+
+// جلب تتبع طلب معين
+export async function getRequestTimeline(requestId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select()
+    .from(requestTimeline)
+    .where(eq(requestTimeline.requestId, requestId))
+    .orderBy(asc(requestTimeline.createdAt));
+}
+
+// ==================== دوال رصيد الإجازات ====================
+
+// جلب رصيد إجازات موظف
+export async function getEmployeeLeaveBalanceData(employeeId: number, year: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select()
+    .from(employeeLeaveBalance)
+    .where(and(
+      eq(employeeLeaveBalance.employeeId, employeeId),
+      eq(employeeLeaveBalance.year, year)
+    ));
+}
+
+// تحديث رصيد الإجازات
+export async function updateEmployeeLeaveBalance(data: {
+  employeeId: number;
+  year: number;
+  leaveType: "annual" | "sick" | "emergency" | "unpaid";
+  totalDays?: number;
+  usedDays?: number;
+  pendingDays?: number;
+}) {
+  const db = await getDb();
+  if (!db) return { success: false };
+  
+  const existing = await db.select()
+    .from(employeeLeaveBalance)
+    .where(and(
+      eq(employeeLeaveBalance.employeeId, data.employeeId),
+      eq(employeeLeaveBalance.year, data.year),
+      eq(employeeLeaveBalance.leaveType, data.leaveType)
+    ))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    // تحديث السجل الموجود
+    await db.update(employeeLeaveBalance)
+      .set({
+        totalDays: data.totalDays ?? existing[0].totalDays,
+        usedDays: data.usedDays ?? existing[0].usedDays,
+        pendingDays: data.pendingDays ?? existing[0].pendingDays,
+      })
+      .where(eq(employeeLeaveBalance.id, existing[0].id));
+  } else {
+    // إنشاء سجل جديد
+    await db.insert(employeeLeaveBalance).values({
+      employeeId: data.employeeId,
+      year: data.year,
+      leaveType: data.leaveType,
+      totalDays: data.totalDays ?? 0,
+      usedDays: data.usedDays ?? 0,
+      pendingDays: data.pendingDays ?? 0,
+    });
+  }
+  
+  return { success: true };
+}
+
+// تهيئة رصيد إجازات موظف جديد
+export async function initializeEmployeeLeaveBalance(employeeId: number, year: number) {
+  const db = await getDb();
+  if (!db) return { success: false };
+  
+  const leaveTypes: Array<"annual" | "sick" | "emergency" | "unpaid"> = ["annual", "sick", "emergency", "unpaid"];
+  const defaultDays = {
+    annual: 21, // 21 يوم سنوية
+    sick: 30,   // 30 يوم مرضية
+    emergency: 5, // 5 أيام طارئة
+    unpaid: 0   // بدون راتب - غير محدود
+  };
+  
+  for (const leaveType of leaveTypes) {
+    const existing = await db.select()
+      .from(employeeLeaveBalance)
+      .where(and(
+        eq(employeeLeaveBalance.employeeId, employeeId),
+        eq(employeeLeaveBalance.year, year),
+        eq(employeeLeaveBalance.leaveType, leaveType)
+      ))
+      .limit(1);
+    
+    if (existing.length === 0) {
+      await db.insert(employeeLeaveBalance).values({
+        employeeId,
+        year,
+        leaveType,
+        totalDays: defaultDays[leaveType],
+        usedDays: 0,
+        pendingDays: 0,
+      });
+    }
+  }
+  
+  return { success: true };
+}

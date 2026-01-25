@@ -1,0 +1,29 @@
+{
+  "query": "SELECT * FROM employeeInvoices WHERE type = 'negative' ORDER BY invoiceDate DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT * FROM employeeInvoices WHERE type = 'negative' ORDER BY invoiceDate DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "240001",
+      "invoiceNumber": "NEG-2601-0001",
+      "type": "negative",
+      "employeeId": "90003",
+      "employeeName": "محمد اسماعيل",
+      "branchId": "30001",
+      "branchName": "Twiq Branch - Riyadh",
+      "amount": "20.00",
+      "customerPhone": "5555555555",
+      "customerName": "اول مره يجي الفرع ",
+      "notes": "",
+      "reason": "بعد عملية دفع مرفوضة قال بجيب فيزا تانيه ومشي ",
+      "createdBy": "630008",
+      "createdByName": "محمد",
+      "invoiceDate": "2026-01-24 21:48:39",
+      "createdAt": "2026-01-24 21:48:39",
+      "updatedAt": "2026-01-24 21:48:39"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tinvoiceNumber\ttype\temployeeId\temployeeName\tbranchId\tbranchName\tamount\tcustomerPhone\tcustomerName\tnotes\treason\tcreatedBy\tcreatedByName\tinvoiceDate\tcreatedAt\tupdatedAt\n240001\tNEG-2601-0001\tnegative\t90003\tمحمد اسماعيل\t30001\tTwiq Branch - Riyadh\t20.00\t5555555555\tاول مره يجي الفرع \t\tبعد عملية دفع مرفوضة قال بجيب فيزا تانيه ومشي \t630008\tمحمد\t2026-01-24 21:48:39\t2026-01-24 21:48:39\t2026-01-24 21:48:39\n",
+  "stderr": "",
+  "execution_time_ms": 1495
+}

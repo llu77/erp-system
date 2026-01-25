@@ -27,9 +27,14 @@ import {
   XCircle,
   AlertCircle,
   History,
-  Mic
+  Mic,
+  Wallet,
+  CalendarDays,
+  UserCircle,
+  Gift
 } from 'lucide-react';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
+import { SalarySlip, LeaveBalance, EmployeeProfile, BonusReport, RequestTimeline, RequestAttachments } from '@/components/portal';
 
 interface Message {
   id: string;
@@ -295,27 +300,59 @@ export default function EmployeePortal() {
       <div className="container mx-auto px-4 py-4 sm:py-6">
         {/* Tabs للتنقل بين المساعد وسجل الطلبات */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-6 bg-slate-800/50">
-            <TabsTrigger 
-              value="chat" 
-              className="data-[state=active]:bg-amber-500 data-[state=active]:text-white"
-            >
-              <MessageSquare className="h-4 w-4 ml-2" />
-              المساعد الذكي
-            </TabsTrigger>
-            <TabsTrigger 
-              value="requests"
-              className="data-[state=active]:bg-amber-500 data-[state=active]:text-white"
-            >
-              <ClipboardList className="h-4 w-4 ml-2" />
-              طلباتي
-              {requestStats.pending > 0 && (
-                <Badge className="mr-2 bg-amber-500/30 text-amber-300 text-xs">
-                  {requestStats.pending}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
+          {/* شريط التبويبات الرئيسي */}
+          <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:max-w-2xl sm:mx-auto sm:grid-cols-6 mb-6 bg-slate-800/50 gap-1">
+              <TabsTrigger 
+                value="chat" 
+                className="data-[state=active]:bg-amber-500 data-[state=active]:text-white whitespace-nowrap text-xs sm:text-sm px-2 sm:px-3"
+              >
+                <MessageSquare className="h-4 w-4 ml-1 sm:ml-2" />
+                <span className="hidden sm:inline">المساعد</span>
+                <span className="sm:hidden">AI</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="requests"
+                className="data-[state=active]:bg-amber-500 data-[state=active]:text-white whitespace-nowrap text-xs sm:text-sm px-2 sm:px-3"
+              >
+                <ClipboardList className="h-4 w-4 ml-1 sm:ml-2" />
+                طلباتي
+                {requestStats.pending > 0 && (
+                  <Badge className="mr-1 sm:mr-2 bg-amber-500/30 text-amber-300 text-xs">
+                    {requestStats.pending}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger 
+                value="salary"
+                className="data-[state=active]:bg-amber-500 data-[state=active]:text-white whitespace-nowrap text-xs sm:text-sm px-2 sm:px-3"
+              >
+                <Wallet className="h-4 w-4 ml-1 sm:ml-2" />
+                الراتب
+              </TabsTrigger>
+              <TabsTrigger 
+                value="leaves"
+                className="data-[state=active]:bg-amber-500 data-[state=active]:text-white whitespace-nowrap text-xs sm:text-sm px-2 sm:px-3"
+              >
+                <CalendarDays className="h-4 w-4 ml-1 sm:ml-2" />
+                الإجازات
+              </TabsTrigger>
+              <TabsTrigger 
+                value="bonus"
+                className="data-[state=active]:bg-amber-500 data-[state=active]:text-white whitespace-nowrap text-xs sm:text-sm px-2 sm:px-3"
+              >
+                <Gift className="h-4 w-4 ml-1 sm:ml-2" />
+                البونص
+              </TabsTrigger>
+              <TabsTrigger 
+                value="profile"
+                className="data-[state=active]:bg-amber-500 data-[state=active]:text-white whitespace-nowrap text-xs sm:text-sm px-2 sm:px-3"
+              >
+                <UserCircle className="h-4 w-4 ml-1 sm:ml-2" />
+                ملفي
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* المساعد الذكي */}
           <TabsContent value="chat" className="mt-0">
@@ -719,6 +756,20 @@ export default function EmployeePortal() {
                               <p className="text-sm text-slate-300">{request.reviewNotes}</p>
                             </div>
                           )}
+                          
+                          {/* أزرار التتبع والمرفقات */}
+                          <div className="mt-3 flex items-center gap-2 border-t border-slate-700 pt-3">
+                            <RequestTimeline 
+                              requestId={request.id} 
+                              requestType={REQUEST_TYPE_NAMES[request.requestType] || request.requestType}
+                              currentStatus={request.status}
+                            />
+                            <RequestAttachments 
+                              requestId={request.id} 
+                              employeeId={employeeInfo.id}
+                              canEdit={request.status === 'pending'}
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -726,6 +777,26 @@ export default function EmployeePortal() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* كشف الراتب */}
+          <TabsContent value="salary" className="mt-0">
+            <SalarySlip employeeId={employeeInfo.id} employeeName={employeeInfo.name} />
+          </TabsContent>
+
+          {/* رصيد الإجازات */}
+          <TabsContent value="leaves" className="mt-0">
+            <LeaveBalance employeeId={employeeInfo.id} />
+          </TabsContent>
+
+          {/* تقرير البونص */}
+          <TabsContent value="bonus" className="mt-0">
+            <BonusReport employeeId={employeeInfo.id} />
+          </TabsContent>
+
+          {/* الملف الشخصي */}
+          <TabsContent value="profile" className="mt-0">
+            <EmployeeProfile employeeId={employeeInfo.id} />
           </TabsContent>
         </Tabs>
       </div>

@@ -7176,6 +7176,258 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         return result;
       }),
   }),
+
+  // ========== بوابة الموظفين - APIs الجديدة ==========
+  employeePortal: router({
+    // جلب الملف الشخصي للموظف
+    getProfile: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const profile = await db.getEmployeeProfile(input.employeeId);
+        if (!profile) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
+        }
+        return profile;
+      }),
+
+    // تحديث البيانات الشخصية
+    updateProfile: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        phone: z.string().optional(),
+        email: z.string().email().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const success = await db.updateEmployeeProfile(input.employeeId, {
+          phone: input.phone,
+          email: input.email,
+        });
+        if (!success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في تحديث البيانات' });
+        }
+        return { success: true };
+      }),
+
+    // جلب كشف الراتب لشهر محدد
+    getSalarySlip: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        year: z.number(),
+        month: z.number().min(1).max(12),
+      }))
+      .query(async ({ input }) => {
+        const slip = await db.getEmployeeSalarySlip(input.employeeId, input.year, input.month);
+        if (!slip) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'لا يوجد كشف راتب لهذا الشهر' });
+        }
+        return slip;
+      }),
+
+    // جلب سجل الرواتب
+    getSalaryHistory: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        limit: z.number().optional().default(12),
+      }))
+      .query(async ({ input }) => {
+        return await db.getEmployeeSalaryHistory(input.employeeId, input.limit);
+      }),
+
+    // جلب رصيد الإجازات
+    getLeaveBalance: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        year: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const balance = await db.getEmployeeLeaveBalance(input.employeeId, input.year);
+        if (!balance) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في جلب رصيد الإجازات' });
+        }
+        return balance;
+      }),
+
+    // جلب سجل الإجازات
+    getLeaveHistory: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        year: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getEmployeeLeaveHistory(input.employeeId, input.year);
+      }),
+
+    // جلب تقرير البونص
+    getBonusReport: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        year: z.number(),
+        month: z.number().min(1).max(12),
+      }))
+      .query(async ({ input }) => {
+        return await db.getEmployeeBonusReport(input.employeeId, input.year, input.month);
+      }),
+
+    // جلب سجل البونص
+    getBonusHistory: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        limit: z.number().optional().default(6),
+      }))
+      .query(async ({ input }) => {
+        return await db.getEmployeeBonusHistory(input.employeeId, input.limit);
+      }),
+
+    // إلغاء طلب
+    cancelRequest: publicProcedure
+      .input(z.object({
+        requestId: z.number(),
+        employeeId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await db.cancelEmployeeRequest(input.requestId, input.employeeId);
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في إلغاء الطلب' });
+        }
+        return { success: true };
+      }),
+
+    // تحديث طلب
+    updateRequest: publicProcedure
+      .input(z.object({
+        requestId: z.number(),
+        employeeId: z.number(),
+        description: z.string().optional(),
+        advanceAmount: z.string().optional(),
+        advanceReason: z.string().optional(),
+        vacationStartDate: z.date().optional(),
+        vacationEndDate: z.date().optional(),
+        vacationDays: z.number().optional(),
+        permissionDate: z.date().optional(),
+        permissionStartTime: z.string().optional(),
+        permissionEndTime: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { requestId, employeeId, ...data } = input;
+        const result = await db.updateEmployeeRequestFromPortal(requestId, employeeId, data);
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في تحديث الطلب' });
+        }
+        return { success: true };
+      }),
+
+    // جلب إحصائيات الطلبات
+    getRequestsStats: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getEmployeePortalRequestsStats(input.employeeId);
+      }),
+
+    // ==================== APIs المرفقات ====================
+    
+    // رفع مرفق لطلب
+    uploadAttachment: publicProcedure
+      .input(z.object({
+        requestId: z.number(),
+        employeeId: z.number(),
+        fileName: z.string(),
+        base64Data: z.string(),
+        contentType: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const { storagePut } = await import('./storage');
+          
+          // تحويل base64 إلى Buffer
+          const base64Content = input.base64Data.replace(/^data:[^;]+;base64,/, '');
+          const buffer = Buffer.from(base64Content, 'base64');
+          
+          // التحقق من حجم الملف (5MB max)
+          const maxSize = 5 * 1024 * 1024;
+          if (buffer.length > maxSize) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'حجم الملف يجب أن يكون أقل من 5 ميجابايت',
+            });
+          }
+          
+          // إنشاء اسم ملف فريد
+          const timestamp = Date.now();
+          const randomSuffix = Math.random().toString(36).substring(2, 8);
+          const fileKey = `request-attachments/${input.requestId}/${timestamp}-${randomSuffix}-${input.fileName}`;
+          
+          const { url } = await storagePut(fileKey, buffer, input.contentType);
+          
+          // حفظ المرفق في قاعدة البيانات
+          await db.addRequestAttachment({
+            requestId: input.requestId,
+            fileName: input.fileName,
+            fileUrl: url,
+            fileType: input.contentType,
+            fileSize: buffer.length,
+            uploadedBy: input.employeeId,
+          });
+          
+          return { success: true, url };
+        } catch (error: any) {
+          if (error instanceof TRPCError) throw error;
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: error?.message || 'فشل رفع الملف',
+          });
+        }
+      }),
+
+    // جلب مرفقات طلب
+    getAttachments: publicProcedure
+      .input(z.object({
+        requestId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getRequestAttachments(input.requestId);
+      }),
+
+    // حذف مرفق
+    deleteAttachment: publicProcedure
+      .input(z.object({
+        attachmentId: z.number(),
+        employeeId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await db.deleteRequestAttachment(input.attachmentId, input.employeeId);
+        if (!result.success) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: result.error || 'فشل في حذف المرفق' });
+        }
+        return { success: true };
+      }),
+
+    // ==================== APIs تتبع الطلب ====================
+    
+    // جلب تتبع طلب
+    getRequestTimeline: publicProcedure
+      .input(z.object({
+        requestId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getRequestTimeline(input.requestId);
+      }),
+
+    // ==================== APIs رصيد الإجازات ====================
+    
+    // تهيئة رصيد إجازات موظف
+    initializeLeaveBalance: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        year: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        return await db.initializeEmployeeLeaveBalance(input.employeeId, input.year);
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

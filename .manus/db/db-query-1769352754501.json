@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, name, username, password, hasPortalAccess FROM employees WHERE username = 'saud' LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, name, username, password, hasPortalAccess FROM employees WHERE username = 'saud' LIMIT 1;",
+  "rows": [
+    {
+      "id": "180001",
+      "name": "Saud",
+      "username": "saud",
+      "password": "a6eaa2c0bcf91437f3dafcd5569813f1:fd582c2cc88e15167b56c3eb9644bf0b74d74418b8cffe4180e33da8228de81001eb5fcd76fcc5ddd05f020fa34529a06a82cdc6e715fd3e6ee5fd00e7b3fe50",
+      "hasPortalAccess": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tusername\tpassword\thasPortalAccess\n180001\tSaud\tsaud\ta6eaa2c0bcf91437f3dafcd5569813f1:fd582c2cc88e15167b56c3eb9644bf0b74d74418b8cffe4180e33da8228de81001eb5fcd76fcc5ddd05f020fa34529a06a82cdc6e715fd3e6ee5fd00e7b3fe50\t1\n",
+  "stderr": "",
+  "execution_time_ms": 1515
+}

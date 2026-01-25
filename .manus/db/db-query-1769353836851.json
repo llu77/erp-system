@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE employees SET password = 'b481849e90a99cb949c706ebcb245e02:1a49de8bdcbe1b651dafe8d3720691f4e6257d41906cc5e0c301092c02e6ad582a27360efd1387f94c72290d7f64007476ef63e64c854a2d5728f86077f7c54e' WHERE username = 'saud';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute UPDATE employees SET password = 'b481849e90a99cb949c706ebcb245e02:1a49de8bdcbe1b651dafe8d3720691f4e6257d41906cc5e0c301092c02e6ad582a27360efd1387f94c72290d7f64007476ef63e64c854a2d5728f86077f7c54e' WHERE username = 'saud';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1548
+}

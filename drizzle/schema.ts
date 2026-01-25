@@ -2053,3 +2053,69 @@ export const pendingRequests = mysqlTable("pending_requests", {
 
 export type PendingRequest = typeof pendingRequests.$inferSelect;
 export type InsertPendingRequest = typeof pendingRequests.$inferInsert;
+
+
+// ==================== جدول مرفقات طلبات الموظفين ====================
+/**
+ * RequestAttachments - مرفقات طلبات الموظفين
+ * يسمح للموظفين بإرفاق ملفات مع طلباتهم
+ */
+export const requestAttachments = mysqlTable("requestAttachments", {
+  id: int("id").autoincrement().primaryKey(),
+  requestId: int("requestId").notNull(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  fileUrl: text("fileUrl").notNull(),
+  fileType: varchar("fileType", { length: 100 }),
+  fileSize: int("fileSize"), // بالبايت
+  uploadedBy: int("uploadedBy").notNull(), // معرف الموظف
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type RequestAttachment = typeof requestAttachments.$inferSelect;
+export type InsertRequestAttachment = typeof requestAttachments.$inferInsert;
+
+// ==================== جدول تتبع مراحل الطلبات ====================
+/**
+ * RequestTimeline - تتبع مراحل الطلب
+ * يسجل كل تغيير في حالة الطلب مع التوقيت
+ */
+export const requestTimeline = mysqlTable("requestTimeline", {
+  id: int("id").autoincrement().primaryKey(),
+  requestId: int("requestId").notNull(),
+  status: mysqlEnum("status", [
+    "submitted",      // تم التقديم
+    "under_review",   // قيد المراجعة
+    "pending_approval", // في انتظار الموافقة
+    "approved",       // تمت الموافقة
+    "rejected",       // مرفوض
+    "cancelled",      // ملغي
+    "completed"       // مكتمل
+  ]).notNull(),
+  notes: text("notes"),
+  actionBy: int("actionBy"), // معرف المستخدم الذي قام بالإجراء
+  actionByName: varchar("actionByName", { length: 100 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type RequestTimeline = typeof requestTimeline.$inferSelect;
+export type InsertRequestTimeline = typeof requestTimeline.$inferInsert;
+
+// ==================== جدول رصيد إجازات الموظفين ====================
+/**
+ * EmployeeLeaveBalance - رصيد الإجازات لكل موظف
+ * يتتبع الإجازات المستحقة والمستخدمة
+ */
+export const employeeLeaveBalance = mysqlTable("employeeLeaveBalance", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  year: int("year").notNull(),
+  leaveType: mysqlEnum("leaveType", ["annual", "sick", "emergency", "unpaid"]).notNull(),
+  totalDays: int("totalDays").default(0).notNull(),
+  usedDays: int("usedDays").default(0).notNull(),
+  pendingDays: int("pendingDays").default(0).notNull(), // أيام في انتظار الموافقة
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeLeaveBalance = typeof employeeLeaveBalance.$inferSelect;
+export type InsertEmployeeLeaveBalance = typeof employeeLeaveBalance.$inferInsert;
