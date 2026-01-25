@@ -139,6 +139,7 @@ const menuStructure: MenuItem[] = [
     roles: ["admin", "manager", "supervisor", "viewer"],
     children: [
       { icon: DollarSign, label: "الإيرادات", path: "/revenues", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: FileText, label: "تقرير فواتير المدفوع", path: "/paid-invoices-report", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Receipt, label: "المصاريف", path: "/expenses", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Gift, label: "البونص", path: "/bonuses", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
       { icon: Wallet, label: "مسيرات الرواتب", path: "/payrolls", roles: ["admin", "manager", "supervisor", "viewer"] },

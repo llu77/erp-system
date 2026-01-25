@@ -61,6 +61,7 @@ import EmployeeAssistant from "./pages/EmployeeAssistant";
 import EmployeePortal from "./pages/EmployeePortal";
 import EmployeeLogin from "./pages/EmployeeLogin";
 import EmployeeAccounts from "./pages/EmployeeAccounts";
+import PaidInvoicesReport from "./pages/PaidInvoicesReport";
 
 function Router() {
   return (
@@ -153,6 +154,11 @@ function Router() {
       <Route path="/revenues">
         <DashboardLayout>
           <Revenues />
+        </DashboardLayout>
+      </Route>
+      <Route path="/paid-invoices-report">
+        <DashboardLayout>
+          <PaidInvoicesReport />
         </DashboardLayout>
       </Route>
       <Route path="/bonuses">

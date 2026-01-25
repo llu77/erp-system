@@ -1922,6 +1922,103 @@ export const appRouter = router({
         
         return { success: true, message: 'تم حذف الإيراد بنجاح' };
       }),
+
+    // تقرير فواتير المدفوع
+    getPaidInvoicesReport: protectedProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ input, ctx }) => {
+        // الحصول على جميع الإيرادات التي تحتوي على فواتير مدفوع
+        const branches = await db.getBranches();
+        const results: Array<{
+          id: number;
+          date: Date;
+          branchId: number;
+          branchName: string;
+          paidInvoices: string;
+          paidInvoicesNote: string | null;
+          total: string;
+        }> = [];
+
+        // تصفية الفروع حسب صلاحيات المستخدم
+        let filteredBranches = branches;
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
+          filteredBranches = branches.filter(b => b.id === ctx.user.branchId);
+        } else if (input.branchId) {
+          filteredBranches = branches.filter(b => b.id === input.branchId);
+        }
+
+        for (const branch of filteredBranches) {
+          const revenues = await db.getDailyRevenuesByDateRange(
+            branch.id,
+            input.startDate,
+            input.endDate
+          );
+
+          for (const rev of revenues) {
+            const paidAmount = parseFloat(rev.paidInvoices || '0');
+            if (paidAmount > 0) {
+              results.push({
+                id: rev.id,
+                date: rev.date,
+                branchId: branch.id,
+                branchName: branch.nameAr || branch.name,
+                paidInvoices: rev.paidInvoices || '0',
+                paidInvoicesNote: rev.paidInvoicesNote || null,
+                total: rev.total,
+              });
+            }
+          }
+        }
+
+        // ترتيب حسب التاريخ (الأحدث أولاً)
+        results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // حساب الإحصائيات
+        const totalPaidInvoices = results.reduce((sum, r) => sum + parseFloat(r.paidInvoices), 0);
+        
+        // تصنيف حسب الأسباب
+        const byReason: Record<string, { count: number; total: number }> = {};
+        for (const r of results) {
+          const reason = r.paidInvoicesNote || 'بدون سبب محدد';
+          if (!byReason[reason]) {
+            byReason[reason] = { count: 0, total: 0 };
+          }
+          byReason[reason].count++;
+          byReason[reason].total += parseFloat(r.paidInvoices);
+        }
+
+        // تصنيف حسب الفرع
+        const byBranch: Record<string, { count: number; total: number }> = {};
+        for (const r of results) {
+          if (!byBranch[r.branchName]) {
+            byBranch[r.branchName] = { count: 0, total: 0 };
+          }
+          byBranch[r.branchName].count++;
+          byBranch[r.branchName].total += parseFloat(r.paidInvoices);
+        }
+
+        return {
+          items: results,
+          summary: {
+            totalCount: results.length,
+            totalAmount: totalPaidInvoices,
+            byReason: Object.entries(byReason).map(([reason, data]) => ({
+              reason,
+              count: data.count,
+              total: data.total,
+            })),
+            byBranch: Object.entries(byBranch).map(([branch, data]) => ({
+              branch,
+              count: data.count,
+              total: data.total,
+            })),
+          },
+        };
+      }),
   }),
 
   // ==================== إدارة البونص الأسبوعي ====================
