@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte, lte, lt, like, or, isNotNull, inArray, asc } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte, lt, like, or, isNotNull, isNull, inArray, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import type { SQL } from "drizzle-orm";
 import {
@@ -10090,3 +10090,130 @@ export async function getEmployeeDocumentInfo(employeeId: number) {
   };
 }
 
+
+// جلب الموظفين الذين لم يرفعوا وثائقهم بعد
+export async function getEmployeesWithoutDocuments() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db.select({
+    id: employees.id,
+    code: employees.code,
+    name: employees.name,
+    phone: employees.phone,
+    position: employees.position,
+    branchId: employees.branchId,
+    infoSubmittedAt: employees.infoSubmittedAt,
+    iqamaNumber: employees.iqamaNumber,
+    iqamaExpiryDate: employees.iqamaExpiryDate,
+    iqamaImageUrl: employees.iqamaImageUrl,
+    healthCertExpiryDate: employees.healthCertExpiryDate,
+    healthCertImageUrl: employees.healthCertImageUrl,
+    contractExpiryDate: employees.contractExpiryDate,
+    contractImageUrl: employees.contractImageUrl,
+  })
+    .from(employees)
+    .where(
+      and(
+        eq(employees.isActive, true),
+        or(
+          isNull(employees.infoSubmittedAt),
+          and(
+            isNull(employees.iqamaImageUrl),
+            isNull(employees.healthCertImageUrl),
+            isNull(employees.contractImageUrl)
+          )
+        )
+      )
+    )
+    .orderBy(employees.name);
+  
+  // جلب أسماء الفروع
+  const branchIds = Array.from(new Set(result.map(e => e.branchId)));
+  const branchesData = await db.select({ id: branches.id, name: branches.name })
+    .from(branches)
+    .where(inArray(branches.id, branchIds));
+  
+  const branchMap = new Map(branchesData.map(b => [b.id, b.name]));
+  
+  return result.map(emp => ({
+    ...emp,
+    branchName: branchMap.get(emp.branchId) || 'غير محدد',
+    missingDocuments: {
+      info: !emp.infoSubmittedAt,
+      iqamaImage: !emp.iqamaImageUrl,
+      healthCertImage: !emp.healthCertImageUrl,
+      contractImage: !emp.contractImageUrl,
+    },
+  }));
+}
+
+// جلب إحصائيات الوثائق
+export async function getDocumentStatistics() {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const allEmployees = await db.select({ id: employees.id })
+    .from(employees)
+    .where(eq(employees.isActive, true));
+  
+  const withInfo = await db.select({ id: employees.id })
+    .from(employees)
+    .where(
+      and(
+        eq(employees.isActive, true),
+        isNotNull(employees.infoSubmittedAt)
+      )
+    );
+  
+  const withAllImages = await db.select({ id: employees.id })
+    .from(employees)
+    .where(
+      and(
+        eq(employees.isActive, true),
+        isNotNull(employees.iqamaImageUrl),
+        isNotNull(employees.healthCertImageUrl),
+        isNotNull(employees.contractImageUrl)
+      )
+    );
+  
+  const withIqamaImage = await db.select({ id: employees.id })
+    .from(employees)
+    .where(
+      and(
+        eq(employees.isActive, true),
+        isNotNull(employees.iqamaImageUrl)
+      )
+    );
+  
+  const withHealthCertImage = await db.select({ id: employees.id })
+    .from(employees)
+    .where(
+      and(
+        eq(employees.isActive, true),
+        isNotNull(employees.healthCertImageUrl)
+      )
+    );
+  
+  const withContractImage = await db.select({ id: employees.id })
+    .from(employees)
+    .where(
+      and(
+        eq(employees.isActive, true),
+        isNotNull(employees.contractImageUrl)
+      )
+    );
+  
+  return {
+    totalEmployees: allEmployees.length,
+    withInfo: withInfo.length,
+    withoutInfo: allEmployees.length - withInfo.length,
+    withAllImages: withAllImages.length,
+    withIqamaImage: withIqamaImage.length,
+    withHealthCertImage: withHealthCertImage.length,
+    withContractImage: withContractImage.length,
+    completionRate: allEmployees.length > 0 
+      ? Math.round((withAllImages.length / allEmployees.length) * 100) 
+      : 0,
+  };
+}

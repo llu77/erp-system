@@ -858,3 +858,147 @@ async function markDocumentNotificationSent(key: string): Promise<void> {
     console.error(`[Document] خطأ في تسجيل الإشعار:`, error);
   }
 }
+
+
+// ==================== تذكيرات وثائق الموظفين ====================
+
+/**
+ * إرسال تذكيرات للموظفين الذين لم يكملوا رفع وثائقهم
+ * يُرسل كل يوم أحد وأربعاء
+ */
+export async function sendDocumentReminders(): Promise<SendResult> {
+  const type = 'document_reminder' as ScheduledNotificationType;
+  const timestamp = new Date().toISOString();
+  
+  console.log(`\n${'='.repeat(70)}`);
+  console.log(`[Documents] 📄 طلب إرسال تذكيرات الوثائق`);
+  console.log(`[Documents] الوقت: ${timestamp}`);
+  console.log(`${'='.repeat(70)}`);
+  
+  // تنظيف الذاكرة من السجلات القديمة
+  cleanupMemory();
+  
+  try {
+    // جلب الموظفين بدون وثائق مكتملة
+    const employeesWithoutDocs = await db.getEmployeesWithoutDocuments();
+    
+    if (!employeesWithoutDocs || employeesWithoutDocs.length === 0) {
+      console.log(`[Documents] ✅ جميع الموظفين أكملوا وثائقهم`);
+      return {
+        success: true,
+        sentCount: 0,
+        skipped: false,
+        reason: 'لا يوجد موظفين بدون وثائق',
+        timestamp,
+      };
+    }
+    
+    // تجميع الموظفين حسب الفرع
+    const employeesByBranch = new Map<string, typeof employeesWithoutDocs>();
+    for (const emp of employeesWithoutDocs) {
+      const branchName = emp.branchName || 'غير محدد';
+      if (!employeesByBranch.has(branchName)) {
+        employeesByBranch.set(branchName, []);
+      }
+      employeesByBranch.get(branchName)!.push(emp);
+    }
+    
+    // إنشاء محتوى الإشعار
+    let content = `📄 تذكير: وثائق الموظفين غير المكتملة\n\n`;
+    content += `إجمالي الموظفين بدون وثائق مكتملة: ${employeesWithoutDocs.length}\n\n`;
+    
+    for (const [branchName, employees] of Array.from(employeesByBranch.entries())) {
+      content += `\n📍 ${branchName} (${employees.length} موظف):\n`;
+      for (const emp of employees.slice(0, 5)) {
+        const missing: string[] = [];
+        if (emp.missingDocuments.info) missing.push('المعلومات');
+        if (emp.missingDocuments.iqamaImage) missing.push('صورة الإقامة');
+        if (emp.missingDocuments.healthCertImage) missing.push('صورة الشهادة الصحية');
+        if (emp.missingDocuments.contractImage) missing.push('صورة العقد');
+        content += `  • ${emp.name} (${emp.code}): ناقص ${missing.join('، ')}\n`;
+      }
+      if (employees.length > 5) {
+        content += `  ... و ${employees.length - 5} موظفين آخرين\n`;
+      }
+    }
+    
+    content += `\n\n⚠️ يرجى متابعة الموظفين لإكمال رفع وثائقهم عبر بوابة الموظفين.`;
+    
+    // إرسال الإشعار للأدمن والمشرف العام
+    const result = await emailNotifications.sendDocumentReminderEmail({
+      totalEmployees: employeesWithoutDocs.length,
+      employeesByBranch: Object.fromEntries(employeesByBranch),
+      content,
+    });
+    
+    if (result.success) {
+      console.log(`[Documents] ✅ تم إرسال ${result.sentCount} إشعار`);
+      return {
+        success: true,
+        sentCount: result.sentCount || 1,
+        skipped: false,
+        timestamp,
+      };
+    } else {
+      console.log(`[Documents] ❌ فشل الإرسال: ${result.error}`);
+      return {
+        success: false,
+        sentCount: 0,
+        skipped: false,
+        reason: result.error,
+        timestamp,
+      };
+    }
+    
+  } catch (error: any) {
+    console.error(`[Documents] ❌ خطأ:`, error.message);
+    return {
+      success: false,
+      sentCount: 0,
+      skipped: false,
+      reason: error.message,
+      timestamp,
+    };
+  }
+}
+
+/**
+ * إرسال تذكير لموظف محدد
+ */
+export async function sendDocumentReminderToEmployee(employeeId: number): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const employee = await db.getEmployeeDocumentInfo(employeeId);
+    if (!employee) {
+      return { success: false, error: 'الموظف غير موجود' };
+    }
+    
+    // التحقق من وجود وثائق ناقصة
+    const missing: string[] = [];
+    if (!employee.infoSubmittedAt) missing.push('المعلومات الأساسية');
+    if (!employee.iqamaImageUrl) missing.push('صورة الإقامة');
+    if (!employee.healthCertImageUrl) missing.push('صورة الشهادة الصحية');
+    if (!employee.contractImageUrl) missing.push('صورة عقد العمل');
+    
+    if (missing.length === 0) {
+      return { success: false, error: 'الموظف أكمل جميع وثائقه' };
+    }
+    
+    // إرسال إشعار داخلي للموظف
+    await db.createNotification({
+      userId: 0, // سيتم تحديده لاحقاً
+      title: '📄 تذكير: إكمال الوثائق',
+      message: `مرحباً ${employee.name}، يرجى إكمال رفع الوثائق التالية: ${missing.join('، ')}. يمكنك ذلك من خلال بوابة الموظفين > ملفي.`,
+      type: 'system',
+    });
+    
+    console.log(`[Documents] ✅ تم إرسال تذكير للموظف ${employee.name}`);
+    return { success: true };
+    
+  } catch (error: any) {
+    console.error(`[Documents] ❌ خطأ في إرسال التذكير:`, error.message);
+    return { success: false, error: error.message };
+  }
+}

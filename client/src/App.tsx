@@ -48,6 +48,7 @@ import Loyalty from "./pages/Loyalty";
 import LoyaltyRegister from "./pages/LoyaltyRegister";
 import LoyaltyVisit from "./pages/LoyaltyVisit";
 import LoyaltySettings from "./pages/LoyaltySettings";
+import EmployeeDocumentsReport from "./pages/EmployeeDocumentsReport";
 import LoyaltyReport from "./pages/LoyaltyReport";
 import LoyaltyDeletionRequests from "./pages/LoyaltyDeletionRequests";
 import MonitoringDashboard from "./pages/MonitoringDashboard";
@@ -149,6 +150,11 @@ function Router() {
       <Route path="/employees">
         <DashboardLayout>
           <Employees />
+        </DashboardLayout>
+      </Route>
+      <Route path="/employees/documents-report">
+        <DashboardLayout>
+          <EmployeeDocumentsReport />
         </DashboardLayout>
       </Route>
       {/* Documents Dashboard */}

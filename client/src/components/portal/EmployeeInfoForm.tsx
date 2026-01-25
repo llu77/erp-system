@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { compressDocumentImage, formatFileSize } from '@/lib/imageCompression';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -152,27 +153,34 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
       return;
     }
 
-    // التحقق من حجم الملف (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('حجم الصورة يجب أن يكون أقل من 5 ميجابايت');
+    // التحقق من حجم الملف (10MB max قبل الضغط)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('حجم الصورة يجب أن يكون أقل من 10 ميجابايت');
       return;
     }
 
     setUploadingType(docType);
 
-    // تحويل الملف إلى Base64
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
+    try {
+      // ضغط الصورة قبل الرفع
+      const { base64, originalSize, compressedSize, compressionRatio } = await compressDocumentImage(file);
+      
+      // عرض رسالة الضغط إذا كان الضغط ملحوظاً
+      if (compressionRatio > 20) {
+        toast.info(`تم ضغط الصورة بنسبة ${compressionRatio}% (من ${formatFileSize(originalSize)} إلى ${formatFileSize(compressedSize)})`);
+      }
+      
       uploadMutation.mutate({
         employeeId,
         documentType: docType,
         imageData: base64,
         fileName: file.name,
-        mimeType: file.type,
+        mimeType: 'image/jpeg',
       });
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+      toast.error('فشل في معالجة الصورة');
+      setUploadingType(null);
+    }
 
     // إعادة تعيين الـ input
     e.target.value = '';

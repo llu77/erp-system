@@ -1942,3 +1942,111 @@ export function getAdvancedBonusPaymentRequestTemplate(data: {
     html: getBaseTemplate(content, 'طلب صرف بونص أسبوعي'),
   };
 }
+
+
+// ==================== قالب تذكير وثائق الموظفين ====================
+export function getDocumentReminderTemplate(data: {
+  recipientName: string;
+  totalEmployees: number;
+  employeesByBranch: Record<string, any[]>;
+}): { subject: string; html: string } {
+  // إنشاء جدول الموظفين حسب الفرع
+  let branchesHtml = '';
+  for (const [branchName, employees] of Object.entries(data.employeesByBranch)) {
+    const employeesRows = employees.slice(0, 5).map((emp: any, i: number) => {
+      const missing: string[] = [];
+      if (emp.missingDocuments?.info) missing.push('المعلومات');
+      if (emp.missingDocuments?.iqamaImage) missing.push('صورة الإقامة');
+      if (emp.missingDocuments?.healthCertImage) missing.push('صورة الشهادة');
+      if (emp.missingDocuments?.contractImage) missing.push('صورة العقد');
+      
+      return `
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">${i + 1}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">${emp.name}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-family: monospace;">${emp.code}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #ef4444;">${missing.join('، ')}</td>
+        </tr>
+      `;
+    }).join('');
+    
+    const moreCount = employees.length > 5 ? employees.length - 5 : 0;
+    
+    branchesHtml += `
+      <div style="margin-bottom: 25px;">
+        <h3 style="color: #1a1a2e; margin-bottom: 15px; font-size: 16px; display: flex; align-items: center;">
+          <span style="margin-left: 8px;">📍</span>
+          ${branchName} (${employees.length} موظف)
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <thead>
+            <tr style="background: #f8fafc;">
+              <th style="padding: 12px; text-align: right; color: #64748b; font-weight: 600; width: 50px;">#</th>
+              <th style="padding: 12px; text-align: right; color: #64748b; font-weight: 600;">الاسم</th>
+              <th style="padding: 12px; text-align: right; color: #64748b; font-weight: 600;">الكود</th>
+              <th style="padding: 12px; text-align: right; color: #64748b; font-weight: 600;">الوثائق الناقصة</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${employeesRows}
+            ${moreCount > 0 ? `
+              <tr>
+                <td colspan="4" style="padding: 12px; text-align: center; color: #64748b; font-style: italic;">
+                  ... و ${moreCount} موظفين آخرين
+                </td>
+              </tr>
+            ` : ''}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+  
+  const content = `
+    <div class="header">
+      <div class="logo">
+        <span class="logo-text">📄</span>
+      </div>
+      <h1>تذكير: وثائق الموظفين</h1>
+      <div class="subtitle">تقرير الوثائق غير المكتملة</div>
+    </div>
+    
+    <div class="content">
+      <div class="greeting">
+        السلام عليكم ورحمة الله وبركاته،<br><br>
+        <strong>${data.recipientName}</strong><br><br>
+        نود إعلامكم بوجود موظفين لم يكملوا رفع وثائقهم بعد:
+      </div>
+      
+      <div class="alert-box warning" style="text-align: center;">
+        <div class="amount" style="color: #f59e0b; font-size: 48px;">${data.totalEmployees}</div>
+        <div style="color: #64748b; margin-top: 5px;">موظف بدون وثائق مكتملة</div>
+      </div>
+      
+      <div class="divider"></div>
+      
+      ${branchesHtml}
+      
+      <div class="alert-box info" style="margin-top: 25px;">
+        <div style="font-weight: 600; margin-bottom: 8px;">⚠️ ملاحظة هامة:</div>
+        <div style="color: #374151; line-height: 1.8;">
+          يرجى متابعة الموظفين لإكمال رفع وثائقهم عبر بوابة الموظفين. 
+          الوثائق المطلوبة: صورة الإقامة، صورة الشهادة الصحية، صورة عقد العمل.
+        </div>
+      </div>
+      
+      <div class="divider"></div>
+      
+      <div style="text-align: center;">
+        <a href="https://sym.manus.space/employees/documents-report" class="cta-button">
+          عرض التقرير الكامل
+        </a>
+      </div>
+    </div>
+  `;
+  
+  return {
+    subject: `📄 تذكير: ${data.totalEmployees} موظف بدون وثائق مكتملة | Symbol AI`,
+    html: getBaseTemplate(content, 'تذكير وثائق الموظفين'),
+  };
+}

@@ -1317,6 +1317,31 @@ export const appRouter = router({
           message: result.success ? `تم إرسال رسالة ترحيبية إلى ${input.email}` : `فشل الإرسال: ${result.error}`,
         };
       }),
+
+    // إرسال تذكيرات الوثائق للموظفين
+    sendDocumentReminders: adminProcedure.mutation(async () => {
+      const { sendDocumentReminders } = await import('./notifications/scheduledNotificationService');
+      const result = await sendDocumentReminders();
+      return {
+        success: result.success,
+        message: result.success 
+          ? `تم إرسال ${result.sentCount} تذكير` 
+          : `فشل: ${result.reason}`,
+        data: result,
+      };
+    }),
+
+    // إرسال تذكير لموظف محدد
+    sendDocumentReminderToEmployee: adminProcedure
+      .input(z.object({ employeeId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { sendDocumentReminderToEmployee } = await import('./notifications/scheduledNotificationService');
+        const result = await sendDocumentReminderToEmployee(input.employeeId);
+        return {
+          success: result.success,
+          message: result.success ? 'تم إرسال التذكير بنجاح' : `فشل: ${result.error}`,
+        };
+      }),
   }),
 
   // ==================== لوحة التحكم والتقارير ====================
@@ -1708,6 +1733,18 @@ export const appRouter = router({
         });
         
         return { success: true, url, key };
+      }),
+
+    // تقرير الموظفين بدون وثائق
+    getWithoutDocuments: protectedProcedure
+      .query(async () => {
+        return await db.getEmployeesWithoutDocuments();
+      }),
+
+    // إحصائيات الوثائق
+    getDocumentStatistics: protectedProcedure
+      .query(async () => {
+        return await db.getDocumentStatistics();
       }),
   }),
   // ==================== إدارة الإيرادات ====================

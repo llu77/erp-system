@@ -782,6 +782,58 @@ export async function notifyEmployeesPayslip(data: {
   return { success: sentCount > 0, sentCount, failedCount };
 }
 
+// ==================== إشعار تذكير الوثائق ====================
+export async function sendDocumentReminderEmail(data: {
+  totalEmployees: number;
+  employeesByBranch: Record<string, any[]>;
+  content: string;
+}): Promise<{ success: boolean; sentCount?: number; error?: string }> {
+  console.log(`📧 إرسال تذكير الوثائق - ${data.totalEmployees} موظف`);
+  
+  // الحصول على المستلمين (الأدمن والمشرف العام)
+  const recipients: { name: string; email: string }[] = [];
+  
+  try {
+    const allUsers = await db.getAllUsers();
+    
+    for (const user of allUsers) {
+      if (!user.email || !user.isActive) continue;
+      
+      const userName = user.name || 'مستخدم';
+      const userRole = user.role as string;
+      
+      // الأدمن أو المشرف العام
+      if (userRole === 'admin' || userRole === 'general_supervisor') {
+        recipients.push({ name: userName, email: user.email });
+      }
+    }
+  } catch (error) {
+    console.error('خطأ في جلب المستلمين:', error);
+  }
+  
+  if (recipients.length === 0) {
+    console.log('⚠️ لا يوجد مستلمين لتذكير الوثائق');
+    return { success: false, error: 'لا يوجد مستلمين' };
+  }
+  
+  let sentCount = 0;
+  
+  for (const recipient of recipients) {
+    const { subject, html } = templates.getDocumentReminderTemplate({
+      recipientName: recipient.name,
+      totalEmployees: data.totalEmployees,
+      employeesByBranch: data.employeesByBranch,
+    });
+    
+    if (await sendEmail(recipient.email, subject, html)) {
+      sentCount++;
+    }
+  }
+  
+  console.log(`✓ تم إرسال تذكير الوثائق إلى ${sentCount} مستلم`);
+  return { success: sentCount > 0, sentCount };
+}
+
 // ==================== تصدير الدوال ====================
 export default {
   notifyNewEmployeeRequest,
@@ -795,6 +847,7 @@ export default {
   notifyPayrollReminder,
   notifyNewPayrollCreated,
   notifyEmployeesPayslip,
+  sendDocumentReminderEmail,
 };
 
 
