@@ -3079,6 +3079,19 @@ ${discrepancyRows}
             requestNumber: result?.requestNumber,
             details: requestDetails,
           }).catch(err => notificationLogger.error('خطأ في إرسال إشعار البريد', err));
+          
+          // إرسال إشعار بريد للموظف بأنه تم استلام طلبه
+          const employee = await db.getEmployeeById(input.employeeId);
+          if (employee?.email) {
+            emailNotifications.notifyEmployeeRequestSubmitted({
+              employeeEmail: employee.email,
+              employeeName: input.employeeName,
+              requestType: input.requestType,
+              requestId: Number(result.insertId),
+              details: input.description || undefined,
+              submittedAt: new Date(),
+            }).catch(err => notificationLogger.error('خطأ في إرسال إشعار الموظف', err));
+          }
         }
 
         return { success: true, message: 'تم تقديم الطلب بنجاح', requestNumber: result?.requestNumber };
@@ -3144,6 +3157,32 @@ ${discrepancyRows}
           branchId: request.branchId ?? undefined,
           branchName: request.branchName ?? undefined,
         }).catch(err => requestsLogger.error('خطأ في إرسال إشعار تحديث الحالة', err));
+        
+        // إرسال إشعار بريد للموظف بتحديث حالة طلبه
+        const employee = await db.getEmployeeById(request.employeeId);
+        if (employee?.email) {
+          if (input.status === 'approved') {
+            emailNotifications.notifyEmployeeRequestApproved({
+              employeeEmail: employee.email,
+              employeeName: request.employeeName,
+              requestType: request.requestType,
+              requestId: input.id,
+              approvedBy: ctx.user.name || 'مسؤول',
+              approvedAt: new Date(),
+              notes: input.reviewNotes,
+            }).catch(err => requestsLogger.error('خطأ في إرسال إشعار الموافقة للموظف', err));
+          } else if (input.status === 'rejected') {
+            emailNotifications.notifyEmployeeRequestRejected({
+              employeeEmail: employee.email,
+              employeeName: request.employeeName,
+              requestType: request.requestType,
+              requestId: input.id,
+              rejectedBy: ctx.user.name || 'مسؤول',
+              rejectedAt: new Date(),
+              reason: input.rejectionReason,
+            }).catch(err => requestsLogger.error('خطأ في إرسال إشعار الرفض للموظف', err));
+          }
+        }
 
         return { success: true, message: `تم ${statusText} الطلب بنجاح` };
       }),

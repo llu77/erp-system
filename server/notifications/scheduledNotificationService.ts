@@ -1002,3 +1002,125 @@ export async function sendDocumentReminderToEmployee(employeeId: number): Promis
     return { success: false, error: error.message };
   }
 }
+
+
+/**
+ * فحص وإرسال تنبيهات انتهاء صلاحية الوثائق
+ * يتم إرسال تنبيه للأدمن والمشرف العام عند اقتراب انتهاء صلاحية وثائق الموظفين
+ */
+export async function checkDocumentExpirations(): Promise<{
+  success: boolean;
+  expiringCount: number;
+  expiredCount: number;
+  sentCount: number;
+  error?: string;
+}> {
+  const timestamp = new Date().toISOString();
+  console.log(`[DocExpiry] 🔍 بدء فحص انتهاء صلاحية الوثائق - ${timestamp}`);
+  
+  try {
+    // جلب جميع الموظفين النشطين مع معلومات وثائقهم
+    const employees = await db.getAllEmployeesWithDocuments();
+    
+    const today = new Date();
+    const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    
+    const expiringDocs: Array<{
+      employeeId: number;
+      employeeName: string;
+      employeeCode: string;
+      branchName: string;
+      documentType: string;
+      expiryDate: Date;
+      daysRemaining: number;
+      status: 'expired' | 'expiring_soon';
+    }> = [];
+    
+    for (const emp of employees) {
+      const checkDocument = (date: Date | null, type: string) => {
+        if (!date) return;
+        
+        const expiryDate = new Date(date);
+        const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+        
+        if (daysRemaining <= 0) {
+          expiringDocs.push({
+            employeeId: emp.id,
+            employeeName: emp.name,
+            employeeCode: emp.code,
+            branchName: emp.branchName || 'غير محدد',
+            documentType: type,
+            expiryDate,
+            daysRemaining,
+            status: 'expired',
+          });
+        } else if (daysRemaining <= 30) {
+          expiringDocs.push({
+            employeeId: emp.id,
+            employeeName: emp.name,
+            employeeCode: emp.code,
+            branchName: emp.branchName || 'غير محدد',
+            documentType: type,
+            expiryDate,
+            daysRemaining,
+            status: 'expiring_soon',
+          });
+        }
+      };
+      
+      checkDocument(emp.iqamaExpiryDate, 'الإقامة');
+      checkDocument(emp.healthCertExpiryDate, 'الشهادة الصحية');
+      checkDocument(emp.contractExpiryDate, 'عقد العمل');
+    }
+    
+    if (expiringDocs.length === 0) {
+      console.log(`[DocExpiry] ✅ لا توجد وثائق منتهية أو قريبة الانتهاء`);
+      return {
+        success: true,
+        expiringCount: 0,
+        expiredCount: 0,
+        sentCount: 0,
+      };
+    }
+    
+    const expiredDocs = expiringDocs.filter(d => d.status === 'expired');
+    const expiringDocs2 = expiringDocs.filter(d => d.status === 'expiring_soon');
+    
+    console.log(`[DocExpiry] ⚠️ وجد ${expiredDocs.length} وثيقة منتهية و ${expiringDocs2.length} وثيقة قريبة الانتهاء`);
+    
+    // إرسال البريد الإلكتروني للأدمن والمشرف العام
+    const result = await emailNotifications.sendDocumentExpiryAlert({
+      expiredDocs,
+      expiringDocs: expiringDocs2,
+    });
+    
+    if (result.success) {
+      console.log(`[DocExpiry] ✅ تم إرسال ${result.sentCount} إشعار`);
+      return {
+        success: true,
+        expiringCount: expiringDocs2.length,
+        expiredCount: expiredDocs.length,
+        sentCount: result.sentCount || 1,
+      };
+    } else {
+      console.log(`[DocExpiry] ❌ فشل الإرسال: ${result.error}`);
+      return {
+        success: false,
+        expiringCount: expiringDocs2.length,
+        expiredCount: expiredDocs.length,
+        sentCount: 0,
+        error: result.error,
+      };
+    }
+    
+  } catch (error: any) {
+    console.error(`[DocExpiry] ❌ خطأ:`, error.message);
+    return {
+      success: false,
+      expiringCount: 0,
+      expiredCount: 0,
+      sentCount: 0,
+      error: error.message,
+    };
+  }
+}

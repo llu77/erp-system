@@ -1732,3 +1732,552 @@ export async function notifyContractExpiry(data: {
   console.log(`✓ تم إرسال إشعار انتهاء عقد العمل إلى ${sentCount} مستلم`);
   return { success: sentCount > 0, sentCount };
 }
+
+
+// ==================== تنبيه انتهاء صلاحية الوثائق الشامل ====================
+
+interface DocumentExpiryData {
+  employeeId: number;
+  employeeName: string;
+  employeeCode: string;
+  branchName: string;
+  documentType: string;
+  expiryDate: Date;
+  daysRemaining: number;
+  status: 'expired' | 'expiring_soon';
+}
+
+/**
+ * إرسال تنبيه شامل لانتهاء صلاحية الوثائق
+ */
+export async function sendDocumentExpiryAlert(data: {
+  expiredDocs: DocumentExpiryData[];
+  expiringDocs: DocumentExpiryData[];
+}): Promise<{ success: boolean; sentCount?: number; error?: string }> {
+  console.log(`\n📋 [Document Expiry Alert] إرسال تنبيه انتهاء صلاحية الوثائق`);
+  console.log(`   - وثائق منتهية: ${data.expiredDocs.length}`);
+  console.log(`   - وثائق قريبة الانتهاء: ${data.expiringDocs.length}`);
+  
+  const recipients: Array<{ name: string; email: string }> = [];
+  
+  try {
+    const users = await db.getAllUsers();
+    for (const user of users) {
+      if (!user.email) continue;
+      const userRole = user.role as string;
+      if (userRole === 'admin' || userRole === 'general_supervisor') {
+        recipients.push({ name: user.name || 'مستخدم', email: user.email });
+      }
+    }
+  } catch (error) {
+    console.error('خطأ في جلب المستلمين:', error);
+  }
+  
+  if (recipients.length === 0) {
+    console.log('⚠️ لا يوجد مستلمين لتنبيه انتهاء الوثائق');
+    return { success: false, error: 'لا يوجد مستلمين' };
+  }
+  
+  const totalDocs = data.expiredDocs.length + data.expiringDocs.length;
+  const subject = `⚠️ تنبيه: ${data.expiredDocs.length > 0 ? `${data.expiredDocs.length} وثيقة منتهية و ` : ''}${data.expiringDocs.length} وثيقة قريبة الانتهاء`;
+  
+  const formatDate = (date: Date) => date.toLocaleDateString('ar-SA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  
+  const htmlContent = `
+    <div dir="rtl" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; max-width: 700px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+      <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); padding: 30px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">⚠️ تنبيه انتهاء صلاحية الوثائق</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">
+          ${new Date().toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })}
+        </p>
+      </div>
+      
+      <div style="padding: 30px;">
+        <!-- ملخص -->
+        <div style="display: flex; gap: 15px; margin-bottom: 25px;">
+          <div style="flex: 1; background: #fee2e2; padding: 15px; border-radius: 8px; text-align: center;">
+            <p style="margin: 0; font-size: 28px; font-weight: bold; color: #dc2626;">${data.expiredDocs.length}</p>
+            <p style="margin: 5px 0 0 0; color: #991b1b; font-size: 14px;">وثيقة منتهية</p>
+          </div>
+          <div style="flex: 1; background: #fef3c7; padding: 15px; border-radius: 8px; text-align: center;">
+            <p style="margin: 0; font-size: 28px; font-weight: bold; color: #d97706;">${data.expiringDocs.length}</p>
+            <p style="margin: 5px 0 0 0; color: #92400e; font-size: 14px;">قريبة الانتهاء</p>
+          </div>
+        </div>
+        
+        ${data.expiredDocs.length > 0 ? `
+        <!-- الوثائق المنتهية -->
+        <h3 style="color: #dc2626; margin-bottom: 15px; border-bottom: 2px solid #dc2626; padding-bottom: 10px;">
+          🚨 وثائق منتهية الصلاحية (${data.expiredDocs.length})
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+          <thead>
+            <tr style="background: #fee2e2;">
+              <th style="padding: 12px 8px; text-align: right; border: 1px solid #fecaca;">الموظف</th>
+              <th style="padding: 12px 8px; text-align: center; border: 1px solid #fecaca;">الفرع</th>
+              <th style="padding: 12px 8px; text-align: center; border: 1px solid #fecaca;">نوع الوثيقة</th>
+              <th style="padding: 12px 8px; text-align: center; border: 1px solid #fecaca;">تاريخ الانتهاء</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.expiredDocs.map((doc, i) => `
+              <tr style="background: ${i % 2 === 0 ? '#fff' : '#fef2f2'};">
+                <td style="padding: 10px 8px; border: 1px solid #fecaca;">
+                  <strong>${doc.employeeName}</strong><br>
+                  <span style="color: #6b7280; font-size: 12px;">${doc.employeeCode}</span>
+                </td>
+                <td style="padding: 10px 8px; border: 1px solid #fecaca; text-align: center;">${doc.branchName}</td>
+                <td style="padding: 10px 8px; border: 1px solid #fecaca; text-align: center;">${doc.documentType}</td>
+                <td style="padding: 10px 8px; border: 1px solid #fecaca; text-align: center; color: #dc2626; font-weight: bold;">
+                  ${formatDate(doc.expiryDate)}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        ` : ''}
+        
+        ${data.expiringDocs.length > 0 ? `
+        <!-- الوثائق قريبة الانتهاء -->
+        <h3 style="color: #d97706; margin-bottom: 15px; border-bottom: 2px solid #d97706; padding-bottom: 10px;">
+          ⚠️ وثائق قريبة الانتهاء (${data.expiringDocs.length})
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+          <thead>
+            <tr style="background: #fef3c7;">
+              <th style="padding: 12px 8px; text-align: right; border: 1px solid #fcd34d;">الموظف</th>
+              <th style="padding: 12px 8px; text-align: center; border: 1px solid #fcd34d;">الفرع</th>
+              <th style="padding: 12px 8px; text-align: center; border: 1px solid #fcd34d;">نوع الوثيقة</th>
+              <th style="padding: 12px 8px; text-align: center; border: 1px solid #fcd34d;">تاريخ الانتهاء</th>
+              <th style="padding: 12px 8px; text-align: center; border: 1px solid #fcd34d;">الأيام المتبقية</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.expiringDocs.map((doc, i) => `
+              <tr style="background: ${i % 2 === 0 ? '#fff' : '#fffbeb'};">
+                <td style="padding: 10px 8px; border: 1px solid #fcd34d;">
+                  <strong>${doc.employeeName}</strong><br>
+                  <span style="color: #6b7280; font-size: 12px;">${doc.employeeCode}</span>
+                </td>
+                <td style="padding: 10px 8px; border: 1px solid #fcd34d; text-align: center;">${doc.branchName}</td>
+                <td style="padding: 10px 8px; border: 1px solid #fcd34d; text-align: center;">${doc.documentType}</td>
+                <td style="padding: 10px 8px; border: 1px solid #fcd34d; text-align: center;">${formatDate(doc.expiryDate)}</td>
+                <td style="padding: 10px 8px; border: 1px solid #fcd34d; text-align: center; font-weight: bold; color: ${doc.daysRemaining <= 7 ? '#dc2626' : '#d97706'};">
+                  ${doc.daysRemaining} يوم
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        ` : ''}
+        
+        <div style="margin-top: 25px; padding: 15px; background: #f3f4f6; border-radius: 8px;">
+          <p style="margin: 0; color: #6b7280; font-size: 14px;">
+            💡 يرجى اتخاذ الإجراءات اللازمة لتجديد الوثائق المنتهية والقريبة من الانتهاء.
+          </p>
+        </div>
+      </div>
+      
+      <div style="background: #1f2937; padding: 20px; text-align: center;">
+        <p style="margin: 0; color: #9ca3af; font-size: 12px;">Symbol AI - نظام إدارة الموارد البشرية</p>
+      </div>
+    </div>
+  `;
+  
+  let sentCount = 0;
+  for (const recipient of recipients) {
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: recipient.email,
+        subject,
+        html: htmlContent,
+      });
+      sentCount++;
+      
+      await db.logSentNotification({
+        recipientId: 0,
+        recipientEmail: recipient.email,
+        recipientName: recipient.name,
+        notificationType: 'document_expiry_alert',
+        subject,
+        bodyArabic: `تنبيه انتهاء وثائق - ${data.expiredDocs.length} منتهية، ${data.expiringDocs.length} قريبة الانتهاء`,
+        status: 'sent',
+        sentAt: new Date(),
+      });
+    } catch (error) {
+      console.error(`✗ فشل إرسال تنبيه انتهاء الوثائق إلى ${recipient.email}:`, error);
+    }
+  }
+  
+  console.log(`✓ تم إرسال تنبيه انتهاء الوثائق إلى ${sentCount} مستلم`);
+  return { success: sentCount > 0, sentCount };
+}
+
+
+// ==================== إشعارات الطلبات للموظفين ====================
+
+/**
+ * إرسال إشعار للموظف عند تقديم طلب جديد
+ */
+export async function notifyEmployeeRequestSubmitted(data: {
+  employeeEmail: string;
+  employeeName: string;
+  requestType: string;
+  requestId: number;
+  details?: string;
+  submittedAt: Date;
+}): Promise<boolean> {
+  console.log(`\n📧 [Request Submitted] إرسال إشعار تقديم طلب للموظف: ${data.employeeName}`);
+  
+  const requestTypeNames: Record<string, string> = {
+    advance: 'سلفة',
+    leave: 'إجازة',
+    arrears: 'صرف متأخرات',
+    permission: 'استئذان',
+    objection: 'اعتراض',
+    resignation: 'استقالة',
+  };
+  
+  const requestTypeName = requestTypeNames[data.requestType] || data.requestType;
+  const submittedAtStr = data.submittedAt.toLocaleDateString('ar-SA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  
+  const subject = `✅ تم استلام طلبك - ${requestTypeName} - الرقم المرجعي: #${data.requestId}`;
+  
+  const htmlContent = `
+    <div dir="rtl" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+      <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">✅ تم استلام طلبك بنجاح</h1>
+      </div>
+      
+      <div style="padding: 30px;">
+        <p style="font-size: 16px; color: #374151; margin-bottom: 20px;">
+          مرحباً <strong>${data.employeeName}</strong>،
+        </p>
+        
+        <p style="font-size: 16px; color: #374151; margin-bottom: 25px;">
+          نود إعلامك بأنه تم استلام طلبك بنجاح وهو الآن قيد المراجعة من قبل الإدارة.
+        </p>
+        
+        <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <table style="width: 100%;">
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">الرقم المرجعي:</td>
+              <td style="padding: 8px 0; font-weight: bold; color: #059669;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">نوع الطلب:</td>
+              <td style="padding: 8px 0; font-weight: bold;">${requestTypeName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">تاريخ التقديم:</td>
+              <td style="padding: 8px 0;">${submittedAtStr}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">الحالة:</td>
+              <td style="padding: 8px 0;">
+                <span style="background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 20px; font-size: 14px;">
+                  قيد المراجعة
+                </span>
+              </td>
+            </tr>
+            ${data.details ? `
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280; vertical-align: top;">التفاصيل:</td>
+              <td style="padding: 8px 0;">${data.details}</td>
+            </tr>
+            ` : ''}
+          </table>
+        </div>
+        
+        <p style="font-size: 14px; color: #6b7280;">
+          سيتم إشعارك عبر البريد الإلكتروني فور اتخاذ قرار بشأن طلبك.
+        </p>
+      </div>
+      
+      <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="margin: 0; color: #9ca3af; font-size: 12px;">Symbol AI - نظام إدارة الموارد البشرية</p>
+      </div>
+    </div>
+  `;
+  
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: data.employeeEmail,
+      subject,
+      html: htmlContent,
+    });
+    
+    await db.logSentNotification({
+      recipientId: 0,
+      recipientEmail: data.employeeEmail,
+      recipientName: data.employeeName,
+      notificationType: 'request_submitted',
+      subject,
+      bodyArabic: `تم استلام طلب ${requestTypeName} - الرقم المرجعي: #${data.requestId}`,
+      status: 'sent',
+      sentAt: new Date(),
+    });
+    
+    console.log(`✓ تم إرسال إشعار تقديم الطلب إلى: ${data.employeeEmail}`);
+    return true;
+  } catch (error) {
+    console.error(`✗ فشل إرسال إشعار تقديم الطلب إلى ${data.employeeEmail}:`, error);
+    return false;
+  }
+}
+
+/**
+ * إرسال إشعار للموظف عند الموافقة على طلبه
+ */
+export async function notifyEmployeeRequestApproved(data: {
+  employeeEmail: string;
+  employeeName: string;
+  requestType: string;
+  requestId: number;
+  approvedBy: string;
+  approvedAt: Date;
+  notes?: string;
+}): Promise<boolean> {
+  console.log(`\n📧 [Request Approved] إرسال إشعار موافقة للموظف: ${data.employeeName}`);
+  
+  const requestTypeNames: Record<string, string> = {
+    advance: 'سلفة',
+    leave: 'إجازة',
+    arrears: 'صرف متأخرات',
+    permission: 'استئذان',
+    objection: 'اعتراض',
+    resignation: 'استقالة',
+  };
+  
+  const requestTypeName = requestTypeNames[data.requestType] || data.requestType;
+  const approvedAtStr = data.approvedAt.toLocaleDateString('ar-SA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  
+  const subject = `🎉 تمت الموافقة على طلبك - ${requestTypeName} - الرقم المرجعي: #${data.requestId}`;
+  
+  const htmlContent = `
+    <div dir="rtl" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+      <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">🎉 تمت الموافقة على طلبك</h1>
+      </div>
+      
+      <div style="padding: 30px;">
+        <p style="font-size: 16px; color: #374151; margin-bottom: 20px;">
+          مرحباً <strong>${data.employeeName}</strong>،
+        </p>
+        
+        <p style="font-size: 16px; color: #374151; margin-bottom: 25px;">
+          يسعدنا إبلاغك بأنه <strong style="color: #059669;">تمت الموافقة</strong> على طلبك.
+        </p>
+        
+        <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <table style="width: 100%;">
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">الرقم المرجعي:</td>
+              <td style="padding: 8px 0; font-weight: bold; color: #059669;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">نوع الطلب:</td>
+              <td style="padding: 8px 0; font-weight: bold;">${requestTypeName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">تاريخ الموافقة:</td>
+              <td style="padding: 8px 0;">${approvedAtStr}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">تمت الموافقة بواسطة:</td>
+              <td style="padding: 8px 0;">${data.approvedBy}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">الحالة:</td>
+              <td style="padding: 8px 0;">
+                <span style="background: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 20px; font-size: 14px;">
+                  ✅ تمت الموافقة
+                </span>
+              </td>
+            </tr>
+            ${data.notes ? `
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280; vertical-align: top;">ملاحظات:</td>
+              <td style="padding: 8px 0;">${data.notes}</td>
+            </tr>
+            ` : ''}
+          </table>
+        </div>
+        
+        <p style="font-size: 14px; color: #6b7280;">
+          شكراً لك، ونتمنى لك التوفيق.
+        </p>
+      </div>
+      
+      <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="margin: 0; color: #9ca3af; font-size: 12px;">Symbol AI - نظام إدارة الموارد البشرية</p>
+      </div>
+    </div>
+  `;
+  
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: data.employeeEmail,
+      subject,
+      html: htmlContent,
+    });
+    
+    await db.logSentNotification({
+      recipientId: 0,
+      recipientEmail: data.employeeEmail,
+      recipientName: data.employeeName,
+      notificationType: 'request_approved',
+      subject,
+      bodyArabic: `تمت الموافقة على طلب ${requestTypeName} - الرقم المرجعي: #${data.requestId}`,
+      status: 'sent',
+      sentAt: new Date(),
+    });
+    
+    console.log(`✓ تم إرسال إشعار الموافقة إلى: ${data.employeeEmail}`);
+    return true;
+  } catch (error) {
+    console.error(`✗ فشل إرسال إشعار الموافقة إلى ${data.employeeEmail}:`, error);
+    return false;
+  }
+}
+
+/**
+ * إرسال إشعار للموظف عند رفض طلبه
+ */
+export async function notifyEmployeeRequestRejected(data: {
+  employeeEmail: string;
+  employeeName: string;
+  requestType: string;
+  requestId: number;
+  rejectedBy: string;
+  rejectedAt: Date;
+  reason?: string;
+}): Promise<boolean> {
+  console.log(`\n📧 [Request Rejected] إرسال إشعار رفض للموظف: ${data.employeeName}`);
+  
+  const requestTypeNames: Record<string, string> = {
+    advance: 'سلفة',
+    leave: 'إجازة',
+    arrears: 'صرف متأخرات',
+    permission: 'استئذان',
+    objection: 'اعتراض',
+    resignation: 'استقالة',
+  };
+  
+  const requestTypeName = requestTypeNames[data.requestType] || data.requestType;
+  const rejectedAtStr = data.rejectedAt.toLocaleDateString('ar-SA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  
+  const subject = `❌ تم رفض طلبك - ${requestTypeName} - الرقم المرجعي: #${data.requestId}`;
+  
+  const htmlContent = `
+    <div dir="rtl" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+      <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 30px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">❌ تم رفض طلبك</h1>
+      </div>
+      
+      <div style="padding: 30px;">
+        <p style="font-size: 16px; color: #374151; margin-bottom: 20px;">
+          مرحباً <strong>${data.employeeName}</strong>،
+        </p>
+        
+        <p style="font-size: 16px; color: #374151; margin-bottom: 25px;">
+          نأسف لإبلاغك بأنه <strong style="color: #dc2626;">تم رفض</strong> طلبك.
+        </p>
+        
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <table style="width: 100%;">
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">الرقم المرجعي:</td>
+              <td style="padding: 8px 0; font-weight: bold; color: #dc2626;">#${data.requestId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">نوع الطلب:</td>
+              <td style="padding: 8px 0; font-weight: bold;">${requestTypeName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">تاريخ الرفض:</td>
+              <td style="padding: 8px 0;">${rejectedAtStr}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">تم الرفض بواسطة:</td>
+              <td style="padding: 8px 0;">${data.rejectedBy}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280;">الحالة:</td>
+              <td style="padding: 8px 0;">
+                <span style="background: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 20px; font-size: 14px;">
+                  ❌ مرفوض
+                </span>
+              </td>
+            </tr>
+            ${data.reason ? `
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280; vertical-align: top;">سبب الرفض:</td>
+              <td style="padding: 8px 0; color: #dc2626;">${data.reason}</td>
+            </tr>
+            ` : ''}
+          </table>
+        </div>
+        
+        <p style="font-size: 14px; color: #6b7280;">
+          إذا كان لديك أي استفسار، يرجى التواصل مع الإدارة.
+        </p>
+      </div>
+      
+      <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="margin: 0; color: #9ca3af; font-size: 12px;">Symbol AI - نظام إدارة الموارد البشرية</p>
+      </div>
+    </div>
+  `;
+  
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: data.employeeEmail,
+      subject,
+      html: htmlContent,
+    });
+    
+    await db.logSentNotification({
+      recipientId: 0,
+      recipientEmail: data.employeeEmail,
+      recipientName: data.employeeName,
+      notificationType: 'request_rejected',
+      subject,
+      bodyArabic: `تم رفض طلب ${requestTypeName} - الرقم المرجعي: #${data.requestId}`,
+      status: 'sent',
+      sentAt: new Date(),
+    });
+    
+    console.log(`✓ تم إرسال إشعار الرفض إلى: ${data.employeeEmail}`);
+    return true;
+  } catch (error) {
+    console.error(`✗ فشل إرسال إشعار الرفض إلى ${data.employeeEmail}:`, error);
+    return false;
+  }
+}
