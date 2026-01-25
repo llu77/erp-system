@@ -303,8 +303,8 @@ export default function DocumentsDashboard() {
     doc.text('Manager', 55, lastPageHeight - 22, { align: 'center' });
     doc.text('Omar Al-Mutairi', 55, lastPageHeight - 18, { align: 'center' });
     
-    doc.save('Documents_Status_Report.pdf');
-    toast.success('تم تحميل التقرير بنجاح');
+      doc.save('Documents_Status_Report.pdf');
+      toast.success('تم تحميل التقرير بنجاح');
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('حدث خطأ أثناء إنشاء التقرير');

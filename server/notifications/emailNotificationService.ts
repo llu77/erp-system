@@ -121,6 +121,72 @@ async function getRecipientsForNotification(
   return recipients;
 }
 
+// ==================== الحصول على مستلمي إشعارات انتهاء الوثائق ====================
+/**
+ * الحصول على مستلمي إشعارات انتهاء الوثائق
+ * - الأدمن: يستقبل جميع الإشعارات
+ * - المشرف العام: يستقبل جميع الإشعارات
+ * - مشرف الفرع: يستقبل إشعارات فرعه فقط
+ */
+async function getRecipientsForDocumentExpiry(branchId?: number): Promise<Recipient[]> {
+  const recipients: Recipient[] = [];
+  
+  try {
+    // الحصول على جميع المستلمين المسجلين
+    const allRecipients = await db.getNotificationRecipients();
+    
+    for (const r of allRecipients) {
+      // الأدمن يستقبل كل الإشعارات
+      if (r.role === 'admin') {
+        recipients.push({
+          id: r.id,
+          name: r.name,
+          email: r.email,
+          role: 'admin',
+          branchId: r.branchId ?? undefined,
+          branchName: r.branchName ?? undefined,
+        });
+        continue;
+      }
+      
+      // المشرف العام يستقبل كل الإشعارات
+      if (r.role === 'general_supervisor') {
+        recipients.push({
+          id: r.id,
+          name: r.name,
+          email: r.email,
+          role: 'general_supervisor',
+          branchId: r.branchId ?? undefined,
+          branchName: r.branchName ?? undefined,
+        });
+        continue;
+      }
+      
+      // مشرف الفرع يستقبل إشعارات فرعه فقط
+      if ((r.role as string) === 'supervisor' || (r.role as string) === 'branch_supervisor') {
+        if (branchId && r.branchId === branchId) {
+          recipients.push({
+            id: r.id,
+            name: r.name,
+            email: r.email,
+            role: 'branch_supervisor',
+            branchId: r.branchId ?? undefined,
+            branchName: r.branchName ?? undefined,
+          });
+          console.log(`📧 [مشرف الفرع] سيتم إرسال إشعار لـ: ${r.name} (${r.email}) - فرع: ${r.branchName}`);
+        }
+      }
+    }
+    
+    console.log(`📨 [مستلمي الوثائق] إجمالي المستلمين: ${recipients.length}`);
+    recipients.forEach(r => console.log(`  - ${r.name} (${r.role}): ${r.email}`));
+  } catch (error) {
+    console.error('خطأ في جلب مستلمي إشعارات الوثائق:', error);
+  }
+  
+  return recipients;
+}
+
 // ==================== إرسال البريد ====================
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   try {
@@ -1312,11 +1378,12 @@ export async function notifyIqamaExpiry(data: {
   expiryDate: Date;
   daysRemaining: number;
   branchName: string;
+  branchId?: number;
 }): Promise<{ success: boolean; sentCount: number }> {
-  console.log(`\n📋 [Iqama Expiry] إرسال إشعار انتهاء الإقامة للموظف: ${data.employeeName}`);
+  console.log(`\n📋 [Iqama Expiry] إرسال إشعار انتهاء الإقامة للموظف: ${data.employeeName} - الفرع: ${data.branchName}`);
   
-  // الحصول على المستلمين (الأدمن والمشرفين)
-  const recipients = await getRecipientsForNotification('general');
+  // الحصول على المستلمين (الأدمن والمشرف العام ومشرف الفرع المعني)
+  const recipients = await getRecipientsForDocumentExpiry(data.branchId);
   
   if (recipients.length === 0) {
     console.log('⚠️ لا يوجد مستلمين للإشعار');
@@ -1415,10 +1482,12 @@ export async function notifyHealthCertExpiry(data: {
   expiryDate: Date;
   daysRemaining: number;
   branchName: string;
+  branchId?: number;
 }): Promise<{ success: boolean; sentCount: number }> {
-  console.log(`\n🏥 [Health Cert Expiry] إرسال إشعار انتهاء الشهادة الصحية للموظف: ${data.employeeName}`);
+  console.log(`\n🏥 [Health Cert Expiry] إرسال إشعار انتهاء الشهادة الصحية للموظف: ${data.employeeName} - الفرع: ${data.branchName}`);
   
-  const recipients = await getRecipientsForNotification('general');
+  // الحصول على المستلمين (الأدمن والمشرف العام ومشرف الفرع المعني)
+  const recipients = await getRecipientsForDocumentExpiry(data.branchId);
   
   if (recipients.length === 0) {
     console.log('⚠️ لا يوجد مستلمين للإشعار');
@@ -1513,11 +1582,13 @@ export async function notifyContractExpiry(data: {
   expiryDate: Date;
   daysRemaining: number;
   branchName: string;
+  branchId?: number;
   reminderType: 'two_months' | 'one_month';
 }): Promise<{ success: boolean; sentCount: number }> {
-  console.log(`\n📄 [Contract Expiry] إرسال إشعار انتهاء عقد العمل للموظف: ${data.employeeName}`);
+  console.log(`\n📄 [Contract Expiry] إرسال إشعار انتهاء عقد العمل للموظف: ${data.employeeName} - الفرع: ${data.branchName}`);
   
-  const recipients = await getRecipientsForNotification('general');
+  // الحصول على المستلمين (الأدمن والمشرف العام ومشرف الفرع المعني)
+  const recipients = await getRecipientsForDocumentExpiry(data.branchId);
   
   if (recipients.length === 0) {
     console.log('⚠️ لا يوجد مستلمين للإشعار');

@@ -696,6 +696,7 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
               expiryDate,
               daysRemaining,
               branchName: getBranchName(employee.branchId),
+              branchId: employee.branchId,
             });
             if (result.success) {
               results.iqamaReminders++;
@@ -723,6 +724,7 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
               expiryDate,
               daysRemaining,
               branchName: getBranchName(employee.branchId),
+              branchId: employee.branchId,
             });
             if (result.success) {
               results.healthCertReminders++;
@@ -750,6 +752,7 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
               expiryDate,
               daysRemaining,
               branchName: getBranchName(employee.branchId),
+              branchId: employee.branchId,
               reminderType: 'two_months',
             });
             if (result.success) {
@@ -772,6 +775,7 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
               expiryDate,
               daysRemaining,
               branchName: getBranchName(employee.branchId),
+              branchId: employee.branchId,
               reminderType: 'one_month',
             });
             if (result.success) {
