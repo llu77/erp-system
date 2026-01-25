@@ -742,17 +742,18 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
       cash: acc.cash + parseFloat(rev.cash || "0"),
       network: acc.network + parseFloat(rev.network || "0"),
       balance: acc.balance + parseFloat(rev.balance || "0"),
+      paidInvoices: acc.paidInvoices + parseFloat(rev.paidInvoices || "0"),
       total: acc.total + parseFloat(rev.total || "0"),
       matched: acc.matched + (rev.isMatched ? 1 : 0),
       unmatched: acc.unmatched + (rev.isMatched ? 0 : 1),
     }),
-    { cash: 0, network: 0, balance: 0, total: 0, matched: 0, unmatched: 0 }
-  ) || { cash: 0, network: 0, balance: 0, total: 0, matched: 0, unmatched: 0 };
+    { cash: 0, network: 0, balance: 0, paidInvoices: 0, total: 0, matched: 0, unmatched: 0 }
+  ) || { cash: 0, network: 0, balance: 0, paidInvoices: 0, total: 0, matched: 0, unmatched: 0 };
 
   // دالة تصدير PDF
   const handleExportPDF = async (
     revenues: typeof monthlyRevenues,
-    totals: { cash: number; network: number; balance: number; total: number; matched: number; unmatched: number },
+    totals: { cash: number; network: number; balance: number; paidInvoices: number; total: number; matched: number; unmatched: number },
     monthName: string,
     monthStart: Date,
     monthEnd: Date
@@ -786,6 +787,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
     { label: 'إجمالي النقدي', value: formatCurrency(totals.cash) },
     { label: 'إجمالي الشبكة', value: formatCurrency(totals.network) },
     { label: 'إجمالي الرصيد', value: formatCurrency(totals.balance) },
+    { label: 'فواتير المدفوع', value: formatCurrency(totals.paidInvoices) },
     { label: 'أيام متطابقة', value: totals.matched },
     { label: 'أيام غير متطابقة', value: totals.unmatched },
   ])}
@@ -798,6 +800,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
         <th>نقدي</th>
         <th>شبكة</th>
         <th>رصيد</th>
+        <th>فواتير المدفوع</th>
         <th>الإجمالي</th>
         <th>الحالة</th>
       </tr>
@@ -805,6 +808,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
     <tbody>
       ${revenues.map(rev => {
         const revDate = new Date(rev.date);
+        const paidInvoicesAmount = parseFloat(rev.paidInvoices || "0");
         return `
           <tr>
             <td>${format(revDate, "d/M/yyyy")}</td>
@@ -812,6 +816,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
             <td class="text-success">${parseFloat(rev.cash || "0").toLocaleString()}</td>
             <td class="text-primary">${parseFloat(rev.network || "0").toLocaleString()}</td>
             <td>${parseFloat(rev.balance || "0").toLocaleString()}</td>
+            <td class="text-orange">${paidInvoicesAmount > 0 ? paidInvoicesAmount.toLocaleString() : '-'}</td>
             <td class="font-bold">${formatCurrency(rev.total || "0")}</td>
             <td class="${rev.isMatched ? 'status-matched' : 'status-unmatched'}">
               ${rev.isMatched ? '✓ متطابق' : '✗ غير متطابق'}
@@ -824,6 +829,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
         <td style="border: none;">${totals.cash.toLocaleString()}</td>
         <td style="border: none;">${totals.network.toLocaleString()}</td>
         <td style="border: none;">${totals.balance.toLocaleString()}</td>
+        <td style="border: none;">${totals.paidInvoices.toLocaleString()}</td>
         <td style="border: none;">${formatCurrency(totals.total)}</td>
         <td style="border: none;">${revenues.length} يوم</td>
       </tr>
@@ -900,7 +906,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
         ) : monthlyRevenues && monthlyRevenues.length > 0 ? (
           <>
             {/* ملخص الشهر */}
-            <div className={`grid gap-3 mb-6 p-4 bg-muted/30 rounded-lg ${isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-5'}`}>
+            <div className={`grid gap-3 mb-6 p-4 bg-muted/30 rounded-lg ${isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-6'}`}>
               <div className="text-center">
                 <div className="text-lg font-semibold text-green-600">{totals.cash.toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">إجمالي النقدي</div>
@@ -912,6 +918,10 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
               <div className="text-center">
                 <div className="text-lg font-semibold text-purple-600">{totals.balance.toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">إجمالي الرصيد</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-orange-500">{totals.paidInvoices.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">فواتير المدفوع</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-green-500">{totals.matched}</div>
@@ -933,6 +943,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                     <TableHead className="text-right">نقدي</TableHead>
                     <TableHead className="text-right">شبكة</TableHead>
                     <TableHead className="text-right">رصيد</TableHead>
+                    <TableHead className="text-right">فواتير المدفوع</TableHead>
                     <TableHead className="text-right">الإجمالي</TableHead>
                     <TableHead className="text-right">الموازنة</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
@@ -958,6 +969,36 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                         </TableCell>
                         <TableCell className="text-purple-600">
                           {parseFloat(revenue.balance || "0").toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-orange-500">
+                          {parseFloat(revenue.paidInvoices || "0") > 0 ? (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="gap-1 h-8 px-2 text-orange-500 hover:text-orange-600">
+                                  {parseFloat(revenue.paidInvoices || "0").toLocaleString()}
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle className="text-orange-500">فواتير المدفوع - {format(new Date(revenue.date), "d MMMM yyyy", { locale: ar })}</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div className="p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                                    <div className="text-lg font-bold text-orange-600 mb-2">
+                                      {parseFloat(revenue.paidInvoices || "0").toLocaleString()} ر.س
+                                    </div>
+                                    {revenue.paidInvoicesNote && (
+                                      <div className="text-sm text-muted-foreground">
+                                        <span className="font-semibold">السبب:</span> {revenue.paidInvoicesNote}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="font-bold">
                           {parseFloat(revenue.total || "0").toLocaleString()} ر.س
