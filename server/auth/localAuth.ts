@@ -27,7 +27,7 @@ export function hashPassword(password: string, salt?: string): { hash: string; s
 }
 
 // التحقق من كلمة المرور
-export function verifyPassword(password: string, storedHash: string): boolean {
+export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
   const [salt, hash] = storedHash.split(":");
   if (!salt || !hash) return false;
   
@@ -64,7 +64,7 @@ export async function localLogin(username: string, password: string) {
       return { success: false, error: "هذا الحساب لا يدعم تسجيل الدخول المحلي" };
     }
 
-    const isValid = verifyPassword(password, user.password);
+    const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
       return { success: false, error: "اسم المستخدم أو كلمة المرور غير صحيحة" };
     }

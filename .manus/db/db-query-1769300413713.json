@@ -1,0 +1,65 @@
+{
+  "query": "SELECT requestType, status, COUNT(*) as count FROM employeeRequests GROUP BY requestType, status ORDER BY count DESC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT requestType, status, COUNT(*) as count FROM employeeRequests GROUP BY requestType, status ORDER BY count DESC LIMIT 20;",
+  "rows": [
+    {
+      "requestType": "arrears",
+      "status": "rejected",
+      "count": "17"
+    },
+    {
+      "requestType": "arrears",
+      "status": "approved",
+      "count": "13"
+    },
+    {
+      "requestType": "advance",
+      "status": "rejected",
+      "count": "7"
+    },
+    {
+      "requestType": "permission",
+      "status": "rejected",
+      "count": "3"
+    },
+    {
+      "requestType": "advance",
+      "status": "approved",
+      "count": "3"
+    },
+    {
+      "requestType": "vacation",
+      "status": "rejected",
+      "count": "2"
+    },
+    {
+      "requestType": "vacation",
+      "status": "approved",
+      "count": "1"
+    },
+    {
+      "requestType": "vacation",
+      "status": "pending",
+      "count": "1"
+    },
+    {
+      "requestType": "objection",
+      "status": "approved",
+      "count": "1"
+    },
+    {
+      "requestType": "resignation",
+      "status": "rejected",
+      "count": "1"
+    },
+    {
+      "requestType": "objection",
+      "status": "rejected",
+      "count": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "requestType\tstatus\tcount\narrears\trejected\t17\narrears\tapproved\t13\nadvance\trejected\t7\npermission\trejected\t3\nadvance\tapproved\t3\nvacation\trejected\t2\nvacation\tapproved\t1\nvacation\tpending\t1\nobjection\tapproved\t1\nresignation\trejected\t1\nobjection\trejected\t1\n",
+  "stderr": "",
+  "execution_time_ms": 1514
+}

@@ -1,0 +1,55 @@
+{
+  "query": "SELECT id, name, username FROM employees WHERE username IS NOT NULL LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, name, username FROM employees WHERE username IS NOT NULL LIMIT 20;",
+  "rows": [
+    {
+      "id": "30002",
+      "name": "علاء ناصر",
+      "username": "علاءناصرemp-002"
+    },
+    {
+      "id": "30004",
+      "name": "عبدالحي جلال",
+      "username": "عبدالحيجemp-004"
+    },
+    {
+      "id": "30007",
+      "name": "السيد محمد",
+      "username": "السيدمحمemp-007"
+    },
+    {
+      "id": "30012",
+      "name": "محمود عماره ",
+      "username": "محمودعماemp-012"
+    },
+    {
+      "id": "60001",
+      "name": "محمد ناصر",
+      "username": "محمدناصرemp100"
+    },
+    {
+      "id": "90001",
+      "name": "فارس محمد ",
+      "username": "فارسمحمدt03"
+    },
+    {
+      "id": "90002",
+      "name": "عمرو",
+      "username": "عمروt2"
+    },
+    {
+      "id": "90003",
+      "name": "محمد اسماعيل",
+      "username": "محمداسماt4"
+    },
+    {
+      "id": "180001",
+      "name": "Saud",
+      "username": "sauds1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tusername\n30002\tعلاء ناصر\tعلاءناصرemp-002\n30004\tعبدالحي جلال\tعبدالحيجemp-004\n30007\tالسيد محمد\tالسيدمحمemp-007\n30012\tمحمود عماره \tمحمودعماemp-012\n60001\tمحمد ناصر\tمحمدناصرemp100\n90001\tفارس محمد \tفارسمحمدt03\n90002\tعمرو\tعمروt2\n90003\tمحمد اسماعيل\tمحمداسماt4\n180001\tSaud\tsauds1\n",
+  "stderr": "",
+  "execution_time_ms": 1515
+}
