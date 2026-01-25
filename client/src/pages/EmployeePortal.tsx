@@ -120,7 +120,7 @@ export default function EmployeePortal() {
       const welcomeMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `مرحباً ${employeeInfo.name}! 👋\n\nأنا Symbol AI، مساعدك الذكي في نظام إدارة الموارد.\n\nيمكنني مساعدتك في:\n• تقديم طلبات (إجازة، سلفة، استئذان، وغيرها)\n• الاستعلام عن رصيد إجازاتك\n• عرض تقارير البونص والإيرادات\n• حساب الأسعار والخصومات\n• الإجابة على استفساراتك\n\nكيف يمكنني مساعدتك اليوم؟`,
+        content: `مرحباً ${employeeInfo.name}! 👋\n\nأنا مساعدك الذكي. اختر من الإجراءات السريعة أدناه أو اكتب طلبك مباشرة.`,
         timestamp: new Date(),
       };
       setMessages([welcomeMessage]);
@@ -263,36 +263,60 @@ export default function EmployeePortal() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" dir="rtl">
-      {/* Header */}
-      <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700 sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-2 rounded-xl">
-              <Sparkles className="h-6 w-6 text-white" />
+      {/* Header - محسّن للموبايل */}
+      <header className="bg-slate-800/80 backdrop-blur-md border-b border-slate-700/50 sticky top-0 z-50 shadow-lg">
+        <div className="container mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
+          {/* الصف الأول: الشعار وزر الخروج */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-1.5 sm:p-2 rounded-lg sm:rounded-xl shadow-lg">
+                <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg sm:text-xl font-bold text-white">Symbol AI</h1>
+                <p className="text-[10px] sm:text-xs text-slate-400">بوابة الموظفين</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">Symbol AI</h1>
-              <p className="text-xs text-slate-400">بوابة الموظفين</p>
+            
+            <div className="flex items-center gap-2 sm:gap-4">
+              {/* معلومات الموظف - مخفية على الموبايل الصغير */}
+              <div className="text-left hidden sm:block">
+                <p className="text-sm font-medium text-white">{employeeInfo.name}</p>
+                <div className="flex items-center gap-1 text-xs text-slate-400">
+                  <Building2 className="h-3 w-3" />
+                  <span>{employeeInfo.branchName}</span>
+                </div>
+              </div>
+              {/* زر الخروج - مكبّر وواضح */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="text-slate-300 hover:text-white hover:bg-slate-700/80 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-slate-600/50 hover:border-slate-500"
+              >
+                <LogOut className="h-4 w-4 sm:ml-2" />
+                <span className="hidden sm:inline">خروج</span>
+              </Button>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            <div className="text-left hidden sm:block">
-              <p className="text-sm font-medium text-white">{employeeInfo.name}</p>
-              <div className="flex items-center gap-1 text-xs text-slate-400">
-                <Building2 className="h-3 w-3" />
-                <span>{employeeInfo.branchName}</span>
+          {/* الصف الثاني: معلومات الموظف على الموبايل */}
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/50 sm:hidden">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                <User className="h-4 w-4 text-amber-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-white">{employeeInfo.name}</p>
+                <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                  <Building2 className="h-2.5 w-2.5" />
+                  <span>{employeeInfo.branchName}</span>
+                </div>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="text-slate-400 hover:text-white hover:bg-slate-700"
-            >
-              <LogOut className="h-4 w-4 ml-2" />
-              <span className="hidden sm:inline">خروج</span>
-            </Button>
+            <Badge className="bg-slate-700/50 text-slate-300 text-[10px] px-2 py-0.5">
+              {employeeInfo.code}
+            </Badge>
           </div>
         </div>
       </header>
@@ -354,70 +378,12 @@ export default function EmployeePortal() {
             </TabsList>
           </div>
 
-          {/* المساعد الذكي */}
+          {/* المساعد الذكي - محسّن للموبايل */}
           <TabsContent value="chat" className="mt-0">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
-              {/* Sidebar - Quick Actions */}
-              <div className="lg:col-span-1 space-y-4 order-2 lg:order-1">
-                <Card className="bg-slate-800/50 border-slate-700">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-white text-sm flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4 text-amber-500" />
-                      إجراءات سريعة
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {quickActions.map((action, index) => (
-                      <Button
-                        key={index}
-                        variant="ghost"
-                        className="w-full justify-start text-slate-300 hover:text-white hover:bg-slate-700"
-                        onClick={() => {
-                          setInput(action.prompt);
-                          setActiveTab('chat');
-                        }}
-                      >
-                        <action.icon className="h-4 w-4 ml-2 text-amber-500" />
-                        {action.label}
-                      </Button>
-                    ))}
-                  </CardContent>
-                </Card>
-
-                {/* Employee Info Card */}
-                <Card className="bg-slate-800/50 border-slate-700 hidden lg:block">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-white text-sm flex items-center gap-2">
-                      <User className="h-4 w-4 text-amber-500" />
-                      معلوماتك
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">الكود</span>
-                      <span className="text-white font-mono">{employeeInfo.code}</span>
-                    </div>
-                    <Separator className="bg-slate-700" />
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">الفرع</span>
-                      <span className="text-white">{employeeInfo.branchName}</span>
-                    </div>
-                    {employeeInfo.position && (
-                      <>
-                        <Separator className="bg-slate-700" />
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">المنصب</span>
-                          <span className="text-white">{employeeInfo.position}</span>
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Main Chat Area */}
-              <div className="lg:col-span-3 order-1 lg:order-2">
-                <Card className="bg-slate-800/50 border-slate-700 h-[calc(100vh-280px)] sm:h-[calc(100vh-220px)] flex flex-col">
+            {/* تصميم جديد: الشات أولاً ثم الإجراءات السريعة */}
+            <div className="flex flex-col h-[calc(100vh-200px)] sm:h-[calc(100vh-180px)]">
+              {/* Main Chat Area - يأخذ كل المساحة المتاحة */}
+              <Card className="bg-slate-800/50 border-slate-700 flex-1 flex flex-col overflow-hidden">
                   <CardHeader className="border-b border-slate-700 pb-3">
                     <div className="flex items-center gap-3">
                       <Avatar className="bg-gradient-to-br from-amber-500 to-orange-600">
@@ -552,14 +518,38 @@ export default function EmployeePortal() {
                     </div>
                   </ScrollArea>
 
-                  {/* Input */}
-                  <div className="p-4 border-t border-slate-700">
+                  {/* الإجراءات السريعة - محسّنة للموبايل */}
+                  <div className="px-3 py-2 border-t border-slate-700/50 bg-slate-800/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MessageSquare className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="text-xs text-slate-400">إجراءات سريعة</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {quickActions.map((action, index) => (
+                        <Button
+                          key={index}
+                          variant="outline"
+                          size="sm"
+                          className="text-[11px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 bg-slate-700/50 border-slate-600/50 text-slate-300 hover:text-white hover:bg-slate-600/50 hover:border-amber-500/50"
+                          onClick={() => {
+                            setInput(action.prompt);
+                          }}
+                        >
+                          <action.icon className="h-3 w-3 sm:h-3.5 sm:w-3.5 ml-1 text-amber-500" />
+                          {action.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Input - محسّن للموبايل */}
+                  <div className="p-3 sm:p-4 border-t border-slate-700 bg-slate-800/50">
                     <form
                       onSubmit={(e) => {
                         e.preventDefault();
                         handleSend();
                       }}
-                      className="flex gap-3"
+                      className="flex gap-2 sm:gap-3 items-center"
                     >
                       {/* زر التسجيل الصوتي */}
                       <VoiceRecorder
@@ -625,21 +615,20 @@ export default function EmployeePortal() {
                       <Input
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="اكتب رسالتك هنا أو اضغط على الميكروفون..."
-                        className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-amber-500"
+                        placeholder="اكتب هنا أو اضغط على الميكروفون"
+                        className="flex-1 bg-slate-700/80 border-slate-600/50 text-white text-sm placeholder:text-slate-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 h-10 sm:h-11 rounded-xl"
                         disabled={isLoading}
                       />
                       <Button
                         type="submit"
                         disabled={!input.trim() || isLoading}
-                        className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white"
+                        className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white h-10 sm:h-11 w-10 sm:w-11 rounded-xl shadow-lg shadow-amber-500/20"
                       >
-                        <Send className="h-4 w-4" />
+                        <Send className="h-4 w-4 sm:h-5 sm:w-5" />
                       </Button>
                     </form>
                   </div>
                 </Card>
-              </div>
             </div>
           </TabsContent>
 
