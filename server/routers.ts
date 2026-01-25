@@ -6717,15 +6717,56 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           { role: 'user', content: input.message },
         ];
 
+        // اكتشاف نية رفع الطلبات
+        const requestKeywords = ['طلب سلفة', 'طلب إجازة', 'طلب استئذان', 'طلب استقالة', 'طلب متأخرات', 'طلب اعتراض',
+          'رفع طلب', 'أريد سلفة', 'أريد إجازة', 'أريد استئذان', 'أريد استقالة',
+          'أحتاج سلفة', 'أحتاج إجازة', 'أبغى سلفة', 'أبغى إجازة'];
+        const confirmKeywords = ['نعم', 'أكد', 'موافق', 'تمام', 'اوكي', 'أوكي', 'ايه', 'أيه', 'صح', 'ماشي'];
+        const cancelKeywords = ['لا', 'إلغاء', 'تراجع', 'لا أريد', 'ما أبغى'];
+        
+        const messageText = input.message.toLowerCase();
+        const isRequestIntent = requestKeywords.some(kw => messageText.includes(kw));
+        const isConfirmIntent = confirmKeywords.some(kw => messageText.trim() === kw || messageText.includes(kw));
+        const isCancelIntent = cancelKeywords.some(kw => messageText.includes(kw));
+        
+        // التحقق من وجود طلبات معلقة
+        let hasPendingRequest = false;
+        if (sessionId) {
+          try {
+            const pendingRequests = await getPendingRequests(sessionId);
+            hasPendingRequest = pendingRequests.length > 0;
+          } catch (e) {
+            console.error('خطأ في فحص الطلبات المعلقة:', e);
+          }
+        }
+        
+        // تحديد tool_choice بناءً على النية
+        let toolChoice: 'auto' | { type: 'function'; function: { name: string } } = 'auto';
+        if (isConfirmIntent && hasPendingRequest) {
+          toolChoice = { type: 'function', function: { name: 'confirm_request' } };
+          console.log('[Symbol AI] Forcing confirm_request tool');
+        } else if (isCancelIntent && hasPendingRequest) {
+          toolChoice = { type: 'function', function: { name: 'cancel_request' } };
+          console.log('[Symbol AI] Forcing cancel_request tool');
+        } else if (isRequestIntent && input.employeeContext?.employeeId) {
+          toolChoice = { type: 'function', function: { name: 'prepare_request' } };
+          console.log('[Symbol AI] Forcing prepare_request tool');
+        }
+        
         // استدعاء LLM مع الأدوات
         const response = await invokeLLM({
           messages,
           tools: assistantTools,
-          tool_choice: 'auto',
+          tool_choice: toolChoice,
           temperature: 0.7,
         });
 
         const assistantMessage = response.choices[0]?.message;
+        
+        console.log('[Symbol AI] Response received:', {
+          hasToolCalls: !!(assistantMessage?.tool_calls && assistantMessage.tool_calls.length > 0),
+          toolCallsCount: assistantMessage?.tool_calls?.length || 0,
+        });
         
         // إذا كان هناك tool calls
         if (assistantMessage?.tool_calls && assistantMessage.tool_calls.length > 0) {
@@ -6734,6 +6775,19 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
 
           for (const toolCall of assistantMessage.tool_calls) {
             const args = JSON.parse(toolCall.function.arguments);
+            
+            // تمرير sessionId و employeeContext للأدوات التي تحتاجها
+            if (['prepare_request', 'confirm_request', 'cancel_request'].includes(toolCall.function.name)) {
+              args.sessionId = sessionId;
+              if (input.employeeContext) {
+                args.employeeId = input.employeeContext.employeeId;
+                args.employeeName = input.employeeContext.employeeName;
+                args.branchId = input.employeeContext.branchId;
+                args.branchName = input.employeeContext.branchName;
+              }
+              console.log(`[Symbol AI] Executing ${toolCall.function.name} with sessionId:`, sessionId);
+            }
+            
             const result = await executeAssistantTool(toolCall.function.name, args);
             
             // تحديث سياق الموظف إذا تم التعرف عليه
