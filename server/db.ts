@@ -2014,9 +2014,13 @@ export async function createPayrollWithDetails(
   // جلب الإجازات المعتمدة لجميع موظفي الفرع
   const branchLeaves = await getApprovedLeavesForBranch(branchId, year, month);
   
-  // إضافة التفاصيل مع الإجازات
+  // جلب الفواتير السالبة للموظفين في هذا الشهر
+  const negativeInvoices = await getNegativeInvoicesForMonth(branchId, year, month);
+  
+  // إضافة التفاصيل مع الإجازات والفواتير السالبة
   const detailsWithPayrollId = details.map(d => {
     const empLeaves = branchLeaves.get(d.employeeId);
+    const empNegativeInvoices = negativeInvoices.get(d.employeeId);
     let leaveDays = 0;
     let leaveDeduction = 0;
     let leaveType = '';
@@ -2035,11 +2039,25 @@ export async function createPayrollWithDetails(
       leaveDetails = JSON.stringify(empLeaves.leaves);
     }
     
-    // تحديث الخصومات والصافي
+    // حساب خصم الفواتير السالبة
+    let negativeInvoicesDeduction = 0;
+    let negativeInvoicesDetails = '';
+    
+    if (empNegativeInvoices && empNegativeInvoices.total > 0) {
+      negativeInvoicesDeduction = empNegativeInvoices.total;
+      negativeInvoicesDetails = JSON.stringify(empNegativeInvoices.invoices.map(inv => ({
+        invoiceNumber: inv.invoiceNumber,
+        amount: inv.amount,
+        reason: inv.reason,
+        date: inv.invoiceDate,
+      })));
+    }
+    
+    // تحديث الخصومات والصافي (مع الإجازات والفواتير السالبة)
     const currentTotalDeductions = parseFloat(d.totalDeductions) || 0;
     const currentNetSalary = parseFloat(d.netSalary) || 0;
-    const newTotalDeductions = currentTotalDeductions + leaveDeduction;
-    const newNetSalary = currentNetSalary - leaveDeduction;
+    const newTotalDeductions = currentTotalDeductions + leaveDeduction + negativeInvoicesDeduction;
+    const newNetSalary = currentNetSalary - leaveDeduction - negativeInvoicesDeduction;
     
     return {
       payrollId: newPayroll.id,
@@ -2056,6 +2074,8 @@ export async function createPayrollWithDetails(
       incentiveAmount: d.incentiveAmount,
       deductionAmount: d.deductionAmount,
       advanceDeduction: d.advanceDeduction,
+      negativeInvoicesDeduction: negativeInvoicesDeduction.toFixed(2),
+      negativeInvoicesDetails: negativeInvoicesDetails || null,
       leaveDays,
       leaveDeduction: leaveDeduction.toFixed(2),
       leaveType: leaveType || null,
@@ -2069,6 +2089,48 @@ export async function createPayrollWithDetails(
   await createPayrollDetails(detailsWithPayrollId);
   
   return newPayroll;
+}
+
+// جلب الفواتير السالبة للموظفين في شهر معين
+export async function getNegativeInvoicesForMonth(
+  branchId: number,
+  year: number,
+  month: number
+): Promise<Map<number, { total: number; invoices: Array<{ id: number; amount: string; invoiceNumber: string; reason: string | null; invoiceDate: Date }> }>> {
+  const db = await getDb();
+  const result = new Map<number, { total: number; invoices: Array<{ id: number; amount: string; invoiceNumber: string; reason: string | null; invoiceDate: Date }> }>();
+  
+  if (!db) return result;
+  
+  // حساب بداية ونهاية الشهر
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+  
+  // جلب الفواتير السالبة للفرع في الشهر المحدد
+  const invoices = await db.select().from(employeeInvoices)
+    .where(and(
+      eq(employeeInvoices.branchId, branchId),
+      eq(employeeInvoices.type, "negative"),
+      gte(employeeInvoices.invoiceDate, startDate),
+      lte(employeeInvoices.invoiceDate, endDate)
+    ));
+  
+  // تجميع الفواتير حسب الموظف
+  for (const inv of invoices) {
+    const existing = result.get(inv.employeeId) || { total: 0, invoices: [] };
+    const amount = parseFloat(inv.amount);
+    existing.total += amount;
+    existing.invoices.push({
+      id: inv.id,
+      amount: inv.amount,
+      invoiceNumber: inv.invoiceNumber,
+      reason: inv.reason,
+      invoiceDate: inv.invoiceDate,
+    });
+    result.set(inv.employeeId, existing);
+  }
+  
+  return result;
 }
 
 // الحصول على طلبات الموظفين الموافق عليها

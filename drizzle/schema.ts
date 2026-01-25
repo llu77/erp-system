@@ -645,6 +645,10 @@ export const payrollDetails = mysqlTable("payrollDetails", {
   // السلف المخصومة
   advanceDeduction: decimal("advanceDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
   
+  // خصم فواتير الموظفين السالبة
+  negativeInvoicesDeduction: decimal("negativeInvoicesDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  negativeInvoicesDetails: text("negativeInvoicesDetails"), // تفاصيل الفواتير السالبة (JSON)
+  
   // الإجازات المعتمدة (من طلبات الموظفين)
   leaveDays: int("leaveDays").default(0).notNull(),
   leaveDeduction: decimal("leaveDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),

@@ -89,6 +89,8 @@ interface EmployeePayrollData {
   incentiveAmount: number;
   deductionAmount: number;
   advanceDeduction: number;
+  negativeInvoicesDeduction: number;
+  negativeInvoicesDetails: string | null;
   grossSalary: number;
   totalDeductions: number;
   netSalary: number;
@@ -165,6 +167,8 @@ export default function Payrolls() {
           incentiveAmount,
           deductionAmount,
           advanceDeduction,
+          negativeInvoicesDeduction: 0,
+          negativeInvoicesDetails: null,
           grossSalary,
           totalDeductions,
           netSalary,
@@ -181,7 +185,8 @@ export default function Payrolls() {
     const absentDays = 30 - data.workDays;
     const absentDeduction = absentDays > 0 ? dailyRate * absentDays : 0;
     const grossSalary = data.baseSalary + overtime + data.incentiveAmount;
-    const totalDeductions = data.deductionAmount + data.advanceDeduction + absentDeduction;
+    const negativeInvoicesDeduction = data.negativeInvoicesDeduction || 0;
+    const totalDeductions = data.deductionAmount + data.advanceDeduction + absentDeduction + negativeInvoicesDeduction;
     const netSalary = grossSalary - totalDeductions;
 
     return {
@@ -1072,6 +1077,11 @@ export default function Payrolls() {
           <span class="label">سلف مستردة</span>
           <span class="value negative">-${parseFloat(detail.advanceDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
         </div>` : ''}
+        ${parseFloat((detail as any).negativeInvoicesDeduction || '0') > 0 ? `
+        <div class="salary-row">
+          <span class="label">فواتير سالبة</span>
+          <span class="value negative">-${parseFloat((detail as any).negativeInvoicesDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
+        </div>` : ''}
         ${totalDeductions === 0 ? `
         <div class="salary-row">
           <span class="label" style="color: #1b5e20;">لا توجد استقطاعات</span>
@@ -1896,6 +1906,7 @@ export default function Payrolls() {
                         <TableHead className="text-center">حوافز</TableHead>
                         <TableHead className="text-center">خصومات</TableHead>
                         <TableHead className="text-center">سلف</TableHead>
+                        <TableHead className="text-center">فواتير سالبة</TableHead>
                         <TableHead className="text-center">إجازات</TableHead>
                         <TableHead className="text-center">الصافي</TableHead>
                         <TableHead className="text-center">طباعة</TableHead>
@@ -1927,6 +1938,14 @@ export default function Payrolls() {
                           </TableCell>
                           <TableCell className="text-center text-red-500">
                             {parseFloat(detail.advanceDeduction) > 0 ? `-${formatAmount(detail.advanceDeduction)}` : '-'}
+                          </TableCell>
+                          <TableCell className="text-center text-orange-500">
+                            {parseFloat((detail as any).negativeInvoicesDeduction || '0') > 0 ? (
+                              <div className="flex flex-col items-center">
+                                <span className="font-medium">-{formatAmount((detail as any).negativeInvoicesDeduction)}</span>
+                                <span className="text-[9px] text-muted-foreground">فواتير سالبة</span>
+                              </div>
+                            ) : '-'}
                           </TableCell>
                           <TableCell className="text-center">
                             {(detail as any).leaveDays > 0 ? (
