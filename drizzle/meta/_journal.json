@@ -323,6 +323,20 @@
       "when": 1769365421046,
       "tag": "0045_powerful_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "5",
+      "when": 1769367262849,
+      "tag": "0046_brainy_the_leader",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "5",
+      "when": 1769367666633,
+      "tag": "0047_cool_longshot",
+      "breakpoints": true
     }
   ]
 }

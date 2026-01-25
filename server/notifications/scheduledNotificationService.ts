@@ -632,3 +632,225 @@ export async function sendWeeklyBonusReport(): Promise<SendResult> {
     };
   }
 }
+
+
+// ==================== إشعارات الوثائق المنتهية ====================
+
+/**
+ * فحص وإرسال إشعارات الوثائق المنتهية
+ * - الإقامة: قبل شهر (30 يوم)
+ * - الشهادة الصحية: قبل أسبوع (7 أيام)
+ * - عقد العمل: قبل شهرين (60 يوم) + قبل شهر (30 يوم)
+ */
+export async function checkAndSendDocumentExpiryReminders(): Promise<{
+  iqamaReminders: number;
+  healthCertReminders: number;
+  contractReminders: number;
+}> {
+  console.log(`\n${'#'.repeat(80)}`);
+  console.log(`# [Document Expiry] فحص الوثائق المنتهية`);
+  console.log(`# التاريخ: ${new Date().toISOString()}`);
+  console.log(`${'#'.repeat(80)}\n`);
+  
+  const results = {
+    iqamaReminders: 0,
+    healthCertReminders: 0,
+    contractReminders: 0,
+  };
+  
+  try {
+    // الحصول على جميع الموظفين النشطين
+    const employees = await db.getAllEmployees();
+    const branches = await db.getBranches();
+    
+    const getBranchName = (branchId: number) => {
+      const branch = branches.find(b => b.id === branchId);
+      return branch?.nameAr || branch?.name || 'غير محدد';
+    };
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    for (const employee of employees) {
+      if (!employee.isActive) continue;
+      
+      const emp = employee as any;
+      
+      // 1. فحص انتهاء الإقامة (قبل 30 يوم)
+      if (emp.iqamaExpiryDate && emp.iqamaNumber) {
+        const expiryDate = new Date(emp.iqamaExpiryDate);
+        const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // إرسال إشعار قبل 30 يوم (شهر)
+        if (daysRemaining > 0 && daysRemaining <= 30) {
+          // التحقق من عدم إرسال إشعار اليوم لهذا الموظف
+          const notificationKey = `iqama_${employee.id}_${today.toISOString().split('T')[0]}`;
+          const alreadySent = await wasDocumentNotificationSentToday(notificationKey);
+          
+          if (!alreadySent) {
+            console.log(`[Iqama] 📋 إرسال إشعار انتهاء إقامة: ${employee.name} - ${daysRemaining} يوم متبقي`);
+            const result = await emailNotifications.notifyIqamaExpiry({
+              employeeName: employee.name,
+              employeeCode: employee.code,
+              iqamaNumber: emp.iqamaNumber,
+              expiryDate,
+              daysRemaining,
+              branchName: getBranchName(employee.branchId),
+            });
+            if (result.success) {
+              results.iqamaReminders++;
+              await markDocumentNotificationSent(notificationKey);
+            }
+          }
+        }
+      }
+      
+      // 2. فحص انتهاء الشهادة الصحية (قبل 7 أيام)
+      if (emp.healthCertExpiryDate) {
+        const expiryDate = new Date(emp.healthCertExpiryDate);
+        const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // إرسال إشعار قبل 7 أيام (أسبوع)
+        if (daysRemaining > 0 && daysRemaining <= 7) {
+          const notificationKey = `health_${employee.id}_${today.toISOString().split('T')[0]}`;
+          const alreadySent = await wasDocumentNotificationSentToday(notificationKey);
+          
+          if (!alreadySent) {
+            console.log(`[Health] 🏥 إرسال إشعار انتهاء شهادة صحية: ${employee.name} - ${daysRemaining} يوم متبقي`);
+            const result = await emailNotifications.notifyHealthCertExpiry({
+              employeeName: employee.name,
+              employeeCode: employee.code,
+              expiryDate,
+              daysRemaining,
+              branchName: getBranchName(employee.branchId),
+            });
+            if (result.success) {
+              results.healthCertReminders++;
+              await markDocumentNotificationSent(notificationKey);
+            }
+          }
+        }
+      }
+      
+      // 3. فحص انتهاء عقد العمل (قبل 60 يوم + 30 يوم)
+      if (emp.contractExpiryDate) {
+        const expiryDate = new Date(emp.contractExpiryDate);
+        const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // إشعار قبل شهرين (55-60 يوم)
+        if (daysRemaining >= 55 && daysRemaining <= 60) {
+          const notificationKey = `contract_2m_${employee.id}_${today.toISOString().split('T')[0]}`;
+          const alreadySent = await wasDocumentNotificationSentToday(notificationKey);
+          
+          if (!alreadySent) {
+            console.log(`[Contract] 📄 إرسال إشعار انتهاء عقد (شهرين): ${employee.name} - ${daysRemaining} يوم متبقي`);
+            const result = await emailNotifications.notifyContractExpiry({
+              employeeName: employee.name,
+              employeeCode: employee.code,
+              expiryDate,
+              daysRemaining,
+              branchName: getBranchName(employee.branchId),
+              reminderType: 'two_months',
+            });
+            if (result.success) {
+              results.contractReminders++;
+              await markDocumentNotificationSent(notificationKey);
+            }
+          }
+        }
+        
+        // إشعار قبل شهر (25-30 يوم)
+        if (daysRemaining >= 25 && daysRemaining <= 30) {
+          const notificationKey = `contract_1m_${employee.id}_${today.toISOString().split('T')[0]}`;
+          const alreadySent = await wasDocumentNotificationSentToday(notificationKey);
+          
+          if (!alreadySent) {
+            console.log(`[Contract] 📄 إرسال إشعار انتهاء عقد (شهر): ${employee.name} - ${daysRemaining} يوم متبقي`);
+            const result = await emailNotifications.notifyContractExpiry({
+              employeeName: employee.name,
+              employeeCode: employee.code,
+              expiryDate,
+              daysRemaining,
+              branchName: getBranchName(employee.branchId),
+              reminderType: 'one_month',
+            });
+            if (result.success) {
+              results.contractReminders++;
+              await markDocumentNotificationSent(notificationKey);
+            }
+          }
+        }
+      }
+    }
+    
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`[Document Expiry] 📊 ملخص النتائج:`);
+    console.log(`  - إشعارات الإقامة: ${results.iqamaReminders}`);
+    console.log(`  - إشعارات الشهادة الصحية: ${results.healthCertReminders}`);
+    console.log(`  - إشعارات عقد العمل: ${results.contractReminders}`);
+    console.log(`${'='.repeat(60)}\n`);
+    
+  } catch (error: any) {
+    console.error(`[Document Expiry] ❌ خطأ:`, error.message);
+  }
+  
+  return results;
+}
+
+// ==================== تتبع إشعارات الوثائق ====================
+const documentNotificationsSent: Map<string, boolean> = new Map();
+
+async function wasDocumentNotificationSentToday(key: string): Promise<boolean> {
+  // فحص الذاكرة أولاً
+  if (documentNotificationsSent.has(key)) {
+    return true;
+  }
+  
+  // فحص قاعدة البيانات
+  try {
+    const database = await getDb();
+    if (!database) return false;
+    
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    
+    const result = await database.select()
+      .from(sentNotifications)
+      .where(and(
+        sql`${sentNotifications.notificationType} = ${key}`,
+        gte(sentNotifications.sentAt, today)
+      ))
+      .limit(1);
+    
+    if (result.length > 0) {
+      documentNotificationsSent.set(key, true);
+      return true;
+    }
+  } catch (error) {
+    console.error(`[Document] خطأ في فحص قاعدة البيانات:`, error);
+  }
+  
+  return false;
+}
+
+async function markDocumentNotificationSent(key: string): Promise<void> {
+  documentNotificationsSent.set(key, true);
+  
+  try {
+    const database = await getDb();
+    if (!database) return;
+    
+    await database.insert(sentNotifications).values({
+      recipientId: 0,
+      recipientEmail: 'system',
+      recipientName: 'System',
+      notificationType: 'document_expiry',
+      subject: `Document Expiry: ${key}`,
+      bodyArabic: key,
+      status: 'sent',
+      sentAt: new Date(),
+    });
+  } catch (error) {
+    console.error(`[Document] خطأ في تسجيل الإشعار:`, error);
+  }
+}

@@ -280,6 +280,11 @@ export const employees = mysqlTable("employees", {
   password: varchar("password", { length: 255 }),
   hasPortalAccess: boolean("hasPortalAccess").default(false).notNull(),
   lastLogin: timestamp("lastLogin"),
+  // حقول الإقامة والوثائق
+  iqamaNumber: varchar("iqamaNumber", { length: 20 }),
+  iqamaExpiryDate: timestamp("iqamaExpiryDate"),
+  healthCertExpiryDate: timestamp("healthCertExpiryDate"),
+  contractExpiryDate: timestamp("contractExpiryDate"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -1238,7 +1243,12 @@ export const sentNotifications = mysqlTable("sentNotifications", {
     "weekly_report",
     "monthly_report",
     "bonus_request",
-    "general"
+    "general",
+    "iqama_expiry",
+    "health_cert_expiry",
+    "contract_expiry_two_months",
+    "contract_expiry_one_month",
+    "document_expiry"
   ]).notNull(),
   
   subject: varchar("subject", { length: 500 }).notNull(),

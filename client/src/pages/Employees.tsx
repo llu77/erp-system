@@ -23,7 +23,11 @@ import {
   Mail,
   Building2,
   Search,
-  UserCircle
+  UserCircle,
+  IdCard,
+  Calendar,
+  FileText,
+  AlertTriangle
 } from "lucide-react";
 
 interface EmployeeFormData {
@@ -33,6 +37,10 @@ interface EmployeeFormData {
   branchId: number | null;
   position: string;
   isActive: boolean;
+  iqamaNumber: string;
+  iqamaExpiryDate: string;
+  healthCertExpiryDate: string;
+  contractExpiryDate: string;
 }
 
 const initialFormData: EmployeeFormData = {
@@ -42,6 +50,10 @@ const initialFormData: EmployeeFormData = {
   branchId: null,
   position: "",
   isActive: true,
+  iqamaNumber: "",
+  iqamaExpiryDate: "",
+  healthCertExpiryDate: "",
+  contractExpiryDate: "",
 };
 
 export default function Employees() {
@@ -116,6 +128,10 @@ export default function Employees() {
         position: formData.position || undefined,
         branchId: formData.branchId || undefined,
         isActive: formData.isActive,
+        iqamaNumber: formData.iqamaNumber || undefined,
+        iqamaExpiryDate: formData.iqamaExpiryDate ? new Date(formData.iqamaExpiryDate) : undefined,
+        healthCertExpiryDate: formData.healthCertExpiryDate ? new Date(formData.healthCertExpiryDate) : undefined,
+        contractExpiryDate: formData.contractExpiryDate ? new Date(formData.contractExpiryDate) : undefined,
       });
     } else {
       createMutation.mutate({
@@ -125,6 +141,10 @@ export default function Employees() {
         position: formData.position || undefined,
         branchId: formData.branchId || undefined,
         isActive: formData.isActive,
+        iqamaNumber: formData.iqamaNumber || undefined,
+        iqamaExpiryDate: formData.iqamaExpiryDate ? new Date(formData.iqamaExpiryDate) : undefined,
+        healthCertExpiryDate: formData.healthCertExpiryDate ? new Date(formData.healthCertExpiryDate) : undefined,
+        contractExpiryDate: formData.contractExpiryDate ? new Date(formData.contractExpiryDate) : undefined,
       });
     }
   };
@@ -138,6 +158,10 @@ export default function Employees() {
       branchId: employee.branchId,
       position: employee.position || "",
       isActive: employee.isActive,
+      iqamaNumber: (employee as any).iqamaNumber || "",
+      iqamaExpiryDate: (employee as any).iqamaExpiryDate ? new Date((employee as any).iqamaExpiryDate).toISOString().split('T')[0] : "",
+      healthCertExpiryDate: (employee as any).healthCertExpiryDate ? new Date((employee as any).healthCertExpiryDate).toISOString().split('T')[0] : "",
+      contractExpiryDate: (employee as any).contractExpiryDate ? new Date((employee as any).contractExpiryDate).toISOString().split('T')[0] : "",
     });
     setShowDialog(true);
   };
@@ -486,6 +510,57 @@ export default function Employees() {
                   placeholder="0501234567"
                   className="mt-2"
                 />
+              </div>
+              {/* قسم الوثائق والإقامة */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                  <IdCard className="h-4 w-4" />
+                  بيانات الإقامة والوثائق
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="iqamaNumber">رقم الإقامة</Label>
+                    <Input
+                      id="iqamaNumber"
+                      value={formData.iqamaNumber}
+                      onChange={(e) => setFormData({ ...formData, iqamaNumber: e.target.value })}
+                      placeholder="2xxxxxxxxx"
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="iqamaExpiryDate">تاريخ انتهاء الإقامة</Label>
+                    <Input
+                      id="iqamaExpiryDate"
+                      type="date"
+                      value={formData.iqamaExpiryDate}
+                      onChange={(e) => setFormData({ ...formData, iqamaExpiryDate: e.target.value })}
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <Label htmlFor="healthCertExpiryDate">تاريخ انتهاء الشهادة الصحية</Label>
+                    <Input
+                      id="healthCertExpiryDate"
+                      type="date"
+                      value={formData.healthCertExpiryDate}
+                      onChange={(e) => setFormData({ ...formData, healthCertExpiryDate: e.target.value })}
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="contractExpiryDate">تاريخ انتهاء عقد العمل</Label>
+                    <Input
+                      id="contractExpiryDate"
+                      type="date"
+                      value={formData.contractExpiryDate}
+                      onChange={(e) => setFormData({ ...formData, contractExpiryDate: e.target.value })}
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Switch

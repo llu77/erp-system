@@ -1298,3 +1298,313 @@ export async function notifyAdvancedBonusPaymentRequest(data: {
   console.log(`✓ تم إرسال طلب صرف البونص إلى ${sentCount} مستلم`);
   return { success: sentCount > 0, sentCount };
 }
+
+
+// ==================== إشعارات الوثائق المنتهية ====================
+
+/**
+ * إرسال إشعار انتهاء الإقامة (قبل شهر)
+ */
+export async function notifyIqamaExpiry(data: {
+  employeeName: string;
+  employeeCode: string;
+  iqamaNumber: string;
+  expiryDate: Date;
+  daysRemaining: number;
+  branchName: string;
+}): Promise<{ success: boolean; sentCount: number }> {
+  console.log(`\n📋 [Iqama Expiry] إرسال إشعار انتهاء الإقامة للموظف: ${data.employeeName}`);
+  
+  // الحصول على المستلمين (الأدمن والمشرفين)
+  const recipients = await getRecipientsForNotification('general');
+  
+  if (recipients.length === 0) {
+    console.log('⚠️ لا يوجد مستلمين للإشعار');
+    return { success: false, sentCount: 0 };
+  }
+  
+  let sentCount = 0;
+  const subject = `⚠️ تنبيه: انتهاء إقامة الموظف ${data.employeeName} خلال ${data.daysRemaining} يوم`;
+  
+  const expiryDateStr = data.expiryDate.toLocaleDateString('ar-SA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  
+  const htmlContent = `
+    <div dir="rtl" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+      <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 30px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">⚠️ تنبيه انتهاء الإقامة</h1>
+      </div>
+      <div style="padding: 30px;">
+        <div style="background: #fef3c7; border-right: 4px solid #f59e0b; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+          <p style="margin: 0; color: #92400e; font-weight: bold;">
+            تنبيه: إقامة الموظف ستنتهي خلال ${data.daysRemaining} يوم
+          </p>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">اسم الموظف:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${data.employeeName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">كود الموظف:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${data.employeeCode}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">رقم الإقامة:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${data.iqamaNumber}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">تاريخ الانتهاء:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold; color: #dc2626;">${expiryDateStr}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">الفرع:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${data.branchName}</td>
+          </tr>
+        </table>
+        
+        <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+          يرجى اتخاذ الإجراءات اللازمة لتجديد الإقامة قبل تاريخ الانتهاء.
+        </p>
+      </div>
+      <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="margin: 0; color: #9ca3af; font-size: 12px;">Symbol AI - نظام إدارة الموارد البشرية</p>
+      </div>
+    </div>
+  `;
+  
+  for (const recipient of recipients) {
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: recipient.email,
+        subject,
+        html: htmlContent,
+      });
+      sentCount++;
+      
+      await db.logSentNotification({
+        recipientId: recipient.id || 0,
+        recipientEmail: recipient.email,
+        recipientName: recipient.name,
+        notificationType: 'iqama_expiry',
+        subject,
+        bodyArabic: `تنبيه انتهاء إقامة - ${data.employeeName} - ${expiryDateStr}`,
+        status: 'sent',
+        sentAt: new Date(),
+      });
+    } catch (error) {
+      console.error(`✗ فشل إرسال إشعار انتهاء الإقامة إلى ${recipient.email}:`, error);
+    }
+  }
+  
+  console.log(`✓ تم إرسال إشعار انتهاء الإقامة إلى ${sentCount} مستلم`);
+  return { success: sentCount > 0, sentCount };
+}
+
+/**
+ * إرسال إشعار انتهاء الشهادة الصحية (قبل أسبوع)
+ */
+export async function notifyHealthCertExpiry(data: {
+  employeeName: string;
+  employeeCode: string;
+  expiryDate: Date;
+  daysRemaining: number;
+  branchName: string;
+}): Promise<{ success: boolean; sentCount: number }> {
+  console.log(`\n🏥 [Health Cert Expiry] إرسال إشعار انتهاء الشهادة الصحية للموظف: ${data.employeeName}`);
+  
+  const recipients = await getRecipientsForNotification('general');
+  
+  if (recipients.length === 0) {
+    console.log('⚠️ لا يوجد مستلمين للإشعار');
+    return { success: false, sentCount: 0 };
+  }
+  
+  let sentCount = 0;
+  const subject = `🏥 تنبيه عاجل: انتهاء الشهادة الصحية للموظف ${data.employeeName} خلال ${data.daysRemaining} يوم`;
+  
+  const expiryDateStr = data.expiryDate.toLocaleDateString('ar-SA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  
+  const htmlContent = `
+    <div dir="rtl" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+      <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 30px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">🏥 تنبيه عاجل - الشهادة الصحية</h1>
+      </div>
+      <div style="padding: 30px;">
+        <div style="background: #fee2e2; border-right: 4px solid #ef4444; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+          <p style="margin: 0; color: #991b1b; font-weight: bold;">
+            ⚠️ تنبيه عاجل: الشهادة الصحية ستنتهي خلال ${data.daysRemaining} يوم فقط!
+          </p>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">اسم الموظف:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${data.employeeName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">كود الموظف:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${data.employeeCode}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">تاريخ الانتهاء:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold; color: #dc2626;">${expiryDateStr}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">الفرع:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${data.branchName}</td>
+          </tr>
+        </table>
+        
+        <p style="color: #dc2626; font-size: 14px; margin-top: 20px; font-weight: bold;">
+          ⚠️ يرجى تجديد الشهادة الصحية فوراً لتجنب أي مخالفات قانونية.
+        </p>
+      </div>
+      <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="margin: 0; color: #9ca3af; font-size: 12px;">Symbol AI - نظام إدارة الموارد البشرية</p>
+      </div>
+    </div>
+  `;
+  
+  for (const recipient of recipients) {
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: recipient.email,
+        subject,
+        html: htmlContent,
+      });
+      sentCount++;
+      
+      await db.logSentNotification({
+        recipientId: recipient.id || 0,
+        recipientEmail: recipient.email,
+        recipientName: recipient.name,
+        notificationType: 'health_cert_expiry',
+        subject,
+        bodyArabic: `تنبيه انتهاء الشهادة الصحية - ${data.employeeName} - ${expiryDateStr}`,
+        status: 'sent',
+        sentAt: new Date(),
+      });
+    } catch (error) {
+      console.error(`✗ فشل إرسال إشعار انتهاء الشهادة الصحية إلى ${recipient.email}:`, error);
+    }
+  }
+  
+  console.log(`✓ تم إرسال إشعار انتهاء الشهادة الصحية إلى ${sentCount} مستلم`);
+  return { success: sentCount > 0, sentCount };
+}
+
+/**
+ * إرسال إشعار انتهاء عقد العمل (قبل شهرين أو شهر)
+ */
+export async function notifyContractExpiry(data: {
+  employeeName: string;
+  employeeCode: string;
+  expiryDate: Date;
+  daysRemaining: number;
+  branchName: string;
+  reminderType: 'two_months' | 'one_month';
+}): Promise<{ success: boolean; sentCount: number }> {
+  console.log(`\n📄 [Contract Expiry] إرسال إشعار انتهاء عقد العمل للموظف: ${data.employeeName}`);
+  
+  const recipients = await getRecipientsForNotification('general');
+  
+  if (recipients.length === 0) {
+    console.log('⚠️ لا يوجد مستلمين للإشعار');
+    return { success: false, sentCount: 0 };
+  }
+  
+  let sentCount = 0;
+  const reminderText = data.reminderType === 'two_months' ? 'شهرين' : 'شهر واحد';
+  const subject = `📄 تنبيه: انتهاء عقد العمل للموظف ${data.employeeName} خلال ${reminderText}`;
+  
+  const expiryDateStr = data.expiryDate.toLocaleDateString('ar-SA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  
+  const bgColor = data.reminderType === 'two_months' ? '#3b82f6' : '#f59e0b';
+  const alertBg = data.reminderType === 'two_months' ? '#dbeafe' : '#fef3c7';
+  const alertBorder = data.reminderType === 'two_months' ? '#3b82f6' : '#f59e0b';
+  const alertText = data.reminderType === 'two_months' ? '#1e40af' : '#92400e';
+  
+  const htmlContent = `
+    <div dir="rtl" style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+      <div style="background: linear-gradient(135deg, ${bgColor} 0%, ${bgColor}dd 100%); padding: 30px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">📄 تنبيه انتهاء عقد العمل</h1>
+      </div>
+      <div style="padding: 30px;">
+        <div style="background: ${alertBg}; border-right: 4px solid ${alertBorder}; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+          <p style="margin: 0; color: ${alertText}; font-weight: bold;">
+            تنبيه: عقد العمل سينتهي خلال ${reminderText} (${data.daysRemaining} يوم)
+          </p>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">اسم الموظف:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${data.employeeName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">كود الموظف:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${data.employeeCode}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">تاريخ انتهاء العقد:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold; color: #dc2626;">${expiryDateStr}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">الفرع:</td>
+            <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: bold;">${data.branchName}</td>
+          </tr>
+        </table>
+        
+        <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+          يرجى مراجعة ملف الموظف واتخاذ القرار المناسب بشأن تجديد العقد أو إنهائه.
+        </p>
+      </div>
+      <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+        <p style="margin: 0; color: #9ca3af; font-size: 12px;">Symbol AI - نظام إدارة الموارد البشرية</p>
+      </div>
+    </div>
+  `;
+  
+  for (const recipient of recipients) {
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: recipient.email,
+        subject,
+        html: htmlContent,
+      });
+      sentCount++;
+      
+      await db.logSentNotification({
+        recipientId: recipient.id || 0,
+        recipientEmail: recipient.email,
+        recipientName: recipient.name,
+        notificationType: `contract_expiry_${data.reminderType}`,
+        subject,
+        bodyArabic: `تنبيه انتهاء عقد العمل - ${data.employeeName} - ${expiryDateStr}`,
+        status: 'sent',
+        sentAt: new Date(),
+      });
+    } catch (error) {
+      console.error(`✗ فشل إرسال إشعار انتهاء عقد العمل إلى ${recipient.email}:`, error);
+    }
+  }
+  
+  console.log(`✓ تم إرسال إشعار انتهاء عقد العمل إلى ${sentCount} مستلم`);
+  return { success: sentCount > 0, sentCount };
+}

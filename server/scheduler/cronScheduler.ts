@@ -13,7 +13,7 @@
 import cron, { ScheduledTask } from 'node-cron';
 import * as db from "../db";
 import { sendAdvancedNotification, NotificationType } from "../notifications/advancedNotificationService";
-import { checkAndSendScheduledReminders } from "../notifications/scheduledNotificationService";
+import { checkAndSendScheduledReminders, checkAndSendDocumentExpiryReminders } from "../notifications/scheduledNotificationService";
 
 // ==================== أنواع البيانات ====================
 
@@ -356,9 +356,24 @@ function createScheduledJobs(): void {
     task: null,
   };
   
+  // مهمة فحص الوثائق المنتهية (الإقامة، الشهادة الصحية، عقد العمل) - 8:00 صباحاً يومياً
+  const documentExpiryJob: ScheduledJob = {
+    id: 'document_expiry_check',
+    name: 'Document Expiry Check',
+    nameAr: 'فحص الوثائق المنتهية',
+    description: 'فحص وإرسال إشعارات انتهاء الإقامة والشهادة الصحية وعقد العمل',
+    cronExpression: '0 8 * * *', // كل يوم الساعة 8:00
+    timezone: TIMEZONE,
+    isActive: true,
+    runCount: 0,
+    failCount: 0,
+    task: null,
+  };
+  
   jobs.set(dailyRevenueJob.id, dailyRevenueJob);
   jobs.set(weeklyReportJob.id, weeklyReportJob);
   jobs.set(monthlyRemindersJob.id, monthlyRemindersJob);
+  jobs.set(documentExpiryJob.id, documentExpiryJob);
 }
 
 /**
@@ -410,6 +425,9 @@ export function startScheduler(): void {
   
   const monthlyJob = jobs.get('monthly_reminders')!;
   scheduleJob(monthlyJob, checkAndSendScheduledReminders);
+  
+  const documentExpiryJob = jobs.get('document_expiry_check')!;
+  scheduleJob(documentExpiryJob, checkAndSendDocumentExpiryReminders);
   
   isSchedulerRunning = true;
   

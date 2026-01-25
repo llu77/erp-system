@@ -1567,6 +1567,10 @@ export const appRouter = router({
         phone: z.string().optional(),
         position: z.string().optional(),
         isActive: z.boolean().optional(),
+        iqamaNumber: z.string().optional(),
+        iqamaExpiryDate: z.date().optional(),
+        healthCertExpiryDate: z.date().optional(),
+        contractExpiryDate: z.date().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         await db.createEmployee({
@@ -1575,6 +1579,10 @@ export const appRouter = router({
           branchId: input.branchId || 0,
           phone: input.phone,
           position: input.position,
+          iqamaNumber: input.iqamaNumber,
+          iqamaExpiryDate: input.iqamaExpiryDate,
+          healthCertExpiryDate: input.healthCertExpiryDate,
+          contractExpiryDate: input.contractExpiryDate,
         });
         await db.createActivityLog({
           userId: ctx.user.id,
@@ -1595,6 +1603,10 @@ export const appRouter = router({
         phone: z.string().optional(),
         position: z.string().optional(),
         isActive: z.boolean().optional(),
+        iqamaNumber: z.string().optional(),
+        iqamaExpiryDate: z.date().optional(),
+        healthCertExpiryDate: z.date().optional(),
+        contractExpiryDate: z.date().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         await db.updateEmployee(input.id, {
@@ -1604,6 +1616,10 @@ export const appRouter = router({
           phone: input.phone || null,
           position: input.position || null,
           isActive: input.isActive ?? true,
+          iqamaNumber: input.iqamaNumber || null,
+          iqamaExpiryDate: input.iqamaExpiryDate || null,
+          healthCertExpiryDate: input.healthCertExpiryDate || null,
+          contractExpiryDate: input.contractExpiryDate || null,
         });
         await db.createActivityLog({
           userId: ctx.user.id,
