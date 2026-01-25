@@ -34,7 +34,7 @@ import {
   Gift
 } from 'lucide-react';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
-import { SalarySlip, LeaveBalance, EmployeeProfile, BonusReport, RequestTimeline, RequestAttachments } from '@/components/portal';
+import { SalarySlip, LeaveBalance, EmployeeProfile, BonusReport, RequestTimeline, RequestAttachments, EmployeeInfoForm } from '@/components/portal';
 import { EmailSetupModal } from '@/components/portal/EmailSetupModal';
 
 interface Message {
@@ -788,7 +788,10 @@ export default function EmployeePortal() {
 
           {/* الملف الشخصي */}
           <TabsContent value="profile" className="mt-0">
-            <EmployeeProfile employeeId={employeeInfo.id} />
+            <div className="space-y-6">
+              <EmployeeProfile employeeId={employeeInfo.id} />
+              <EmployeeInfoForm employeeId={employeeInfo.id} />
+            </div>
           </TabsContent>
         </Tabs>
       </div>

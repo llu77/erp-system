@@ -288,6 +288,9 @@ export const employees = mysqlTable("employees", {
   healthCertImageUrl: varchar("healthCertImageUrl", { length: 500 }),
   contractExpiryDate: timestamp("contractExpiryDate"),
   contractImageUrl: varchar("contractImageUrl", { length: 500 }),
+  // حقل تسجيل المعلومات من الموظف (لمرة واحدة فقط)
+  infoSubmittedAt: timestamp("infoSubmittedAt"),
+  infoSubmittedBy: int("infoSubmittedBy"), // null = الموظف نفسه، أو ID الأدمن
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

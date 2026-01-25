@@ -9966,3 +9966,118 @@ export async function getAllEmployeesWithDocuments() {
     branchName: branchMap.get(emp.branchId) || 'غير محدد',
   }));
 }
+
+
+// ==================== دوال معلومات الموظف في بوابة الموظفين ====================
+
+// التحقق مما إذا كان الموظف قد سجل معلوماته
+export async function hasEmployeeSubmittedInfo(employeeId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  
+  const result = await db.select({ infoSubmittedAt: employees.infoSubmittedAt })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+  
+  return result.length > 0 && result[0].infoSubmittedAt !== null;
+}
+
+// تسجيل معلومات الموظف (لمرة واحدة فقط من الموظف)
+export async function submitEmployeeInfo(
+  employeeId: number,
+  data: {
+    iqamaNumber?: string;
+    iqamaExpiryDate?: Date;
+    healthCertExpiryDate?: Date;
+    contractExpiryDate?: Date;
+  }
+) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'خطأ في الاتصال بقاعدة البيانات' };
+  
+  // التحقق من أن الموظف لم يسجل معلوماته من قبل
+  const hasSubmitted = await hasEmployeeSubmittedInfo(employeeId);
+  if (hasSubmitted) {
+    return { success: false, error: 'تم تسجيل المعلومات مسبقاً. يرجى التواصل مع الإدارة للتعديل.' };
+  }
+  
+  await db.update(employees)
+    .set({
+      iqamaNumber: data.iqamaNumber,
+      iqamaExpiryDate: data.iqamaExpiryDate,
+      healthCertExpiryDate: data.healthCertExpiryDate,
+      contractExpiryDate: data.contractExpiryDate,
+      infoSubmittedAt: new Date(),
+      infoSubmittedBy: null, // null يعني الموظف نفسه
+      updatedAt: new Date(),
+    })
+    .where(eq(employees.id, employeeId));
+  
+  return { success: true };
+}
+
+// تحديث معلومات الموظف من الأدمن فقط
+export async function updateEmployeeInfoByAdmin(
+  employeeId: number,
+  adminId: number,
+  data: {
+    iqamaNumber?: string;
+    iqamaExpiryDate?: Date | null;
+    healthCertExpiryDate?: Date | null;
+    contractExpiryDate?: Date | null;
+  }
+) {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'خطأ في الاتصال بقاعدة البيانات' };
+  
+  await db.update(employees)
+    .set({
+      iqamaNumber: data.iqamaNumber,
+      iqamaExpiryDate: data.iqamaExpiryDate,
+      healthCertExpiryDate: data.healthCertExpiryDate,
+      contractExpiryDate: data.contractExpiryDate,
+      infoSubmittedBy: adminId, // تسجيل من قام بالتعديل
+      updatedAt: new Date(),
+    })
+    .where(eq(employees.id, employeeId));
+  
+  return { success: true };
+}
+
+// جلب معلومات الموظف للعرض في بوابة الموظفين
+export async function getEmployeeDocumentInfo(employeeId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select({
+    id: employees.id,
+    code: employees.code,
+    name: employees.name,
+    phone: employees.phone,
+    position: employees.position,
+    branchId: employees.branchId,
+    iqamaNumber: employees.iqamaNumber,
+    iqamaExpiryDate: employees.iqamaExpiryDate,
+    healthCertExpiryDate: employees.healthCertExpiryDate,
+    contractExpiryDate: employees.contractExpiryDate,
+    infoSubmittedAt: employees.infoSubmittedAt,
+    infoSubmittedBy: employees.infoSubmittedBy,
+  })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+  
+  if (result.length === 0) return null;
+  
+  // جلب اسم الفرع
+  const branch = await db.select({ name: branches.name })
+    .from(branches)
+    .where(eq(branches.id, result[0].branchId))
+    .limit(1);
+  
+  return {
+    ...result[0],
+    branchName: branch.length > 0 ? branch[0].name : 'غير محدد',
+  };
+}

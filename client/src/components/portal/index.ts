@@ -4,3 +4,4 @@ export { EmployeeProfile } from './EmployeeProfile';
 export { BonusReport } from './BonusReport';
 export { RequestTimeline } from './RequestTimeline';
 export { RequestAttachments } from './RequestAttachments';
+export { EmployeeInfoForm } from './EmployeeInfoForm';

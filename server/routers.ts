@@ -1650,6 +1650,31 @@ export const appRouter = router({
         return await db.getEmployeesWithExpiringDocuments();
       }),
     
+    // تحديث معلومات الموظف (للأدمن فقط)
+    updateEmployeeInfo: adminProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        iqamaNumber: z.string().optional(),
+        iqamaExpiryDate: z.date().nullable().optional(),
+        healthCertExpiryDate: z.date().nullable().optional(),
+        contractExpiryDate: z.date().nullable().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { employeeId, ...data } = input;
+        const result = await db.updateEmployeeInfoByAdmin(employeeId, ctx.user.id, data);
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: result.error || 'فشل في تحديث المعلومات' });
+        }
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'update',
+          entityType: 'employee_info',
+          details: `تم تحديث معلومات الموظف رقم ${employeeId}`,
+        });
+        return { success: true, message: 'تم تحديث المعلومات بنجاح' };
+      }),
+
     // رفع صورة وثيقة
     uploadDocumentImage: managerProcedure
       .input(z.object({
@@ -7564,6 +7589,49 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }))
       .mutation(async ({ input }) => {
         return await db.markAllEmployeeNotificationsAsRead(input.employeeId);
+      }),
+
+    // ==================== APIs معلومات الموظف ====================
+    
+    // جلب معلومات الوثائق للموظف
+    getDocumentInfo: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const info = await db.getEmployeeDocumentInfo(input.employeeId);
+        if (!info) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
+        }
+        return info;
+      }),
+
+    // التحقق مما إذا كان الموظف قد سجل معلوماته
+    hasSubmittedInfo: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const hasSubmitted = await db.hasEmployeeSubmittedInfo(input.employeeId);
+        return { hasSubmitted };
+      }),
+
+    // تسجيل معلومات الموظف (لمرة واحدة فقط)
+    submitInfo: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        iqamaNumber: z.string().optional(),
+        iqamaExpiryDate: z.date().optional(),
+        healthCertExpiryDate: z.date().optional(),
+        contractExpiryDate: z.date().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { employeeId, ...data } = input;
+        const result = await db.submitEmployeeInfo(employeeId, data);
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في تسجيل المعلومات' });
+        }
+        return { success: true, message: 'تم تسجيل المعلومات بنجاح' };
       }),
   }),
 });
