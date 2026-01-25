@@ -1644,8 +1644,47 @@ export const appRouter = router({
         });
         return { success: true, message: 'تم حذف الموظف بنجاح' };
       }),
+    // الحصول على الموظفين ذوي الوثائق المنتهية أو قريبة الانتهاء
+    getExpiringDocuments: protectedProcedure
+      .query(async () => {
+        return await db.getEmployeesWithExpiringDocuments();
+      }),
+    
+    // رفع صورة وثيقة
+    uploadDocumentImage: managerProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        documentType: z.enum(['iqama', 'healthCert', 'contract']),
+        base64Data: z.string(),
+        fileName: z.string(),
+        contentType: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { storagePut } = await import('./storage');
+        
+        const base64Content = input.base64Data.replace(/^data:[^;]+;base64,/, '');
+        const buffer = Buffer.from(base64Content, 'base64');
+        
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const fileKey = `employee-documents/${input.employeeId}/${input.documentType}-${timestamp}-${randomSuffix}-${input.fileName}`;
+        
+        const { url, key } = await storagePut(fileKey, buffer, input.contentType);
+        
+        // حفظ رابط الصورة في قاعدة البيانات
+        await db.updateEmployeeDocumentImage(input.employeeId, input.documentType, url);
+        
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'update',
+          entityType: 'employee_document',
+          details: `تم رفع صورة ${input.documentType} للموظف رقم ${input.employeeId}`,
+        });
+        
+        return { success: true, url, key };
+      }),
   }),
-
   // ==================== إدارة الإيرادات ====================
   revenues: router({
     // رفع صورة الموازنة إلى S3

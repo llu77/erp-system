@@ -337,6 +337,13 @@
       "when": 1769367666633,
       "tag": "0047_cool_longshot",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "5",
+      "when": 1769368267806,
+      "tag": "0048_faulty_lifeguard",
+      "breakpoints": true
     }
   ]
 }

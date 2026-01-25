@@ -283,8 +283,11 @@ export const employees = mysqlTable("employees", {
   // حقول الإقامة والوثائق
   iqamaNumber: varchar("iqamaNumber", { length: 20 }),
   iqamaExpiryDate: timestamp("iqamaExpiryDate"),
+  iqamaImageUrl: varchar("iqamaImageUrl", { length: 500 }),
   healthCertExpiryDate: timestamp("healthCertExpiryDate"),
+  healthCertImageUrl: varchar("healthCertImageUrl", { length: 500 }),
   contractExpiryDate: timestamp("contractExpiryDate"),
+  contractImageUrl: varchar("contractImageUrl", { length: 500 }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

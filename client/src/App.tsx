@@ -22,6 +22,7 @@ import BonusRequests from "./pages/BonusRequests";
 import Revenues from "./pages/Revenues";
 import Branches from "./pages/Branches";
 import Employees from "./pages/Employees";
+import DocumentsDashboard from "./pages/DocumentsDashboard";
 import SubmitRequest from "./pages/SubmitRequest";
 import ManageRequests from "./pages/ManageRequests";
 import Payrolls from "./pages/Payrolls";
@@ -148,6 +149,12 @@ function Router() {
       <Route path="/employees">
         <DashboardLayout>
           <Employees />
+        </DashboardLayout>
+      </Route>
+      {/* Documents Dashboard */}
+      <Route path="/documents-dashboard">
+        <DashboardLayout>
+          <DocumentsDashboard />
         </DashboardLayout>
       </Route>
       {/* Bonus System Routes */}

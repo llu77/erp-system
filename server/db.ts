@@ -9797,3 +9797,172 @@ export async function notifyEmployeeRequestStatusChange(data: {
     relatedId: data.requestId,
   });
 }
+
+// ==================== دوال الوثائق المنتهية ====================
+
+// الحصول على الموظفين ذوي الوثائق المنتهية أو قريبة الانتهاء
+export async function getEmployeesWithExpiringDocuments() {
+  const db = await getDb();
+  if (!db) return { expiring: { iqama: [], healthCert: [], contract: [] }, expired: { iqama: [], healthCert: [], contract: [] }, summary: { totalExpiring: 0, totalExpired: 0, expiringIqamaCount: 0, expiringHealthCertCount: 0, expiringContractCount: 0, expiredIqamaCount: 0, expiredHealthCertCount: 0, expiredContractCount: 0 } };
+  
+  const now = new Date();
+  const oneMonthFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const twoMonthsFromNow = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+  const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  
+  const { employees, branches } = await import('../drizzle/schema');
+  
+  const allEmployees = await db
+    .select({
+      id: employees.id,
+      code: employees.code,
+      name: employees.name,
+      branchId: employees.branchId,
+      phone: employees.phone,
+      position: employees.position,
+      iqamaNumber: employees.iqamaNumber,
+      iqamaExpiryDate: employees.iqamaExpiryDate,
+      iqamaImageUrl: employees.iqamaImageUrl,
+      healthCertExpiryDate: employees.healthCertExpiryDate,
+      healthCertImageUrl: employees.healthCertImageUrl,
+      contractExpiryDate: employees.contractExpiryDate,
+      contractImageUrl: employees.contractImageUrl,
+      isActive: employees.isActive,
+    })
+    .from(employees)
+    .where(eq(employees.isActive, true));
+  
+  const expiringIqama: typeof allEmployees = [];
+  const expiringHealthCert: typeof allEmployees = [];
+  const expiringContract: typeof allEmployees = [];
+  const expiredIqama: typeof allEmployees = [];
+  const expiredHealthCert: typeof allEmployees = [];
+  const expiredContract: typeof allEmployees = [];
+  
+  for (const emp of allEmployees) {
+    if (emp.iqamaExpiryDate) {
+      if (emp.iqamaExpiryDate < now) {
+        expiredIqama.push(emp);
+      } else if (emp.iqamaExpiryDate <= oneMonthFromNow) {
+        expiringIqama.push(emp);
+      }
+    }
+    
+    if (emp.healthCertExpiryDate) {
+      if (emp.healthCertExpiryDate < now) {
+        expiredHealthCert.push(emp);
+      } else if (emp.healthCertExpiryDate <= oneWeekFromNow) {
+        expiringHealthCert.push(emp);
+      }
+    }
+    
+    if (emp.contractExpiryDate) {
+      if (emp.contractExpiryDate < now) {
+        expiredContract.push(emp);
+      } else if (emp.contractExpiryDate <= twoMonthsFromNow) {
+        expiringContract.push(emp);
+      }
+    }
+  }
+  
+  const branchesData = await db.select().from(branches);
+  const branchMap = new Map(branchesData.map(b => [b.id, b.name]));
+  
+  const addBranchName = (emps: typeof allEmployees) => 
+    emps.map(emp => ({
+      ...emp,
+      branchName: branchMap.get(emp.branchId) || 'غير محدد',
+    }));
+  
+  return {
+    expiring: {
+      iqama: addBranchName(expiringIqama),
+      healthCert: addBranchName(expiringHealthCert),
+      contract: addBranchName(expiringContract),
+    },
+    expired: {
+      iqama: addBranchName(expiredIqama),
+      healthCert: addBranchName(expiredHealthCert),
+      contract: addBranchName(expiredContract),
+    },
+    summary: {
+      totalExpiring: expiringIqama.length + expiringHealthCert.length + expiringContract.length,
+      totalExpired: expiredIqama.length + expiredHealthCert.length + expiredContract.length,
+      expiringIqamaCount: expiringIqama.length,
+      expiringHealthCertCount: expiringHealthCert.length,
+      expiringContractCount: expiringContract.length,
+      expiredIqamaCount: expiredIqama.length,
+      expiredHealthCertCount: expiredHealthCert.length,
+      expiredContractCount: expiredContract.length,
+    },
+  };
+}
+
+// تحديث صورة وثيقة الموظف
+export async function updateEmployeeDocumentImage(
+  employeeId: number,
+  documentType: 'iqama' | 'healthCert' | 'contract',
+  imageUrl: string
+) {
+  const db = await getDb();
+  if (!db) return { success: false };
+  
+  const { employees } = await import('../drizzle/schema');
+  const updateData: Record<string, string> = {};
+  
+  switch (documentType) {
+    case 'iqama':
+      updateData.iqamaImageUrl = imageUrl;
+      break;
+    case 'healthCert':
+      updateData.healthCertImageUrl = imageUrl;
+      break;
+    case 'contract':
+      updateData.contractImageUrl = imageUrl;
+      break;
+  }
+  
+  await db
+    .update(employees)
+    .set(updateData)
+    .where(eq(employees.id, employeeId));
+  
+  return { success: true };
+}
+
+// الحصول على جميع الموظفين مع بيانات الوثائق للتقرير
+export async function getAllEmployeesWithDocuments() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const { employees, branches } = await import('../drizzle/schema');
+  
+  const employeesData = await db
+    .select({
+      id: employees.id,
+      code: employees.code,
+      name: employees.name,
+      branchId: employees.branchId,
+      phone: employees.phone,
+      position: employees.position,
+      iqamaNumber: employees.iqamaNumber,
+      iqamaExpiryDate: employees.iqamaExpiryDate,
+      iqamaImageUrl: employees.iqamaImageUrl,
+      healthCertExpiryDate: employees.healthCertExpiryDate,
+      healthCertImageUrl: employees.healthCertImageUrl,
+      contractExpiryDate: employees.contractExpiryDate,
+      contractImageUrl: employees.contractImageUrl,
+      isActive: employees.isActive,
+    })
+    .from(employees)
+    .where(eq(employees.isActive, true))
+    .orderBy(employees.name);
+  
+  const branchesData = await db.select().from(branches);
+  const branchMap = new Map(branchesData.map(b => [b.id, b.name]));
+  
+  return employeesData.map(emp => ({
+    ...emp,
+    branchName: branchMap.get(emp.branchId) || 'غير محدد',
+  }));
+}
