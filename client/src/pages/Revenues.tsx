@@ -64,6 +64,8 @@ export default function Revenues() {
   const [branchRevenue, setBranchRevenue] = useState({
     cash: "",
     network: "",
+    paidInvoices: "",
+    paidInvoicesNote: "",
   });
   const [employeeRevenues, setEmployeeRevenues] = useState<EmployeeRevenueInput[]>([]);
   const [balanceImages, setBalanceImages] = useState<Array<{ url: string; key: string; preview: string }>>([]);
@@ -163,7 +165,7 @@ export default function Revenues() {
     onSuccess: () => {
       toast.success("تم حفظ الإيرادات بنجاح وتحديث البونص تلقائياً");
       // إعادة تعيين النموذج
-      setBranchRevenue({ cash: "", network: "" });
+      setBranchRevenue({ cash: "", network: "", paidInvoices: "", paidInvoicesNote: "" });
       setEmployeeRevenues([]);
       setUnmatchReason("");
       setBalanceImages([]);
@@ -211,12 +213,13 @@ export default function Revenues() {
     setEmployeeRevenues(employeeRevenues.filter((_, i) => i !== index));
   };
 
-  // حساب إجمالي الفرع (الكاش + الشبكة فقط، الرصيد غير محسوب)
+  // حساب إجمالي الفرع (الكاش + الشبكة + فواتير المدفوع، الرصيد غير محسوب)
   const calculateBranchTotal = () => {
     const cash = parseFloat(branchRevenue.cash) || 0;
     const network = parseFloat(branchRevenue.network) || 0;
+    const paidInvoices = parseFloat(branchRevenue.paidInvoices) || 0;
     // الرصيد غير محسوب في الإجمالي
-    return (cash + network).toFixed(2);
+    return (cash + network + paidInvoices).toFixed(2);
   };
 
   // حساب إجمالي الموظفين
@@ -257,6 +260,8 @@ export default function Revenues() {
       cash: branchRevenue.cash || "0",
       network: branchRevenue.network || "0",
       balance: branchRevenue.network || "0", // الرصيد = الشبكة تلقائياً (سيتم حسابه في الخادم)
+      paidInvoices: branchRevenue.paidInvoices || "0", // فواتير المدفوع
+      paidInvoicesNote: branchRevenue.paidInvoicesNote || "", // سبب فواتير المدفوع
       total: calculateBranchTotal(),
       isMatched: isAutoMatched,
       unmatchReason: isAutoMatched ? undefined : unmatchReason,
@@ -373,6 +378,30 @@ export default function Revenues() {
                   placeholder="0.00"
                   className="mt-2"
                 />
+              </div>
+              <div>
+                <Label>فواتير المدفوع <span className="text-xs text-muted-foreground">(اختياري)</span></Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={branchRevenue.paidInvoices}
+                  onChange={(e) => setBranchRevenue({ ...branchRevenue, paidInvoices: e.target.value })}
+                  placeholder="0.00"
+                  className="mt-2"
+                />
+                {/* خانة الملاحظة تظهر عند إدخال مبلغ */}
+                {branchRevenue.paidInvoices && parseFloat(branchRevenue.paidInvoices) > 0 && (
+                  <div className="mt-2">
+                    <Label className="text-xs text-muted-foreground">سبب فواتير المدفوع</Label>
+                    <Input
+                      type="text"
+                      value={branchRevenue.paidInvoicesNote}
+                      onChange={(e) => setBranchRevenue({ ...branchRevenue, paidInvoicesNote: e.target.value })}
+                      placeholder="اكتب سبب فواتير المدفوع..."
+                      className="mt-1"
+                    />
+                  </div>
+                )}
               </div>
               <div>
                 <Label>الإجمالي</Label>

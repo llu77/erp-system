@@ -1664,6 +1664,8 @@ export const appRouter = router({
         cash: z.string(),
         network: z.string(),
         balance: z.string(),
+        paidInvoices: z.string().optional(),
+        paidInvoicesNote: z.string().optional(),
         total: z.string(),
         isMatched: z.boolean(),
         unmatchReason: z.string().optional(),
@@ -1701,9 +1703,10 @@ export const appRouter = router({
         // 2. حساب الرصيد والإجمالي
         const networkAmount = parseFloat(input.network);
         const cashAmount = parseFloat(input.cash);
+        const paidInvoicesAmount = parseFloat(input.paidInvoices || '0');
         const calculatedBalance = networkAmount;
-        // الإجمالي = الكاش + الشبكة
-        const calculatedTotal = cashAmount + networkAmount;
+        // الإجمالي = الكاش + الشبكة + فواتير المدفوع
+        const calculatedTotal = cashAmount + networkAmount + paidInvoicesAmount;
 
         // 3. المطابقة التلقائية: التحقق من أن مجموع إيرادات الموظفين = (النقدي + الشبكة)
         let totalEmployeeCash = 0;
@@ -1755,7 +1758,9 @@ export const appRouter = router({
           cash: input.cash,
           network: input.network,
           balance: calculatedBalance.toString(), // الرصيد = الشبكة تلقائياً
-          total: calculatedTotal.toString(), // الإجمالي = النقدي فقط
+          paidInvoices: paidInvoicesAmount.toString(), // فواتير المدفوع
+          paidInvoicesNote: input.paidInvoicesNote || null, // سبب فواتير المدفوع
+          total: calculatedTotal.toString(), // الإجمالي = الكاش + الشبكة + فواتير المدفوع
           isMatched, // المطابقة التلقائية
           unmatchReason: unmatchReason || null,
           balanceImages: input.balanceImages,
