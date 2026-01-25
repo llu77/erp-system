@@ -87,6 +87,8 @@ export default function EmployeePortal() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
   const [employeeInfo, setEmployeeInfo] = useState<EmployeeInfo | null>(null);
   const [activeTab, setActiveTab] = useState('chat');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -142,6 +144,21 @@ export default function EmployeePortal() {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    setLoadingMessage('جاري معالجة طلبك...');
+    setLastFailedMessage(null);
+
+    // تحديث رسالة التحميل بشكل تدريجي
+    const loadingMessages = [
+      'جاري معالجة طلبك...',
+      'جاري تحليل البيانات...',
+      'جاري جلب المعلومات...',
+      'يرجى الانتظار قليلاً...',
+    ];
+    let messageIndex = 0;
+    const loadingInterval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % loadingMessages.length;
+      setLoadingMessage(loadingMessages[messageIndex]);
+    }, 3000);
 
     try {
       const response = await chatMutation.mutateAsync({
@@ -167,20 +184,46 @@ export default function EmployeePortal() {
         pendingRequestType: response.pendingRequestType,
       };
 
+      clearInterval(loadingInterval);
       setMessages(prev => [...prev, assistantMessage]);
       
       // تحديث الطلبات بعد كل رسالة (قد يكون تم إنشاء طلب جديد)
       refetchRequests();
-    } catch (error) {
+    } catch (error: unknown) {
+      clearInterval(loadingInterval);
+      
+      // تحديد نوع الخطأ
+      let errorContent = 'عذراً، حدث خطأ أثناء معالجة طلبك.';
+      const errorObj = error as { message?: string };
+      
+      if (errorObj?.message?.includes('timeout') || errorObj?.message?.includes('TIMEOUT')) {
+        errorContent = 'عذراً، استغرق الطلب وقتاً أطول من المتوقع. يرجى المحاولة مرة أخرى.';
+      } else if (errorObj?.message?.includes('network') || errorObj?.message?.includes('fetch')) {
+        errorContent = 'عذراً، حدثت مشكلة في الاتصال. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.';
+      }
+      
+      // حفظ الرسالة الفاشلة لإعادة المحاولة
+      setLastFailedMessage(input);
+      
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'عذراً، حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.',
+        content: errorContent,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
+      clearInterval(loadingInterval);
       setIsLoading(false);
+      setLoadingMessage('');
+    }
+  };
+
+  // دالة إعادة المحاولة
+  const handleRetry = () => {
+    if (lastFailedMessage) {
+      setInput(lastFailedMessage);
+      setLastFailedMessage(null);
     }
   };
 
@@ -449,9 +492,24 @@ export default function EmployeePortal() {
                           <div className="bg-slate-700 rounded-2xl px-4 py-3">
                             <div className="flex items-center gap-2">
                               <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
-                              <span className="text-sm text-slate-300">جاري الكتابة...</span>
+                              <span className="text-sm text-slate-300">{loadingMessage || 'جاري الكتابة...'}</span>
                             </div>
                           </div>
+                        </div>
+                      )}
+                      
+                      {/* زر إعادة المحاولة عند فشل الطلب */}
+                      {lastFailedMessage && !isLoading && (
+                        <div className="flex justify-center">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
+                            onClick={handleRetry}
+                          >
+                            <History className="h-4 w-4 ml-1" />
+                            إعادة المحاولة
+                          </Button>
                         </div>
                       )}
                     </div>
