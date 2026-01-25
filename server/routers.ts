@@ -15,6 +15,11 @@ import * as biAnalytics from "./bi/analyticsService";
 import * as aiAnalytics from "./bi/aiAnalyticsService";
 import * as revenueAnalytics from "./bi/revenueAnalyticsService";
 import * as financialForecast from "./bi/financialForecastService";
+import { createLogger, symbolAiLogger, requestsLogger, payrollLogger, bonusLogger, notificationLogger } from "./utils/logger";
+import { handleDatabaseError, handleNotFoundError, handleBusinessRuleError } from "./middleware/errorMiddleware";
+
+// إنشاء loggers للوحدات المختلفة
+const logger = createLogger('Routers');
 
 // إجراء للمدير فقط (كامل الصلاحيات)
 const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -1116,7 +1121,7 @@ export const appRouter = router({
             quantity: item.quantity,
             price: parseFloat(item.unitCost),
           })),
-        }).catch(err => console.error('خطأ في إرسال إشعار أمر الشراء:', err));
+        }).catch(err => notificationLogger.error('خطأ في إرسال إشعار أمر الشراء', err));
 
         await db.createActivityLog({
           userId: ctx.user.id,
@@ -1775,7 +1780,7 @@ export const appRouter = router({
             const { syncBonusOnRevenueChange } = await import('./bonus/sync');
             await syncBonusOnRevenueChange(empRev.employeeId, input.branchId, new Date(input.date));
           } catch (error: any) {
-            console.error('Bonus sync error:', error.message);
+            bonusLogger.error('خطأ في مزامنة البونص', error);
             await db.createSystemLog({
               level: 'warning',
               category: 'bonus',
@@ -1804,7 +1809,7 @@ export const appRouter = router({
             actualAmount: totalEmployeeAmount,
             difference: Math.abs(expectedAmount - totalEmployeeAmount),
             reason: unmatchReason,
-          }).catch(err => console.error('خطأ في إرسال إشعار عدم التطابق:', err));
+          }).catch(err => notificationLogger.error('خطأ في إرسال إشعار عدم التطابق', err));
         }
 
         // تشغيل المراقبة الذكية (Trigger)
@@ -1821,9 +1826,9 @@ export const appRouter = router({
             isMatched: input.isMatched,
             unmatchReason: input.unmatchReason || undefined,
           });
-          console.log('[Smart Monitoring] Revenue analyzed:', monitoringResult.severity);
+          logger.info('تحليل الإيرادات', { severity: monitoringResult.severity });
         } catch (error: any) {
-          console.error('[Smart Monitoring] Error:', error.message);
+          logger.error('خطأ في المراقبة الذكية', error);
         }
 
         // فحص الفروقات وإرسال تنبيهات استباقية
@@ -1867,14 +1872,14 @@ export const appRouter = router({
                   month,
                   year,
                   discrepancies: discrepancyResult.discrepancies,
-                }).catch(err => console.error('خطأ في إرسال تنبيه الفروقات:', err));
+                }).catch(err => notificationLogger.error('خطأ في إرسال تنبيه الفروقات', err));
               }
             }
             
-            console.log(`[تنبيه استباقي] تم اكتشاف ${discrepancyResult.discrepancies.length} فروقات في فرع ${branchName}`);
+            logger.info('تنبيه استباقي', { discrepanciesCount: discrepancyResult.discrepancies.length, branchName });
           }
         } catch (error: any) {
-          console.error('[تنبيه استباقي] خطأ:', error.message);
+          logger.error('خطأ في التنبيه الاستباقي', error);
         }
 
         return { success: true, message: 'تم حفظ الإيرادات بنجاح' };
@@ -2109,7 +2114,7 @@ export const appRouter = router({
             requestedBy: ctx.user.name || 'مشرف',
             requestedByRole: ctx.user.role === 'admin' ? 'مسؤول النظام' : ctx.user.role === 'manager' ? 'المدير' : ctx.user.role === 'supervisor' ? 'مشرف الفرع' : 'مستخدم',
             employees: employeesData,
-          }).catch(err => console.error('خطأ في إرسال إشعار طلب صرف البونص المتقدم:', err));
+          }).catch(err => bonusLogger.error('خطأ في إرسال إشعار طلب صرف البونص', err));
         }
 
         return { success: true, message: 'تم إرسال طلب الصرف بنجاح' };
@@ -2478,7 +2483,7 @@ ${discrepancyRows}
             discrepancies: discrepancyResult.discrepancies.length
           };
         } catch (error) {
-          console.error('Failed to send discrepancy alert:', error);
+          notificationLogger.error('فشل إرسال تنبيه الفروقات', error);
           return { success: false, message: 'فشل إرسال التنبيه' };
         }
       }),
@@ -2503,7 +2508,7 @@ ${discrepancyRows}
             sentCount: result.sentCount,
           };
         } catch (error) {
-          console.error('Failed to send weekly bonus report:', error);
+          bonusLogger.error('فشل إرسال تقرير البونص الأسبوعي', error);
           return { success: false, message: 'فشل إرسال التقرير الأسبوعي' };
         }
       }),
@@ -2854,7 +2859,7 @@ ${discrepancyRows}
             branchName: input.branchName,
             requestNumber: result?.requestNumber,
             details: requestDetails,
-          }).catch(err => console.error('خطأ في إرسال إشعار البريد:', err));
+          }).catch(err => notificationLogger.error('خطأ في إرسال إشعار البريد', err));
         }
 
         return { success: true, message: 'تم تقديم الطلب بنجاح', requestNumber: result?.requestNumber };
@@ -2919,7 +2924,7 @@ ${discrepancyRows}
           reviewerName: ctx.user.name || 'مسؤول',
           branchId: request.branchId ?? undefined,
           branchName: request.branchName ?? undefined,
-        }).catch(err => console.error('خطأ في إرسال إشعار تحديث الحالة:', err));
+        }).catch(err => requestsLogger.error('خطأ في إرسال إشعار تحديث الحالة', err));
 
         return { success: true, message: `تم ${statusText} الطلب بنجاح` };
       }),
@@ -3020,7 +3025,7 @@ ${discrepancyRows}
               year: input.year,
               employeeCount: payroll.employeeCount || 0,
               totalNetSalary: parseFloat(payroll.totalNetSalary || '0'),
-            }).catch(err => console.error('خطأ في إرسال إشعار مسيرة الرواتب:', err));
+            }).catch(err => payrollLogger.error('خطأ في إرسال إشعار مسيرة الرواتب', err));
           }
           
           return { success: true, message: 'تم إنشاء مسيرة الرواتب بنجاح', payroll };
@@ -3104,7 +3109,7 @@ ${discrepancyRows}
               });
             }
           } catch (error) {
-            console.error('خطأ في إرسال إشعارات الراتب:', error);
+            payrollLogger.error('خطأ في إرسال إشعارات الراتب', error);
             // لا نريد إيقاف العملية بسبب فشل الإشعار
           }
         }
@@ -3398,7 +3403,7 @@ ${discrepancyRows}
             branchName: input.branchName,
             date: input.expenseDate,
             threshold: 500,
-          }).catch(err => console.error('خطأ في إرسال إشعار المصروف:', err));
+          }).catch(err => notificationLogger.error('خطأ في إرسال إشعار المصروف', err));
         }
 
         // تشغيل المراقبة الذكية للمصاريف (Trigger)
@@ -3412,9 +3417,9 @@ ${discrepancyRows}
             description: input.description || '',
             date: input.expenseDate,
           });
-          console.log('[Smart Monitoring] Expense analyzed:', monitoringResult.severity);
+          logger.info('تحليل المصروفات', { severity: monitoringResult.severity });
         } catch (error: any) {
-          console.error('[Smart Monitoring] Expense Error:', error.message);
+          logger.error('خطأ في مراقبة المصروفات', error);
         }
 
         return { success: true, message: 'تم إضافة المصروف بنجاح' };
@@ -4934,7 +4939,7 @@ ${discrepancyRows}
               createdByName: ctx.user.name || 'Unknown',
             });
           } catch (error) {
-            console.error('[Task Create] Failed to send email notification:', error);
+            notificationLogger.error('فشل إرسال إشعار المهمة', error);
           }
         }
 
@@ -4990,7 +4995,7 @@ ${discrepancyRows}
             });
           }
         } catch (error) {
-          console.error('[Task Response] Failed to send notification:', error);
+          notificationLogger.error('فشل إرسال إشعار الرد', error);
         }
         
         return result;
@@ -5637,15 +5642,15 @@ ${discrepancyRows}
           const randomSuffix = Math.random().toString(36).substring(2, 8);
           const fileKey = `loyalty-invoices/${timestamp}-${randomSuffix}-${input.fileName}`;
           
-          console.log(`Uploading invoice image: ${fileKey}, size: ${buffer.length} bytes`);
+          logger.debug('رفع صورة الفاتورة', { fileKey, size: buffer.length });
           
           const { url, key } = await storagePut(fileKey, buffer, input.contentType);
           
-          console.log(`Upload successful: ${url}`);
+          logger.info('نجاح رفع الصورة', { url });
           
           return { success: true, url, key };
         } catch (error: any) {
-          console.error('Upload invoice image error:', error);
+          logger.error('خطأ في رفع صورة الفاتورة', error);
           
           if (error instanceof TRPCError) {
             throw error;
@@ -6642,7 +6647,7 @@ ${discrepancyRows}
             // تحميل آخر 10 رسائل كسياق
             conversationContext = await getConversationContext(sessionId, 10);
           } catch (e) {
-            console.error('خطأ في إدارة الجلسة:', e);
+            symbolAiLogger.error('خطأ في إدارة الجلسة', e);
           }
         }
 
@@ -6736,7 +6741,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
             const pendingRequests = await getPendingRequests(sessionId);
             hasPendingRequest = pendingRequests.length > 0;
           } catch (e) {
-            console.error('خطأ في فحص الطلبات المعلقة:', e);
+            symbolAiLogger.error('خطأ في فحص الطلبات المعلقة', e);
           }
         }
         
@@ -6744,13 +6749,13 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         let toolChoice: 'auto' | { type: 'function'; function: { name: string } } = 'auto';
         if (isConfirmIntent && hasPendingRequest) {
           toolChoice = { type: 'function', function: { name: 'confirm_request' } };
-          console.log('[Symbol AI] Forcing confirm_request tool');
+          symbolAiLogger.info('إجبار استخدام confirm_request');
         } else if (isCancelIntent && hasPendingRequest) {
           toolChoice = { type: 'function', function: { name: 'cancel_request' } };
-          console.log('[Symbol AI] Forcing cancel_request tool');
+          symbolAiLogger.info('إجبار استخدام cancel_request');
         } else if (isRequestIntent && input.employeeContext?.employeeId) {
           toolChoice = { type: 'function', function: { name: 'prepare_request' } };
-          console.log('[Symbol AI] Forcing prepare_request tool');
+          symbolAiLogger.info('إجبار استخدام prepare_request');
         }
         
         // استدعاء LLM مع الأدوات
@@ -6763,7 +6768,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
 
         const assistantMessage = response.choices[0]?.message;
         
-        console.log('[Symbol AI] Response received:', {
+        symbolAiLogger.debug('تم استلام الرد', {
           hasToolCalls: !!(assistantMessage?.tool_calls && assistantMessage.tool_calls.length > 0),
           toolCallsCount: assistantMessage?.tool_calls?.length || 0,
         });
@@ -6785,7 +6790,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
                 args.branchId = input.employeeContext.branchId;
                 args.branchName = input.employeeContext.branchName;
               }
-              console.log(`[Symbol AI] Executing ${toolCall.function.name} with sessionId:`, sessionId);
+              symbolAiLogger.info(`تنفيذ ${toolCall.function.name}`, { sessionId });
             }
             
             const result = await executeAssistantTool(toolCall.function.name, args);
@@ -6843,7 +6848,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
                 toolResults: JSON.stringify(toolResults.map(t => t.result)),
               });
             } catch (e) {
-              console.error('خطأ في حفظ الرسائل:', e);
+              symbolAiLogger.error('خطأ في حفظ الرسائل', e);
             }
           }
 
@@ -6858,7 +6863,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
                 pendingRequestType = pendingReqs[0].requestType;
               }
             } catch (e) {
-              console.error('خطأ في التحقق من الطلبات المعلقة:', e);
+              symbolAiLogger.error('خطأ في التحقق من الطلبات المعلقة', e);
             }
           }
 
@@ -6882,7 +6887,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
             await saveMessage(sessionId, { role: 'user', content: input.message });
             await saveMessage(sessionId, { role: 'assistant', content: responseContent });
           } catch (e) {
-            console.error('خطأ في حفظ الرسائل:', e);
+            symbolAiLogger.error('خطأ في حفظ الرسائل', e);
           }
         }
 
@@ -6897,7 +6902,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
               pendingReqType = pendingReqs[0].requestType;
             }
           } catch (e) {
-            console.error('خطأ في التحقق من الطلبات المعلقة:', e);
+            symbolAiLogger.error('خطأ في التحقق من الطلبات المعلقة', e);
           }
         }
 
@@ -6946,7 +6951,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
             message: 'تم بدء محادثة جديدة',
           };
         } catch (e) {
-          console.error('خطأ في بدء محادثة جديدة:', e);
+          symbolAiLogger.error('خطأ في بدء محادثة جديدة', e);
           return {
             success: false,
             sessionId: null,

@@ -2766,3 +2766,25 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إضافة أزرار "نعم، أكد الطلب" و "لا، ألغي" في واجهة المحادثة
 - [x] ربط الأزرار بإرسال "نعم" أو "لا" تلقائياً
 - [x] اختبار الأزرار والتأكد من عملها
+
+
+## تحسين معالجة الأخطاء والتسجيل (Error Handling & Logging)
+- [ ] تحليل الوضع الحالي لمعالجة الأخطاء في المشروع
+- [ ] إنشاء نظام موحد للأخطاء (AppError classes)
+- [ ] إنشاء نظام تسجيل منظم (Structured Logging)
+- [ ] تطبيق معالجة الأخطاء على إجراءات tRPC
+- [ ] إضافة سجل تدقيق للأخطاء في قاعدة البيانات
+- [ ] اختبار النظام والتحقق من عمله
+
+
+## تحسين معالجة الأخطاء والتسجيل (Error Handling & Logging) - 25 يناير 2026
+- [x] إنشاء نظام تسجيل منظم (Structured Logger) في `server/utils/logger.ts`
+- [x] إنشاء دوال معالجة الأخطاء في `server/middleware/errorMiddleware.ts`
+- [x] تحديث 35 موقع console.error/warn/log إلى logger في routers.ts
+- [x] إنشاء loggers متخصصة لكل وحدة (Auth, Database, SymbolAI, Requests, etc.)
+- [x] كتابة 20 اختبار لنظام التسجيل (logger.test.ts)
+- [x] كتابة 27 اختبار لمعالجة الأخطاء (errorMiddleware.test.ts)
+- [x] دعم مستويات التسجيل (debug, info, warn, error, fatal)
+- [x] دعم قياس وقت العمليات (withTiming, startOperation)
+- [x] دعم السياق (context) في الرسائل
+- [x] دعم child loggers للسياق المتداخل
