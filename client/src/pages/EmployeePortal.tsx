@@ -386,7 +386,7 @@ export default function EmployeePortal() {
             {/* تصميم جديد: الشات أولاً ثم الإجراءات السريعة */}
             <div className="flex flex-col h-[calc(100vh-200px)] sm:h-[calc(100vh-180px)]">
               {/* Main Chat Area - يأخذ كل المساحة المتاحة */}
-              <Card className="bg-slate-800/50 border-slate-700 flex-1 flex flex-col overflow-hidden">
+              <Card className="bg-slate-800/50 border-slate-700 flex-1 flex flex-col overflow-hidden min-h-0">
                   <CardHeader className="border-b border-slate-700 pb-3">
                     <div className="flex items-center gap-3">
                       <Avatar className="bg-gradient-to-br from-amber-500 to-orange-600">
@@ -406,8 +406,8 @@ export default function EmployeePortal() {
                   </CardHeader>
 
                   {/* Messages */}
-                  <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-                    <div className="space-y-4">
+                  <ScrollArea className="flex-1 min-h-0" ref={scrollRef}>
+                    <div className="p-4 space-y-4">
                       {messages.map((message) => (
                         <div
                           key={message.id}
