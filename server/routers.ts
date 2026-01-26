@@ -7009,12 +7009,19 @@ ${discrepancyRows}
           employeeName: z.string().optional(),
           branchId: z.number().optional(),
           branchName: z.string().optional(),
+          isSupervisor: z.boolean().optional(),
         }).optional(),
       }))
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
         const { assistantTools, executeAssistantTool } = await import('./ai/assistantTools');
+        const { supervisorTools, executeSupervisorTool } = await import('./ai/supervisorTools');
         const { getOrCreateActiveSession, saveMessage, getConversationContext, getPendingRequests } = await import('./ai/conversationMemory');
+        
+        // تحديد نوع المستخدم (موظف عادي أو مشرف)
+        const isSupervisor = input.employeeContext?.isSupervisor || false;
+        const supervisorName = input.employeeContext?.employeeName || '';
+        const supervisorBranchId = input.employeeContext?.branchId;
 
         // إدارة الجلسة والذاكرة
         let sessionId = input.sessionId;
@@ -7047,7 +7054,22 @@ ${discrepancyRows}
         const currentMonth = now.toLocaleDateString('ar-SA', { month: 'long' });
         const currentYear = now.getFullYear();
         
-        const systemPrompt = `أنت مساعد ذكي للموظفين في شركة Symbol AI. مهمتك مساعدة الموظفين في:
+        // بناء system prompt بناءً على نوع المستخدم
+        const supervisorSection = isSupervisor ? `
+
+## صلاحيات المشرف:
+أنت تتحدث مع **المشرف ${supervisorName}** (فرع ${input.employeeContext?.branchName}).
+كمشرف، لديك صلاحيات موسعة:
+- عرض قائمة جميع موظفي الفرع (get_branch_employees)
+- عرض إيرادات الفرع الإجمالية (get_branch_revenue)
+- عرض إيرادات أي موظف في الفرع (get_employee_revenue_supervisor)
+- عرض ترتيب الموظفين حسب الإيرادات (get_branch_employees_ranking)
+- تحليل أداء موظف وتقديم نصائح (analyze_employee_performance)
+
+**تنبيه:** يمكنك فقط الاطلاع على بيانات فرعك (رقم ${supervisorBranchId}). لا يمكنك الوصول لبيانات فروع أخرى.
+` : '';
+        
+        const systemPrompt = `أنت **Symbol AI** - مساعد ذكي متقدم لشركة Symbol AI. مهمتك مساعدة الموظفين في:${supervisorSection}
 
 **التاريخ الحالي:** ${currentDate}
 **الشهر الحالي:** ${currentMonth} ${currentYear}
@@ -7153,10 +7175,15 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           symbolAiLogger.info('إجبار استخدام prepare_request');
         }
         
+        // دمج أدوات المشرف إذا كان المستخدم مشرفاً
+        const allTools = isSupervisor 
+          ? [...assistantTools, ...supervisorTools] 
+          : assistantTools;
+        
         // استدعاء LLM مع الأدوات
         const response = await invokeLLM({
           messages,
-          tools: assistantTools,
+          tools: allTools,
           tool_choice: toolChoice,
           temperature: 0.7,
         });
@@ -7188,7 +7215,18 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
               symbolAiLogger.info(`تنفيذ ${toolCall.function.name}`, { sessionId });
             }
             
-            const result = await executeAssistantTool(toolCall.function.name, args);
+            // تحديد أي منفذ للأداة (موظف أو مشرف)
+            const supervisorToolNames = ['get_branch_employees', 'get_branch_revenue', 'get_employee_revenue_supervisor', 'get_branch_employees_ranking', 'analyze_employee_performance'];
+            
+            let result;
+            if (supervisorToolNames.includes(toolCall.function.name) && isSupervisor) {
+              // تمرير branchId لأدوات المشرف
+              args.branchId = supervisorBranchId;
+              args.supervisorBranchId = supervisorBranchId;
+              result = await executeSupervisorTool(toolCall.function.name, args);
+            } else {
+              result = await executeAssistantTool(toolCall.function.name, args);
+            }
             
             // تحديث سياق الموظف إذا تم التعرف عليه
             if (toolCall.function.name === 'identify_employee' && result.success && result.data && !Array.isArray(result.data)) {
