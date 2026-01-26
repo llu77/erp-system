@@ -3075,3 +3075,21 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إشعارات بريد للموظفين عند الموافقة أو الرفض
 - [x] محتوى احترافي لرسائل البريد
 - [x] إضافة اختبارات vitest
+
+## تكامل Twilio لرسائل WhatsApp/SMS (طلب جديد)
+- [ ] إعداد Twilio secrets (Account SID, Auth Token, Messaging Service SID)
+- [ ] إنشاء خدمة twilioService للرسائل
+- [ ] دمج Twilio في نظام الإشعارات الحالي
+- [ ] إضافة إشعارات WhatsApp للموظفين عند تقديم/موافقة/رفض الطلبات
+- [ ] إضافة اختبارات للنظام الجديد
+
+
+## تكامل Twilio لرسائل WhatsApp/SMS (طلب جديد)
+- [x] إعداد Twilio secrets
+- [x] إنشاء خدمة إرسال الرسائل SMS/WhatsApp
+- [x] دمج Twilio في إشعارات الطلبات
+- [x] إضافة إشعار SMS عند تقديم الطلب
+- [x] إضافة إشعار SMS عند الموافقة أو الرفض
+- [x] إضافة APIs لإرسال SMS/WhatsApp مخصصة
+- [x] إضافة تذكير الوثائق عبر SMS
+- [x] إضافة اختبارات vitest (12 اختبار ناجح)

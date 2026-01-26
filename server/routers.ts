@@ -11,6 +11,7 @@ import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from "./
 import * as advancedNotifications from "./notifications/advancedNotificationService";
 import * as reminderService from "./notifications/reminderService";
 import * as emailNotifications from "./notifications/emailNotificationService";
+import * as twilioService from "./notifications/twilioService";
 import * as biAnalytics from "./bi/analyticsService";
 import * as aiAnalytics from "./bi/aiAnalyticsService";
 import * as revenueAnalytics from "./bi/revenueAnalyticsService";
@@ -1340,6 +1341,71 @@ export const appRouter = router({
         return {
           success: result.success,
           message: result.success ? 'تم إرسال التذكير بنجاح' : `فشل: ${result.error}`,
+        };
+      }),
+
+    // إرسال رسالة SMS مخصصة
+    sendSMS: adminProcedure
+      .input(z.object({
+        to: z.string().min(9, 'رقم الهاتف مطلوب'),
+        body: z.string().min(1, 'نص الرسالة مطلوب'),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await twilioService.sendSMS(input);
+        return {
+          success: result.success,
+          message: result.success ? 'تم إرسال الرسالة بنجاح' : `فشل: ${result.error}`,
+          data: result,
+        };
+      }),
+
+    // إرسال رسالة WhatsApp مخصصة
+    sendWhatsApp: adminProcedure
+      .input(z.object({
+        to: z.string().min(9, 'رقم الهاتف مطلوب'),
+        body: z.string().min(1, 'نص الرسالة مطلوب'),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await twilioService.sendWhatsApp(input);
+        return {
+          success: result.success,
+          message: result.success ? 'تم إرسال رسالة WhatsApp بنجاح' : `فشل: ${result.error}`,
+          data: result,
+        };
+      }),
+
+    // إرسال تذكير الوثائق عبر SMS لموظف محدد
+    sendDocumentReminderSMS: adminProcedure
+      .input(z.object({ employeeId: z.number() }))
+      .mutation(async ({ input }) => {
+        const employee = await db.getEmployeeById(input.employeeId);
+        if (!employee) {
+          return { success: false, message: 'الموظف غير موجود' };
+        }
+        if (!employee.phone) {
+          return { success: false, message: 'لا يوجد رقم هاتف للموظف' };
+        }
+        
+        const missingDocs: string[] = [];
+        const docInfo = await db.getEmployeeDocumentInfo(input.employeeId);
+        if (!docInfo?.iqamaNumber) missingDocs.push('رقم الإقامة');
+        if (!docInfo?.iqamaExpiryDate) missingDocs.push('تاريخ انتهاء الإقامة');
+        if (!docInfo?.healthCertExpiryDate) missingDocs.push('تاريخ انتهاء الشهادة الصحية');
+        if (!docInfo?.contractExpiryDate) missingDocs.push('تاريخ انتهاء عقد العمل');
+        
+        if (missingDocs.length === 0) {
+          return { success: false, message: 'الموظف أكمل جميع وثائقه' };
+        }
+        
+        const result = await twilioService.sendDocumentReminderSMS(
+          employee.phone,
+          employee.name,
+          missingDocs
+        );
+        
+        return {
+          success: result.success,
+          message: result.success ? 'تم إرسال التذكير عبر SMS بنجاح' : `فشل: ${result.error}`,
         };
       }),
   }),
@@ -3092,6 +3158,16 @@ ${discrepancyRows}
               submittedAt: new Date(),
             }).catch(err => notificationLogger.error('خطأ في إرسال إشعار الموظف', err));
           }
+          
+          // إرسال إشعار SMS للموظف
+          if (employee?.phone) {
+            twilioService.sendRequestSubmittedNotification(
+              employee.phone,
+              input.employeeName,
+              getRequestTypeName(input.requestType),
+              result?.requestNumber || String(result.insertId)
+            ).catch(err => notificationLogger.error('خطأ في إرسال SMS للموظف', err));
+          }
         }
 
         return { success: true, message: 'تم تقديم الطلب بنجاح', requestNumber: result?.requestNumber };
@@ -3181,6 +3257,28 @@ ${discrepancyRows}
               rejectedAt: new Date(),
               reason: input.rejectionReason,
             }).catch(err => requestsLogger.error('خطأ في إرسال إشعار الرفض للموظف', err));
+          }
+        }
+        
+        // إرسال إشعار SMS للموظف بتحديث حالة طلبه
+        if (employee?.phone) {
+          const requestTypeName = getRequestTypeName(request.requestType);
+          if (input.status === 'approved') {
+            twilioService.sendRequestApprovedNotification(
+              employee.phone,
+              request.employeeName,
+              requestTypeName,
+              request.requestNumber || String(input.id),
+              input.reviewNotes
+            ).catch(err => requestsLogger.error('خطأ في إرسال SMS الموافقة للموظف', err));
+          } else if (input.status === 'rejected') {
+            twilioService.sendRequestRejectedNotification(
+              employee.phone,
+              request.employeeName,
+              requestTypeName,
+              request.requestNumber || String(input.id),
+              input.rejectionReason
+            ).catch(err => requestsLogger.error('خطأ في إرسال SMS الرفض للموظف', err));
           }
         }
 
