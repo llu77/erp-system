@@ -496,9 +496,14 @@ export default function EmployeePortal() {
                             </AvatarFallback>
                           </Avatar>
                           <div className="bg-slate-700 rounded-2xl px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
-                              <span className="text-sm text-slate-300">{loadingMessage || 'جاري الكتابة...'}</span>
+                            <div className="flex items-center gap-3">
+                              {/* نقاط متحركة لمؤشر الكتابة */}
+                              <div className="flex gap-1">
+                                <span className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                <span className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                <span className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                              </div>
+                              <span className="text-sm text-slate-300">{loadingMessage || 'جارٍ الكتابة...'}</span>
                             </div>
                           </div>
                         </div>
