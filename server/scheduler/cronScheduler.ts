@@ -14,6 +14,7 @@ import cron, { ScheduledTask } from 'node-cron';
 import * as db from "../db";
 import { sendAdvancedNotification, NotificationType } from "../notifications/advancedNotificationService";
 import { checkAndSendScheduledReminders, checkAndSendDocumentExpiryReminders } from "../notifications/scheduledNotificationService";
+import { sendPerformanceAlerts } from "../notifications/performanceAlerts";
 
 // ==================== أنواع البيانات ====================
 
@@ -370,10 +371,25 @@ function createScheduledJobs(): void {
     task: null,
   };
   
+  // مهمة تنبيهات تراجع أداء الموظفين - 7:30 صباحاً يومياً
+  const performanceAlertsJob: ScheduledJob = {
+    id: 'performance_alerts',
+    name: 'Performance Alerts',
+    nameAr: 'تنبيهات تراجع الأداء',
+    description: 'إرسال تنبيهات للمشرفين عند تراجع أداء الموظفين بنسبة 30% أو أكثر',
+    cronExpression: '30 7 * * *', // كل يوم الساعة 7:30 صباحاً
+    timezone: TIMEZONE,
+    isActive: true,
+    runCount: 0,
+    failCount: 0,
+    task: null,
+  };
+  
   jobs.set(dailyRevenueJob.id, dailyRevenueJob);
   jobs.set(weeklyReportJob.id, weeklyReportJob);
   jobs.set(monthlyRemindersJob.id, monthlyRemindersJob);
   jobs.set(documentExpiryJob.id, documentExpiryJob);
+  jobs.set(performanceAlertsJob.id, performanceAlertsJob);
 }
 
 /**
@@ -428,6 +444,14 @@ export function startScheduler(): void {
   
   const documentExpiryJob = jobs.get('document_expiry_check')!;
   scheduleJob(documentExpiryJob, checkAndSendDocumentExpiryReminders);
+  
+  const performanceAlertsJob = jobs.get('performance_alerts')!;
+  scheduleJob(performanceAlertsJob, async () => {
+    console.log("📉 [CronScheduler] بدء إرسال تنبيهات تراجع الأداء...");
+    const result = await sendPerformanceAlerts();
+    console.log(`✅ [CronScheduler] تم إرسال ${result.alertsSent} تنبيه`);
+    return result;
+  });
   
   isSchedulerRunning = true;
   

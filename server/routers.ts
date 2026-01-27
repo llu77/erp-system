@@ -4372,6 +4372,26 @@ ${discrepancyRows}
         return { success: true, message: 'تم إرسال تقرير الأرباح بنجاح' };
       }),
 
+    // إرسال تنبيهات تراجع الأداء يدوياً
+    sendPerformanceAlerts: adminProcedure
+      .mutation(async () => {
+        const { sendPerformanceAlerts } = await import('./notifications/performanceAlerts');
+        const result = await sendPerformanceAlerts();
+        if (!result.success) {
+          throw new TRPCError({ 
+            code: 'INTERNAL_SERVER_ERROR', 
+            message: result.errors.join(', ') || 'فشل إرسال التنبيهات' 
+          });
+        }
+        return { 
+          success: true, 
+          message: result.alertsSent > 0 
+            ? `تم إرسال ${result.alertsSent} تنبيه للمشرفين`
+            : 'لا توجد تنبيهات تراجع أداء حالياً',
+          alertsSent: result.alertsSent
+        };
+      }),
+
     // الحصول على أفضل المنتجات
     topProducts: supervisorViewProcedure
       .input(z.object({
