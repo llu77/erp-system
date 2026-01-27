@@ -3120,3 +3120,10 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] دمج الـ cron job مع السيرفر (cronScheduler.ts)
 - [x] إضافة endpoint للتشغيل اليدوي (scheduledReports.sendPerformanceAlerts)
 - [x] اختبار النظام
+
+
+## إضافة صور الموظفين (طلب جديد)
+- [x] رفع صورة عبدالحي جلال إلى S3
+- [x] تحديث قاعدة البيانات بـ URL الصورة
+- [x] تحديث واجهة EmployeeProfile لعرض الصورة
+- [x] التحقق من عرض الصورة في الواجهة

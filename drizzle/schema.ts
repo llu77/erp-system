@@ -281,6 +281,8 @@ export const employees = mysqlTable("employees", {
   hasPortalAccess: boolean("hasPortalAccess").default(false).notNull(),
   isSupervisor: boolean("isSupervisor").default(false).notNull(),
   lastLogin: timestamp("lastLogin"),
+  // صورة الموظف
+  photoUrl: varchar("photoUrl", { length: 500 }),
   // حقول الإقامة والوثائق
   iqamaNumber: varchar("iqamaNumber", { length: 20 }),
   iqamaExpiryDate: timestamp("iqamaExpiryDate"),

@@ -8929,6 +8929,7 @@ export async function getEmployeeProfile(employeeId: number) {
     lastLogin: employees.lastLogin,
     isActive: employees.isActive,
     createdAt: employees.createdAt,
+    photoUrl: employees.photoUrl,
   })
     .from(employees)
     .where(eq(employees.id, employeeId))

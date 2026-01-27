@@ -117,9 +117,17 @@ export function EmployeeProfile({ employeeId }: EmployeeProfileProps) {
         <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 p-6">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-                <User className="h-8 w-8 text-white" />
-              </div>
+              {profile.photoUrl ? (
+                <img 
+                  src={profile.photoUrl} 
+                  alt={profile.name}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-amber-500/50 shadow-lg"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                  <User className="h-8 w-8 text-white" />
+                </div>
+              )}
               <div>
                 <h2 className="text-xl font-bold text-white">{profile.name}</h2>
                 <p className="text-slate-400">{profile.position || 'موظف'}</p>
