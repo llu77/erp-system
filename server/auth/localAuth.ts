@@ -234,7 +234,7 @@ export async function ensureDefaultUsersExist() {
 
     if (adminExists.length === 0) {
       console.log("[LocalAuth] Creating default Admin user...");
-      const { hash } = hashPassword("Omar101010");
+      const { hash } = hashPassword("Omar101010#");
       
       await db.insert(users).values({
         username: "Admin",
@@ -249,7 +249,7 @@ export async function ensureDefaultUsersExist() {
       console.log("[LocalAuth] Default Admin user created successfully");
     } else {
       // تحديث كلمة مرور Admin
-      const { hash } = hashPassword("Omar101010");
+      const { hash } = hashPassword("Omar101010#");
       await db
         .update(users)
         .set({ password: hash })

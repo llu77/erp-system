@@ -1,0 +1,30 @@
+{
+  "query": "SELECT id, name, username, branchId, isSupervisor, position, hasPortalAccess, isActive FROM employees WHERE isSupervisor = 1 OR username LIKE '%laban%' OR username LIKE '%twiq%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, name, username, branchId, isSupervisor, position, hasPortalAccess, isActive FROM employees WHERE isSupervisor = 1 OR username LIKE '%laban%' OR username LIKE '%twiq%';",
+  "rows": [
+    {
+      "id": "30004",
+      "name": "عبدالحي جلال",
+      "username": "laban",
+      "branchId": "1",
+      "isSupervisor": "1",
+      "position": "supervisor",
+      "hasPortalAccess": "1",
+      "isActive": "1"
+    },
+    {
+      "id": "90003",
+      "name": "محمد اسماعيل",
+      "username": "twiq",
+      "branchId": "30001",
+      "isSupervisor": "1",
+      "position": "Supervisor ",
+      "hasPortalAccess": "1",
+      "isActive": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tusername\tbranchId\tisSupervisor\tposition\thasPortalAccess\tisActive\n30004\tعبدالحي جلال\tlaban\t1\t1\tsupervisor\t1\t1\n90003\tمحمد اسماعيل\ttwiq\t30001\t1\tSupervisor \t1\t1\n",
+  "stderr": "",
+  "execution_time_ms": 1537
+}
