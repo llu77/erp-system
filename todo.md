@@ -3127,3 +3127,4 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] تحديث قاعدة البيانات بـ URL الصورة
 - [x] تحديث واجهة EmployeeProfile لعرض الصورة
 - [x] التحقق من عرض الصورة في الواجهة
+- [x] رفع صورة محمود عماره (EMP-012) إلى S3
