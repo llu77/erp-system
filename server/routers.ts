@@ -2798,6 +2798,28 @@ ${discrepancyRows}
         }
       }),
 
+    // إرسال إشعارات الوثائق المنتهية (يدوياً)
+    sendDocumentExpiryNotifications: adminProcedure
+      .mutation(async ({ ctx }) => {
+        try {
+          const { sendDocumentExpiryNotifications } = await import('./notifications/documentExpiryNotifications');
+          const result = await sendDocumentExpiryNotifications();
+          
+          return {
+            success: result.success,
+            message: result.success 
+              ? `تم إرسال تقرير الوثائق إلى ${result.sentCount} مستلم (إجمالي الوثائق: ${result.totalDocuments})`
+              : result.errors.join(', ') || 'فشل إرسال التقرير',
+            sentCount: result.sentCount,
+            totalDocuments: result.totalDocuments,
+            errors: result.errors,
+          };
+        } catch (error) {
+          notificationLogger.error('فشل إرسال إشعارات الوثائق', error);
+          return { success: false, message: 'فشل إرسال إشعارات الوثائق' };
+        }
+      }),
+
     // ==================== إدارة مستويات البونص (للأدمن فقط) ====================
     
     // الحصول على جميع مستويات البونص

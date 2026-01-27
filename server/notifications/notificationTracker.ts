@@ -13,7 +13,8 @@ export type TrackedNotificationType =
   | 'monthly_inventory_reminder'
   | 'weekly_report'
   | 'daily_revenue_reminder'
-  | 'low_stock_alert';
+  | 'low_stock_alert'
+  | 'document_expiry';
 
 // واجهة سجل الإشعار
 interface NotificationRecord {

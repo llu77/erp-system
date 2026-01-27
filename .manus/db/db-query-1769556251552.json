@@ -1,0 +1,30 @@
+{
+  "query": "SELECT id, name, code, username, password, hasPortalAccess, isSupervisor, branchId FROM employees WHERE isSupervisor = 1 LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, name, code, username, password, hasPortalAccess, isSupervisor, branchId FROM employees WHERE isSupervisor = 1 LIMIT 10;",
+  "rows": [
+    {
+      "id": "30004",
+      "name": "عبدالحي جلال",
+      "code": "EMP-004",
+      "username": "laban",
+      "password": "82d72ef924c458dd134a8b0da76dbb85:5467e3fc8f6f82ae8f99ac677e95adb3ad74f4e38cfd583cdf7331dcb1f38aca5a67e14580b1127b88b3e9324c7a574ef6e142bf3a19eba014cf1cb1ae758ac0",
+      "hasPortalAccess": "1",
+      "isSupervisor": "1",
+      "branchId": "1"
+    },
+    {
+      "id": "90003",
+      "name": "محمد اسماعيل",
+      "code": "T4",
+      "username": "twiq",
+      "password": "a9b41d298d762461908fea8ddbbe6fb4:12c7d92b02d35d0c9dd0201b4523fb3577c8a993e7a3803dd2bf2d554a2a4c89bb86e0d3b0d244a4dd2288756e787e023b7dad1b58dd47fdd4c7b22bb96a9c3b",
+      "hasPortalAccess": "1",
+      "isSupervisor": "1",
+      "branchId": "30001"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcode\tusername\tpassword\thasPortalAccess\tisSupervisor\tbranchId\n30004\tعبدالحي جلال\tEMP-004\tlaban\t82d72ef924c458dd134a8b0da76dbb85:5467e3fc8f6f82ae8f99ac677e95adb3ad74f4e38cfd583cdf7331dcb1f38aca5a67e14580b1127b88b3e9324c7a574ef6e142bf3a19eba014cf1cb1ae758ac0\t1\t1\t1\n90003\tمحمد اسماعيل\tT4\ttwiq\ta9b41d298d762461908fea8ddbbe6fb4:12c7d92b02d35d0c9dd0201b4523fb3577c8a993e7a3803dd2bf2d554a2a4c89bb86e0d3b0d244a4dd2288756e787e023b7dad1b58dd47fdd4c7b22bb96a9c3b\t1\t1\t30001\n",
+  "stderr": "",
+  "execution_time_ms": 1540
+}

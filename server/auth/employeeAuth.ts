@@ -1,5 +1,5 @@
 import { getDb } from '../db';
-import { employees, branches } from '../../drizzle/schema';
+import { employees, branches, users } from '../../drizzle/schema';
 import { eq, and, like, or } from 'drizzle-orm';
 import { hashPassword, verifyPassword } from './localAuth';
 
@@ -78,7 +78,7 @@ export async function createEmployeeAccounts(): Promise<{
   }
 }
 
-// تسجيل دخول الموظف
+// تسجيل دخول الموظف (يدعم الموظفين والمشرفين والأدمن)
 export async function employeeLogin(username: string, password: string): Promise<{
   success: boolean;
   employee?: {
@@ -91,6 +91,8 @@ export async function employeeLogin(username: string, password: string): Promise
     email: string | null;
     emailVerified: boolean;
     isSupervisor: boolean;
+    isAdmin?: boolean;
+    role?: string;
   };
   error?: string;
 }> {
@@ -100,7 +102,7 @@ export async function employeeLogin(username: string, password: string): Promise
   }
 
   try {
-    // البحث عن الموظف
+    // البحث أولاً في جدول الموظفين
     const emp = await db
       .select()
       .from(employees)
@@ -111,52 +113,115 @@ export async function employeeLogin(username: string, password: string): Promise
       ))
       .limit(1);
 
-    if (emp.length === 0) {
+    if (emp.length > 0) {
+      const employee = emp[0];
+
+      // التحقق من كلمة المرور
+      if (!employee.password) {
+        return { success: false, error: 'الحساب غير مفعل' };
+      }
+
+      const isValid = await verifyPassword(password, employee.password);
+      if (!isValid) {
+        return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
+      }
+
+      // تحديث آخر تسجيل دخول
+      await db
+        .update(employees)
+        .set({ lastLogin: new Date() })
+        .where(eq(employees.id, employee.id));
+
+      // جلب اسم الفرع
+      let branchName = 'غير محدد';
+      const branch = await db
+        .select()
+        .from(branches)
+        .where(eq(branches.id, employee.branchId))
+        .limit(1);
+      
+      if (branch.length > 0) {
+        branchName = branch[0].name;
+      }
+
+      return {
+        success: true,
+        employee: {
+          id: employee.id,
+          name: employee.name,
+          code: employee.code,
+          branchId: employee.branchId,
+          branchName,
+          position: employee.position,
+          email: employee.email,
+          emailVerified: employee.emailVerified,
+          isSupervisor: employee.isSupervisor || false,
+          isAdmin: false,
+          role: 'employee',
+        },
+      };
+    }
+
+    // إذا لم يُوجد في جدول الموظفين، ابحث في جدول المستخدمين (للمشرفين والأدمن)
+    const user = await db
+      .select()
+      .from(users)
+      .where(and(
+        eq(users.username, username),
+        eq(users.isActive, true)
+      ))
+      .limit(1);
+
+    if (user.length === 0) {
       return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
     }
 
-    const employee = emp[0];
+    const foundUser = user[0];
 
     // التحقق من كلمة المرور
-    if (!employee.password) {
+    if (!foundUser.password) {
       return { success: false, error: 'الحساب غير مفعل' };
     }
 
-    const isValid = await verifyPassword(password, employee.password);
+    const isValid = await verifyPassword(password, foundUser.password);
     if (!isValid) {
       return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
     }
 
     // تحديث آخر تسجيل دخول
     await db
-      .update(employees)
-      .set({ lastLogin: new Date() })
-      .where(eq(employees.id, employee.id));
+      .update(users)
+      .set({ lastSignedIn: new Date() })
+      .where(eq(users.id, foundUser.id));
 
-    // جلب اسم الفرع
-    let branchName = 'غير محدد';
-    const branch = await db
-      .select()
-      .from(branches)
-      .where(eq(branches.id, employee.branchId))
-      .limit(1);
-    
-    if (branch.length > 0) {
-      branchName = branch[0].name;
+    // جلب اسم الفرع إذا كان موجوداً
+    let branchName = 'جميع الفروع';
+    if (foundUser.branchId) {
+      const branch = await db
+        .select()
+        .from(branches)
+        .where(eq(branches.id, foundUser.branchId))
+        .limit(1);
+      
+      if (branch.length > 0) {
+        branchName = branch[0].name;
+      }
     }
 
     return {
       success: true,
       employee: {
-        id: employee.id,
-        name: employee.name,
-        code: employee.code,
-        branchId: employee.branchId,
+        id: foundUser.id,
+        name: foundUser.name || foundUser.username || 'مستخدم',
+        code: `USR-${foundUser.id.toString().padStart(3, '0')}`,
+        branchId: foundUser.branchId || 0,
         branchName,
-        position: employee.position,
-        email: employee.email,
-        emailVerified: employee.emailVerified,
-        isSupervisor: employee.isSupervisor || false,
+        position: foundUser.position || foundUser.role,
+        email: foundUser.email,
+        emailVerified: true,
+        isSupervisor: foundUser.role === 'supervisor' || foundUser.role === 'admin',
+        isAdmin: foundUser.role === 'admin',
+        role: foundUser.role,
       },
     };
   } catch (error) {

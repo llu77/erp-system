@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -29,7 +30,10 @@ import {
   XCircle,
   TrendingUp,
   Users,
-  Shield
+  Shield,
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays
 } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -53,13 +57,297 @@ interface EmployeeDocument {
   isActive: boolean;
 }
 
+// مكون التقويم المرئي
+function DocumentCalendar({ documentsData, selectedBranch }: { 
+  documentsData: any; 
+  selectedBranch: string;
+}) {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  
+  // جمع جميع الوثائق مع تواريخها
+  const allDocuments = useMemo(() => {
+    if (!documentsData) return [];
+    
+    const docs: Array<{
+      employeeId: number;
+      employeeName: string;
+      employeeCode: string;
+      branchId: number;
+      branchName: string;
+      documentType: 'iqama' | 'healthCert' | 'contract';
+      documentName: string;
+      expiryDate: Date;
+    }> = [];
+    
+    // الإقامات
+    [...(documentsData.expired?.iqama || []), ...(documentsData.expiring?.iqama || [])].forEach(emp => {
+      if (emp.iqamaExpiryDate) {
+        docs.push({
+          employeeId: emp.id,
+          employeeName: emp.name,
+          employeeCode: emp.code,
+          branchId: emp.branchId,
+          branchName: emp.branchName,
+          documentType: 'iqama',
+          documentName: 'الإقامة',
+          expiryDate: new Date(emp.iqamaExpiryDate),
+        });
+      }
+    });
+    
+    // الشهادات الصحية
+    [...(documentsData.expired?.healthCert || []), ...(documentsData.expiring?.healthCert || [])].forEach(emp => {
+      if (emp.healthCertExpiryDate) {
+        docs.push({
+          employeeId: emp.id,
+          employeeName: emp.name,
+          employeeCode: emp.code,
+          branchId: emp.branchId,
+          branchName: emp.branchName,
+          documentType: 'healthCert',
+          documentName: 'الشهادة الصحية',
+          expiryDate: new Date(emp.healthCertExpiryDate),
+        });
+      }
+    });
+    
+    // العقود
+    [...(documentsData.expired?.contract || []), ...(documentsData.expiring?.contract || [])].forEach(emp => {
+      if (emp.contractExpiryDate) {
+        docs.push({
+          employeeId: emp.id,
+          employeeName: emp.name,
+          employeeCode: emp.code,
+          branchId: emp.branchId,
+          branchName: emp.branchName,
+          documentType: 'contract',
+          documentName: 'عقد العمل',
+          expiryDate: new Date(emp.contractExpiryDate),
+        });
+      }
+    });
+    
+    // فلتر حسب الفرع
+    if (selectedBranch !== 'all') {
+      const branchId = parseInt(selectedBranch);
+      return docs.filter(d => d.branchId === branchId);
+    }
+    
+    return docs;
+  }, [documentsData, selectedBranch]);
+  
+  // أيام الشهر الحالي
+  const calendarDays = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDayOfWeek = firstDay.getDay();
+    
+    const days: Array<{ date: Date | null; documents: typeof allDocuments }> = [];
+    
+    // أيام فارغة قبل بداية الشهر
+    for (let i = 0; i < startDayOfWeek; i++) {
+      days.push({ date: null, documents: [] });
+    }
+    
+    // أيام الشهر
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const docsOnDay = allDocuments.filter(doc => {
+        const docDate = new Date(doc.expiryDate);
+        return docDate.getDate() === day && 
+               docDate.getMonth() === month && 
+               docDate.getFullYear() === year;
+      });
+      days.push({ date, documents: docsOnDay });
+    }
+    
+    return days;
+  }, [currentMonth, allDocuments]);
+  
+  const monthNames = [
+    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+  ];
+  
+  const dayNames = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+  
+  const goToPrevMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  };
+  
+  const goToNextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  };
+  
+  const goToToday = () => {
+    setCurrentMonth(new Date());
+  };
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const getDocumentColor = (type: 'iqama' | 'healthCert' | 'contract') => {
+    switch (type) {
+      case 'iqama': return 'bg-blue-500';
+      case 'healthCert': return 'bg-green-500';
+      case 'contract': return 'bg-purple-500';
+    }
+  };
+  
+  const getDocumentIcon = (type: 'iqama' | 'healthCert' | 'contract') => {
+    switch (type) {
+      case 'iqama': return <IdCard className="w-3 h-3" />;
+      case 'healthCert': return <Heart className="w-3 h-3" />;
+      case 'contract': return <FileSignature className="w-3 h-3" />;
+    }
+  };
+  
+  return (
+    <div className="space-y-4">
+      {/* رأس التقويم */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={goToPrevMonth}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={goToNextMonth}>
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={goToToday}>
+            اليوم
+          </Button>
+        </div>
+        
+        <h3 className="text-xl font-bold text-black dark:text-white">
+          {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+        </h3>
+        
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded bg-blue-500"></div>
+            <span>إقامة</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded bg-green-500"></div>
+            <span>شهادة صحية</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded bg-purple-500"></div>
+            <span>عقد</span>
+          </div>
+        </div>
+      </div>
+      
+      {/* شبكة التقويم */}
+      <div className="grid grid-cols-7 gap-1">
+        {/* أسماء الأيام */}
+        {dayNames.map((day, i) => (
+          <div key={i} className="p-2 text-center font-bold text-muted-foreground bg-slate-100 dark:bg-slate-800 rounded">
+            {day}
+          </div>
+        ))}
+        
+        {/* أيام الشهر */}
+        {calendarDays.map((day, i) => {
+          if (!day.date) {
+            return <div key={i} className="p-2 min-h-[100px] bg-slate-50 dark:bg-slate-900/50 rounded"></div>;
+          }
+          
+          const isToday = day.date.getTime() === today.getTime();
+          const isPast = day.date < today;
+          const hasExpired = day.documents.some(d => new Date(d.expiryDate) < today);
+          
+          return (
+            <div 
+              key={i} 
+              className={`p-2 min-h-[100px] rounded border transition-all ${
+                isToday ? 'border-2 border-primary bg-primary/5' :
+                hasExpired ? 'border-red-300 bg-red-50 dark:bg-red-950/30' :
+                day.documents.length > 0 ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/30' :
+                'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+              }`}
+            >
+              <div className={`text-sm font-bold mb-1 ${
+                isToday ? 'text-primary' :
+                isPast ? 'text-muted-foreground' :
+                'text-black dark:text-white'
+              }`}>
+                {day.date.getDate()}
+              </div>
+              
+              <div className="space-y-1">
+                {day.documents.slice(0, 3).map((doc, j) => (
+                  <div 
+                    key={j}
+                    className={`text-xs p-1 rounded text-white flex items-center gap-1 truncate ${getDocumentColor(doc.documentType)}`}
+                    title={`${doc.employeeName} - ${doc.documentName}`}
+                  >
+                    {getDocumentIcon(doc.documentType)}
+                    <span className="truncate">{doc.employeeName}</span>
+                  </div>
+                ))}
+                {day.documents.length > 3 && (
+                  <div className="text-xs text-muted-foreground text-center">
+                    +{day.documents.length - 3} أخرى
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* ملخص الشهر */}
+      {allDocuments.length > 0 && (
+        <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+          <h4 className="font-bold mb-2 text-black dark:text-white">ملخص الشهر</h4>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground">إقامات:</span>
+              <span className="font-bold mr-2 text-blue-600">
+                {allDocuments.filter(d => d.documentType === 'iqama' && 
+                  new Date(d.expiryDate).getMonth() === currentMonth.getMonth() &&
+                  new Date(d.expiryDate).getFullYear() === currentMonth.getFullYear()
+                ).length}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">شهادات صحية:</span>
+              <span className="font-bold mr-2 text-green-600">
+                {allDocuments.filter(d => d.documentType === 'healthCert' && 
+                  new Date(d.expiryDate).getMonth() === currentMonth.getMonth() &&
+                  new Date(d.expiryDate).getFullYear() === currentMonth.getFullYear()
+                ).length}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">عقود:</span>
+              <span className="font-bold mr-2 text-purple-600">
+                {allDocuments.filter(d => d.documentType === 'contract' && 
+                  new Date(d.expiryDate).getMonth() === currentMonth.getMonth() &&
+                  new Date(d.expiryDate).getFullYear() === currentMonth.getFullYear()
+                ).length}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DocumentsDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeDocument | null>(null);
   const [uploadType, setUploadType] = useState<'iqama' | 'healthCert' | 'contract'>('iqama');
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   
   const { data: documentsData, isLoading, refetch } = trpc.employees.getExpiringDocuments.useQuery();
+  const { data: branches } = trpc.branches.list.useQuery();
   const uploadMutation = trpc.employees.uploadDocumentImage.useMutation({
     onSuccess: () => {
       toast.success('تم رفع الصورة بنجاح');
@@ -492,13 +780,25 @@ export default function DocumentsDashboard() {
   };
   
   const filterEmployees = (employees: EmployeeDocument[]) => {
-    if (!searchTerm) return employees;
-    const term = searchTerm.toLowerCase();
-    return employees.filter(emp => 
-      emp.name.toLowerCase().includes(term) ||
-      emp.code.toLowerCase().includes(term) ||
-      emp.branchName.toLowerCase().includes(term)
-    );
+    let filtered = employees;
+    
+    // فلتر الفرع
+    if (selectedBranch !== 'all') {
+      const branchId = parseInt(selectedBranch);
+      filtered = filtered.filter(emp => emp.branchId === branchId);
+    }
+    
+    // فلتر البحث
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(emp => 
+        emp.name.toLowerCase().includes(term) ||
+        emp.code.toLowerCase().includes(term) ||
+        emp.branchName.toLowerCase().includes(term)
+      );
+    }
+    
+    return filtered;
   };
   
   const renderEmployeeTable = (employees: EmployeeDocument[], documentType: 'iqama' | 'healthCert' | 'contract') => {
@@ -794,15 +1094,36 @@ export default function DocumentsDashboard() {
         </div>
       )}
       
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-        <Input
-          placeholder="بحث بالاسم أو الكود أو الفرع..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pr-12 h-12 text-lg border-2"
-        />
+      {/* Search & Branch Filter */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <Input
+            placeholder="بحث بالاسم أو الكود..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pr-12 h-12 text-lg border-2"
+          />
+        </div>
+        
+        <div className="w-full sm:w-64">
+          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <SelectTrigger className="h-12 text-lg border-2">
+              <Building className="w-5 h-5 ml-2 text-muted-foreground" />
+              <SelectValue placeholder="جميع الفروع" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                <span className="font-medium">جميع الفروع</span>
+              </SelectItem>
+              {branches?.map((branch) => (
+                <SelectItem key={branch.id} value={branch.id.toString()}>
+                  {branch.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       
       {/* Tabs */}
@@ -928,6 +1249,20 @@ export default function DocumentsDashboard() {
           </Tabs>
         </TabsContent>
       </Tabs>
+      
+      {/* Calendar View */}
+      <Card className="border-2 border-slate-200 dark:border-slate-700">
+        <CardHeader className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900">
+          <CardTitle className="flex items-center gap-3 text-xl">
+            <CalendarDays className="w-6 h-6 text-primary" />
+            تقويم تواريخ انتهاء الوثائق
+          </CardTitle>
+          <CardDescription>عرض مرئي لتواريخ انتهاء الوثائق خلال الأشهر القادمة</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <DocumentCalendar documentsData={documentsData} selectedBranch={selectedBranch} />
+        </CardContent>
+      </Card>
       
       {/* Upload Dialog */}
       <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
