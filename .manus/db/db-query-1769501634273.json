@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE employees SET isSupervisor = true WHERE username IN ('laban', 'twiq');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute UPDATE employees SET isSupervisor = true WHERE username IN ('laban', 'twiq');",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1997
+}

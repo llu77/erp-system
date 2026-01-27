@@ -279,6 +279,7 @@ export const employees = mysqlTable("employees", {
   username: varchar("username", { length: 50 }).unique(),
   password: varchar("password", { length: 255 }),
   hasPortalAccess: boolean("hasPortalAccess").default(false).notNull(),
+  isSupervisor: boolean("isSupervisor").default(false).notNull(),
   lastLogin: timestamp("lastLogin"),
   // حقول الإقامة والوثائق
   iqamaNumber: varchar("iqamaNumber", { length: 20 }),
@@ -1254,7 +1255,8 @@ export const sentNotifications = mysqlTable("sentNotifications", {
     "health_cert_expiry",
     "contract_expiry_two_months",
     "contract_expiry_one_month",
-    "document_expiry"
+    "document_expiry",
+    "performance_alert"
   ]).notNull(),
   
   subject: varchar("subject", { length: 500 }).notNull(),

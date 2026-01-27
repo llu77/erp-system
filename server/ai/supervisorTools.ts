@@ -21,6 +21,7 @@ import {
   bonusDetails
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, desc, sql, sum } from "drizzle-orm";
+import { getPerformanceAlertsForSupervisor } from "../notifications/performanceAlerts";
 
 // ========== أنواع النتائج ==========
 export interface SupervisorToolResult {
@@ -584,6 +585,27 @@ export const supervisorTools = [
         required: ["supervisorBranchId", "employeeId"]
       }
     }
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_performance_alerts",
+      description: "جلب تنبيهات تراجع أداء الموظفين في الفرع. يعرض الموظفين الذين تراجع أداؤهم بنسبة 30% أو أكثر مقارنة بالأسبوع السابق. متاح للمشرف فقط.",
+      parameters: {
+        type: "object",
+        properties: {
+          supervisorId: {
+            type: "number",
+            description: "رقم المشرف"
+          },
+          branchId: {
+            type: "number",
+            description: "رقم الفرع"
+          }
+        },
+        required: ["supervisorId", "branchId"]
+      }
+    }
   }
 ];
 
@@ -605,7 +627,28 @@ export async function executeSupervisorTool(toolName: string, args: any): Promis
     case 'analyze_employee_performance':
       return analyzeEmployeePerformance(args.supervisorBranchId, args.employeeId);
     
+    case 'get_performance_alerts':
+      return getPerformanceAlerts(args.supervisorId, args.branchId);
+    
     default:
       return errorResult(`أداة غير معروفة: ${toolName}`);
+  }
+}
+
+// ========== جلب تنبيهات تراجع الأداء ==========
+async function getPerformanceAlerts(supervisorId: number, branchId: number): Promise<SupervisorToolResult> {
+  try {
+    const alerts = await getPerformanceAlertsForSupervisor(supervisorId, branchId);
+    
+    return {
+      success: true,
+      hasData: alerts.hasAlerts,
+      dataCount: alerts.declinedEmployees.length,
+      data: alerts.declinedEmployees,
+      message: alerts.summary,
+      source: 'تحليل الأداء الأسبوعي'
+    };
+  } catch (error) {
+    return errorResult(`حدث خطأ: ${error}`);
   }
 }

@@ -1,0 +1,91 @@
+{
+  "query": "SELECT id, name, username, hasPortalAccess, isActive, isSupervisor, branchId FROM employees WHERE username IS NOT NULL AND username != '' LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, name, username, hasPortalAccess, isActive, isSupervisor, branchId FROM employees WHERE username IS NOT NULL AND username != '' LIMIT 10;",
+  "rows": [
+    {
+      "id": "30002",
+      "name": "علاء ناصر",
+      "username": "alaa",
+      "hasPortalAccess": "1",
+      "isActive": "1",
+      "isSupervisor": "0",
+      "branchId": "1"
+    },
+    {
+      "id": "30004",
+      "name": "عبدالحي جلال",
+      "username": "laban",
+      "hasPortalAccess": "1",
+      "isActive": "1",
+      "isSupervisor": "1",
+      "branchId": "1"
+    },
+    {
+      "id": "30007",
+      "name": "السيد محمد",
+      "username": "elsayed",
+      "hasPortalAccess": "1",
+      "isActive": "1",
+      "isSupervisor": "0",
+      "branchId": "1"
+    },
+    {
+      "id": "30012",
+      "name": "محمود عماره ",
+      "username": "mahmoud",
+      "hasPortalAccess": "1",
+      "isActive": "1",
+      "isSupervisor": "0",
+      "branchId": "1"
+    },
+    {
+      "id": "60001",
+      "name": "محمد ناصر",
+      "username": "mohamed",
+      "hasPortalAccess": "1",
+      "isActive": "1",
+      "isSupervisor": "0",
+      "branchId": "30001"
+    },
+    {
+      "id": "90001",
+      "name": "فارس محمد ",
+      "username": "fares",
+      "hasPortalAccess": "1",
+      "isActive": "1",
+      "isSupervisor": "0",
+      "branchId": "30001"
+    },
+    {
+      "id": "90002",
+      "name": "عمرو",
+      "username": "amr",
+      "hasPortalAccess": "1",
+      "isActive": "1",
+      "isSupervisor": "0",
+      "branchId": "30001"
+    },
+    {
+      "id": "90003",
+      "name": "محمد اسماعيل",
+      "username": "twiq",
+      "hasPortalAccess": "1",
+      "isActive": "1",
+      "isSupervisor": "1",
+      "branchId": "30001"
+    },
+    {
+      "id": "180001",
+      "name": "Saud",
+      "username": "saud",
+      "hasPortalAccess": "1",
+      "isActive": "1",
+      "isSupervisor": "0",
+      "branchId": "30001"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tusername\thasPortalAccess\tisActive\tisSupervisor\tbranchId\n30002\tعلاء ناصر\talaa\t1\t1\t0\t1\n30004\tعبدالحي جلال\tlaban\t1\t1\t1\t1\n30007\tالسيد محمد\telsayed\t1\t1\t0\t1\n30012\tمحمود عماره \tmahmoud\t1\t1\t0\t1\n60001\tمحمد ناصر\tmohamed\t1\t1\t0\t30001\n90001\tفارس محمد \tfares\t1\t1\t0\t30001\n90002\tعمرو\tamr\t1\t1\t0\t30001\n90003\tمحمد اسماعيل\ttwiq\t1\t1\t1\t30001\n180001\tSaud\tsaud\t1\t1\t0\t30001\n",
+  "stderr": "",
+  "execution_time_ms": 1537
+}

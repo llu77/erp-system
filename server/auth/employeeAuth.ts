@@ -90,6 +90,7 @@ export async function employeeLogin(username: string, password: string): Promise
     position: string | null;
     email: string | null;
     emailVerified: boolean;
+    isSupervisor: boolean;
   };
   error?: string;
 }> {
@@ -155,6 +156,7 @@ export async function employeeLogin(username: string, password: string): Promise
         position: employee.position,
         email: employee.email,
         emailVerified: employee.emailVerified,
+        isSupervisor: employee.isSupervisor || false,
       },
     };
   } catch (error) {

@@ -55,6 +55,7 @@ interface EmployeeInfo {
   position: string | null;
   email: string | null;
   emailVerified: boolean;
+  isSupervisor?: boolean;
 }
 
 // أنواع الطلبات بالعربية
@@ -176,6 +177,7 @@ export default function EmployeePortal() {
           employeeName: employeeInfo.name,
           branchId: employeeInfo.branchId,
           branchName: employeeInfo.branchName,
+          isSupervisor: employeeInfo.isSupervisor || false,
         },
         conversationHistory: messages.map(m => ({
           role: m.role as 'user' | 'assistant' | 'system' | 'tool',
@@ -582,6 +584,7 @@ export default function EmployeePortal() {
                                 employeeName: employeeInfo!.name,
                                 branchId: employeeInfo!.branchId,
                                 branchName: employeeInfo!.branchName,
+                                isSupervisor: employeeInfo!.isSupervisor || false,
                               },
                               conversationHistory: [...messages, userMessage].map(m => ({
                                 role: m.role as 'user' | 'assistant' | 'system' | 'tool',

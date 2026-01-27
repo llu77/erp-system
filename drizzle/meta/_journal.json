@@ -351,6 +351,20 @@
       "when": 1769374602067,
       "tag": "0049_happy_carmella_unuscione",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "5",
+      "when": 1769409019656,
+      "tag": "0050_productive_adam_warlock",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "5",
+      "when": 1769537376837,
+      "tag": "0051_sudden_nightcrawler",
+      "breakpoints": true
     }
   ]
 }
