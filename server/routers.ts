@@ -4392,6 +4392,57 @@ ${discrepancyRows}
         };
       }),
 
+    // تقرير الإيرادات الشهري
+    generateRevenueReport: adminProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2030),
+        branchId: z.number().optional()
+      }))
+      .mutation(async ({ input }) => {
+        const { generateMonthlyRevenueReport } = await import('./reports/monthlyReports');
+        const pdfBuffer = await generateMonthlyRevenueReport(input.month, input.year, input.branchId);
+        return { 
+          success: true, 
+          pdf: pdfBuffer.toString('base64'),
+          filename: `revenue-report-${input.year}-${input.month}.pdf`
+        };
+      }),
+
+    // تقرير المصاريف الشهري
+    generateExpenseReport: adminProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2030),
+        branchId: z.number().optional()
+      }))
+      .mutation(async ({ input }) => {
+        const { generateMonthlyExpenseReport } = await import('./reports/monthlyReports');
+        const pdfBuffer = await generateMonthlyExpenseReport(input.month, input.year, input.branchId);
+        return { 
+          success: true, 
+          pdf: pdfBuffer.toString('base64'),
+          filename: `expense-report-${input.year}-${input.month}.pdf`
+        };
+      }),
+
+    // تقرير البونص الشهري
+    generateBonusReport: adminProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2030),
+        branchId: z.number().optional()
+      }))
+      .mutation(async ({ input }) => {
+        const { generateMonthlyBonusReport } = await import('./reports/monthlyReports');
+        const pdfBuffer = await generateMonthlyBonusReport(input.month, input.year, input.branchId);
+        return { 
+          success: true, 
+          pdf: pdfBuffer.toString('base64'),
+          filename: `bonus-report-${input.year}-${input.month}.pdf`
+        };
+      }),
+
     // الحصول على أفضل المنتجات
     topProducts: supervisorViewProcedure
       .input(z.object({

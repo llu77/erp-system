@@ -64,6 +64,7 @@ import EmployeePortal from "./pages/EmployeePortal";
 import EmployeeLogin from "./pages/EmployeeLogin";
 import EmployeeAccounts from "./pages/EmployeeAccounts";
 import PaidInvoicesReport from "./pages/PaidInvoicesReport";
+import MonthlyReports from "./pages/MonthlyReports";
 
 function Router() {
   return (
@@ -134,6 +135,11 @@ function Router() {
       <Route path="/reports">
         <DashboardLayout>
           <Reports />
+        </DashboardLayout>
+      </Route>
+      <Route path="/monthly-reports">
+        <DashboardLayout>
+          <MonthlyReports />
         </DashboardLayout>
       </Route>
       <Route path="/notifications/send">
