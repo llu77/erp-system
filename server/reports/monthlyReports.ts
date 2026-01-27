@@ -866,3 +866,347 @@ function generateBonusHTML(data: BonusHTMLData): string {
 </html>
 `;
 }
+
+
+// ==================== تقرير الربح والخسارة (P&L) ====================
+
+export async function generateProfitLossReport(month: number, year: number, branchId?: number): Promise<Buffer> {
+  const db = await getDb();
+  if (!db) throw new Error('Database connection failed');
+  
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0);
+  
+  // 1. جلب إجمالي الإيرادات
+  const revenuesQuery = db.select({
+    totalCash: sql<number>`COALESCE(SUM(${dailyRevenues.cash}), 0)`,
+    totalNetwork: sql<number>`COALESCE(SUM(${dailyRevenues.network}), 0)`,
+  }).from(dailyRevenues).where(
+    and(
+      gte(dailyRevenues.date, startDate),
+      lte(dailyRevenues.date, endDate),
+      branchId ? eq(dailyRevenues.branchId, branchId) : sql`1=1`
+    )
+  );
+  const revenueData = await revenuesQuery || [{ totalCash: 0, totalNetwork: 0 }];
+  const totalRevenue = Number(revenueData[0]?.totalCash || 0) + Number(revenueData[0]?.totalNetwork || 0);
+  
+  // 2. جلب إجمالي المصاريف (المعتمدة والمدفوعة فقط)
+  const expensesQuery = db.select({
+    category: expenses.category,
+    total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
+  }).from(expenses).where(
+    and(
+      gte(expenses.expenseDate, startDate),
+      lte(expenses.expenseDate, endDate),
+      sql`${expenses.status} IN ('approved', 'paid')`,
+      branchId ? eq(expenses.branchId, branchId) : sql`1=1`
+    )
+  ).groupBy(expenses.category);
+  const expensesByCategory = await expensesQuery || [];
+  
+  let totalExpenses = 0;
+  const expenseCategories: Array<{category: string, label: string, amount: number}> = [];
+  for (const e of expensesByCategory) {
+    const amount = Number(e.total || 0);
+    totalExpenses += amount;
+    expenseCategories.push({
+      category: e.category || 'other',
+      label: getCategoryLabel(e.category || 'other'),
+      amount
+    });
+  }
+  
+  // 3. جلب إجمالي الرواتب (المعتمدة والمدفوعة)
+  const { payrolls } = await import('../../drizzle/schema');
+  const payrollsQuery = db.select({
+    totalNet: sql<number>`COALESCE(SUM(${payrolls.totalNetSalary}), 0)`,
+    totalBase: sql<number>`COALESCE(SUM(${payrolls.totalBaseSalary}), 0)`,
+    totalOvertime: sql<number>`COALESCE(SUM(${payrolls.totalOvertime}), 0)`,
+    totalIncentives: sql<number>`COALESCE(SUM(${payrolls.totalIncentives}), 0)`,
+    totalDeductions: sql<number>`COALESCE(SUM(${payrolls.totalDeductions}), 0)`,
+  }).from(payrolls).where(
+    and(
+      eq(payrolls.year, year),
+      eq(payrolls.month, month),
+      sql`${payrolls.status} IN ('approved', 'paid')`,
+      branchId ? eq(payrolls.branchId, branchId) : sql`1=1`
+    )
+  );
+  const payrollData = await payrollsQuery || [{ totalNet: 0, totalBase: 0, totalOvertime: 0, totalIncentives: 0, totalDeductions: 0 }];
+  const totalSalaries = Number(payrollData[0]?.totalNet || 0);
+  
+  // 4. حساب الربح الصافي
+  const grossProfit = totalRevenue - totalExpenses;
+  const netProfit = totalRevenue - totalExpenses - totalSalaries;
+  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0;
+  
+  // إنشاء HTML
+  const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Arial', sans-serif; background: #fff; color: #000; padding: 20px; font-size: 12px; }
+    .header { text-align: center; margin-bottom: 20px; border-bottom: 3px solid #1e3a5f; padding-bottom: 15px; }
+    .header h1 { color: #1e3a5f; font-size: 22px; margin-bottom: 5px; }
+    .header p { color: #666; font-size: 14px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+    .summary-card { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; text-align: center; }
+    .summary-card.revenue { border-top: 4px solid #22c55e; }
+    .summary-card.expense { border-top: 4px solid #ef4444; }
+    .summary-card.salary { border-top: 4px solid #f59e0b; }
+    .summary-card.profit { border-top: 4px solid #3b82f6; }
+    .summary-card h3 { font-size: 11px; color: #666; margin-bottom: 8px; }
+    .summary-card .amount { font-size: 18px; font-weight: bold; color: #000; }
+    .summary-card.profit .amount { color: ${netProfit >= 0 ? '#22c55e' : '#ef4444'}; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { border: 1px solid #dee2e6; padding: 10px; text-align: right; }
+    th { background: #1e3a5f; color: #fff; font-size: 11px; }
+    td { font-size: 11px; color: #000; }
+    .section-title { background: #f1f5f9; padding: 10px; font-weight: bold; margin: 20px 0 10px; border-right: 4px solid #1e3a5f; }
+    .footer { margin-top: 30px; display: flex; justify-content: space-between; }
+    .signature { text-align: center; width: 200px; }
+    .signature-line { border-top: 1px solid #000; margin-top: 50px; padding-top: 5px; }
+    .profit-row { background: #f0fdf4; font-weight: bold; }
+    .loss-row { background: #fef2f2; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>تقرير الربح والخسارة</h1>
+    <p>شهر ${getMonthName(month)} ${year}</p>
+  </div>
+  
+  <div class="summary-grid">
+    <div class="summary-card revenue">
+      <h3>إجمالي الإيرادات</h3>
+      <div class="amount">${formatCurrency(totalRevenue)}</div>
+    </div>
+    <div class="summary-card expense">
+      <h3>إجمالي المصاريف</h3>
+      <div class="amount">${formatCurrency(totalExpenses)}</div>
+    </div>
+    <div class="summary-card salary">
+      <h3>إجمالي الرواتب</h3>
+      <div class="amount">${formatCurrency(totalSalaries)}</div>
+    </div>
+    <div class="summary-card profit">
+      <h3>صافي الربح</h3>
+      <div class="amount">${formatCurrency(netProfit)}</div>
+    </div>
+  </div>
+  
+  <div class="section-title">قائمة الدخل التفصيلية</div>
+  <table>
+    <tr><th colspan="2">الإيرادات</th></tr>
+    <tr><td>إيرادات نقدية (كاش)</td><td>${formatCurrency(Number(revenueData[0]?.totalCash || 0))}</td></tr>
+    <tr><td>إيرادات شبكة</td><td>${formatCurrency(Number(revenueData[0]?.totalNetwork || 0))}</td></tr>
+    <tr style="background:#e8f5e9;font-weight:bold;"><td>إجمالي الإيرادات</td><td>${formatCurrency(totalRevenue)}</td></tr>
+    
+    <tr><th colspan="2">المصاريف التشغيلية</th></tr>
+    ${expenseCategories.map(e => `<tr><td>${e.label}</td><td>${formatCurrency(e.amount)}</td></tr>`).join('')}
+    <tr style="background:#ffebee;font-weight:bold;"><td>إجمالي المصاريف</td><td>${formatCurrency(totalExpenses)}</td></tr>
+    
+    <tr class="${grossProfit >= 0 ? 'profit-row' : 'loss-row'}"><td><strong>الربح الإجمالي (قبل الرواتب)</strong></td><td><strong>${formatCurrency(grossProfit)}</strong></td></tr>
+    
+    <tr><th colspan="2">الرواتب والأجور</th></tr>
+    <tr><td>رواتب أساسية</td><td>${formatCurrency(Number(payrollData[0]?.totalBase || 0))}</td></tr>
+    <tr><td>ساعات إضافية</td><td>${formatCurrency(Number(payrollData[0]?.totalOvertime || 0))}</td></tr>
+    <tr><td>حوافز</td><td>${formatCurrency(Number(payrollData[0]?.totalIncentives || 0))}</td></tr>
+    <tr><td>خصومات (-)</td><td>${formatCurrency(Number(payrollData[0]?.totalDeductions || 0))}</td></tr>
+    <tr style="background:#fff3e0;font-weight:bold;"><td>صافي الرواتب</td><td>${formatCurrency(totalSalaries)}</td></tr>
+    
+    <tr class="${netProfit >= 0 ? 'profit-row' : 'loss-row'}"><td><strong>صافي الربح النهائي</strong></td><td><strong>${formatCurrency(netProfit)}</strong></td></tr>
+    <tr><td>هامش الربح</td><td>${profitMargin.toFixed(1)}%</td></tr>
+  </table>
+  
+  <div class="footer">
+    <div class="signature"><div class="signature-line">المشرف العام: سالم الوادعي</div></div>
+    <div class="signature"><div class="signature-line">المدير: عمر المطيري</div></div>
+  </div>
+</body>
+</html>`;
+
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' } });
+  await browser.close();
+  return Buffer.from(pdf);
+}
+
+// ==================== تقرير مسير الرواتب الشهري ====================
+
+export async function generatePayrollReport(month: number, year: number, branchId?: number): Promise<Buffer> {
+  const db = await getDb();
+  if (!db) throw new Error('Database connection failed');
+  
+  const { payrolls, payrollDetails } = await import('../../drizzle/schema');
+  
+  // جلب مسير الرواتب
+  const payrollQuery = db.select().from(payrolls).where(
+    and(
+      eq(payrolls.year, year),
+      eq(payrolls.month, month),
+      branchId ? eq(payrolls.branchId, branchId) : sql`1=1`
+    )
+  ).orderBy(desc(payrolls.createdAt));
+  const payrollsList = await payrollQuery || [];
+  
+  if (payrollsList.length === 0) {
+    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>body{font-family:Arial;padding:40px;text-align:center;}</style></head><body><h1>لا يوجد مسير رواتب</h1><p>لم يتم العثور على مسير رواتب لشهر ${getMonthName(month)} ${year}</p></body></html>`;
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(html);
+    const pdf = await page.pdf({ format: 'A4' });
+    await browser.close();
+    return Buffer.from(pdf);
+  }
+  
+  // جلب تفاصيل الرواتب
+  const allDetails: Array<{
+    payrollNumber: string;
+    branchName: string;
+    employeeName: string;
+    employeeCode: string;
+    position: string | null;
+    baseSalary: number;
+    overtimeAmount: number;
+    incentiveAmount: number;
+    totalDeductions: number;
+    netSalary: number;
+    status: string;
+  }> = [];
+  
+  for (const p of payrollsList) {
+    const detailsQuery = db.select().from(payrollDetails).where(eq(payrollDetails.payrollId, p.id));
+    const details = await detailsQuery || [];
+    for (const d of details) {
+      allDetails.push({
+        payrollNumber: p.payrollNumber,
+        branchName: p.branchName,
+        employeeName: d.employeeName,
+        employeeCode: d.employeeCode,
+        position: d.position,
+        baseSalary: Number(d.baseSalary || 0),
+        overtimeAmount: Number(d.overtimeAmount || 0),
+        incentiveAmount: Number(d.incentiveAmount || 0),
+        totalDeductions: Number(d.totalDeductions || 0),
+        netSalary: Number(d.netSalary || 0),
+        status: p.status,
+      });
+    }
+  }
+  
+  // حساب الإجماليات
+  let totalBase = 0, totalOvertime = 0, totalIncentives = 0, totalDeductions = 0, totalNet = 0;
+  for (const d of allDetails) {
+    totalBase += d.baseSalary;
+    totalOvertime += d.overtimeAmount;
+    totalIncentives += d.incentiveAmount;
+    totalDeductions += d.totalDeductions;
+    totalNet += d.netSalary;
+  }
+  
+  const getPayrollStatusLabel = (s: string) => {
+    const labels: Record<string, string> = { draft: 'مسودة', pending: 'قيد المراجعة', approved: 'معتمد', paid: 'مدفوع', cancelled: 'ملغى' };
+    return labels[s] || s;
+  };
+  
+  const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Arial', sans-serif; background: #fff; color: #000; padding: 15px; font-size: 10px; }
+    .header { text-align: center; margin-bottom: 15px; border-bottom: 3px solid #1e3a5f; padding-bottom: 10px; }
+    .header h1 { color: #1e3a5f; font-size: 20px; margin-bottom: 5px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px; }
+    .summary-card { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px; text-align: center; }
+    .summary-card h3 { font-size: 9px; color: #666; margin-bottom: 5px; }
+    .summary-card .amount { font-size: 14px; font-weight: bold; color: #000; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+    th, td { border: 1px solid #dee2e6; padding: 6px; text-align: right; font-size: 9px; }
+    th { background: #1e3a5f; color: #fff; }
+    .total-row { background: #e3f2fd; font-weight: bold; }
+    .footer { margin-top: 20px; display: flex; justify-content: space-between; }
+    .signature { text-align: center; width: 180px; }
+    .signature-line { border-top: 1px solid #000; margin-top: 40px; padding-top: 5px; font-size: 10px; }
+    .approved { color: #22c55e; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>مسير الرواتب الشهري</h1>
+    <p>شهر ${getMonthName(month)} ${year} | عدد الموظفين: ${allDetails.length}</p>
+  </div>
+  
+  <div class="summary-grid">
+    <div class="summary-card"><h3>الرواتب الأساسية</h3><div class="amount">${formatCurrency(totalBase)}</div></div>
+    <div class="summary-card"><h3>الساعات الإضافية</h3><div class="amount">${formatCurrency(totalOvertime)}</div></div>
+    <div class="summary-card"><h3>الحوافز</h3><div class="amount">${formatCurrency(totalIncentives)}</div></div>
+    <div class="summary-card"><h3>الخصومات</h3><div class="amount">${formatCurrency(totalDeductions)}</div></div>
+    <div class="summary-card"><h3>صافي الرواتب</h3><div class="amount">${formatCurrency(totalNet)}</div></div>
+  </div>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>الفرع</th>
+        <th>الموظف</th>
+        <th>الكود</th>
+        <th>المنصب</th>
+        <th>الأساسي</th>
+        <th>الإضافي</th>
+        <th>الحوافز</th>
+        <th>الخصومات</th>
+        <th>الصافي</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${allDetails.map((d, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${d.branchName}</td>
+          <td>${d.employeeName}</td>
+          <td>${d.employeeCode}</td>
+          <td>${d.position || '-'}</td>
+          <td>${formatCurrency(d.baseSalary)}</td>
+          <td>${formatCurrency(d.overtimeAmount)}</td>
+          <td>${formatCurrency(d.incentiveAmount)}</td>
+          <td>${formatCurrency(d.totalDeductions)}</td>
+          <td>${formatCurrency(d.netSalary)}</td>
+          <td class="${d.status === 'approved' || d.status === 'paid' ? 'approved' : ''}">${getPayrollStatusLabel(d.status)}</td>
+        </tr>
+      `).join('')}
+      <tr class="total-row">
+        <td colspan="5">الإجمالي</td>
+        <td>${formatCurrency(totalBase)}</td>
+        <td>${formatCurrency(totalOvertime)}</td>
+        <td>${formatCurrency(totalIncentives)}</td>
+        <td>${formatCurrency(totalDeductions)}</td>
+        <td>${formatCurrency(totalNet)}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <div class="footer">
+    <div class="signature"><div class="signature-line">المشرف العام: سالم الوادعي</div></div>
+    <div class="signature"><div class="signature-line">المدير: عمر المطيري</div></div>
+  </div>
+</body>
+</html>`;
+
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdf = await page.pdf({ format: 'A4', landscape: true, printBackground: true, margin: { top: '10mm', bottom: '10mm', left: '5mm', right: '5mm' } });
+  await browser.close();
+  return Buffer.from(pdf);
+}

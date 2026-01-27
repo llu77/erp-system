@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, DollarSign, Receipt, Award, Download, Loader2 } from 'lucide-react';
+import { FileText, DollarSign, Receipt, Award, Download, Loader2, TrendingUp, Users } from 'lucide-react';
 
 const MONTHS = [
   { value: '1', label: 'يناير' },
@@ -27,6 +27,8 @@ const YEARS = Array.from({ length: 5 }, (_, i) => ({
   label: String(currentYear - i),
 }));
 
+type ReportType = 'revenue' | 'expense' | 'bonus' | 'profitLoss' | 'payroll';
+
 export default function MonthlyReports() {
   const { toast } = useToast();
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
@@ -36,6 +38,8 @@ export default function MonthlyReports() {
   const revenueReport = trpc.scheduledReports.generateRevenueReport.useMutation();
   const expenseReport = trpc.scheduledReports.generateExpenseReport.useMutation();
   const bonusReport = trpc.scheduledReports.generateBonusReport.useMutation();
+  const profitLossReport = trpc.scheduledReports.profitLossReport.useMutation();
+  const payrollReport = trpc.scheduledReports.payrollReport.useMutation();
 
   const downloadPDF = (base64: string, filename: string) => {
     const byteCharacters = atob(base64);
@@ -55,7 +59,7 @@ export default function MonthlyReports() {
     URL.revokeObjectURL(url);
   };
 
-  const handleGenerateReport = async (reportType: 'revenue' | 'expense' | 'bonus') => {
+  const handleGenerateReport = async (reportType: ReportType) => {
     setLoadingReport(reportType);
     try {
       const input = { month: parseInt(month), year: parseInt(year) };
@@ -70,6 +74,12 @@ export default function MonthlyReports() {
           break;
         case 'bonus':
           result = await bonusReport.mutateAsync(input);
+          break;
+        case 'profitLoss':
+          result = await profitLossReport.mutateAsync(input);
+          break;
+        case 'payroll':
+          result = await payrollReport.mutateAsync(input);
           break;
       }
 
@@ -93,7 +103,25 @@ export default function MonthlyReports() {
 
   const reports = [
     {
-      id: 'revenue',
+      id: 'profitLoss' as ReportType,
+      title: 'تقرير الربح والخسارة (P&L)',
+      description: 'قائمة الدخل الشاملة: الإيرادات - المصاريف - الرواتب = صافي الربح',
+      icon: TrendingUp,
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-500/10',
+      badge: 'جديد',
+    },
+    {
+      id: 'payroll' as ReportType,
+      title: 'تقرير مسير الرواتب',
+      description: 'تفاصيل رواتب الموظفين: الأساسي + الإضافي + الحوافز - الخصومات',
+      icon: Users,
+      color: 'text-purple-500',
+      bgColor: 'bg-purple-500/10',
+      badge: 'جديد',
+    },
+    {
+      id: 'revenue' as ReportType,
       title: 'تقرير الإيرادات الشهري',
       description: 'إجمالي الإيرادات (كاش + شبكة) حسب الفرع والموظف مع الرسوم البيانية',
       icon: DollarSign,
@@ -101,7 +129,7 @@ export default function MonthlyReports() {
       bgColor: 'bg-green-500/10',
     },
     {
-      id: 'expense',
+      id: 'expense' as ReportType,
       title: 'تقرير المصاريف الشهري',
       description: 'تفاصيل المصاريف حسب الفئة والحالة مع إجمالي المعتمد والمصروف',
       icon: Receipt,
@@ -109,7 +137,7 @@ export default function MonthlyReports() {
       bgColor: 'bg-red-500/10',
     },
     {
-      id: 'bonus',
+      id: 'bonus' as ReportType,
       title: 'تقرير البونص الشهري',
       description: 'تفاصيل البونص الأسبوعي للموظفين حسب المستوى والفرع',
       icon: Award,
@@ -173,9 +201,14 @@ export default function MonthlyReports() {
       </Card>
 
       {/* قائمة التقارير */}
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {reports.map((report) => (
-          <Card key={report.id} className="hover:shadow-lg transition-shadow">
+          <Card key={report.id} className="hover:shadow-lg transition-shadow relative">
+            {'badge' in report && report.badge && (
+              <span className="absolute top-3 left-3 bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full">
+                {report.badge}
+              </span>
+            )}
             <CardHeader>
               <div className={`w-12 h-12 rounded-lg ${report.bgColor} flex items-center justify-center mb-4`}>
                 <report.icon className={`h-6 w-6 ${report.color}`} />
@@ -186,7 +219,7 @@ export default function MonthlyReports() {
             <CardContent>
               <Button
                 className="w-full"
-                onClick={() => handleGenerateReport(report.id as 'revenue' | 'expense' | 'bonus')}
+                onClick={() => handleGenerateReport(report.id)}
                 disabled={loadingReport !== null}
               >
                 {loadingReport === report.id ? (
@@ -213,8 +246,8 @@ export default function MonthlyReports() {
           <ul className="grid md:grid-cols-2 gap-2 text-sm text-muted-foreground">
             <li>✅ شعار Symbol الرسمي</li>
             <li>✅ ختم الشركة المعتمد</li>
-            <li>✅ توقيع المشرف العام</li>
-            <li>✅ توقيع المدير</li>
+            <li>✅ توقيع المشرف العام: سالم الوادعي</li>
+            <li>✅ توقيع المدير: عمر المطيري</li>
             <li>✅ تصميم احترافي موحد</li>
             <li>✅ رسوم بيانية توضيحية</li>
             <li>✅ جداول مفصلة</li>

@@ -3139,3 +3139,11 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إضافة صفحة التقارير الشهرية في لوحة التحكم (/monthly-reports)
 - [x] إضافة endpoints لتوليد التقارير (scheduledReports)
 - [x] اختبار التقارير
+
+
+## تقارير P&L ومسير الرواتب (طلب جديد)
+- [x] تقرير الربح والخسارة (P&L) الشهري
+- [x] تقرير مسير الرواتب الشهري
+- [x] إضافة endpoints في routers.ts
+- [x] تحديث واجهة MonthlyReports.tsx
+- [x] اختبارات vitest (23 اختبار ناجح)

@@ -4443,6 +4443,40 @@ ${discrepancyRows}
         };
       }),
 
+    // تقرير الربح والخسارة (P&L)
+    profitLossReport: adminProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2030),
+        branchId: z.number().optional()
+      }))
+      .mutation(async ({ input }) => {
+        const { generateProfitLossReport } = await import('./reports/monthlyReports');
+        const pdfBuffer = await generateProfitLossReport(input.month, input.year, input.branchId);
+        return { 
+          success: true, 
+          pdf: pdfBuffer.toString('base64'),
+          filename: `profit-loss-report-${input.year}-${input.month}.pdf`
+        };
+      }),
+
+    // تقرير مسير الرواتب
+    payrollReport: adminProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2030),
+        branchId: z.number().optional()
+      }))
+      .mutation(async ({ input }) => {
+        const { generatePayrollReport } = await import('./reports/monthlyReports');
+        const pdfBuffer = await generatePayrollReport(input.month, input.year, input.branchId);
+        return { 
+          success: true, 
+          pdf: pdfBuffer.toString('base64'),
+          filename: `payroll-report-${input.year}-${input.month}.pdf`
+        };
+      }),
+
     // الحصول على أفضل المنتجات
     topProducts: supervisorViewProcedure
       .input(z.object({
