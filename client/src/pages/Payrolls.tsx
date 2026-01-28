@@ -146,14 +146,23 @@ export default function Payrolls() {
     { branchId: selectedBranch!, year: selectedYear, month: selectedMonth },
     { enabled: !!selectedBranch && step === 'form' }
   );
+  
+  // جلب إعدادات رواتب الموظفين
+  const { data: salarySettings } = trpc.salarySettings.list.useQuery(
+    undefined,
+    { enabled: !!selectedBranch && step === 'form' }
+  );
 
   // تهيئة بيانات الموظفين عند تحميلهم مع السلف والفواتير السالبة والإجازات تلقائياً
   useEffect(() => {
     if (branchEmployees && branchEmployees.length > 0) {
       const initialData: EmployeePayrollData[] = branchEmployees.map((emp: any) => {
-        const baseSalary = BASE_SALARY;
-        const overtimeEnabled = false;
-        const overtimeAmount = 0;
+        // جلب إعدادات الراتب للموظف من قاعدة البيانات
+        const empSettings = salarySettings?.find(s => s.employeeId === emp.id);
+        const baseSalary = empSettings?.baseSalary ? parseFloat(empSettings.baseSalary) : BASE_SALARY;
+        // استخدام إعدادات الساعات الإضافية المحفوظة للموظف
+        const overtimeEnabled = empSettings?.overtimeEnabled || false;
+        const overtimeAmount = overtimeEnabled ? OVERTIME_AMOUNT : 0;
         const workDays = 30;
         const absentDays = 0;
         const absentDeduction = 0;
@@ -179,11 +188,13 @@ export default function Payrolls() {
           days: leave.days
         })) || [];
         
-        // حساب خصم الإجازة بناءً على نوعها (بدون ساعات إضافية افتراضياً)
-        // الراتب اليومي = الراتب الأساسي / 30 = 66.67 ر.س
+        // حساب خصم الإجازة بناءً على نوعها مع مراعاة الساعات الإضافية
+        // الراتب اليومي = (الراتب الأساسي + الساعات الإضافية) / 30
+        // مثال: مع ساعات إضافية: (2000 + 1000) / 30 = 100 ر.س/يوم
+        // بدون ساعات إضافية: 2000 / 30 = 66.67 ر.س/يوم
         let unpaidLeaveDeduction = 0;
         if (leavesData.length > 0) {
-          const dailySalary = baseSalary / 30; // 66.67 ر.س بدون ساعات إضافية
+          const dailySalary = (baseSalary + overtimeAmount) / 30; // يشمل الساعات الإضافية إذا كانت مفعلة
           for (const leave of leavesData) {
             const leaveType = leave.type?.toLowerCase().trim();
             // إجازة سنوية أو مرضية - مدفوعة بالكامل
@@ -200,9 +211,9 @@ export default function Payrolls() {
           }
         }
         
-        const grossSalary = baseSalary;
+        const grossSalary = baseSalary + overtimeAmount;
         const totalDeductions = advanceDeduction + negativeInvoicesDeduction + unpaidLeaveDeduction;
-        const netSalary = baseSalary - totalDeductions;
+        const netSalary = grossSalary - totalDeductions;
 
         return {
           employeeId: emp.id,
@@ -211,7 +222,7 @@ export default function Payrolls() {
           position: emp.position || '',
           baseSalary,
           overtimeEnabled,
-          overtimeAmount,
+          overtimeAmount: overtimeAmount,
           workDays,
           absentDays,
           absentDeduction,
@@ -230,7 +241,7 @@ export default function Payrolls() {
       });
       setEmployeesData(initialData);
     }
-  }, [branchEmployees, branchAdvances, deductionsPreview]);
+  }, [branchEmployees, branchAdvances, deductionsPreview, salarySettings]);
 
   // حساب الراتب لموظف معين
   const calculateSalary = (data: EmployeePayrollData): EmployeePayrollData => {

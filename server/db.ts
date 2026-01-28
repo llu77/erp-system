@@ -2095,11 +2095,13 @@ export async function createPayrollWithDetails(
     }
     
     // حساب خصم الفواتير السالبة
-    let negativeInvoicesDeduction = 0;
+    // ملاحظة: الفواتير السالبة موجودة بالفعل في d.negativeInvoicesDeduction من الواجهة
+    // لذلك نستخدمها فقط لتحديث التفاصيل وليس لإعادة الحساب
+    let negativeInvoicesDeduction = parseFloat(d.negativeInvoicesDeduction) || 0;
     let negativeInvoicesDetails = '';
     
     if (empNegativeInvoices && empNegativeInvoices.total > 0) {
-      negativeInvoicesDeduction = empNegativeInvoices.total;
+      // استخدام القيمة المرسلة من الواجهة (لأنها محسوبة بالفعل)
       negativeInvoicesDetails = JSON.stringify(empNegativeInvoices.invoices.map(inv => ({
         invoiceNumber: inv.invoiceNumber,
         amount: inv.amount,
@@ -2108,11 +2110,12 @@ export async function createPayrollWithDetails(
       })));
     }
     
-    // تحديث الخصومات والصافي (مع الإجازات والفواتير السالبة)
+    // تحديث الخصومات والصافي (فقط الإجازات - الفواتير السالبة محسوبة بالفعل في الواجهة)
     const currentTotalDeductions = parseFloat(d.totalDeductions) || 0;
     const currentNetSalary = parseFloat(d.netSalary) || 0;
-    const newTotalDeductions = currentTotalDeductions + leaveDeduction + negativeInvoicesDeduction;
-    const newNetSalary = currentNetSalary - leaveDeduction - negativeInvoicesDeduction;
+    // إضافة خصم الإجازة فقط (الفواتير السالبة موجودة بالفعل في currentTotalDeductions)
+    const newTotalDeductions = currentTotalDeductions + leaveDeduction;
+    const newNetSalary = currentNetSalary - leaveDeduction;
     
     return {
       payrollId: newPayroll.id,
