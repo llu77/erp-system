@@ -8338,6 +8338,264 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         
         return await db.getEmployeeDetailsForPortalAdmin(input.employeeId);
       }),
+
+    // رفع صورة الموظف
+    uploadEmployeePhoto: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+        employeeId: z.number(),
+        photoData: z.string(), // Base64 encoded image
+        fileName: z.string(),
+        contentType: z.string().default('image/jpeg'),
+      }))
+      .mutation(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        try {
+          const { storagePut } = await import('./storage');
+          
+          // تحويل Base64 إلى Buffer
+          const base64Data = input.photoData.replace(/^data:image\/\w+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          
+          // إنشاء مسار فريد للصورة
+          const timestamp = Date.now();
+          const randomSuffix = Math.random().toString(36).substring(2, 8);
+          const fileKey = `employees/${input.employeeId}/photo-${timestamp}-${randomSuffix}.${input.fileName.split('.').pop() || 'jpg'}`;
+          
+          // رفع الصورة إلى S3
+          const { url } = await storagePut(fileKey, buffer, input.contentType);
+          
+          // تحديث قاعدة البيانات
+          const result = await db.updateEmployeePhoto(input.employeeId, url);
+          
+          if (!result.success) {
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: result.error || 'فشل في تحديث صورة الموظف' });
+          }
+          
+          return { success: true, photoUrl: url };
+        } catch (error) {
+          console.error('Error uploading employee photo:', error);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في رفع صورة الموظف' });
+        }
+      }),
+
+    // حذف صورة الموظف
+    deleteEmployeePhoto: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+        employeeId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        const result = await db.updateEmployeePhoto(input.employeeId, null);
+        
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: result.error || 'فشل في حذف صورة الموظف' });
+        }
+        
+        return { success: true };
+      }),
+
+    // تحديث بيانات الموظف الكاملة
+    updateEmployeeData: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+        employeeId: z.number(),
+        data: z.object({
+          // البيانات الشخصية
+          name: z.string().optional(),
+          phone: z.string().optional(),
+          email: z.string().email().optional().or(z.literal('')),
+          position: z.string().optional(),
+          branchId: z.number().optional(),
+          // بيانات الوثائق
+          iqamaNumber: z.string().optional(),
+          iqamaExpiryDate: z.string().optional().nullable(),
+          healthCertExpiryDate: z.string().optional().nullable(),
+          contractExpiryDate: z.string().optional().nullable(),
+          // حالة الموظف
+          isActive: z.boolean().optional(),
+          hasPortalAccess: z.boolean().optional(),
+          isSupervisor: z.boolean().optional(),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        // تحويل التواريخ من string إلى Date
+        const processedData: Record<string, unknown> = { ...input.data };
+        
+        if (input.data.iqamaExpiryDate) {
+          processedData.iqamaExpiryDate = new Date(input.data.iqamaExpiryDate);
+        } else if (input.data.iqamaExpiryDate === null) {
+          processedData.iqamaExpiryDate = null;
+        }
+        
+        if (input.data.healthCertExpiryDate) {
+          processedData.healthCertExpiryDate = new Date(input.data.healthCertExpiryDate);
+        } else if (input.data.healthCertExpiryDate === null) {
+          processedData.healthCertExpiryDate = null;
+        }
+        
+        if (input.data.contractExpiryDate) {
+          processedData.contractExpiryDate = new Date(input.data.contractExpiryDate);
+        } else if (input.data.contractExpiryDate === null) {
+          processedData.contractExpiryDate = null;
+        }
+        
+        const result = await db.updateEmployeeFullData(
+          input.employeeId,
+          input.adminId,
+          processedData as Parameters<typeof db.updateEmployeeFullData>[2]
+        );
+        
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: result.error || 'فشل في تحديث بيانات الموظف' });
+        }
+        
+        return { success: true };
+      }),
+
+    // جلب الموظفين مع الصور (مع pagination)
+    getEmployeesWithPhotos: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+        branchId: z.number().optional(),
+        search: z.string().optional(),
+        page: z.number().default(1),
+        limit: z.number().default(20),
+      }))
+      .query(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        return await db.getEmployeesWithPhotos(
+          input.branchId,
+          input.search,
+          input.page,
+          input.limit
+        );
+      }),
+
+    // جلب الوثائق المنتهية بالتفصيل
+    getExpiringDocumentsDetailed: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+        daysBeforeExpiry: z.number().default(30),
+      }))
+      .query(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        return await db.getExpiringDocumentsDetailed(input.daysBeforeExpiry);
+      }),
+
+    // إرسال تذكير بانتهاء وثيقة
+    sendDocumentReminder: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+        employeeId: z.number(),
+        documentType: z.enum(['iqama', 'healthCert', 'contract']),
+        reminderType: z.enum(['email', 'sms', 'system']),
+        message: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        // جلب بيانات الموظف
+        const empDetails = await db.getEmployeeDetailsForPortalAdmin(input.employeeId);
+        if (!empDetails) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
+        }
+        
+        const documentTypeNames: Record<string, string> = {
+          iqama: 'الإقامة',
+          healthCert: 'الشهادة الصحية',
+          contract: 'العقد',
+        };
+        
+        const defaultMessage = `تذكير: وثيقة ${documentTypeNames[input.documentType]} الخاصة بك قريبة الانتهاء أو منتهية. يرجى تجديدها في أقرب وقت.`;
+        
+        // إرسال التذكير حسب النوع
+        if (input.reminderType === 'email' && empDetails.employee.email) {
+          try {
+            const emailService = await import('./notifications/emailNotificationService');
+            // استخدام دالة إشعار انتهاء الوثائق المناسبة
+            if (input.documentType === 'iqama') {
+              await emailService.notifyIqamaExpiry({
+                employeeName: empDetails.employee.name,
+                employeeCode: empDetails.employee.code,
+                iqamaNumber: empDetails.documents.iqamaNumber || '',
+                branchName: empDetails.employee.branchName,
+                expiryDate: empDetails.documents.iqamaExpiryDate ? new Date(empDetails.documents.iqamaExpiryDate) : new Date(),
+                daysRemaining: 0,
+                branchId: empDetails.employee.branchId,
+              });
+            } else if (input.documentType === 'healthCert') {
+              await emailService.notifyHealthCertExpiry({
+                employeeName: empDetails.employee.name,
+                employeeCode: empDetails.employee.code,
+                branchName: empDetails.employee.branchName,
+                expiryDate: empDetails.documents.healthCertExpiryDate ? new Date(empDetails.documents.healthCertExpiryDate) : new Date(),
+                daysRemaining: 0,
+                branchId: empDetails.employee.branchId,
+              });
+            } else if (input.documentType === 'contract') {
+              await emailService.notifyContractExpiry({
+                employeeName: empDetails.employee.name,
+                employeeCode: empDetails.employee.code,
+                branchName: empDetails.employee.branchName,
+                expiryDate: empDetails.documents.contractExpiryDate ? new Date(empDetails.documents.contractExpiryDate) : new Date(),
+                daysRemaining: 0,
+                branchId: empDetails.employee.branchId,
+                reminderType: 'one_month',
+              });
+            }
+          } catch (error) {
+            console.error('Error sending email reminder:', error);
+          }
+        }
+        
+        // إنشاء سجل التذكير
+        const result = await db.createDocumentReminder({
+          employeeId: input.employeeId,
+          documentType: input.documentType,
+          reminderType: input.reminderType,
+          sentTo: empDetails.employee.email || empDetails.employee.phone || 'system',
+          sentBy: input.adminId,
+          message: input.message || defaultMessage,
+        });
+        
+        if (!result.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: result.error || 'فشل في إرسال التذكير' });
+        }
+        
+        return { success: true };
+      }),
   }),
 
   // ==================== التقارير الأسبوعية التلقائية ====================

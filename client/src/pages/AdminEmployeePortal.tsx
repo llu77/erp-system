@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -9,6 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { 
   Users, 
@@ -48,7 +51,15 @@ import {
   Activity,
   Shield,
   Settings,
-  Home
+  Home,
+  Camera,
+  Upload,
+  Edit,
+  Save,
+  X,
+  Send,
+  AlertTriangle,
+  Image as ImageIcon
 } from 'lucide-react';
 
 // أنواع الطلبات
@@ -89,6 +100,90 @@ interface AdminInfo {
   accessAllBranches: boolean;
 }
 
+// مكون صورة الموظف مع إمكانية الرفع
+function EmployeeAvatar({ 
+  photoUrl, 
+  name, 
+  size = 'md',
+  editable = false,
+  onUpload
+}: { 
+  photoUrl?: string | null; 
+  name: string; 
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  editable?: boolean;
+  onUpload?: (file: File) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imageError, setImageError] = useState(false);
+  
+  const sizeClasses = {
+    sm: 'h-10 w-10',
+    md: 'h-16 w-16',
+    lg: 'h-24 w-24',
+    xl: 'h-32 w-32'
+  };
+  
+  const iconSizes = {
+    sm: 'h-5 w-5',
+    md: 'h-8 w-8',
+    lg: 'h-12 w-12',
+    xl: 'h-16 w-16'
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onUpload) {
+      // التحقق من نوع الملف
+      if (!file.type.startsWith('image/')) {
+        toast.error('يرجى اختيار ملف صورة صالح');
+        return;
+      }
+      // التحقق من حجم الملف (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('حجم الصورة يجب أن لا يتجاوز 5 ميجابايت');
+        return;
+      }
+      onUpload(file);
+    }
+  };
+
+  return (
+    <div className="relative group">
+      <div className={`${sizeClasses[size]} rounded-full overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center`}>
+        {photoUrl && !imageError ? (
+          <img 
+            src={photoUrl} 
+            alt={name}
+            className="h-full w-full object-cover"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <UserCircle className={`${iconSizes[size]} text-white`} />
+        )}
+      </div>
+      
+      {editable && (
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          >
+            <Camera className="h-6 w-6 text-white" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function AdminEmployeePortal() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -101,13 +196,25 @@ export default function AdminEmployeePortal() {
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [reviewNotes, setReviewNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // حالات التعديل
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState<any>({});
+  const [isUploading, setIsUploading] = useState(false);
+  
+  // حالات التذكير
+  const [showReminderDialog, setShowReminderDialog] = useState(false);
+  const [reminderEmployee, setReminderEmployee] = useState<any>(null);
+  const [reminderDocType, setReminderDocType] = useState<'iqama' | 'healthCert' | 'contract'>('iqama');
+  const [reminderType, setReminderType] = useState<'email' | 'sms' | 'system'>('system');
+  const [reminderMessage, setReminderMessage] = useState('');
+  const [isSendingReminder, setIsSendingReminder] = useState(false);
 
   // جلب معلومات الأدمن من localStorage
   const adminInfo: AdminInfo | null = useMemo(() => {
     const stored = localStorage.getItem('employeeInfo');
     if (stored) {
       const info = JSON.parse(stored);
-      // التحقق من أن المستخدم أدمن أو مشرف
       if (info.isAdmin || info.isSupervisor) {
         return info;
       }
@@ -115,16 +222,15 @@ export default function AdminEmployeePortal() {
     return null;
   }, []);
 
-  // استخدام portalAdmin APIs بدلاً من APIs القديمة
   const adminId = adminInfo?.id || 0;
 
-  // جلب الفروع باستخدام portalAdmin
+  // جلب الفروع
   const { data: branches, isLoading: branchesLoading } = trpc.portalAdmin.getBranches.useQuery(
     { adminId },
     { enabled: !!adminInfo }
   );
 
-  // جلب الموظفين باستخدام portalAdmin
+  // جلب الموظفين
   const { 
     data: employees, 
     isLoading: employeesLoading, 
@@ -138,7 +244,7 @@ export default function AdminEmployeePortal() {
     { enabled: !!adminInfo }
   );
 
-  // جلب الطلبات باستخدام portalAdmin
+  // جلب الطلبات
   const { 
     data: requests, 
     isLoading: requestsLoading, 
@@ -153,19 +259,66 @@ export default function AdminEmployeePortal() {
     { enabled: !!adminInfo }
   );
 
-  // جلب الوثائق المنتهية باستخدام portalAdmin
-  const { data: expiringDocs } = trpc.portalAdmin.getExpiringDocuments.useQuery(
+  // جلب الوثائق المنتهية
+  const { data: expiringDocs, refetch: refetchExpiringDocs } = trpc.portalAdmin.getExpiringDocuments.useQuery(
     { adminId },
     { enabled: !!adminInfo }
   );
 
-  // جلب إحصائيات الداشبورد باستخدام portalAdmin
+  // جلب إحصائيات الداشبورد
   const { data: dashboardStatsData } = trpc.portalAdmin.getDashboardStats.useQuery(
     { adminId },
     { enabled: !!adminInfo }
   );
 
-  // حساب إحصائيات الطلبات من البيانات المتاحة
+  // Mutations
+  const updateStatusMutation = trpc.portalAdmin.updateRequestStatus.useMutation({
+    onSuccess: () => {
+      refetchRequests();
+      setShowRequestDialog(false);
+      setSelectedRequest(null);
+      setReviewNotes('');
+      toast.success('تم تحديث حالة الطلب بنجاح');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'حدث خطأ أثناء تحديث الطلب');
+    }
+  });
+
+  const uploadPhotoMutation = trpc.portalAdmin.uploadEmployeePhoto.useMutation({
+    onSuccess: () => {
+      refetchEmployees();
+      toast.success('تم رفع الصورة بنجاح');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'حدث خطأ أثناء رفع الصورة');
+    }
+  });
+
+  const updateEmployeeMutation = trpc.portalAdmin.updateEmployeeData.useMutation({
+    onSuccess: () => {
+      refetchEmployees();
+      setIsEditing(false);
+      toast.success('تم تحديث بيانات الموظف بنجاح');
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'حدث خطأ أثناء تحديث البيانات');
+    }
+  });
+
+  const sendReminderMutation = trpc.portalAdmin.sendDocumentReminder.useMutation({
+    onSuccess: () => {
+      setShowReminderDialog(false);
+      setReminderEmployee(null);
+      setReminderMessage('');
+      toast.success('تم إرسال التذكير بنجاح');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'حدث خطأ أثناء إرسال التذكير');
+    }
+  });
+
+  // حساب الإحصائيات
   const requestStats = useMemo(() => {
     if (!requests) return { total: 0, pending: 0, approved: 0, rejected: 0 };
     return {
@@ -176,20 +329,8 @@ export default function AdminEmployeePortal() {
     };
   }, [requests]);
 
-  // Mutation للموافقة/الرفض باستخدام portalAdmin
-  const updateStatusMutation = trpc.portalAdmin.updateRequestStatus.useMutation({
-    onSuccess: () => {
-      refetchRequests();
-      setShowRequestDialog(false);
-      setSelectedRequest(null);
-      setReviewNotes('');
-    },
-  });
-
-  // فلترة الموظفين (الفلترة تتم في الخادم الآن)
   const filteredEmployees = employees || [];
 
-  // إحصائيات الداشبورد
   const dashboardStats = useMemo(() => {
     if (dashboardStatsData) {
       return {
@@ -204,7 +345,6 @@ export default function AdminEmployeePortal() {
       };
     }
     
-    // Fallback to calculated stats
     const totalEmployees = employees?.length || 0;
     const activeEmployees = employees?.filter((e: any) => e.isActive).length || 0;
     const pendingRequests = requestStats?.pending || 0;
@@ -244,6 +384,93 @@ export default function AdminEmployeePortal() {
     }
   };
 
+  // رفع صورة الموظف
+  const handlePhotoUpload = async (file: File, employeeId: number) => {
+    setIsUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        await uploadPhotoMutation.mutateAsync({
+          adminId,
+          employeeId,
+          photoData: base64,
+          fileName: file.name,
+          contentType: file.type,
+        });
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      setIsUploading(false);
+      toast.error('حدث خطأ أثناء رفع الصورة');
+    }
+  };
+
+  // بدء التعديل
+  const startEditing = (employee: any) => {
+    setEditFormData({
+      name: employee.name || '',
+      phone: employee.phone || '',
+      email: employee.email || '',
+      position: employee.position || '',
+      nationality: employee.nationality || '',
+      iqamaNumber: employee.iqamaNumber || '',
+      iqamaExpiryDate: employee.iqamaExpiryDate ? new Date(employee.iqamaExpiryDate).toISOString().split('T')[0] : '',
+      healthCertExpiryDate: employee.healthCertExpiryDate ? new Date(employee.healthCertExpiryDate).toISOString().split('T')[0] : '',
+      contractExpiryDate: employee.contractExpiryDate ? new Date(employee.contractExpiryDate).toISOString().split('T')[0] : '',
+      bankName: employee.bankName || '',
+      iban: employee.iban || '',
+      isActive: employee.isActive ?? true,
+    });
+    setIsEditing(true);
+  };
+
+  // حفظ التعديلات
+  const saveChanges = async (employeeId: number) => {
+    try {
+      await updateEmployeeMutation.mutateAsync({
+        adminId,
+        employeeId,
+        data: {
+          ...editFormData,
+          iqamaExpiryDate: editFormData.iqamaExpiryDate ? new Date(editFormData.iqamaExpiryDate).getTime() : undefined,
+          healthCertExpiryDate: editFormData.healthCertExpiryDate ? new Date(editFormData.healthCertExpiryDate).getTime() : undefined,
+          contractExpiryDate: editFormData.contractExpiryDate ? new Date(editFormData.contractExpiryDate).getTime() : undefined,
+        },
+      });
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
+
+  // إرسال تذكير
+  const handleSendReminder = async () => {
+    if (!reminderEmployee || !adminInfo) return;
+    
+    setIsSendingReminder(true);
+    try {
+      await sendReminderMutation.mutateAsync({
+        adminId,
+        employeeId: reminderEmployee.id,
+        documentType: reminderDocType,
+        reminderType,
+        message: reminderMessage,
+      });
+    } finally {
+      setIsSendingReminder(false);
+    }
+  };
+
+  // فتح نافذة التذكير
+  const openReminderDialog = (employee: any, docType: 'iqama' | 'healthCert' | 'contract') => {
+    setReminderEmployee(employee);
+    setReminderDocType(docType);
+    const docNames = { iqama: 'الإقامة', healthCert: 'الشهادة الصحية', contract: 'العقد' };
+    setReminderMessage(`تذكير: وثيقة ${docNames[docType]} الخاصة بك قريبة الانتهاء أو منتهية. يرجى تجديدها في أقرب وقت.`);
+    setShowReminderDialog(true);
+  };
+
   // تسجيل الخروج
   const handleLogout = () => {
     localStorage.removeItem('employeeInfo');
@@ -251,54 +478,56 @@ export default function AdminEmployeePortal() {
     setLocation('/employee-login');
   };
 
-  // التحقق من الصلاحيات
+  // التحقق من تسجيل الدخول
   if (!adminInfo) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center" dir="rtl">
-        <Card className="bg-slate-800/50 border-slate-700 p-8 text-center">
-          <Shield className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">غير مصرح</h2>
-          <p className="text-slate-400 mb-4">ليس لديك صلاحية الوصول لهذه الصفحة</p>
-          <Button onClick={() => setLocation('/employee-login')} className="bg-amber-500 hover:bg-amber-600">
-            العودة لتسجيل الدخول
-          </Button>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <Card className="bg-slate-800/50 border-slate-700 max-w-md w-full">
+          <CardContent className="p-8 text-center">
+            <Shield className="h-16 w-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white mb-2">غير مصرح</h2>
+            <p className="text-slate-400 mb-6">يجب تسجيل الدخول كمسؤول للوصول لهذه الصفحة</p>
+            <Button onClick={() => setLocation('/employee-login')} className="bg-amber-500 hover:bg-amber-600">
+              تسجيل الدخول
+            </Button>
+          </CardContent>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
-      <header className="bg-slate-800/80 backdrop-blur-md border-b border-slate-700/50 sticky top-0 z-50 shadow-lg">
+      <header className="bg-slate-800/80 backdrop-blur-sm border-b border-slate-700 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-2 rounded-xl shadow-lg">
-                <Shield className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white">لوحة تحكم الأدمن</h1>
-                <p className="text-xs text-slate-400">إدارة الموظفين والطلبات</p>
-              </div>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setLocation('/employee-portal')}
+              className="text-slate-400 hover:text-white"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+            
+            <div className="text-center">
+              <h1 className="text-xl font-bold text-white">لوحة تحكم الأدمن</h1>
+              <p className="text-xs text-slate-400">إدارة الموظفين والطلبات</p>
             </div>
             
-            <div className="flex items-center gap-4">
-              <div className="text-left hidden sm:block">
-                <p className="text-sm font-medium text-white">{adminInfo.name}</p>
-                <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs">
-                  {adminInfo.isAdmin ? 'مدير النظام' : 'مشرف'}
-                </Badge>
-              </div>
-              
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
                 onClick={handleLogout}
-                className="text-slate-400 hover:text-white hover:bg-slate-700"
+                className="text-slate-400 hover:text-red-400"
               >
                 <LogOut className="h-5 w-5" />
               </Button>
+              <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-2 rounded-lg">
+                <Shield className="h-5 w-5 text-white" />
+              </div>
             </div>
           </div>
         </div>
@@ -307,37 +536,22 @@ export default function AdminEmployeePortal() {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          {/* Navigation Tabs */}
           <TabsList className="bg-slate-800/50 border border-slate-700 p-1 flex-wrap h-auto gap-1">
-            <TabsTrigger value="dashboard" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white gap-2">
-              <Home className="h-4 w-4" />
-              <span className="hidden sm:inline">الرئيسية</span>
+            <TabsTrigger value="dashboard" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
+              <Home className="h-4 w-4 ml-2" />
+              الرئيسية
             </TabsTrigger>
-            <TabsTrigger value="requests" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white gap-2">
-              <ClipboardList className="h-4 w-4" />
-              <span className="hidden sm:inline">الطلبات</span>
-              {dashboardStats.pendingRequests > 0 && (
-                <Badge className="bg-red-500 text-white text-xs px-1.5 py-0">
-                  {dashboardStats.pendingRequests}
-                </Badge>
-              )}
+            <TabsTrigger value="employees" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
+              <Users className="h-4 w-4 ml-2" />
+              الموظفين
             </TabsTrigger>
-            <TabsTrigger value="employees" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white gap-2">
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">الموظفين</span>
+            <TabsTrigger value="requests" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
+              <FileText className="h-4 w-4 ml-2" />
+              الطلبات
             </TabsTrigger>
-            <TabsTrigger value="documents" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">الوثائق</span>
-              {dashboardStats.expiredDocs > 0 && (
-                <Badge className="bg-red-500 text-white text-xs px-1.5 py-0">
-                  {dashboardStats.expiredDocs}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="reports" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white gap-2">
-              <BarChart3 className="h-4 w-4" />
-              <span className="hidden sm:inline">التقارير</span>
+            <TabsTrigger value="documents" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white">
+              <IdCard className="h-4 w-4 ml-2" />
+              الوثائق
             </TabsTrigger>
           </TabsList>
 
@@ -345,76 +559,170 @@ export default function AdminEmployeePortal() {
           <TabsContent value="dashboard" className="space-y-6">
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 border-blue-500/30">
+              <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-blue-300">إجمالي الموظفين</p>
-                      <p className="text-3xl font-bold text-white">{dashboardStats.totalEmployees}</p>
-                      <p className="text-xs text-blue-400">{dashboardStats.activeEmployees} نشط</p>
+                      <p className="text-blue-400 text-sm">إجمالي الموظفين</p>
+                      <p className="text-2xl font-bold text-white">{dashboardStats.totalEmployees}</p>
+                      <p className="text-xs text-slate-400">{dashboardStats.activeEmployees} نشط</p>
                     </div>
-                    <Users className="h-10 w-10 text-blue-400" />
+                    <Users className="h-10 w-10 text-blue-500" />
                   </div>
                 </CardContent>
               </Card>
-
-              <Card className="bg-gradient-to-br from-amber-600/20 to-amber-800/20 border-amber-500/30">
+              
+              <Card className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border-amber-500/30">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-amber-300">طلبات معلقة</p>
-                      <p className="text-3xl font-bold text-white">{dashboardStats.pendingRequests}</p>
-                      <p className="text-xs text-amber-400">تحتاج مراجعة</p>
+                      <p className="text-amber-400 text-sm">طلبات معلقة</p>
+                      <p className="text-2xl font-bold text-white">{dashboardStats.pendingRequests}</p>
                     </div>
-                    <Clock className="h-10 w-10 text-amber-400" />
+                    <Clock className="h-10 w-10 text-amber-500" />
                   </div>
                 </CardContent>
               </Card>
-
-              <Card className="bg-gradient-to-br from-red-600/20 to-red-800/20 border-red-500/30">
+              
+              <Card className="bg-gradient-to-br from-red-500/20 to-red-600/10 border-red-500/30">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-red-300">وثائق منتهية</p>
-                      <p className="text-3xl font-bold text-white">{dashboardStats.expiredDocs}</p>
-                      <p className="text-xs text-red-400">{dashboardStats.expiringDocsCount} قريبة الانتهاء</p>
+                      <p className="text-red-400 text-sm">وثائق منتهية</p>
+                      <p className="text-2xl font-bold text-white">{dashboardStats.expiredDocs}</p>
                     </div>
-                    <AlertCircle className="h-10 w-10 text-red-400" />
+                    <AlertCircle className="h-10 w-10 text-red-500" />
                   </div>
                 </CardContent>
               </Card>
-
-              <Card className="bg-gradient-to-br from-emerald-600/20 to-emerald-800/20 border-emerald-500/30">
+              
+              <Card className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border-emerald-500/30">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-emerald-300">طلبات موافق عليها</p>
-                      <p className="text-3xl font-bold text-white">{dashboardStats.approvedRequests}</p>
-                      <p className="text-xs text-emerald-400">من {dashboardStats.totalRequests} طلب</p>
+                      <p className="text-emerald-400 text-sm">طلبات موافق عليها</p>
+                      <p className="text-2xl font-bold text-white">{dashboardStats.approvedRequests}</p>
                     </div>
-                    <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+                    <CheckCircle2 className="h-10 w-10 text-emerald-500" />
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Quick Actions & Recent Activity */}
+            {/* Quick Actions & Alerts */}
             <div className="grid md:grid-cols-2 gap-6">
-              {/* الطلبات الأخيرة */}
+              {/* الوثائق المنتهية */}
               <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader className="pb-3">
+                <CardHeader>
                   <CardTitle className="text-white flex items-center gap-2">
-                    <ClipboardList className="h-5 w-5 text-amber-500" />
-                    أحدث الطلبات المعلقة
+                    <AlertTriangle className="h-5 w-5 text-red-500" />
+                    تنبيهات الوثائق
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[300px]">
-                    {requestsLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
+                    {(!expiringDocs?.expired?.iqama?.length && !expiringDocs?.expired?.healthCert?.length && !expiringDocs?.expired?.contract?.length && !expiringDocs?.expiring?.iqama?.length && !expiringDocs?.expiring?.healthCert?.length && !expiringDocs?.expiring?.contract?.length) ? (
+                      <div className="text-center py-8 text-slate-400">
+                        <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-emerald-500" />
+                        <p>لا توجد وثائق منتهية أو قريبة الانتهاء</p>
                       </div>
-                    ) : requests?.filter((r: any) => r.status === 'pending').slice(0, 5).length === 0 ? (
+                    ) : (
+                      <div className="space-y-3">
+                        {/* الوثائق المنتهية */}
+                        {expiringDocs?.expired?.iqama?.map((emp: any) => (
+                          <div key={`iqama-${emp.id}`} className="p-3 bg-red-500/10 rounded-lg border border-red-500/30 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size="sm" />
+                              <div>
+                                <span className="font-medium text-white">{emp.name}</span>
+                                <p className="text-xs text-red-400">إقامة منتهية - {emp.branchName}</p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openReminderDialog(emp, 'iqama')}
+                              className="text-amber-400 hover:text-amber-300"
+                            >
+                              <Bell className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        {expiringDocs?.expired?.healthCert?.map((emp: any) => (
+                          <div key={`health-${emp.id}`} className="p-3 bg-red-500/10 rounded-lg border border-red-500/30 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size="sm" />
+                              <div>
+                                <span className="font-medium text-white">{emp.name}</span>
+                                <p className="text-xs text-red-400">شهادة صحية منتهية - {emp.branchName}</p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openReminderDialog(emp, 'healthCert')}
+                              className="text-amber-400 hover:text-amber-300"
+                            >
+                              <Bell className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        {expiringDocs?.expired?.contract?.map((emp: any) => (
+                          <div key={`contract-${emp.id}`} className="p-3 bg-red-500/10 rounded-lg border border-red-500/30 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size="sm" />
+                              <div>
+                                <span className="font-medium text-white">{emp.name}</span>
+                                <p className="text-xs text-red-400">عقد منتهي - {emp.branchName}</p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openReminderDialog(emp, 'contract')}
+                              className="text-amber-400 hover:text-amber-300"
+                            >
+                              <Bell className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        {/* الوثائق قريبة الانتهاء */}
+                        {expiringDocs?.expiring?.iqama?.slice(0, 5).map((emp: any) => (
+                          <div key={`iqama-exp-${emp.id}`} className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/30 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size="sm" />
+                              <div>
+                                <span className="font-medium text-white">{emp.name}</span>
+                                <p className="text-xs text-amber-400">إقامة قريبة الانتهاء - {emp.branchName}</p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openReminderDialog(emp, 'iqama')}
+                              className="text-amber-400 hover:text-amber-300"
+                            >
+                              <Bell className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+
+              {/* آخر الطلبات */}
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-amber-500" />
+                    آخر الطلبات المعلقة
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[300px]">
+                    {!requests?.filter((r: any) => r.status === 'pending').length ? (
                       <div className="text-center py-8 text-slate-400">
                         <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-emerald-500" />
                         <p>لا توجد طلبات معلقة</p>
@@ -436,15 +744,9 @@ export default function AdminEmployeePortal() {
                                 {STATUS_NAMES[request.status]}
                               </Badge>
                             </div>
-                            <div className="flex items-center gap-4 text-sm text-slate-400">
-                              <span className="flex items-center gap-1">
-                                <FileText className="h-3 w-3" />
-                                {REQUEST_TYPE_NAMES[request.requestType]}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {new Date(request.createdAt).toLocaleDateString('ar-SA')}
-                              </span>
+                            <div className="flex items-center gap-4 text-xs text-slate-400">
+                              <span>{REQUEST_TYPE_NAMES[request.requestType]}</span>
+                              <span>{new Date(request.createdAt).toLocaleDateString('ar-SA')}</span>
                             </div>
                           </div>
                         ))}
@@ -453,77 +755,114 @@ export default function AdminEmployeePortal() {
                   </ScrollArea>
                 </CardContent>
               </Card>
+            </div>
+          </TabsContent>
 
-              {/* تنبيهات الوثائق */}
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Bell className="h-5 w-5 text-red-500" />
-                    تنبيهات الوثائق
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[300px]">
-                    {!expiringDocs ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
+          {/* Employees Tab */}
+          <TabsContent value="employees" className="space-y-4">
+            {/* Search & Filter */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardContent className="p-4">
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex-1 min-w-[250px]">
+                    <div className="relative">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="بحث بالاسم أو الكود..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pr-10 bg-slate-700 border-slate-600 text-white"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="w-[200px]">
+                    <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                      <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                        <SelectValue placeholder="الفرع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع الفروع</SelectItem>
+                        {branches?.map((branch: any) => (
+                          <SelectItem key={branch.id} value={branch.id.toString()}>
+                            {branch.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                    onClick={() => refetchEmployees()}
+                  >
+                    <RefreshCw className="h-4 w-4 ml-2" />
+                    تحديث
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Employees Grid */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {employeesLoading ? (
+                <div className="col-span-full flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+                </div>
+              ) : filteredEmployees.length === 0 ? (
+                <div className="col-span-full text-center py-8 text-slate-400">
+                  <Users className="h-12 w-12 mx-auto mb-2" />
+                  <p>لا يوجد موظفين</p>
+                </div>
+              ) : (
+                filteredEmployees.map((employee: any) => (
+                  <Card 
+                    key={employee.id}
+                    className="bg-slate-800/50 border-slate-700 hover:border-amber-500/50 cursor-pointer transition-all"
+                    onClick={() => setSelectedEmployee(employee.id)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        <EmployeeAvatar 
+                          photoUrl={employee.photoUrl} 
+                          name={employee.name} 
+                          size="md"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-white truncate">{employee.name}</h4>
+                          <p className="text-sm text-slate-400">{employee.code}</p>
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
+                              {employee.branchName}
+                            </Badge>
+                            {employee.isActive ? (
+                              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">
+                                نشط
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">
+                                غير نشط
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    ) : dashboardStats.expiredDocs === 0 && dashboardStats.expiringDocsCount === 0 ? (
-                      <div className="text-center py-8 text-slate-400">
-                        <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-emerald-500" />
-                        <p>جميع الوثائق سارية</p>
+                      
+                      <div className="mt-4 pt-4 border-t border-slate-700 grid grid-cols-2 gap-2 text-xs">
+                        <div className="flex items-center gap-1 text-slate-400">
+                          <Phone className="h-3 w-3" />
+                          <span className="truncate">{employee.phone || 'غير محدد'}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-slate-400">
+                          <Briefcase className="h-3 w-3" />
+                          <span className="truncate">{employee.position || 'غير محدد'}</span>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {/* الإقامات المنتهية */}
-                        {expiringDocs?.expired?.iqama?.map((emp: any) => (
-                          <div key={`iqama-${emp.id}`} className="p-3 bg-red-500/10 rounded-lg border border-red-500/30">
-                            <div className="flex items-center gap-2 mb-1">
-                              <IdCard className="h-4 w-4 text-red-400" />
-                              <span className="font-medium text-white">{emp.name}</span>
-                              <Badge className="bg-red-500/20 text-red-400 text-xs">منتهية</Badge>
-                            </div>
-                            <p className="text-xs text-slate-400">إقامة - {emp.branchName}</p>
-                          </div>
-                        ))}
-                        {/* الشهادات الصحية المنتهية */}
-                        {expiringDocs?.expired?.healthCert?.map((emp: any) => (
-                          <div key={`health-${emp.id}`} className="p-3 bg-red-500/10 rounded-lg border border-red-500/30">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Heart className="h-4 w-4 text-red-400" />
-                              <span className="font-medium text-white">{emp.name}</span>
-                              <Badge className="bg-red-500/20 text-red-400 text-xs">منتهية</Badge>
-                            </div>
-                            <p className="text-xs text-slate-400">شهادة صحية - {emp.branchName}</p>
-                          </div>
-                        ))}
-                        {/* العقود المنتهية */}
-                        {expiringDocs?.expired?.contract?.map((emp: any) => (
-                          <div key={`contract-${emp.id}`} className="p-3 bg-red-500/10 rounded-lg border border-red-500/30">
-                            <div className="flex items-center gap-2 mb-1">
-                              <FileSignature className="h-4 w-4 text-red-400" />
-                              <span className="font-medium text-white">{emp.name}</span>
-                              <Badge className="bg-red-500/20 text-red-400 text-xs">منتهية</Badge>
-                            </div>
-                            <p className="text-xs text-slate-400">عقد العمل - {emp.branchName}</p>
-                          </div>
-                        ))}
-                        {/* الوثائق قريبة الانتهاء */}
-                        {expiringDocs?.expiring?.iqama?.slice(0, 3).map((emp: any) => (
-                          <div key={`iqama-exp-${emp.id}`} className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/30">
-                            <div className="flex items-center gap-2 mb-1">
-                              <IdCard className="h-4 w-4 text-amber-400" />
-                              <span className="font-medium text-white">{emp.name}</span>
-                              <Badge className="bg-amber-500/20 text-amber-400 text-xs">قريبة الانتهاء</Badge>
-                            </div>
-                            <p className="text-xs text-slate-400">إقامة - {emp.branchName}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </ScrollArea>
-                </CardContent>
-              </Card>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
           </TabsContent>
 
@@ -652,10 +991,6 @@ export default function AdminEmployeePortal() {
                               </div>
                             )}
                           </div>
-                          
-                          {request.title && (
-                            <p className="mt-3 text-sm text-slate-400 line-clamp-2">{request.title}</p>
-                          )}
                         </div>
                       ))}
                     </div>
@@ -663,103 +998,6 @@ export default function AdminEmployeePortal() {
                 </ScrollArea>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          {/* Employees Tab */}
-          <TabsContent value="employees" className="space-y-4">
-            {/* Search & Filter */}
-            <Card className="bg-slate-800/50 border-slate-700">
-              <CardContent className="p-4">
-                <div className="flex flex-wrap gap-4">
-                  <div className="flex-1 min-w-[250px]">
-                    <div className="relative">
-                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        placeholder="بحث بالاسم أو الكود..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pr-10 bg-slate-700 border-slate-600 text-white"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="w-[200px]">
-                    <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                      <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                        <SelectValue placeholder="الفرع" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">جميع الفروع</SelectItem>
-                        {branches?.map((branch: any) => (
-                          <SelectItem key={branch.id} value={branch.id.toString()}>
-                            {branch.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Employees Grid */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {employeesLoading ? (
-                <div className="col-span-full flex items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-                </div>
-              ) : filteredEmployees.length === 0 ? (
-                <div className="col-span-full text-center py-8 text-slate-400">
-                  <Users className="h-12 w-12 mx-auto mb-2" />
-                  <p>لا يوجد موظفين</p>
-                </div>
-              ) : (
-                filteredEmployees.map((employee: any) => (
-                  <Card 
-                    key={employee.id}
-                    className="bg-slate-800/50 border-slate-700 hover:border-amber-500/50 cursor-pointer transition-all"
-                    onClick={() => setSelectedEmployee(employee.id)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-4">
-                        <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-3 rounded-xl">
-                          <UserCircle className="h-8 w-8 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-bold text-white">{employee.name}</h4>
-                          <p className="text-sm text-slate-400">{employee.code}</p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
-                              {employee.branchName}
-                            </Badge>
-                            {employee.isActive ? (
-                              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">
-                                نشط
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">
-                                غير نشط
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-4 pt-4 border-t border-slate-700 grid grid-cols-2 gap-2 text-xs">
-                        <div className="flex items-center gap-1 text-slate-400">
-                          <Phone className="h-3 w-3" />
-                          <span>{employee.phone || 'غير محدد'}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-slate-400">
-                          <Briefcase className="h-3 w-3" />
-                          <span>{employee.position || 'غير محدد'}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
           </TabsContent>
 
           {/* Documents Tab */}
@@ -770,118 +1008,176 @@ export default function AdminEmployeePortal() {
                   <AlertCircle className="h-5 w-5 text-red-500" />
                   الوثائق المنتهية والقريبة الانتهاء
                 </CardTitle>
+                <CardDescription className="text-slate-400">
+                  يمكنك إرسال تذكير للموظفين بالنقر على أيقونة الجرس
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-3 gap-4">
+                <div className="grid md:grid-cols-3 gap-6">
                   {/* الإقامات */}
                   <div className="space-y-3">
-                    <h4 className="font-bold text-white flex items-center gap-2">
-                      <IdCard className="h-4 w-4 text-blue-500" />
+                    <h4 className="font-bold text-white flex items-center gap-2 pb-2 border-b border-slate-700">
+                      <IdCard className="h-5 w-5 text-blue-500" />
                       الإقامات
                     </h4>
                     {expiringDocs?.expired?.iqama?.length === 0 && expiringDocs?.expiring?.iqama?.length === 0 ? (
-                      <p className="text-sm text-slate-400">لا توجد إقامات منتهية</p>
+                      <p className="text-sm text-slate-400 text-center py-4">لا توجد إقامات منتهية</p>
                     ) : (
-                      <div className="space-y-2">
-                        {expiringDocs?.expired?.iqama?.map((emp: any) => (
-                          <div key={emp.id} className="p-2 bg-red-500/10 rounded border border-red-500/30">
-                            <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-red-400">منتهية</p>
-                          </div>
-                        ))}
-                        {expiringDocs?.expiring?.iqama?.map((emp: any) => (
-                          <div key={emp.id} className="p-2 bg-amber-500/10 rounded border border-amber-500/30">
-                            <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-amber-400">قريبة الانتهاء</p>
-                          </div>
-                        ))}
-                      </div>
+                      <ScrollArea className="h-[300px]">
+                        <div className="space-y-2">
+                          {expiringDocs?.expired?.iqama?.map((emp: any) => (
+                            <div key={emp.id} className="p-3 bg-red-500/10 rounded-lg border border-red-500/30 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size="sm" />
+                                <div>
+                                  <p className="font-medium text-white text-sm">{emp.name}</p>
+                                  <p className="text-xs text-red-400">منتهية</p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openReminderDialog(emp, 'iqama')}
+                                className="text-amber-400 hover:text-amber-300"
+                              >
+                                <Bell className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                          {expiringDocs?.expiring?.iqama?.map((emp: any) => (
+                            <div key={emp.id} className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/30 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size="sm" />
+                                <div>
+                                  <p className="font-medium text-white text-sm">{emp.name}</p>
+                                  <p className="text-xs text-amber-400">قريبة الانتهاء</p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openReminderDialog(emp, 'iqama')}
+                                className="text-amber-400 hover:text-amber-300"
+                              >
+                                <Bell className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     )}
                   </div>
                   
                   {/* الشهادات الصحية */}
                   <div className="space-y-3">
-                    <h4 className="font-bold text-white flex items-center gap-2">
-                      <Heart className="h-4 w-4 text-green-500" />
+                    <h4 className="font-bold text-white flex items-center gap-2 pb-2 border-b border-slate-700">
+                      <Heart className="h-5 w-5 text-green-500" />
                       الشهادات الصحية
                     </h4>
                     {expiringDocs?.expired?.healthCert?.length === 0 && expiringDocs?.expiring?.healthCert?.length === 0 ? (
-                      <p className="text-sm text-slate-400">لا توجد شهادات منتهية</p>
+                      <p className="text-sm text-slate-400 text-center py-4">لا توجد شهادات منتهية</p>
                     ) : (
-                      <div className="space-y-2">
-                        {expiringDocs?.expired?.healthCert?.map((emp: any) => (
-                          <div key={emp.id} className="p-2 bg-red-500/10 rounded border border-red-500/30">
-                            <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-red-400">منتهية</p>
-                          </div>
-                        ))}
-                        {expiringDocs?.expiring?.healthCert?.map((emp: any) => (
-                          <div key={emp.id} className="p-2 bg-amber-500/10 rounded border border-amber-500/30">
-                            <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-amber-400">قريبة الانتهاء</p>
-                          </div>
-                        ))}
-                      </div>
+                      <ScrollArea className="h-[300px]">
+                        <div className="space-y-2">
+                          {expiringDocs?.expired?.healthCert?.map((emp: any) => (
+                            <div key={emp.id} className="p-3 bg-red-500/10 rounded-lg border border-red-500/30 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size="sm" />
+                                <div>
+                                  <p className="font-medium text-white text-sm">{emp.name}</p>
+                                  <p className="text-xs text-red-400">منتهية</p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openReminderDialog(emp, 'healthCert')}
+                                className="text-amber-400 hover:text-amber-300"
+                              >
+                                <Bell className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                          {expiringDocs?.expiring?.healthCert?.map((emp: any) => (
+                            <div key={emp.id} className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/30 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size="sm" />
+                                <div>
+                                  <p className="font-medium text-white text-sm">{emp.name}</p>
+                                  <p className="text-xs text-amber-400">قريبة الانتهاء</p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openReminderDialog(emp, 'healthCert')}
+                                className="text-amber-400 hover:text-amber-300"
+                              >
+                                <Bell className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     )}
                   </div>
                   
                   {/* العقود */}
                   <div className="space-y-3">
-                    <h4 className="font-bold text-white flex items-center gap-2">
-                      <FileSignature className="h-4 w-4 text-purple-500" />
+                    <h4 className="font-bold text-white flex items-center gap-2 pb-2 border-b border-slate-700">
+                      <FileSignature className="h-5 w-5 text-purple-500" />
                       العقود
                     </h4>
                     {expiringDocs?.expired?.contract?.length === 0 && expiringDocs?.expiring?.contract?.length === 0 ? (
-                      <p className="text-sm text-slate-400">لا توجد عقود منتهية</p>
+                      <p className="text-sm text-slate-400 text-center py-4">لا توجد عقود منتهية</p>
                     ) : (
-                      <div className="space-y-2">
-                        {expiringDocs?.expired?.contract?.map((emp: any) => (
-                          <div key={emp.id} className="p-2 bg-red-500/10 rounded border border-red-500/30">
-                            <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-red-400">منتهية</p>
-                          </div>
-                        ))}
-                        {expiringDocs?.expiring?.contract?.map((emp: any) => (
-                          <div key={emp.id} className="p-2 bg-amber-500/10 rounded border border-amber-500/30">
-                            <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-amber-400">قريبة الانتهاء</p>
-                          </div>
-                        ))}
-                      </div>
+                      <ScrollArea className="h-[300px]">
+                        <div className="space-y-2">
+                          {expiringDocs?.expired?.contract?.map((emp: any) => (
+                            <div key={emp.id} className="p-3 bg-red-500/10 rounded-lg border border-red-500/30 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size="sm" />
+                                <div>
+                                  <p className="font-medium text-white text-sm">{emp.name}</p>
+                                  <p className="text-xs text-red-400">منتهي</p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openReminderDialog(emp, 'contract')}
+                                className="text-amber-400 hover:text-amber-300"
+                              >
+                                <Bell className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                          {expiringDocs?.expiring?.contract?.map((emp: any) => (
+                            <div key={emp.id} className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/30 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <EmployeeAvatar photoUrl={emp.photoUrl} name={emp.name} size="sm" />
+                                <div>
+                                  <p className="font-medium text-white text-sm">{emp.name}</p>
+                                  <p className="text-xs text-amber-400">قريب الانتهاء</p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openReminderDialog(emp, 'contract')}
+                                className="text-amber-400 hover:text-amber-300"
+                              >
+                                <Bell className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     )}
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          {/* Reports Tab */}
-          <TabsContent value="reports" className="space-y-4">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Card className="bg-slate-800/50 border-slate-700 hover:border-amber-500/50 cursor-pointer transition-all">
-                <CardContent className="p-6 text-center">
-                  <BarChart3 className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-                  <h4 className="font-bold text-white mb-2">تقرير الطلبات</h4>
-                  <p className="text-sm text-slate-400">إحصائيات شاملة للطلبات</p>
-                </CardContent>
-              </Card>
-              
-              <Card className="bg-slate-800/50 border-slate-700 hover:border-amber-500/50 cursor-pointer transition-all">
-                <CardContent className="p-6 text-center">
-                  <Users className="h-12 w-12 text-blue-500 mx-auto mb-4" />
-                  <h4 className="font-bold text-white mb-2">تقرير الموظفين</h4>
-                  <p className="text-sm text-slate-400">بيانات الموظفين الشاملة</p>
-                </CardContent>
-              </Card>
-              
-              <Card className="bg-slate-800/50 border-slate-700 hover:border-amber-500/50 cursor-pointer transition-all">
-                <CardContent className="p-6 text-center">
-                  <FileText className="h-12 w-12 text-emerald-500 mx-auto mb-4" />
-                  <h4 className="font-bold text-white mb-2">تقرير الوثائق</h4>
-                  <p className="text-sm text-slate-400">حالة وثائق الموظفين</p>
-                </CardContent>
-              </Card>
-            </div>
           </TabsContent>
         </Tabs>
       </div>
@@ -898,65 +1194,43 @@ export default function AdminEmployeePortal() {
           
           {selectedRequest && (
             <div className="space-y-4">
-              {/* معلومات الموظف */}
-              <div className="p-4 bg-slate-700/50 rounded-lg">
-                <h4 className="font-bold text-white mb-3">معلومات الموظف</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-slate-400">الاسم:</span>
-                    <span className="text-white mr-2">{selectedRequest.employeeName}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">الفرع:</span>
-                    <span className="text-white mr-2">{selectedRequest.branchName}</span>
-                  </div>
+              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-700/50 rounded-lg">
+                <div>
+                  <span className="text-slate-400 text-sm">اسم الموظف:</span>
+                  <p className="text-white font-medium">{selectedRequest.employeeName}</p>
                 </div>
-              </div>
-              
-              {/* تفاصيل الطلب */}
-              <div className="p-4 bg-slate-700/50 rounded-lg">
-                <h4 className="font-bold text-white mb-3">تفاصيل الطلب</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-slate-400">نوع الطلب:</span>
-                    <span className="text-white mr-2">{REQUEST_TYPE_NAMES[selectedRequest.requestType]}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">الحالة:</span>
-                    <Badge className={`mr-2 ${STATUS_COLORS[selectedRequest.status]}`}>
-                      {STATUS_NAMES[selectedRequest.status]}
-                    </Badge>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">تاريخ الطلب:</span>
-                    <span className="text-white mr-2">
-                      {new Date(selectedRequest.createdAt).toLocaleDateString('ar-SA')}
-                    </span>
-                  </div>
-                  {selectedRequest.advanceAmount && (
-                    <div>
-                      <span className="text-slate-400">المبلغ:</span>
-                      <span className="text-white mr-2">{selectedRequest.advanceAmount} ر.س</span>
-                    </div>
-                  )}
+                <div>
+                  <span className="text-slate-400 text-sm">نوع الطلب:</span>
+                  <p className="text-white font-medium">{REQUEST_TYPE_NAMES[selectedRequest.requestType]}</p>
                 </div>
-                
-                {selectedRequest.title && (
-                  <div className="mt-3">
-                    <span className="text-slate-400">العنوان:</span>
-                    <p className="text-white mt-1">{selectedRequest.title}</p>
+                <div>
+                  <span className="text-slate-400 text-sm">الفرع:</span>
+                  <p className="text-white font-medium">{selectedRequest.branchName || 'غير محدد'}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-sm">تاريخ الطلب:</span>
+                  <p className="text-white font-medium">{new Date(selectedRequest.createdAt).toLocaleDateString('ar-SA')}</p>
+                </div>
+                {selectedRequest.advanceAmount && (
+                  <div>
+                    <span className="text-slate-400 text-sm">المبلغ:</span>
+                    <p className="text-white font-medium">{selectedRequest.advanceAmount} ر.س</p>
                   </div>
                 )}
-                
+                <div>
+                  <span className="text-slate-400 text-sm">الحالة:</span>
+                  <Badge className={STATUS_COLORS[selectedRequest.status]}>
+                    {STATUS_NAMES[selectedRequest.status]}
+                  </Badge>
+                </div>
                 {selectedRequest.description && (
-                  <div className="mt-3">
-                    <span className="text-slate-400">التفاصيل:</span>
+                  <div className="col-span-2">
+                    <span className="text-slate-400 text-sm">التفاصيل:</span>
                     <p className="text-white mt-1">{selectedRequest.description}</p>
                   </div>
                 )}
               </div>
               
-              {/* ملاحظات المراجعة (للطلبات المعلقة) */}
               {selectedRequest.status === 'pending' && (
                 <div className="p-4 bg-slate-700/50 rounded-lg">
                   <h4 className="font-bold text-white mb-3">ملاحظات المراجعة</h4>
@@ -1004,13 +1278,35 @@ export default function AdminEmployeePortal() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       {/* Employee Details Dialog */}
-      <Dialog open={selectedEmployee !== null} onOpenChange={(open) => !open && setSelectedEmployee(null)}>
+      <Dialog open={selectedEmployee !== null} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedEmployee(null);
+          setIsEditing(false);
+        }
+      }}>
         <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserCircle className="h-5 w-5 text-amber-500" />
-              ملف الموظف
+            <DialogTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UserCircle className="h-5 w-5 text-amber-500" />
+                ملف الموظف
+              </div>
+              {!isEditing && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const employee = employees?.find((e: any) => e.id === selectedEmployee);
+                    if (employee) startEditing(employee);
+                  }}
+                  className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+                >
+                  <Edit className="h-4 w-4 ml-2" />
+                  تعديل
+                </Button>
+              )}
             </DialogTitle>
           </DialogHeader>
           
@@ -1023,27 +1319,54 @@ export default function AdminEmployeePortal() {
                 {/* المعلومات الأساسية */}
                 <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-600/10 rounded-lg border border-amber-500/30">
                   <div className="flex items-center gap-4">
-                    <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-xl">
-                      <UserCircle className="h-12 w-12 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-white">{employee.name}</h3>
+                    <EmployeeAvatar 
+                      photoUrl={(employee as any).photoUrl} 
+                      name={employee.name} 
+                      size="xl"
+                      editable={true}
+                      onUpload={(file) => handlePhotoUpload(file, employee.id)}
+                    />
+                    <div className="flex-1">
+                      {isEditing ? (
+                        <Input
+                          value={editFormData.name}
+                          onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                          className="bg-slate-700 border-slate-600 text-white text-xl font-bold mb-2"
+                        />
+                      ) : (
+                        <h3 className="text-2xl font-bold text-white">{employee.name}</h3>
+                      )}
                       <p className="text-slate-400">{employee.code}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
                           {employee.branchName}
                         </Badge>
-                        {employee.isActive ? (
-                          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                            نشط
-                          </Badge>
+                        {isEditing ? (
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={editFormData.isActive}
+                              onCheckedChange={(checked) => setEditFormData({ ...editFormData, isActive: checked })}
+                            />
+                            <span className="text-sm text-slate-400">{editFormData.isActive ? 'نشط' : 'غير نشط'}</span>
+                          </div>
                         ) : (
-                          <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
-                            غير نشط
-                          </Badge>
+                          employee.isActive ? (
+                            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                              نشط
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
+                              غير نشط
+                            </Badge>
+                          )
                         )}
                       </div>
                     </div>
+                    {isUploading && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
+                        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -1055,12 +1378,28 @@ export default function AdminEmployeePortal() {
                   </h4>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-slate-400">رقم الجوال:</span>
-                      <span className="text-white mr-2">{employee.phone || 'غير محدد'}</span>
+                      <Label className="text-slate-400">رقم الجوال:</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editFormData.phone}
+                          onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                          className="bg-slate-600 border-slate-500 text-white mt-1"
+                        />
+                      ) : (
+                        <p className="text-white">{employee.phone || 'غير محدد'}</p>
+                      )}
                     </div>
                     <div>
-                      <span className="text-slate-400">البريد الإلكتروني:</span>
-                      <span className="text-white mr-2">{employee.email || 'غير محدد'}</span>
+                      <Label className="text-slate-400">البريد الإلكتروني:</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editFormData.email}
+                          onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                          className="bg-slate-600 border-slate-500 text-white mt-1"
+                        />
+                      ) : (
+                        <p className="text-white">{employee.email || 'غير محدد'}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1073,22 +1412,34 @@ export default function AdminEmployeePortal() {
                   </h4>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-slate-400">المسمى الوظيفي:</span>
-                      <span className="text-white mr-2">{employee.position || 'غير محدد'}</span>
+                      <Label className="text-slate-400">المسمى الوظيفي:</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editFormData.position}
+                          onChange={(e) => setEditFormData({ ...editFormData, position: e.target.value })}
+                          className="bg-slate-600 border-slate-500 text-white mt-1"
+                        />
+                      ) : (
+                        <p className="text-white">{employee.position || 'غير محدد'}</p>
+                      )}
                     </div>
                     <div>
-                      <span className="text-slate-400">الراتب الأساسي:</span>
-                      <span className="text-white mr-2">{(employee as any).baseSalary?.toLocaleString() || 0} ر.س</span>
+                      <Label className="text-slate-400">الجنسية:</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editFormData.nationality}
+                          onChange={(e) => setEditFormData({ ...editFormData, nationality: e.target.value })}
+                          className="bg-slate-600 border-slate-500 text-white mt-1"
+                        />
+                      ) : (
+                        <p className="text-white">{(employee as any).nationality || 'غير محدد'}</p>
+                      )}
                     </div>
                     <div>
-                      <span className="text-slate-400">تاريخ الالتحاق:</span>
-                      <span className="text-white mr-2">
+                      <Label className="text-slate-400">تاريخ الالتحاق:</Label>
+                      <p className="text-white">
                         {(employee as any).joinDate ? new Date((employee as any).joinDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">الجنسية:</span>
-                      <span className="text-white mr-2">{(employee as any).nationality || 'غير محدد'}</span>
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1101,26 +1452,61 @@ export default function AdminEmployeePortal() {
                   </h4>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-slate-400">رقم الإقامة:</span>
-                      <span className="text-white mr-2">{employee.iqamaNumber || 'غير محدد'}</span>
+                      <Label className="text-slate-400">رقم الإقامة:</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editFormData.iqamaNumber}
+                          onChange={(e) => setEditFormData({ ...editFormData, iqamaNumber: e.target.value })}
+                          className="bg-slate-600 border-slate-500 text-white mt-1"
+                        />
+                      ) : (
+                        <p className="text-white">{employee.iqamaNumber || 'غير محدد'}</p>
+                      )}
                     </div>
                     <div>
-                      <span className="text-slate-400">انتهاء الإقامة:</span>
-                      <span className={`mr-2 ${employee.iqamaExpiryDate && new Date(employee.iqamaExpiryDate) < new Date() ? 'text-red-400' : 'text-white'}`}>
-                        {employee.iqamaExpiryDate ? new Date(employee.iqamaExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                      </span>
+                      <Label className="text-slate-400">انتهاء الإقامة:</Label>
+                      {isEditing ? (
+                        <Input
+                          type="date"
+                          value={editFormData.iqamaExpiryDate}
+                          onChange={(e) => setEditFormData({ ...editFormData, iqamaExpiryDate: e.target.value })}
+                          className="bg-slate-600 border-slate-500 text-white mt-1"
+                        />
+                      ) : (
+                        <p className={`${employee.iqamaExpiryDate && new Date(employee.iqamaExpiryDate) < new Date() ? 'text-red-400' : 'text-white'}`}>
+                          {employee.iqamaExpiryDate ? new Date(employee.iqamaExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        </p>
+                      )}
                     </div>
                     <div>
-                      <span className="text-slate-400">انتهاء الشهادة الصحية:</span>
-                      <span className={`mr-2 ${employee.healthCertExpiryDate && new Date(employee.healthCertExpiryDate) < new Date() ? 'text-red-400' : 'text-white'}`}>
-                        {employee.healthCertExpiryDate ? new Date(employee.healthCertExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                      </span>
+                      <Label className="text-slate-400">انتهاء الشهادة الصحية:</Label>
+                      {isEditing ? (
+                        <Input
+                          type="date"
+                          value={editFormData.healthCertExpiryDate}
+                          onChange={(e) => setEditFormData({ ...editFormData, healthCertExpiryDate: e.target.value })}
+                          className="bg-slate-600 border-slate-500 text-white mt-1"
+                        />
+                      ) : (
+                        <p className={`${employee.healthCertExpiryDate && new Date(employee.healthCertExpiryDate) < new Date() ? 'text-red-400' : 'text-white'}`}>
+                          {employee.healthCertExpiryDate ? new Date(employee.healthCertExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        </p>
+                      )}
                     </div>
                     <div>
-                      <span className="text-slate-400">انتهاء العقد:</span>
-                      <span className={`mr-2 ${employee.contractExpiryDate && new Date(employee.contractExpiryDate) < new Date() ? 'text-red-400' : 'text-white'}`}>
-                        {employee.contractExpiryDate ? new Date(employee.contractExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                      </span>
+                      <Label className="text-slate-400">انتهاء العقد:</Label>
+                      {isEditing ? (
+                        <Input
+                          type="date"
+                          value={editFormData.contractExpiryDate}
+                          onChange={(e) => setEditFormData({ ...editFormData, contractExpiryDate: e.target.value })}
+                          className="bg-slate-600 border-slate-500 text-white mt-1"
+                        />
+                      ) : (
+                        <p className={`${employee.contractExpiryDate && new Date(employee.contractExpiryDate) < new Date() ? 'text-red-400' : 'text-white'}`}>
+                          {employee.contractExpiryDate ? new Date(employee.contractExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1133,12 +1519,28 @@ export default function AdminEmployeePortal() {
                   </h4>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-slate-400">اسم البنك:</span>
-                      <span className="text-white mr-2">{(employee as any).bankName || 'غير محدد'}</span>
+                      <Label className="text-slate-400">اسم البنك:</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editFormData.bankName}
+                          onChange={(e) => setEditFormData({ ...editFormData, bankName: e.target.value })}
+                          className="bg-slate-600 border-slate-500 text-white mt-1"
+                        />
+                      ) : (
+                        <p className="text-white">{(employee as any).bankName || 'غير محدد'}</p>
+                      )}
                     </div>
                     <div>
-                      <span className="text-slate-400">رقم الحساب (IBAN):</span>
-                      <span className="text-white mr-2 font-mono text-xs">{(employee as any).iban || 'غير محدد'}</span>
+                      <Label className="text-slate-400">رقم الحساب (IBAN):</Label>
+                      {isEditing ? (
+                        <Input
+                          value={editFormData.iban}
+                          onChange={(e) => setEditFormData({ ...editFormData, iban: e.target.value })}
+                          className="bg-slate-600 border-slate-500 text-white mt-1 font-mono text-xs"
+                        />
+                      ) : (
+                        <p className="text-white font-mono text-xs">{(employee as any).iban || 'غير محدد'}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1146,13 +1548,127 @@ export default function AdminEmployeePortal() {
             );
           })()}
           
+          <DialogFooter className="flex gap-2">
+            {isEditing ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEditing(false)}
+                  className="border-slate-600 text-slate-300"
+                >
+                  <X className="h-4 w-4 ml-2" />
+                  إلغاء
+                </Button>
+                <Button
+                  onClick={() => saveChanges(selectedEmployee!)}
+                  disabled={updateEmployeeMutation.isPending}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                >
+                  {updateEmployeeMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  ) : (
+                    <Save className="h-4 w-4 ml-2" />
+                  )}
+                  حفظ التغييرات
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={() => setSelectedEmployee(null)}
+                className="border-slate-600 text-slate-300"
+              >
+                إغلاق
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reminder Dialog */}
+      <Dialog open={showReminderDialog} onOpenChange={setShowReminderDialog}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-amber-500" />
+              إرسال تذكير
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              إرسال تذكير للموظف بتجديد الوثيقة
+            </DialogDescription>
+          </DialogHeader>
+          
+          {reminderEmployee && (
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-700/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <EmployeeAvatar photoUrl={reminderEmployee.photoUrl} name={reminderEmployee.name} size="md" />
+                  <div>
+                    <p className="font-medium text-white">{reminderEmployee.name}</p>
+                    <p className="text-sm text-slate-400">{reminderEmployee.branchName}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <Label className="text-slate-400">نوع الوثيقة</Label>
+                <Select value={reminderDocType} onValueChange={(v: any) => setReminderDocType(v)}>
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="iqama">الإقامة</SelectItem>
+                    <SelectItem value="healthCert">الشهادة الصحية</SelectItem>
+                    <SelectItem value="contract">العقد</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label className="text-slate-400">طريقة الإرسال</Label>
+                <Select value={reminderType} onValueChange={(v: any) => setReminderType(v)}>
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="system">إشعار نظام</SelectItem>
+                    <SelectItem value="email">بريد إلكتروني</SelectItem>
+                    <SelectItem value="sms">رسالة SMS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label className="text-slate-400">نص الرسالة</Label>
+                <Textarea
+                  value={reminderMessage}
+                  onChange={(e) => setReminderMessage(e.target.value)}
+                  className="bg-slate-700 border-slate-600 text-white mt-1"
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+          
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setSelectedEmployee(null)}
+              onClick={() => setShowReminderDialog(false)}
               className="border-slate-600 text-slate-300"
             >
-              إغلاق
+              إلغاء
+            </Button>
+            <Button
+              onClick={handleSendReminder}
+              disabled={isSendingReminder}
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              {isSendingReminder ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              ) : (
+                <Send className="h-4 w-4 ml-2" />
+              )}
+              إرسال التذكير
             </Button>
           </DialogFooter>
         </DialogContent>
