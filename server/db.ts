@@ -693,27 +693,26 @@ export async function getSalesReport(startDate: Date, endDate: Date) {
   const db = await getDb();
   if (!db) return null;
 
+  // استخدام dailyRevenues بدلاً من invoices لأنها تحتوي على البيانات الفعلية
   const salesData = await db.select({
-    date: sql<string>`DATE(invoiceDate)`,
-    total: sql<string>`SUM(total)`,
+    date: sql<string>`DATE(date)`,
+    total: sql<string>`SUM(cash + network)`,
     count: sql<number>`COUNT(*)`
-  }).from(invoices)
+  }).from(dailyRevenues)
     .where(and(
-      gte(invoices.invoiceDate, startDate),
-      lte(invoices.invoiceDate, endDate),
-      eq(invoices.status, 'paid')
+      gte(dailyRevenues.date, startDate),
+      lte(dailyRevenues.date, endDate)
     ))
-    .groupBy(sql`DATE(invoiceDate)`)
-    .orderBy(sql`DATE(invoiceDate)`);
+    .groupBy(sql`DATE(date)`)
+    .orderBy(sql`DATE(date)`);
 
   const totalSales = await db.select({
-    total: sql<string>`COALESCE(SUM(total), 0)`,
+    total: sql<string>`COALESCE(SUM(cash + network), 0)`,
     count: sql<number>`COUNT(*)`
-  }).from(invoices)
+  }).from(dailyRevenues)
     .where(and(
-      gte(invoices.invoiceDate, startDate),
-      lte(invoices.invoiceDate, endDate),
-      eq(invoices.status, 'paid')
+      gte(dailyRevenues.date, startDate),
+      lte(dailyRevenues.date, endDate)
     ));
 
   return {
@@ -729,6 +728,7 @@ export async function getPurchasesReport(startDate: Date, endDate: Date) {
   const db = await getDb();
   if (!db) return null;
 
+  // تضمين المشتريات الموافق عليها والمستلمة
   const purchasesData = await db.select({
     date: sql<string>`DATE(orderDate)`,
     total: sql<string>`SUM(total)`,
@@ -737,7 +737,7 @@ export async function getPurchasesReport(startDate: Date, endDate: Date) {
     .where(and(
       gte(purchaseOrders.orderDate, startDate),
       lte(purchaseOrders.orderDate, endDate),
-      eq(purchaseOrders.status, 'received')
+      sql`status IN ('approved', 'received')`
     ))
     .groupBy(sql`DATE(orderDate)`)
     .orderBy(sql`DATE(orderDate)`);
@@ -749,7 +749,7 @@ export async function getPurchasesReport(startDate: Date, endDate: Date) {
     .where(and(
       gte(purchaseOrders.orderDate, startDate),
       lte(purchaseOrders.orderDate, endDate),
-      eq(purchaseOrders.status, 'received')
+      sql`status IN ('approved', 'received')`
     ));
 
   return {
