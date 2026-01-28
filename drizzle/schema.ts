@@ -2663,3 +2663,92 @@ export const riskAlerts = mysqlTable("riskAlerts", {
 
 export type RiskAlert = typeof riskAlerts.$inferSelect;
 export type InsertRiskAlert = typeof riskAlerts.$inferInsert;
+
+
+// ==================== جدول التقارير المجدولة للذكاء الاصطناعي ====================
+/**
+ * ScheduledAIReports - التقارير المجدولة للذكاء الاصطناعي
+ * تخزن إعدادات التقارير الأسبوعية التلقائية
+ */
+export const scheduledAIReports = mysqlTable("scheduledAIReports", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // نوع التقرير
+  reportType: mysqlEnum("reportType", [
+    "weekly_ai_summary",      // ملخص أسبوعي شامل
+    "risk_alerts",            // تنبيهات المخاطر
+    "performance_analysis",   // تحليل الأداء
+    "compliance_report",      // تقرير الامتثال
+    "financial_forecast"      // التوقعات المالية
+  ]).notNull(),
+  
+  // جدولة التقرير
+  scheduleType: mysqlEnum("scheduleType", ["daily", "weekly", "monthly"]).default("weekly").notNull(),
+  scheduleDay: int("scheduleDay").default(0).notNull(), // 0-6 للأسبوعي، 1-31 للشهري
+  scheduleTime: varchar("scheduleTime", { length: 10 }).default("08:00").notNull(), // HH:MM
+  
+  // المستلمين
+  recipientEmails: json("recipientEmails").$type<string[]>().notNull(),
+  sendToOwner: boolean("sendToOwner").default(true).notNull(),
+  
+  // الفرع (null = جميع الفروع)
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // حالة التقرير
+  isActive: boolean("isActive").default(true).notNull(),
+  lastRunAt: timestamp("lastRunAt"),
+  nextRunAt: timestamp("nextRunAt"),
+  lastRunStatus: mysqlEnum("lastRunStatus", ["success", "failed", "pending"]).default("pending"),
+  lastRunError: text("lastRunError"),
+  
+  // إحصائيات
+  totalRuns: int("totalRuns").default(0).notNull(),
+  successfulRuns: int("successfulRuns").default(0).notNull(),
+  
+  // المنشئ
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ScheduledAIReport = typeof scheduledAIReports.$inferSelect;
+export type InsertScheduledAIReport = typeof scheduledAIReports.$inferInsert;
+
+// ==================== جدول سجل تشغيل التقارير المجدولة ====================
+/**
+ * ScheduledAIReportLogs - سجل تشغيل التقارير المجدولة
+ */
+export const scheduledAIReportLogs = mysqlTable("scheduledAIReportLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  reportId: int("reportId").notNull(),
+  reportType: varchar("reportType", { length: 50 }).notNull(),
+  
+  // نتيجة التشغيل
+  status: mysqlEnum("status", ["success", "failed"]).notNull(),
+  executionTimeMs: int("executionTimeMs"),
+  
+  // محتوى التقرير
+  reportContent: json("reportContent").$type<{
+    summary: string;
+    recommendations: string[];
+    risks: string[];
+    kpis: Record<string, number>;
+  }>(),
+  
+  // تفاصيل الإرسال
+  emailsSent: int("emailsSent").default(0).notNull(),
+  recipientList: json("recipientList").$type<string[]>(),
+  
+  // الأخطاء
+  errorMessage: text("errorMessage"),
+  errorStack: text("errorStack"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ScheduledAIReportLog = typeof scheduledAIReportLogs.$inferSelect;
+export type InsertScheduledAIReportLog = typeof scheduledAIReportLogs.$inferInsert;

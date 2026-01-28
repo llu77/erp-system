@@ -11,18 +11,27 @@ import {
 
 describe('Financial Forecast Service', () => {
   describe('Fixed Costs Constants', () => {
+    // التكاليف الثابتة الحقيقية لكل فرع:
+    // - رواتب: 12,000 ر.س
+    // - إيجار محل: 3,300 ر.س
+    // - إيجار سكن: 1,700 ر.س
+    // - كهرباء: 400 ر.س
+    // - إنترنت: 300 ر.س
+    // - المجموع لكل فرع: 17,700 ر.س
+    // - المجموع للفرعين: 35,400 ر.س
     it('should have correct fixed costs breakdown', () => {
-      expect(FIXED_COSTS.salaries).toBe(21000);
-      expect(FIXED_COSTS.shopRent).toBe(6600);
-      expect(FIXED_COSTS.housingRent).toBe(3200);
-      expect(FIXED_COSTS.electricity).toBe(800);
-      expect(FIXED_COSTS.internet).toBe(600);
+      expect(FIXED_COSTS.salaries).toBe(12000);
+      expect(FIXED_COSTS.shopRent).toBe(3300);
+      expect(FIXED_COSTS.housingRent).toBe(1700);
+      expect(FIXED_COSTS.electricity).toBe(400);
+      expect(FIXED_COSTS.internet).toBe(300);
     });
 
     it('should calculate total fixed costs correctly', () => {
-      const expectedTotal = 21000 + 6600 + 3200 + 800 + 600;
+      const expectedPerBranch = 12000 + 3300 + 1700 + 400 + 300; // 17,700
+      const expectedTotal = expectedPerBranch * 2; // 35,400
       expect(TOTAL_FIXED_COSTS).toBe(expectedTotal);
-      expect(TOTAL_FIXED_COSTS).toBe(32200);
+      expect(TOTAL_FIXED_COSTS).toBe(35400);
     });
 
     it('should have correct branches count', () => {
@@ -31,7 +40,7 @@ describe('Financial Forecast Service', () => {
 
     it('should calculate fixed costs per branch correctly', () => {
       expect(FIXED_COSTS_PER_BRANCH).toBe(TOTAL_FIXED_COSTS / BRANCHES_COUNT);
-      expect(FIXED_COSTS_PER_BRANCH).toBe(16100);
+      expect(FIXED_COSTS_PER_BRANCH).toBe(17700);
     });
   });
 

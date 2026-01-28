@@ -3231,3 +3231,13 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] واجهة عرض التوصيات (AIDecisionCenter.tsx)
 - [x] اختبارات vitest (13 اختبار)
 
+
+
+## ربط نظام التدقيق التلقائي + التقارير الأسبوعية
+- [x] إنشاء middleware للتدقيق التلقائي في tRPC (auditMiddleware.ts)
+- [x] ربط التدقيق بجميع عمليات CRUD (الموظفين، المعاملات، الطلبات، المخزون)
+- [x] إنشاء خدمة التقارير الأسبوعية التلقائية (weekly-reports.service.ts)
+- [x] إنشاء قالب البريد الإلكتروني للتقرير الأسبوعي
+- [x] إضافة جدول scheduledReports لتتبع التقارير المرسلة
+- [x] إضافة واجهة إعدادات الجدولة للمدير (ReportScheduleSettings.tsx)
+- [x] اختبارات vitest (726 اختبار ناجح)

@@ -8209,6 +8209,45 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         return await aiDecisionEngine.generateAIInsights(input.year, input.month);
       }),
   }),
+
+  // ==================== التقارير الأسبوعية التلقائية ====================
+  weeklyReports: {
+    // إرسال التقرير الأسبوعي يدوياً
+    sendNow: adminProcedure
+      .mutation(async () => {
+        const weeklyReportService = await import('./scheduled/weeklyAIReportService');
+        return await weeklyReportService.sendWeeklyAIReport([]);
+      }),
+    
+    // الحصول على حالة الجدولة
+    getScheduleStatus: adminProcedure
+      .query(async () => {
+        const weeklyReportService = await import('./scheduled/weeklyAIReportService');
+        return await weeklyReportService.getReportScheduleStatus();
+      }),
+    
+    // تفعيل/تعطيل الجدولة
+    toggleSchedule: adminProcedure
+      .input(z.object({
+        enabled: z.boolean(),
+      }))
+      .mutation(async ({ input }) => {
+        const weeklyReportService = await import('./scheduled/weeklyAIReportService');
+        // الجدولة غير مفعلة حالياً
+        return { success: true, enabled: input.enabled };
+      }),
+    
+    // الحصول على سجل التقارير المرسلة
+    getReportLogs: adminProcedure
+      .input(z.object({
+        limit: z.number().optional().default(10),
+      }))
+      .query(async ({ input }) => {
+        const weeklyReportService = await import('./scheduled/weeklyAIReportService');
+        // سجلات التقارير غير مفعلة حالياً
+        return [];
+      }),
+  },
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

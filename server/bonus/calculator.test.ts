@@ -10,54 +10,78 @@ import {
 
 describe("Bonus Calculator", () => {
   describe("calculateBonus", () => {
-    it("returns tier_5 with 180 SAR for revenue >= 2400", () => {
-      const result = calculateBonus(2400);
-      expect(result.tier).toBe("tier_5");
-      expect(result.amount).toBe(180);
+    // المستويات المحدثة (7 يناير 2026):
+    // tier_7: >=3200 → 190 ر.س
+    // tier_6: 2800-3199 → 155 ر.س
+    // tier_5: 2500-2799 → 120 ر.س
+    // tier_4: 2200-2499 → 90 ر.س
+    // tier_3: 1950-2199 → 65 ر.س
+    // tier_2: 1750-1949 → 55 ر.س
+    // tier_1: 1450-1749 → 35 ر.س
+    // none: <1450 → 0 ر.س
+
+    it("returns tier_7 with 190 SAR for revenue >= 3200", () => {
+      const result = calculateBonus(3200);
+      expect(result.tier).toBe("tier_7");
+      expect(result.amount).toBe(190);
       expect(result.isEligible).toBe(true);
     });
 
-    it("returns tier_5 for revenue above 2400", () => {
-      const result = calculateBonus(3000);
-      expect(result.tier).toBe("tier_5");
-      expect(result.amount).toBe(180);
+    it("returns tier_7 for revenue above 3200", () => {
+      const result = calculateBonus(4000);
+      expect(result.tier).toBe("tier_7");
+      expect(result.amount).toBe(190);
     });
 
-    it("returns tier_4 with 135 SAR for revenue 2100-2399", () => {
-      const result = calculateBonus(2100);
-      expect(result.tier).toBe("tier_4");
-      expect(result.amount).toBe(135);
+    it("returns tier_6 with 155 SAR for revenue 2800-3199", () => {
+      const result = calculateBonus(2800);
+      expect(result.tier).toBe("tier_6");
+      expect(result.amount).toBe(155);
       expect(result.isEligible).toBe(true);
     });
 
-    it("returns tier_4 for revenue 2399", () => {
-      const result = calculateBonus(2399);
-      expect(result.tier).toBe("tier_4");
-      expect(result.amount).toBe(135);
+    it("returns tier_6 for revenue 3199", () => {
+      const result = calculateBonus(3199);
+      expect(result.tier).toBe("tier_6");
+      expect(result.amount).toBe(155);
     });
 
-    it("returns tier_3 with 95 SAR for revenue 1800-2099", () => {
-      const result = calculateBonus(1800);
+    it("returns tier_5 with 120 SAR for revenue 2500-2799", () => {
+      const result = calculateBonus(2500);
+      expect(result.tier).toBe("tier_5");
+      expect(result.amount).toBe(120);
+      expect(result.isEligible).toBe(true);
+    });
+
+    it("returns tier_4 with 90 SAR for revenue 2200-2499", () => {
+      const result = calculateBonus(2200);
+      expect(result.tier).toBe("tier_4");
+      expect(result.amount).toBe(90);
+      expect(result.isEligible).toBe(true);
+    });
+
+    it("returns tier_3 with 65 SAR for revenue 1950-2199", () => {
+      const result = calculateBonus(1950);
       expect(result.tier).toBe("tier_3");
-      expect(result.amount).toBe(95);
+      expect(result.amount).toBe(65);
       expect(result.isEligible).toBe(true);
     });
 
-    it("returns tier_2 with 60 SAR for revenue 1500-1799", () => {
-      const result = calculateBonus(1500);
+    it("returns tier_2 with 55 SAR for revenue 1750-1949", () => {
+      const result = calculateBonus(1750);
       expect(result.tier).toBe("tier_2");
-      expect(result.amount).toBe(60);
+      expect(result.amount).toBe(55);
       expect(result.isEligible).toBe(true);
     });
 
-    it("returns tier_1 with 35 SAR for revenue 1200-1499", () => {
-      const result = calculateBonus(1200);
+    it("returns tier_1 with 35 SAR for revenue 1450-1749", () => {
+      const result = calculateBonus(1450);
       expect(result.tier).toBe("tier_1");
       expect(result.amount).toBe(35);
       expect(result.isEligible).toBe(true);
     });
 
-    it("returns none with 0 SAR for revenue < 1200", () => {
+    it("returns none with 0 SAR for revenue < 1450", () => {
       const result = calculateBonus(1199);
       expect(result.tier).toBe("none");
       expect(result.amount).toBe(0);
@@ -172,6 +196,8 @@ describe("Bonus Calculator", () => {
 
   describe("getTierNameAr", () => {
     it("returns correct Arabic name for each tier", () => {
+      expect(getTierNameAr("tier_7")).toBe("المستوى 7");
+      expect(getTierNameAr("tier_6")).toBe("المستوى 6");
       expect(getTierNameAr("tier_5")).toBe("المستوى 5");
       expect(getTierNameAr("tier_4")).toBe("المستوى 4");
       expect(getTierNameAr("tier_3")).toBe("المستوى 3");
@@ -183,8 +209,10 @@ describe("Bonus Calculator", () => {
 
   describe("getTierColor", () => {
     it("returns correct color for each tier", () => {
-      expect(getTierColor("tier_5")).toBe("purple");
-      expect(getTierColor("tier_4")).toBe("blue");
+      expect(getTierColor("tier_7")).toBe("purple");
+      expect(getTierColor("tier_6")).toBe("indigo");
+      expect(getTierColor("tier_5")).toBe("blue");
+      expect(getTierColor("tier_4")).toBe("cyan");
       expect(getTierColor("tier_3")).toBe("green");
       expect(getTierColor("tier_2")).toBe("yellow");
       expect(getTierColor("tier_1")).toBe("orange");

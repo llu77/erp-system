@@ -68,6 +68,7 @@ import PaidInvoicesReport from "./pages/PaidInvoicesReport";
 import MonthlyReports from "./pages/MonthlyReports";
 import AIDecisionCenter from "./pages/AIDecisionCenter";
 import AuditCompliance from "./pages/AuditCompliance";
+import ReportScheduleSettings from "./pages/ReportScheduleSettings";
 
 function Router() {
   return (
@@ -242,6 +243,11 @@ function Router() {
       <Route path="/audit-compliance">
         <DashboardLayout>
           <AuditCompliance />
+        </DashboardLayout>
+      </Route>
+      <Route path="/report-schedule-settings">
+        <DashboardLayout>
+          <ReportScheduleSettings />
         </DashboardLayout>
       </Route>
       {/* Security & Audit */}

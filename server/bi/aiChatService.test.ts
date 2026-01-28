@@ -154,8 +154,9 @@ describe('Welcome Message and User Name', () => {
 
   it('should ask about user name in welcome message', () => {
     const message = getWelcomeMessage();
-    expect(message).toContain('عمر');
-    expect(message).toContain('سالم');
+    // الرسالة تسأل عن اسم المستخدم بدلاً من ذكر أسماء محددة
+    expect(message).toContain('اسمك');
+    expect(message).toContain('مرحبا');
   });
 });
 

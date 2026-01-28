@@ -32,43 +32,43 @@ describe("Local Authentication", () => {
   });
 
   describe("verifyPassword", () => {
-    it("should verify correct password", () => {
+    it("should verify correct password", async () => {
       const password = "Omar101010";
       const { hash } = hashPassword(password);
       
-      const isValid = verifyPassword(password, hash);
+      const isValid = await verifyPassword(password, hash);
       expect(isValid).toBe(true);
     });
 
-    it("should reject incorrect password", () => {
+    it("should reject incorrect password", async () => {
       const password = "Omar101010";
       const wrongPassword = "WrongPassword";
       const { hash } = hashPassword(password);
       
-      const isValid = verifyPassword(wrongPassword, hash);
+      const isValid = await verifyPassword(wrongPassword, hash);
       expect(isValid).toBe(false);
     });
 
-    it("should handle empty password", () => {
+    it("should handle empty password", async () => {
       const password = "Omar101010";
       const { hash } = hashPassword(password);
       
-      const isValid = verifyPassword("", hash);
+      const isValid = await verifyPassword("", hash);
       expect(isValid).toBe(false);
     });
 
-    it("should handle invalid hash format", () => {
-      const isValid = verifyPassword("password", "invalidhash");
+    it("should handle invalid hash format", async () => {
+      const isValid = await verifyPassword("password", "invalidhash");
       expect(isValid).toBe(false);
     });
   });
 
   describe("Admin credentials", () => {
-    it("should verify Admin default password", () => {
-      const adminPassword = "Omar101010";
+    it("should verify Admin default password", async () => {
+      const adminPassword = "Omar101010#";
       const { hash } = hashPassword(adminPassword);
       
-      const isValid = verifyPassword(adminPassword, hash);
+      const isValid = await verifyPassword(adminPassword, hash);
       expect(isValid).toBe(true);
     });
   });
