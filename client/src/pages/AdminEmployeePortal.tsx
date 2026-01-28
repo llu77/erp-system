@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -115,23 +115,56 @@ export default function AdminEmployeePortal() {
     return null;
   }, []);
 
-  // جلب الفروع
-  const { data: branches } = trpc.branches.list.useQuery();
+  // استخدام portalAdmin APIs بدلاً من APIs القديمة
+  const adminId = adminInfo?.id || 0;
 
-  // جلب الموظفين
-  const { data: employees, isLoading: employeesLoading, refetch: refetchEmployees } = trpc.employees.list.useQuery();
+  // جلب الفروع باستخدام portalAdmin
+  const { data: branches, isLoading: branchesLoading } = trpc.portalAdmin.getBranches.useQuery(
+    { adminId },
+    { enabled: !!adminInfo }
+  );
 
-  // جلب الطلبات
-  const { data: requests, isLoading: requestsLoading, refetch: refetchRequests } = trpc.employeeRequests.list.useQuery({
-    status: selectedStatus === 'all' ? undefined : selectedStatus,
-    requestType: selectedRequestType === 'all' ? undefined : selectedRequestType,
-    branchId: selectedBranch === 'all' ? undefined : parseInt(selectedBranch),
-  });
+  // جلب الموظفين باستخدام portalAdmin
+  const { 
+    data: employees, 
+    isLoading: employeesLoading, 
+    refetch: refetchEmployees 
+  } = trpc.portalAdmin.getEmployees.useQuery(
+    { 
+      adminId,
+      branchId: selectedBranch !== 'all' ? parseInt(selectedBranch) : undefined,
+      search: searchQuery || undefined
+    },
+    { enabled: !!adminInfo }
+  );
 
-  // جلب الوثائق المنتهية
-  const { data: expiringDocs } = trpc.employees.getExpiringDocuments.useQuery();
+  // جلب الطلبات باستخدام portalAdmin
+  const { 
+    data: requests, 
+    isLoading: requestsLoading, 
+    refetch: refetchRequests 
+  } = trpc.portalAdmin.getRequests.useQuery(
+    {
+      adminId,
+      status: selectedStatus === 'all' ? undefined : selectedStatus,
+      requestType: selectedRequestType === 'all' ? undefined : selectedRequestType,
+      branchId: selectedBranch === 'all' ? undefined : parseInt(selectedBranch),
+    },
+    { enabled: !!adminInfo }
+  );
 
-  // جلب إحصائيات الطلبات
+  // جلب الوثائق المنتهية باستخدام portalAdmin
+  const { data: expiringDocs } = trpc.portalAdmin.getExpiringDocuments.useQuery(
+    { adminId },
+    { enabled: !!adminInfo }
+  );
+
+  // جلب إحصائيات الداشبورد باستخدام portalAdmin
+  const { data: dashboardStatsData } = trpc.portalAdmin.getDashboardStats.useQuery(
+    { adminId },
+    { enabled: !!adminInfo }
+  );
+
   // حساب إحصائيات الطلبات من البيانات المتاحة
   const requestStats = useMemo(() => {
     if (!requests) return { total: 0, pending: 0, approved: 0, rejected: 0 };
@@ -143,8 +176,8 @@ export default function AdminEmployeePortal() {
     };
   }, [requests]);
 
-  // Mutation للموافقة/الرفض
-  const updateStatusMutation = trpc.employeeRequests.updateStatus.useMutation({
+  // Mutation للموافقة/الرفض باستخدام portalAdmin
+  const updateStatusMutation = trpc.portalAdmin.updateRequestStatus.useMutation({
     onSuccess: () => {
       refetchRequests();
       setShowRequestDialog(false);
@@ -153,34 +186,27 @@ export default function AdminEmployeePortal() {
     },
   });
 
-  // فلترة الموظفين
-  const filteredEmployees = useMemo(() => {
-    if (!employees) return [];
-    
-    let filtered = employees;
-    
-    // فلتر الفرع
-    if (selectedBranch !== 'all') {
-      filtered = filtered.filter(emp => emp.branchId === parseInt(selectedBranch));
-    }
-    
-    // فلتر البحث
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(emp => 
-        emp.name.toLowerCase().includes(query) ||
-        emp.code.toLowerCase().includes(query) ||
-        emp.phone?.toLowerCase().includes(query)
-      );
-    }
-    
-    return filtered;
-  }, [employees, selectedBranch, searchQuery]);
+  // فلترة الموظفين (الفلترة تتم في الخادم الآن)
+  const filteredEmployees = employees || [];
 
   // إحصائيات الداشبورد
   const dashboardStats = useMemo(() => {
+    if (dashboardStatsData) {
+      return {
+        totalEmployees: dashboardStatsData.totalEmployees,
+        activeEmployees: dashboardStatsData.activeEmployees,
+        pendingRequests: dashboardStatsData.pendingRequests,
+        expiredDocs: dashboardStatsData.expiringDocuments,
+        expiringDocsCount: 0,
+        totalRequests: requestStats?.total || 0,
+        approvedRequests: dashboardStatsData.approvedRequests,
+        rejectedRequests: dashboardStatsData.rejectedRequests,
+      };
+    }
+    
+    // Fallback to calculated stats
     const totalEmployees = employees?.length || 0;
-    const activeEmployees = employees?.filter(e => e.isActive).length || 0;
+    const activeEmployees = employees?.filter((e: any) => e.isActive).length || 0;
     const pendingRequests = requestStats?.pending || 0;
     const expiredDocs = (expiringDocs?.expired?.iqama?.length || 0) + 
                         (expiringDocs?.expired?.healthCert?.length || 0) + 
@@ -199,16 +225,17 @@ export default function AdminEmployeePortal() {
       approvedRequests: requestStats?.approved || 0,
       rejectedRequests: requestStats?.rejected || 0,
     };
-  }, [employees, requestStats, expiringDocs]);
+  }, [employees, requestStats, expiringDocs, dashboardStatsData]);
 
   // معالجة الطلب
   const handleProcessRequest = async (status: 'approved' | 'rejected') => {
-    if (!selectedRequest) return;
+    if (!selectedRequest || !adminInfo) return;
     
     setIsProcessing(true);
     try {
       await updateStatusMutation.mutateAsync({
-        id: selectedRequest.id,
+        adminId: adminInfo.id,
+        requestId: selectedRequest.id,
         status,
         reviewNotes,
       });
@@ -387,14 +414,14 @@ export default function AdminEmployeePortal() {
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
                       </div>
-                    ) : requests?.filter(r => r.status === 'pending').slice(0, 5).length === 0 ? (
+                    ) : requests?.filter((r: any) => r.status === 'pending').slice(0, 5).length === 0 ? (
                       <div className="text-center py-8 text-slate-400">
                         <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-emerald-500" />
                         <p>لا توجد طلبات معلقة</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {requests?.filter(r => r.status === 'pending').slice(0, 5).map((request: any) => (
+                        {requests?.filter((r: any) => r.status === 'pending').slice(0, 5).map((request: any) => (
                           <div 
                             key={request.id}
                             className="p-3 bg-slate-700/50 rounded-lg border border-slate-600 hover:border-amber-500/50 cursor-pointer transition-all"

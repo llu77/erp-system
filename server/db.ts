@@ -1406,23 +1406,29 @@ export async function updateEmployeeRequestStatus(
   reviewedByName: string,
   reviewNotes?: string,
   rejectionReason?: string
-) {
+): Promise<{ success: boolean; error?: string }> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) return { success: false, error: 'Database not available' };
   
-  const updateData: Partial<InsertEmployeeRequest> = {
-    status,
-    reviewedBy,
-    reviewedByName,
-    reviewedAt: new Date(),
-    reviewNotes,
-  };
-  
-  if (status === "rejected" && rejectionReason) {
-    updateData.rejectionReason = rejectionReason;
+  try {
+    const updateData: Partial<InsertEmployeeRequest> = {
+      status,
+      reviewedBy,
+      reviewedByName,
+      reviewedAt: new Date(),
+      reviewNotes,
+    };
+    
+    if (status === "rejected" && rejectionReason) {
+      updateData.rejectionReason = rejectionReason;
+    }
+    
+    await db.update(employeeRequests).set(updateData).where(eq(employeeRequests.id, id));
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating employee request status:', error);
+    return { success: false, error: 'Failed to update request status' };
   }
-  
-  await db.update(employeeRequests).set(updateData).where(eq(employeeRequests.id, id));
 }
 
 // تحديث طلب
@@ -10286,4 +10292,315 @@ export async function getDocumentStatistics() {
       ? Math.round((withAllImages.length / allEmployees.length) * 100) 
       : 0,
   };
+}
+
+
+// ==================== دوال لوحة تحكم الأدمن في بوابة الموظفين ====================
+
+// التحقق من صلاحيات الأدمن في بوابة الموظفين
+export async function checkPortalAdminAccess(userId: number): Promise<{
+  isAdmin: boolean;
+  adminName?: string;
+  adminRole?: string;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return { isAdmin: false };
+  }
+
+  try {
+    // البحث في جدول المستخدمين
+    const user = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        role: users.role,
+        username: users.username,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (user.length > 0 && (user[0].role === 'admin' || user[0].role === 'manager' || user[0].role === 'supervisor')) {
+      return {
+        isAdmin: true,
+        adminName: user[0].name || user[0].username || 'Admin',
+        adminRole: user[0].role,
+      };
+    }
+
+    return { isAdmin: false };
+  } catch (error) {
+    console.error('Error checking portal admin access:', error);
+    return { isAdmin: false };
+  }
+}
+
+// جلب قائمة الموظفين للأدمن في بوابة الموظفين
+export async function getEmployeesForPortalAdmin(
+  branchId?: number,
+  search?: string
+): Promise<Array<{
+  id: number;
+  name: string;
+  code: string;
+  branchId: number;
+  branchName: string;
+  position: string | null;
+  phone: string | null;
+  email: string | null;
+  isActive: boolean;
+  iqamaNumber: string | null;
+  iqamaExpiryDate: Date | null;
+  healthCertExpiryDate: Date | null;
+  contractExpiryDate: Date | null;
+  hasPortalAccess: boolean;
+  lastLogin: Date | null;
+}>> {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  try {
+    let query = db
+      .select({
+        id: employees.id,
+        name: employees.name,
+        code: employees.code,
+        branchId: employees.branchId,
+        position: employees.position,
+        phone: employees.phone,
+        email: employees.email,
+        isActive: employees.isActive,
+        iqamaNumber: employees.iqamaNumber,
+        iqamaExpiryDate: employees.iqamaExpiryDate,
+        healthCertExpiryDate: employees.healthCertExpiryDate,
+        contractExpiryDate: employees.contractExpiryDate,
+        hasPortalAccess: employees.hasPortalAccess,
+        lastLogin: employees.lastLogin,
+      })
+      .from(employees)
+      .where(eq(employees.isActive, true));
+
+    const emps = await query;
+
+    // جلب أسماء الفروع
+    const branchList = await db.select().from(branches);
+    const branchMap = new Map(branchList.map((b: { id: number; name: string }) => [b.id, b.name]));
+
+    let result = emps.map((emp: typeof emps[0]) => ({
+      ...emp,
+      branchName: branchMap.get(emp.branchId) || 'غير محدد',
+    }));
+
+    // فلترة حسب الفرع
+    if (branchId) {
+      result = result.filter(emp => emp.branchId === branchId);
+    }
+
+    // فلترة حسب البحث
+    if (search) {
+      const searchLower = search.toLowerCase();
+      result = result.filter(emp => 
+        emp.name.toLowerCase().includes(searchLower) ||
+        emp.code.toLowerCase().includes(searchLower)
+      );
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Error getting employees for portal admin:', error);
+    return [];
+  }
+}
+
+// جلب قائمة الفروع للأدمن في بوابة الموظفين
+export async function getBranchesForPortalAdmin(): Promise<Array<{
+  id: number;
+  name: string;
+  employeeCount: number;
+}>> {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  try {
+    const branchList = await db.select().from(branches);
+    
+    // حساب عدد الموظفين لكل فرع
+    const employeeCounts = await db
+      .select({
+        branchId: employees.branchId,
+      })
+      .from(employees)
+      .where(eq(employees.isActive, true));
+
+    const countMap = new Map<number, number>();
+    employeeCounts.forEach((emp: { branchId: number }) => {
+      countMap.set(emp.branchId, (countMap.get(emp.branchId) || 0) + 1);
+    });
+
+    return branchList.map((branch: { id: number; name: string }) => ({
+      id: branch.id,
+      name: branch.name,
+      employeeCount: countMap.get(branch.id) || 0,
+    }));
+  } catch (error) {
+    console.error('Error getting branches for portal admin:', error);
+    return [];
+  }
+}
+
+// جلب إحصائيات لوحة تحكم الأدمن في بوابة الموظفين
+export async function getPortalAdminDashboardStats(): Promise<{
+  totalEmployees: number;
+  activeEmployees: number;
+  pendingRequests: number;
+  approvedRequests: number;
+  rejectedRequests: number;
+  expiringDocuments: number;
+  branchCount: number;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      totalEmployees: 0,
+      activeEmployees: 0,
+      pendingRequests: 0,
+      approvedRequests: 0,
+      rejectedRequests: 0,
+      expiringDocuments: 0,
+      branchCount: 0,
+    };
+  }
+
+  try {
+    // عدد الموظفين
+    const allEmployees = await db.select({ id: employees.id }).from(employees);
+    const activeEmps = await db
+      .select({ id: employees.id })
+      .from(employees)
+      .where(eq(employees.isActive, true));
+
+    // عدد الطلبات
+    const allRequests = await db.select({ id: employeeRequests.id, status: employeeRequests.status }).from(employeeRequests);
+    const pendingReqs = allRequests.filter((r: { status: string }) => r.status === 'pending').length;
+    const approvedReqs = allRequests.filter((r: { status: string }) => r.status === 'approved').length;
+    const rejectedReqs = allRequests.filter((r: { status: string }) => r.status === 'rejected').length;
+
+    // عدد الفروع
+    const branchList = await db.select({ id: branches.id }).from(branches);
+
+    // الوثائق المنتهية (خلال 30 يوم)
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    
+    const expiringDocs = await db
+      .select({ id: employees.id })
+      .from(employees)
+      .where(
+        and(
+          eq(employees.isActive, true),
+          or(
+            and(
+              isNotNull(employees.iqamaExpiryDate),
+              lte(employees.iqamaExpiryDate, thirtyDaysFromNow)
+            ),
+            and(
+              isNotNull(employees.healthCertExpiryDate),
+              lte(employees.healthCertExpiryDate, thirtyDaysFromNow)
+            ),
+            and(
+              isNotNull(employees.contractExpiryDate),
+              lte(employees.contractExpiryDate, thirtyDaysFromNow)
+            )
+          )
+        )
+      );
+
+    return {
+      totalEmployees: allEmployees.length,
+      activeEmployees: activeEmps.length,
+      pendingRequests: pendingReqs,
+      approvedRequests: approvedReqs,
+      rejectedRequests: rejectedReqs,
+      expiringDocuments: expiringDocs.length,
+      branchCount: branchList.length,
+    };
+  } catch (error) {
+    console.error('Error getting portal admin dashboard stats:', error);
+    return {
+      totalEmployees: 0,
+      activeEmployees: 0,
+      pendingRequests: 0,
+      approvedRequests: 0,
+      rejectedRequests: 0,
+      expiringDocuments: 0,
+      branchCount: 0,
+    };
+  }
+}
+
+// جلب تفاصيل موظف للأدمن في بوابة الموظفين
+export async function getEmployeeDetailsForPortalAdmin(employeeId: number): Promise<{
+  employee: any;
+  requests: any[];
+  documents: any;
+} | null> {
+  const db = await getDb();
+  if (!db) {
+    return null;
+  }
+
+  try {
+    // جلب بيانات الموظف
+    const emp = await db
+      .select()
+      .from(employees)
+      .where(eq(employees.id, employeeId))
+      .limit(1);
+
+    if (emp.length === 0) {
+      return null;
+    }
+
+    const employee = emp[0];
+
+    // جلب اسم الفرع
+    const branch = await db
+      .select()
+      .from(branches)
+      .where(eq(branches.id, employee.branchId))
+      .limit(1);
+
+    // جلب طلبات الموظف
+    const requests = await db
+      .select()
+      .from(employeeRequests)
+      .where(eq(employeeRequests.employeeId, employeeId))
+      .orderBy(desc(employeeRequests.createdAt))
+      .limit(10);
+
+    return {
+      employee: {
+        ...employee,
+        branchName: branch.length > 0 ? branch[0].name : 'غير محدد',
+      },
+      requests,
+      documents: {
+        iqamaNumber: employee.iqamaNumber,
+        iqamaExpiryDate: employee.iqamaExpiryDate,
+        iqamaImageUrl: employee.iqamaImageUrl,
+        healthCertExpiryDate: employee.healthCertExpiryDate,
+        healthCertImageUrl: employee.healthCertImageUrl,
+        contractExpiryDate: employee.contractExpiryDate,
+        contractImageUrl: employee.contractImageUrl,
+      },
+    };
+  } catch (error) {
+    console.error('Error getting employee details for portal admin:', error);
+    return null;
+  }
 }

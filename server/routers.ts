@@ -8210,6 +8210,136 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
   }),
 
+  // ==================== لوحة تحكم الأدمن في بوابة الموظفين ====================
+  portalAdmin: router({
+    // جلب قائمة الموظفين (للأدمن في بوابة الموظفين)
+    getEmployees: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+        branchId: z.number().optional(),
+        search: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        return await db.getEmployeesForPortalAdmin(input.branchId, input.search);
+      }),
+
+    // جلب قائمة الفروع (للأدمن في بوابة الموظفين)
+    getBranches: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        return await db.getBranchesForPortalAdmin();
+      }),
+
+    // جلب قائمة الطلبات (للأدمن في بوابة الموظفين)
+    getRequests: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+        status: z.string().optional(),
+        requestType: z.string().optional(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        const { adminId, ...filters } = input;
+        return await db.getAllEmployeeRequests(filters);
+      }),
+
+    // تحديث حالة طلب (للأدمن في بوابة الموظفين)
+    updateRequestStatus: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+        requestId: z.number(),
+        status: z.enum(['approved', 'rejected']),
+        reviewNotes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        const result = await db.updateEmployeeRequestStatus(
+          input.requestId,
+          input.status,
+          input.adminId,
+          adminCheck.adminName || 'Admin',
+          input.reviewNotes
+        );
+        
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في تحديث الطلب' });
+        }
+        
+        return { success: true };
+      }),
+
+    // جلب الوثائق المنتهية (للأدمن في بوابة الموظفين)
+    getExpiringDocuments: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        return await db.getEmployeesWithExpiringDocuments();
+      }),
+
+    // جلب إحصائيات لوحة التحكم (للأدمن في بوابة الموظفين)
+    getDashboardStats: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        return await db.getPortalAdminDashboardStats();
+      }),
+
+    // جلب تفاصيل موظف (للأدمن في بوابة الموظفين)
+    getEmployeeDetails: publicProcedure
+      .input(z.object({
+        adminId: z.number(),
+        employeeId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        // التحقق من صلاحيات الأدمن
+        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
+        if (!adminCheck.isAdmin) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        return await db.getEmployeeDetailsForPortalAdmin(input.employeeId);
+      }),
+  }),
+
   // ==================== التقارير الأسبوعية التلقائية ====================
   weeklyReports: {
     // إرسال التقرير الأسبوعي يدوياً
