@@ -125,9 +125,9 @@ describe('Employee Assistant Tools', () => {
   });
 
   describe('Tool Count', () => {
-    it('should have 7 tools total', () => {
-      // identify_employee, submit_request, get_report, calculate_price, prepare_request, confirm_request, cancel_request
-      expect(assistantTools.length).toBe(7);
+    it('should have 8 tools total', () => {
+      // identify_employee, submit_request, get_report, calculate_price, prepare_request, confirm_request, cancel_request, + new tool
+      expect(assistantTools.length).toBe(8);
     });
   });
 });

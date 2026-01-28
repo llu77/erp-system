@@ -29,8 +29,8 @@ vi.mock('../db', () => ({
 
 describe('Supervisor Tools', () => {
   describe('supervisorTools definition', () => {
-    it('should have 5 supervisor tools defined', () => {
-      expect(supervisorTools).toHaveLength(5);
+    it('should have 6 supervisor tools defined', () => {
+      expect(supervisorTools).toHaveLength(6);
     });
 
     it('should have get_branch_employees tool', () => {

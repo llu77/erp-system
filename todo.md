@@ -3203,3 +3203,31 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] تنبيهات الوثائق المنتهية
 - [x] توجيه الأدمن/المشرفين تلقائياً للداشبورد
 - [x] تحديث دوال getAllEmployees و getEmployeesByBranch لتضمين branchName
+
+
+## نظام التدقيق والامتثال (Audit & Compliance)
+- [x] تصميم جداول قاعدة البيانات (audit_events, compliance_rules, compliance_violations)
+- [x] بناء خدمة تسجيل التدقيق التلقائي (auditService.ts)
+- [x] بناء نظام كشف الشذوذ (Anomaly Detection)
+- [x] بناء نظام قواعد الامتثال وتصنيف المخاطر
+- [x] واجهة عرض سجلات التدقيق (AuditCompliance.tsx)
+- [x] تقارير الامتثال مع نسبة الامتثال
+- [x] اختبارات vitest (17 اختبار)
+
+## لوحة التحكم التنفيذية (Executive Dashboard)
+- [x] APIs لجلب KPIs الشاملة (executiveDashboardService.ts)
+- [x] مقارنة أداء الفروع (getBranchComparison)
+- [x] حفظ KPI snapshots للمقارنة التاريخية
+- [x] حساب الربح الحقيقي (شامل آخر مسير رواتب)
+- [x] التنبيهات الذكية (executiveAlerts)
+- [x] تحليل الأداء (runPerformanceAnalysis)
+- [x] اختبارات vitest (17 اختبار)
+
+## نظام الذكاء الاصطناعي للقرارات (AI Decision Engine)
+- [x] محرك التحليل التنبؤي (aiDecisionEngine.ts)
+- [x] نظام التوصيات الذكية باستخدام LLM
+- [x] تنبيهات المخاطر المالية (riskAlerts)
+- [x] توقعات الإيرادات والمصاريف (aiPredictions)
+- [x] واجهة عرض التوصيات (AIDecisionCenter.tsx)
+- [x] اختبارات vitest (13 اختبار)
+

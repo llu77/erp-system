@@ -18,6 +18,9 @@ import * as revenueAnalytics from "./bi/revenueAnalyticsService";
 import * as financialForecast from "./bi/financialForecastService";
 import { createLogger, symbolAiLogger, requestsLogger, payrollLogger, bonusLogger, notificationLogger } from "./utils/logger";
 import { handleDatabaseError, handleNotFoundError, handleBusinessRuleError } from "./middleware/errorMiddleware";
+import * as auditService from "./audit/auditService";
+import * as executiveDashboard from "./executive/executiveDashboardService";
+import * as aiDecisionEngine from "./ai/aiDecisionEngine";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -8042,6 +8045,168 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         }
         
         return { success: true, message: 'تم حذف الصورة بنجاح' };
+      }),
+  }),
+  
+  // ==================== نظام التدقيق والامتثال ====================
+  auditCompliance: router({
+    // تسجيل حدث تدقيق
+    logEvent: adminProcedure
+      .input(z.object({
+        eventType: z.enum(["create", "update", "delete", "view", "export", "import", "login", "logout", "login_failed", "password_change", "approval", "rejection", "payment", "transfer", "config_change", "permission_change", "bulk_operation"]),
+        entityType: z.string(),
+        entityId: z.number().optional(),
+        entityName: z.string().optional(),
+        description: z.string().optional(),
+        oldData: z.record(z.string(), z.any()).optional(),
+        newData: z.record(z.string(), z.any()).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await auditService.logAuditEvent({
+          ...input,
+          context: {
+            userId: ctx.user.id,
+            userName: ctx.user.name ?? undefined,
+            userRole: ctx.user.role ?? undefined,
+          },
+        });
+      }),
+    
+    // جلب سجلات التدقيق
+    getEvents: adminProcedure
+      .input(z.object({
+        eventType: z.enum(["create", "update", "delete", "view", "export", "import", "login", "logout", "login_failed", "password_change", "approval", "rejection", "payment", "transfer", "config_change", "permission_change", "bulk_operation"]).optional(),
+        entityType: z.string().optional(),
+        userId: z.number().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+        limit: z.number().default(100),
+        offset: z.number().default(0),
+      }))
+      .query(async ({ input }) => {
+        return await auditService.getAuditEvents(input);
+      }),
+    
+    // كشف الشذوذ
+    detectAnomalies: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await auditService.detectAnomalies(input.year, input.month);
+      }),
+    
+    // تقرير الامتثال
+    getComplianceReport: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await auditService.generateComplianceReport(input.year, input.month);
+      }),
+  }),
+  
+  // ==================== لوحة التحكم التنفيذية ====================
+  executive: router({
+    // KPIs الشاملة
+    getKPIs: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await executiveDashboard.calculateExecutiveKPIs(input.year, input.month);
+      }),
+    
+    // مقارنة الفروع
+    getBranchComparison: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await executiveDashboard.getBranchComparison(input.year, input.month);
+      }),
+    
+    // التنبيهات التنفيذية
+    getAlerts: adminProcedure
+      .input(z.object({
+        status: z.enum(["active", "acknowledged", "resolved", "dismissed"]).optional(),
+        severity: z.enum(["info", "warning", "critical"]).optional(),
+        limit: z.number().default(50),
+      }))
+      .query(async ({ input }) => {
+        return await executiveDashboard.getExecutiveAlerts(input);
+      }),
+    
+    // تحديث حالة التنبيه
+    updateAlertStatus: adminProcedure
+      .input(z.object({
+        alertId: z.number(),
+        status: z.enum(["acknowledged", "resolved", "dismissed"]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await executiveDashboard.updateAlertStatus(
+          input.alertId,
+          input.status,
+          ctx.user.id
+        );
+      }),
+    
+    // تشغيل التحليل التلقائي
+    runAnalysis: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        await executiveDashboard.runPerformanceAnalysis(input.year, input.month);
+        return { success: true, message: 'تم تشغيل التحليل بنجاح' };
+      }),
+  }),
+  
+  // ==================== نظام الذكاء الاصطناعي للقرارات ====================
+  aiDecision: router({
+    // التنبؤات المالية
+    getPredictions: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await aiDecisionEngine.generateFinancialPredictions(input.year, input.month);
+      }),
+    
+    // تقييم المخاطر
+    getRiskAssessment: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await aiDecisionEngine.assessRisks(input.year, input.month);
+      }),
+    
+    // التوصيات الذكية
+    getRecommendations: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await aiDecisionEngine.generateAIRecommendations(input.year, input.month);
+      }),
+    
+    // التحليل الشامل بالذكاء الاصطناعي
+    getAIInsights: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await aiDecisionEngine.generateAIInsights(input.year, input.month);
       }),
   }),
 });

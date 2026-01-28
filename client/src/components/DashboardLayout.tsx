@@ -118,6 +118,8 @@ const menuStructure: MenuItem[] = [
       { icon: BarChart3, label: "لوحة BI المتقدمة", path: "/bi-dashboard", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: FileText, label: "منشئ التقارير", path: "/report-builder", roles: ["admin", "manager", "supervisor"] },
       { icon: Brain, label: "تحليلات AI", path: "/ai-analytics", roles: ["admin", "manager"] },
+      { icon: Brain, label: "مركز الذكاء الاصطناعي", path: "/ai-decision-center", roles: ["admin", "manager"] },
+      { icon: Shield, label: "التدقيق والامتثال", path: "/audit-compliance", roles: ["admin", "manager"] },
     ]
   },
   

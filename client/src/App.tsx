@@ -66,6 +66,8 @@ import EmployeeLogin from "./pages/EmployeeLogin";
 import EmployeeAccounts from "./pages/EmployeeAccounts";
 import PaidInvoicesReport from "./pages/PaidInvoicesReport";
 import MonthlyReports from "./pages/MonthlyReports";
+import AIDecisionCenter from "./pages/AIDecisionCenter";
+import AuditCompliance from "./pages/AuditCompliance";
 
 function Router() {
   return (
@@ -230,6 +232,16 @@ function Router() {
       <Route path="/executive-dashboard">
         <DashboardLayout>
           <ExecutiveDashboard />
+        </DashboardLayout>
+      </Route>
+      <Route path="/ai-decision-center">
+        <DashboardLayout>
+          <AIDecisionCenter />
+        </DashboardLayout>
+      </Route>
+      <Route path="/audit-compliance">
+        <DashboardLayout>
+          <AuditCompliance />
         </DashboardLayout>
       </Route>
       {/* Security & Audit */}

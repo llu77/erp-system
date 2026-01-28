@@ -2169,3 +2169,497 @@ export const employeeNotifications = mysqlTable("employeeNotifications", {
 
 export type EmployeeNotification = typeof employeeNotifications.$inferSelect;
 export type InsertEmployeeNotification = typeof employeeNotifications.$inferInsert;
+
+
+// ==================== نظام التدقيق والامتثال ====================
+
+/**
+ * AuditEvents - سجل التدقيق الشامل
+ * يسجل جميع العمليات الحساسة في النظام مع التفاصيل الكاملة
+ */
+export const auditEvents = mysqlTable("auditEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // معلومات المستخدم
+  userId: int("userId"),
+  userName: varchar("userName", { length: 200 }),
+  userRole: varchar("userRole", { length: 50 }),
+  userBranchId: int("userBranchId"),
+  
+  // تفاصيل العملية
+  eventType: mysqlEnum("eventType", [
+    "create", "update", "delete", "view", "export", "import",
+    "login", "logout", "login_failed", "password_change",
+    "approval", "rejection", "payment", "transfer",
+    "config_change", "permission_change", "bulk_operation"
+  ]).notNull(),
+  
+  entityType: varchar("entityType", { length: 100 }).notNull(), // نوع الكيان (employee, revenue, expense, etc.)
+  entityId: int("entityId"),
+  entityName: varchar("entityName", { length: 255 }),
+  
+  // البيانات القديمة والجديدة (JSON)
+  oldData: json("oldData").$type<Record<string, unknown>>(),
+  newData: json("newData").$type<Record<string, unknown>>(),
+  changedFields: json("changedFields").$type<string[]>(),
+  
+  // معلومات إضافية
+  description: text("description"),
+  ipAddress: varchar("ipAddress", { length: 50 }),
+  userAgent: text("userAgent"),
+  sessionId: varchar("sessionId", { length: 100 }),
+  
+  // تصنيف المخاطر
+  riskLevel: mysqlEnum("riskLevel", ["low", "medium", "high", "critical"]).default("low").notNull(),
+  isAnomaly: boolean("isAnomaly").default(false).notNull(),
+  anomalyScore: decimal("anomalyScore", { precision: 5, scale: 2 }),
+  anomalyReason: text("anomalyReason"),
+  
+  // حالة المراجعة
+  reviewStatus: mysqlEnum("reviewStatus", ["pending", "reviewed", "flagged", "resolved"]).default("pending"),
+  reviewedBy: int("reviewedBy"),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewNotes: text("reviewNotes"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AuditEvent = typeof auditEvents.$inferSelect;
+export type InsertAuditEvent = typeof auditEvents.$inferInsert;
+
+/**
+ * ComplianceRules - قواعد الامتثال
+ * تحدد القواعد والسياسات التي يجب الالتزام بها
+ */
+export const complianceRules = mysqlTable("complianceRules", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  nameAr: varchar("nameAr", { length: 255 }).notNull(),
+  description: text("description"),
+  
+  // نوع القاعدة
+  category: mysqlEnum("category", [
+    "financial",      // مالية
+    "hr",             // موارد بشرية
+    "operational",    // تشغيلية
+    "security",       // أمنية
+    "data_privacy"    // خصوصية البيانات
+  ]).notNull(),
+  
+  // شروط القاعدة (JSON)
+  conditions: json("conditions").$type<{
+    entityType: string;
+    field?: string;
+    operator: "gt" | "lt" | "eq" | "ne" | "gte" | "lte" | "contains" | "not_contains";
+    value: number | string | boolean;
+    timeWindow?: string; // e.g., "1d", "1w", "1m"
+    threshold?: number;
+  }[]>(),
+  
+  // الإجراء عند المخالفة
+  severity: mysqlEnum("severity", ["info", "warning", "violation", "critical"]).default("warning").notNull(),
+  autoAction: mysqlEnum("autoAction", ["none", "notify", "block", "escalate"]).default("notify"),
+  notifyRoles: json("notifyRoles").$type<string[]>(),
+  
+  isActive: boolean("isActive").default(true).notNull(),
+  createdBy: int("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ComplianceRule = typeof complianceRules.$inferSelect;
+export type InsertComplianceRule = typeof complianceRules.$inferInsert;
+
+/**
+ * ComplianceViolations - مخالفات الامتثال
+ * تسجل المخالفات المكتشفة
+ */
+export const complianceViolations = mysqlTable("complianceViolations", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  ruleId: int("ruleId").notNull(),
+  ruleCode: varchar("ruleCode", { length: 50 }).notNull(),
+  ruleName: varchar("ruleName", { length: 255 }).notNull(),
+  
+  // تفاصيل المخالفة
+  violationType: mysqlEnum("violationType", [
+    "threshold_exceeded",   // تجاوز الحد
+    "unauthorized_access",  // وصول غير مصرح
+    "policy_breach",        // خرق السياسة
+    "data_anomaly",         // شذوذ في البيانات
+    "timing_violation",     // مخالفة توقيت
+    "approval_bypass"       // تجاوز الموافقات
+  ]).notNull(),
+  
+  severity: mysqlEnum("severity", ["info", "warning", "violation", "critical"]).notNull(),
+  
+  // الكيان المخالف
+  entityType: varchar("entityType", { length: 100 }).notNull(),
+  entityId: int("entityId"),
+  entityName: varchar("entityName", { length: 255 }),
+  
+  // المستخدم المسؤول
+  userId: int("userId"),
+  userName: varchar("userName", { length: 200 }),
+  branchId: int("branchId"),
+  
+  // تفاصيل المخالفة
+  description: text("description").notNull(),
+  evidence: json("evidence").$type<Record<string, unknown>>(),
+  
+  // حالة المعالجة
+  status: mysqlEnum("status", [
+    "open",           // مفتوحة
+    "investigating",  // قيد التحقيق
+    "resolved",       // تم الحل
+    "dismissed",      // مرفوضة
+    "escalated"       // مصعدة
+  ]).default("open").notNull(),
+  
+  // معالجة المخالفة
+  assignedTo: int("assignedTo"),
+  resolvedBy: int("resolvedBy"),
+  resolvedAt: timestamp("resolvedAt"),
+  resolution: text("resolution"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ComplianceViolation = typeof complianceViolations.$inferSelect;
+export type InsertComplianceViolation = typeof complianceViolations.$inferInsert;
+
+// ==================== لوحة التحكم التنفيذية ====================
+
+/**
+ * KPISnapshots - لقطات مؤشرات الأداء
+ * تخزن قيم KPIs بشكل دوري للتحليل التاريخي
+ */
+export const kpiSnapshots = mysqlTable("kpiSnapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // التوقيت
+  snapshotDate: timestamp("snapshotDate").notNull(),
+  periodType: mysqlEnum("periodType", ["daily", "weekly", "monthly", "quarterly", "yearly"]).notNull(),
+  year: int("year").notNull(),
+  month: int("month"),
+  week: int("week"),
+  day: int("day"),
+  
+  // الفرع (null = إجمالي)
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // المؤشرات المالية
+  totalRevenue: decimal("totalRevenue", { precision: 15, scale: 2 }).default("0").notNull(),
+  cashRevenue: decimal("cashRevenue", { precision: 15, scale: 2 }).default("0").notNull(),
+  networkRevenue: decimal("networkRevenue", { precision: 15, scale: 2 }).default("0").notNull(),
+  totalExpenses: decimal("totalExpenses", { precision: 15, scale: 2 }).default("0").notNull(),
+  operationalExpenses: decimal("operationalExpenses", { precision: 15, scale: 2 }).default("0").notNull(),
+  salaryExpenses: decimal("salaryExpenses", { precision: 15, scale: 2 }).default("0").notNull(),
+  netProfit: decimal("netProfit", { precision: 15, scale: 2 }).default("0").notNull(),
+  profitMargin: decimal("profitMargin", { precision: 5, scale: 2 }).default("0").notNull(),
+  
+  // مؤشرات الموارد البشرية
+  totalEmployees: int("totalEmployees").default(0).notNull(),
+  activeEmployees: int("activeEmployees").default(0).notNull(),
+  attendanceRate: decimal("attendanceRate", { precision: 5, scale: 2 }).default("0"),
+  pendingRequests: int("pendingRequests").default(0),
+  expiringDocuments: int("expiringDocuments").default(0),
+  
+  // مؤشرات التشغيل
+  totalTransactions: int("totalTransactions").default(0),
+  averageTransactionValue: decimal("averageTransactionValue", { precision: 12, scale: 2 }).default("0"),
+  
+  // مؤشرات النمو (مقارنة بالفترة السابقة)
+  revenueGrowth: decimal("revenueGrowth", { precision: 5, scale: 2 }),
+  expenseGrowth: decimal("expenseGrowth", { precision: 5, scale: 2 }),
+  profitGrowth: decimal("profitGrowth", { precision: 5, scale: 2 }),
+  
+  // بيانات إضافية (JSON)
+  additionalMetrics: json("additionalMetrics").$type<Record<string, number>>(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type KPISnapshot = typeof kpiSnapshots.$inferSelect;
+export type InsertKPISnapshot = typeof kpiSnapshots.$inferInsert;
+
+/**
+ * ExecutiveAlerts - تنبيهات تنفيذية
+ * تنبيهات مهمة للإدارة العليا
+ */
+export const executiveAlerts = mysqlTable("executiveAlerts", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // نوع التنبيه
+  alertType: mysqlEnum("alertType", [
+    "revenue_drop",         // انخفاض الإيرادات
+    "expense_spike",        // ارتفاع المصاريف
+    "profit_warning",       // تحذير الربحية
+    "cash_flow_risk",       // مخاطر السيولة
+    "compliance_issue",     // مشكلة امتثال
+    "performance_alert",    // تنبيه أداء
+    "document_expiry",      // انتهاء وثائق
+    "target_achievement",   // تحقيق الهدف
+    "anomaly_detected"      // كشف شذوذ
+  ]).notNull(),
+  
+  severity: mysqlEnum("severity", ["info", "warning", "critical"]).default("warning").notNull(),
+  
+  // التفاصيل
+  title: varchar("title", { length: 255 }).notNull(),
+  titleAr: varchar("titleAr", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  messageAr: text("messageAr").notNull(),
+  
+  // الكيان المرتبط
+  entityType: varchar("entityType", { length: 100 }),
+  entityId: int("entityId"),
+  branchId: int("branchId"),
+  
+  // البيانات
+  metrics: json("metrics").$type<{
+    currentValue: number;
+    previousValue?: number;
+    threshold?: number;
+    changePercent?: number;
+  }>(),
+  
+  // التوصية
+  recommendation: text("recommendation"),
+  recommendationAr: text("recommendationAr"),
+  
+  // الحالة
+  status: mysqlEnum("status", ["active", "acknowledged", "resolved", "dismissed"]).default("active").notNull(),
+  acknowledgedBy: int("acknowledgedBy"),
+  acknowledgedAt: timestamp("acknowledgedAt"),
+  resolvedBy: int("resolvedBy"),
+  resolvedAt: timestamp("resolvedAt"),
+  
+  // الإشعارات
+  notificationSent: boolean("notificationSent").default(false).notNull(),
+  notificationSentAt: timestamp("notificationSentAt"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ExecutiveAlert = typeof executiveAlerts.$inferSelect;
+export type InsertExecutiveAlert = typeof executiveAlerts.$inferInsert;
+
+// ==================== نظام الذكاء الاصطناعي للقرارات ====================
+
+/**
+ * AIPredictions - تنبؤات الذكاء الاصطناعي
+ * تخزن التنبؤات المالية والتشغيلية
+ */
+export const aiPredictions = mysqlTable("aiPredictions", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // نوع التنبؤ
+  predictionType: mysqlEnum("predictionType", [
+    "revenue_forecast",     // توقع الإيرادات
+    "expense_forecast",     // توقع المصاريف
+    "profit_forecast",      // توقع الأرباح
+    "demand_forecast",      // توقع الطلب
+    "staffing_needs",       // احتياجات التوظيف
+    "cash_flow_forecast"    // توقع التدفق النقدي
+  ]).notNull(),
+  
+  // الفترة المتوقعة
+  targetPeriod: mysqlEnum("targetPeriod", ["day", "week", "month", "quarter"]).notNull(),
+  targetDate: timestamp("targetDate").notNull(),
+  
+  // الفرع (null = إجمالي)
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // القيم المتوقعة
+  predictedValue: decimal("predictedValue", { precision: 15, scale: 2 }).notNull(),
+  confidenceLevel: decimal("confidenceLevel", { precision: 5, scale: 2 }).notNull(), // 0-100%
+  lowerBound: decimal("lowerBound", { precision: 15, scale: 2 }),
+  upperBound: decimal("upperBound", { precision: 15, scale: 2 }),
+  
+  // القيمة الفعلية (تُحدث لاحقاً)
+  actualValue: decimal("actualValue", { precision: 15, scale: 2 }),
+  accuracy: decimal("accuracy", { precision: 5, scale: 2 }), // دقة التنبؤ
+  
+  // العوامل المؤثرة
+  factors: json("factors").$type<{
+    name: string;
+    impact: number; // -100 to 100
+    description: string;
+  }[]>(),
+  
+  // النموذج المستخدم
+  modelVersion: varchar("modelVersion", { length: 50 }),
+  modelParams: json("modelParams").$type<Record<string, unknown>>(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AIPrediction = typeof aiPredictions.$inferSelect;
+export type InsertAIPrediction = typeof aiPredictions.$inferInsert;
+
+/**
+ * AIAdvancedRecommendations - توصيات الذكاء الاصطناعي المتقدمة
+ * توصيات ذكية لتحسين الأداء مع تحليل عميق
+ */
+export const aiAdvancedRecommendations = mysqlTable("aiAdvancedRecommendations", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // نوع التوصية
+  recommendationType: mysqlEnum("recommendationType", [
+    "cost_reduction",       // تقليل التكاليف
+    "revenue_increase",     // زيادة الإيرادات
+    "efficiency_improvement", // تحسين الكفاءة
+    "risk_mitigation",      // تخفيف المخاطر
+    "staffing_optimization", // تحسين التوظيف
+    "process_automation",   // أتمتة العمليات
+    "pricing_adjustment",   // تعديل التسعير
+    "inventory_optimization" // تحسين المخزون
+  ]).notNull(),
+  
+  // الأولوية
+  priority: mysqlEnum("priority", ["low", "medium", "high", "critical"]).default("medium").notNull(),
+  
+  // التفاصيل
+  title: varchar("title", { length: 255 }).notNull(),
+  titleAr: varchar("titleAr", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  descriptionAr: text("descriptionAr").notNull(),
+  
+  // الفرع المستهدف (null = عام)
+  branchId: int("branchId"),
+  
+  // التأثير المتوقع
+  expectedImpact: json("expectedImpact").$type<{
+    metric: string;
+    currentValue: number;
+    projectedValue: number;
+    changePercent: number;
+    timeframe: string;
+  }>(),
+  
+  // خطوات التنفيذ
+  actionSteps: json("actionSteps").$type<{
+    step: number;
+    action: string;
+    actionAr: string;
+    responsible?: string;
+    deadline?: string;
+  }[]>(),
+  
+  // مستوى الثقة
+  confidenceScore: decimal("confidenceScore", { precision: 5, scale: 2 }).notNull(),
+  
+  // الحالة
+  status: mysqlEnum("status", [
+    "new",            // جديدة
+    "under_review",   // قيد المراجعة
+    "approved",       // معتمدة
+    "in_progress",    // قيد التنفيذ
+    "completed",      // مكتملة
+    "rejected",       // مرفوضة
+    "deferred"        // مؤجلة
+  ]).default("new").notNull(),
+  
+  // التتبع
+  reviewedBy: int("reviewedBy"),
+  reviewedAt: timestamp("reviewedAt"),
+  implementedBy: int("implementedBy"),
+  implementedAt: timestamp("implementedAt"),
+  
+  // النتيجة الفعلية
+  actualImpact: json("actualImpact").$type<{
+    metric: string;
+    beforeValue: number;
+    afterValue: number;
+    changePercent: number;
+  }>(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AIAdvancedRecommendation = typeof aiAdvancedRecommendations.$inferSelect;
+export type InsertAIAdvancedRecommendation = typeof aiAdvancedRecommendations.$inferInsert;
+
+/**
+ * RiskAlerts - تنبيهات المخاطر
+ * تنبيهات ذكية للمخاطر المالية والتشغيلية
+ */
+export const riskAlerts = mysqlTable("riskAlerts", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // نوع المخاطر
+  riskType: mysqlEnum("riskType", [
+    "financial",      // مالية
+    "operational",    // تشغيلية
+    "compliance",     // امتثال
+    "hr",             // موارد بشرية
+    "market",         // سوقية
+    "liquidity"       // سيولة
+  ]).notNull(),
+  
+  // مستوى المخاطر
+  riskLevel: mysqlEnum("riskLevel", ["low", "medium", "high", "critical"]).notNull(),
+  riskScore: decimal("riskScore", { precision: 5, scale: 2 }).notNull(), // 0-100
+  
+  // التفاصيل
+  title: varchar("title", { length: 255 }).notNull(),
+  titleAr: varchar("titleAr", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  descriptionAr: text("descriptionAr").notNull(),
+  
+  // الفرع المتأثر
+  branchId: int("branchId"),
+  
+  // المؤشرات
+  indicators: json("indicators").$type<{
+    name: string;
+    value: number;
+    threshold: number;
+    trend: "up" | "down" | "stable";
+  }[]>(),
+  
+  // التأثير المحتمل
+  potentialImpact: json("potentialImpact").$type<{
+    financial: number;
+    operational: string;
+    timeline: string;
+  }>(),
+  
+  // خطة التخفيف
+  mitigationPlan: json("mitigationPlan").$type<{
+    action: string;
+    actionAr: string;
+    priority: number;
+    deadline?: string;
+  }[]>(),
+  
+  // الحالة
+  status: mysqlEnum("status", [
+    "active",         // نشط
+    "monitoring",     // تحت المراقبة
+    "mitigating",     // قيد التخفيف
+    "resolved",       // تم الحل
+    "accepted"        // مقبول (تم قبول المخاطر)
+  ]).default("active").notNull(),
+  
+  // التتبع
+  assignedTo: int("assignedTo"),
+  resolvedBy: int("resolvedBy"),
+  resolvedAt: timestamp("resolvedAt"),
+  resolution: text("resolution"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RiskAlert = typeof riskAlerts.$inferSelect;
+export type InsertRiskAlert = typeof riskAlerts.$inferInsert;
