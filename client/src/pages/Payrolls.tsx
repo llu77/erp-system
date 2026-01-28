@@ -74,6 +74,12 @@ const statusColors: Record<string, string> = {
   cancelled: "bg-red-500/20 text-red-400",
 };
 
+// نوع بيانات الإجازة
+interface LeaveData {
+  type: string;
+  days: number;
+}
+
 // نوع بيانات الموظف في النموذج
 interface EmployeePayrollData {
   employeeId: number;
@@ -93,6 +99,7 @@ interface EmployeePayrollData {
   negativeInvoicesDetails: string | null;
   unpaidLeaveDeduction: number;
   unpaidLeaveDays: number;
+  leavesData: LeaveData[]; // بيانات الإجازات الخام لإعادة الحساب
   grossSalary: number;
   totalDeductions: number;
   netSalary: number;
@@ -166,11 +173,18 @@ export default function Payrolls() {
         
         // جلب الإجازات بدون راتب للموظف تلقائياً
         const employeeLeaves = deductionsPreview?.leaves?.[emp.id];
-        // حساب خصم الإجازة بناءً على نوعها
+        // تخزين بيانات الإجازات الخام لإعادة الحساب عند تغيير الساعات الإضافية
+        const leavesData: LeaveData[] = employeeLeaves?.leaves?.map((leave: any) => ({
+          type: leave.type,
+          days: leave.days
+        })) || [];
+        
+        // حساب خصم الإجازة بناءً على نوعها (بدون ساعات إضافية افتراضياً)
+        // الراتب اليومي = الراتب الأساسي / 30 = 66.67 ر.س
         let unpaidLeaveDeduction = 0;
-        if (employeeLeaves && employeeLeaves.leaves) {
-          const dailySalary = baseSalary / 30;
-          for (const leave of employeeLeaves.leaves) {
+        if (leavesData.length > 0) {
+          const dailySalary = baseSalary / 30; // 66.67 ر.س بدون ساعات إضافية
+          for (const leave of leavesData) {
             const leaveType = leave.type?.toLowerCase().trim();
             // إجازة سنوية أو مرضية - مدفوعة بالكامل
             if (leaveType === 'annual' || leaveType === 'سنوية' || leaveType === 'sick' || leaveType === 'مرضية') {
@@ -208,6 +222,7 @@ export default function Payrolls() {
           negativeInvoicesDetails,
           unpaidLeaveDeduction: unpaidLeaveDeduction,
           unpaidLeaveDays: employeeLeaves?.totalDays || 0,
+          leavesData,
           grossSalary,
           totalDeductions,
           netSalary,
@@ -225,7 +240,28 @@ export default function Payrolls() {
     const absentDeduction = absentDays > 0 ? dailyRate * absentDays : 0;
     const grossSalary = data.baseSalary + overtime + data.incentiveAmount;
     const negativeInvoicesDeduction = data.negativeInvoicesDeduction || 0;
-    const unpaidLeaveDeduction = data.unpaidLeaveDeduction || 0;
+    
+    // إعادة حساب خصم الإجازة بناءً على حالة الساعات الإضافية
+    // مع ساعات إضافية: (2000 + 1000) / 30 = 100 ر.س/يوم
+    // بدون ساعات إضافية: 2000 / 30 = 66.67 ر.س/يوم
+    let unpaidLeaveDeduction = 0;
+    if (data.leavesData && data.leavesData.length > 0) {
+      for (const leave of data.leavesData) {
+        const leaveType = leave.type?.toLowerCase().trim();
+        // إجازة سنوية أو مرضية - مدفوعة بالكامل
+        if (leaveType === 'annual' || leaveType === 'سنوية' || leaveType === 'sick' || leaveType === 'مرضية') {
+          continue;
+        }
+        // إجازة طارئة - خصم 50%
+        if (leaveType === 'emergency' || leaveType === 'طارئة') {
+          unpaidLeaveDeduction += dailyRate * leave.days * 0.5;
+        } else {
+          // إجازة بدون راتب - خصم كامل
+          unpaidLeaveDeduction += dailyRate * leave.days;
+        }
+      }
+    }
+    
     const totalDeductions = data.deductionAmount + data.advanceDeduction + absentDeduction + negativeInvoicesDeduction + unpaidLeaveDeduction;
     const netSalary = grossSalary - totalDeductions;
 
@@ -234,6 +270,7 @@ export default function Payrolls() {
       overtimeAmount: overtime,
       absentDays,
       absentDeduction,
+      unpaidLeaveDeduction,
       grossSalary,
       totalDeductions,
       netSalary,
