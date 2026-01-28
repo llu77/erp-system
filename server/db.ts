@@ -8827,10 +8827,22 @@ export async function getApprovedLeavesForEmployee(
   }> = [];
 
   for (const leave of leaveRequests) {
-    if (!leave.vacationStartDate || !leave.vacationEndDate) continue;
-
+    if (!leave.vacationStartDate) continue;
+    
+    // إذا لم يكن هناك تاريخ نهاية، نستخدم تاريخ البداية + عدد الأيام
     const leaveStart = new Date(leave.vacationStartDate);
-    const leaveEnd = new Date(leave.vacationEndDate);
+    let leaveEnd: Date;
+    
+    if (leave.vacationEndDate) {
+      leaveEnd = new Date(leave.vacationEndDate);
+    } else if (leave.vacationDays && leave.vacationDays > 0) {
+      // حساب تاريخ النهاية من عدد الأيام
+      leaveEnd = new Date(leaveStart);
+      leaveEnd.setDate(leaveEnd.getDate() + leave.vacationDays - 1);
+    } else {
+      // إذا لم يكن هناك تاريخ نهاية ولا عدد أيام، نعتبرها يوم واحد
+      leaveEnd = new Date(leaveStart);
+    }
 
     // حساب التقاطع مع الشهر
     const effectiveStart = leaveStart < monthStart ? monthStart : leaveStart;
@@ -8901,19 +8913,27 @@ export function calculateLeaveDeduction(
 ): number {
   // الراتب اليومي
   const dailySalary = baseSalary / workDays;
+  
+  // توحيد نوع الإجازة (دعم الإنجليزية والعربية)
+  const normalizedType = leaveType?.toLowerCase().trim();
 
   // حساب الخصم حسب نوع الإجازة
-  switch (leaveType) {
+  switch (normalizedType) {
+    // إجازة سنوية - مدفوعة بالكامل
     case 'سنوية':
+    case 'annual':
+    // إجازة مرضية - مدفوعة بالكامل
     case 'مرضية':
-      // إجازة مدفوعة - لا خصم
+    case 'sick':
       return 0;
+    // إجازة طارئة - خصم 50%
     case 'طارئة':
-      // إجازة طارئة - خصم 50%
+    case 'emergency':
       return dailySalary * leaveDays * 0.5;
+    // إجازة بدون راتب - خصم كامل
     case 'بدون راتب':
+    case 'unpaid':
     default:
-      // إجازة بدون راتب - خصم كامل
       return dailySalary * leaveDays;
   }
 }

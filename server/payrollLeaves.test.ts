@@ -50,41 +50,56 @@ describe('ربط مسير الرواتب بالإجازات', () => {
     const baseSalary = 3000;
     const workDays = 30;
     const dailySalary = baseSalary / workDays; // 100 ر.س
+    
+    // دالة حساب الخصم الموحدة (تدعم العربية والإنجليزية)
+    function calculateDeduction(leaveType: string, leaveDays: number): number {
+      const normalizedType = leaveType?.toLowerCase().trim();
+      switch (normalizedType) {
+        case 'سنوية':
+        case 'annual':
+        case 'مرضية':
+        case 'sick':
+          return 0;
+        case 'طارئة':
+        case 'emergency':
+          return dailySalary * leaveDays * 0.5;
+        case 'بدون راتب':
+        case 'unpaid':
+        default:
+          return dailySalary * leaveDays;
+      }
+    }
 
-    it('يجب ألا يُخصم للإجازة السنوية', () => {
-      const leaveType = 'سنوية';
-      const leaveDays = 5;
-      
-      // الإجازة السنوية مدفوعة
-      const deduction = leaveType === 'سنوية' ? 0 : dailySalary * leaveDays;
-      expect(deduction).toBe(0);
+    it('يجب ألا يُخصم للإجازة السنوية (عربي)', () => {
+      expect(calculateDeduction('سنوية', 5)).toBe(0);
+    });
+    
+    it('يجب ألا يُخصم للإجازة السنوية (annual)', () => {
+      expect(calculateDeduction('annual', 5)).toBe(0);
     });
 
-    it('يجب ألا يُخصم للإجازة المرضية', () => {
-      const leaveType = 'مرضية';
-      const leaveDays = 3;
-      
-      // الإجازة المرضية مدفوعة
-      const deduction = leaveType === 'مرضية' ? 0 : dailySalary * leaveDays;
-      expect(deduction).toBe(0);
+    it('يجب ألا يُخصم للإجازة المرضية (عربي)', () => {
+      expect(calculateDeduction('مرضية', 3)).toBe(0);
+    });
+    
+    it('يجب ألا يُخصم للإجازة المرضية (sick)', () => {
+      expect(calculateDeduction('sick', 3)).toBe(0);
     });
 
-    it('يجب خصم 50% للإجازة الطارئة', () => {
-      const leaveType = 'طارئة';
-      const leaveDays = 2;
-      
-      // الإجازة الطارئة خصم 50%
-      const deduction = leaveType === 'طارئة' ? dailySalary * leaveDays * 0.5 : 0;
-      expect(deduction).toBe(100); // 100 × 2 × 0.5 = 100
+    it('يجب خصم 50% للإجازة الطارئة (عربي)', () => {
+      expect(calculateDeduction('طارئة', 2)).toBe(100); // 100 × 2 × 0.5 = 100
+    });
+    
+    it('يجب خصم 50% للإجازة الطارئة (emergency)', () => {
+      expect(calculateDeduction('emergency', 2)).toBe(100); // 100 × 2 × 0.5 = 100
     });
 
-    it('يجب خصم كامل للإجازة بدون راتب', () => {
-      const leaveType = 'بدون راتب';
-      const leaveDays = 3;
-      
-      // الإجازة بدون راتب خصم كامل
-      const deduction = leaveType === 'بدون راتب' ? dailySalary * leaveDays : 0;
-      expect(deduction).toBe(300); // 100 × 3 = 300
+    it('يجب خصم كامل للإجازة بدون راتب (عربي)', () => {
+      expect(calculateDeduction('بدون راتب', 3)).toBe(300); // 100 × 3 = 300
+    });
+    
+    it('يجب خصم كامل للإجازة بدون راتب (unpaid)', () => {
+      expect(calculateDeduction('unpaid', 3)).toBe(300); // 100 × 3 = 300
     });
   });
 
