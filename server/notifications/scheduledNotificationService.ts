@@ -700,7 +700,8 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
       if (iqamaSetting.isEnabled && emp.iqamaExpiryDate && emp.iqamaNumber) {
         const expiryDate = new Date(emp.iqamaExpiryDate);
         const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const alertDays = (iqamaSetting as any).alertDays || [30, 15, 7];
+        const rawAlertDays = (iqamaSetting as any).alertDays || [30, 15, 7];
+        const alertDays = Array.isArray(rawAlertDays) ? rawAlertDays : (typeof rawAlertDays === 'string' ? JSON.parse(rawAlertDays) : [30, 15, 7]);
         
         // التحقق من أن الأيام المتبقية تطابق إحدى فترات التنبيه
         const shouldAlert = daysRemaining > 0 && alertDays.some((d: number) => daysRemaining <= d && daysRemaining > d - 5);
@@ -745,7 +746,8 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
       if (healthSetting.isEnabled && emp.healthCertExpiryDate) {
         const expiryDate = new Date(emp.healthCertExpiryDate);
         const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const alertDays = (healthSetting as any).alertDays || [15, 7, 3];
+        const rawAlertDays = (healthSetting as any).alertDays || [15, 7, 3];
+        const alertDays = Array.isArray(rawAlertDays) ? rawAlertDays : (typeof rawAlertDays === 'string' ? JSON.parse(rawAlertDays) : [15, 7, 3]);
         
         // التحقق من أن الأيام المتبقية تطابق إحدى فترات التنبيه
         const shouldAlert = daysRemaining > 0 && alertDays.some((d: number) => daysRemaining <= d && daysRemaining > d - 3);
@@ -787,7 +789,8 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
       if (contractSetting.isEnabled && emp.contractExpiryDate) {
         const expiryDate = new Date(emp.contractExpiryDate);
         const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const alertDays = (contractSetting as any).alertDays || [60, 30, 15];
+        const rawAlertDays = (contractSetting as any).alertDays || [60, 30, 15];
+        const alertDays = Array.isArray(rawAlertDays) ? rawAlertDays : (typeof rawAlertDays === 'string' ? JSON.parse(rawAlertDays) : [60, 30, 15]);
         
         // التحقق من أن الأيام المتبقية تطابق إحدى فترات التنبيه
         const shouldAlert = daysRemaining > 0 && alertDays.some((d: number) => daysRemaining <= d && daysRemaining > d - 5);
