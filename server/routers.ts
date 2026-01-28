@@ -8636,6 +8636,77 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         return [];
       }),
   },
+  
+  // ==================== إعدادات التنبيهات التلقائية للوثائق ====================
+  documentAlerts: {
+    // جلب جميع إعدادات التنبيهات
+    getSettings: adminProcedure
+      .query(async () => {
+        return await db.getDocumentAlertSettings();
+      }),
+    
+    // جلب إعداد نوع وثيقة محدد
+    getSettingByType: adminProcedure
+      .input(z.object({
+        documentType: z.enum(['iqama', 'health_cert', 'contract']),
+      }))
+      .query(async ({ input }) => {
+        return await db.getDocumentAlertSettingByType(input.documentType);
+      }),
+    
+    // تحديث إعدادات تنبيه نوع وثيقة
+    updateSetting: adminProcedure
+      .input(z.object({
+        documentType: z.enum(['iqama', 'health_cert', 'contract']),
+        isEnabled: z.boolean().optional(),
+        alertDays: z.array(z.number()).optional(),
+        sendEmail: z.boolean().optional(),
+        sendSms: z.boolean().optional(),
+        sendInApp: z.boolean().optional(),
+        sendHour: z.number().min(0).max(23).optional(),
+        notifyAdmin: z.boolean().optional(),
+        notifyGeneralSupervisor: z.boolean().optional(),
+        notifyBranchSupervisor: z.boolean().optional(),
+        notifyEmployee: z.boolean().optional(),
+        customMessage: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { documentType, ...data } = input;
+        return await db.updateDocumentAlertSetting(documentType, {
+          ...data,
+          updatedBy: ctx.user?.id,
+          updatedByName: ctx.user?.name || undefined,
+        });
+      }),
+    
+    // إنشاء إعدادات افتراضية
+    initializeSettings: adminProcedure
+      .mutation(async () => {
+        return await db.initializeDocumentAlertSettings();
+      }),
+    
+    // جلب سجل التنبيهات المرسلة
+    getLogs: adminProcedure
+      .input(z.object({
+        employeeId: z.number().optional(),
+        documentType: z.enum(['iqama', 'health_cert', 'contract']).optional(),
+        alertType: z.enum(['auto', 'manual']).optional(),
+        status: z.enum(['sent', 'failed', 'pending']).optional(),
+        page: z.number().optional().default(1),
+        limit: z.number().optional().default(50),
+      }))
+      .query(async ({ input }) => {
+        const { page, limit, ...filters } = input;
+        return await db.getDocumentAlertLogs(filters, page, limit);
+      }),
+    
+    // تشغيل فحص الوثائق يدوياً
+    runManualCheck: adminProcedure
+      .mutation(async () => {
+        const { checkAndSendDocumentExpiryReminders } = await import('./notifications/scheduledNotificationService');
+        return await checkAndSendDocumentExpiryReminders();
+      }),
+  },
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

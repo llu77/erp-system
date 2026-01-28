@@ -3367,3 +3367,38 @@ node scripts/scheduledTasks.mjs weekly-report
 - [ ] إضافة تصدير قائمة الموظفين PDF/Excel
 - [ ] تحسين التصميم للموبايل
 
+
+
+## نظام التنبيهات التلقائية لانتهاء الوثائق (28 يناير 2026) - مكتمل
+
+### 1. خدمة التنبيهات التلقائية
+- [x] تحديث scheduledNotificationService.ts لاستخدام الإعدادات الديناميكية
+- [x] دالة جلب الوثائق القريبة الانتهاء (فترات قابلة للتخصيص)
+- [x] دالة إرسال التنبيهات عبر البريد الإلكتروني
+- [x] دالة إرسال التنبيهات عبر SMS
+- [x] منع التكرار باستخدام جدول documentAlertLogs
+
+### 2. جدولة التنبيهات (Cron Job)
+- [x] cron job يومي (8:00 صباحاً) موجود مسبقاً
+- [x] دمج مع cronScheduler.ts
+- [x] endpoint للتشغيل اليدوي (documentAlerts.runManualCheck)
+
+### 3. واجهة إعدادات التنبيهات
+- [x] صفحة DocumentAlertSettings.tsx
+- [x] تحديد فترات التنبيه (قابلة للتخصيص)
+- [x] اختيار قنوات الإرسال (بريد/SMS/إشعارات داخلية)
+- [x] تفعيل/تعطيل التنبيهات التلقائية
+- [x] تحديد المستلمين (المدير/المشرف العام/مشرف الفرع/الموظف)
+- [x] سجل التنبيهات المرسلة
+
+### 4. قاعدة البيانات
+- [x] جدول documentAlertSettings (إعدادات كل نوع وثيقة)
+- [x] جدول documentAlertLogs (سجل التنبيهات المرسلة)
+- [x] دوال db.ts لإدارة الإعدادات والسجلات
+
+### 5. APIs
+- [x] documentAlerts.getSettings
+- [x] documentAlerts.updateSetting
+- [x] documentAlerts.initializeSettings
+- [x] documentAlerts.getLogs
+- [x] documentAlerts.runManualCheck

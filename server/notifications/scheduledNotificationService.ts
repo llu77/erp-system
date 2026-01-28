@@ -637,10 +637,11 @@ export async function sendWeeklyBonusReport(): Promise<SendResult> {
 // ==================== إشعارات الوثائق المنتهية ====================
 
 /**
- * فحص وإرسال إشعارات الوثائق المنتهية
- * - الإقامة: قبل شهر (30 يوم)
- * - الشهادة الصحية: قبل أسبوع (7 أيام)
- * - عقد العمل: قبل شهرين (60 يوم) + قبل شهر (30 يوم)
+ * فحص وإرسال إشعارات الوثائق المنتهية - الإصدار المحسن
+ * يستخدم الإعدادات الديناميكية من قاعدة البيانات
+ * - الإقامة: افتراضي [30, 15, 7] يوم
+ * - الشهادة الصحية: افتراضي [15, 7, 3] يوم
+ * - عقد العمل: افتراضي [60, 30, 15] يوم
  */
 export async function checkAndSendDocumentExpiryReminders(): Promise<{
   iqamaReminders: number;
@@ -648,7 +649,7 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
   contractReminders: number;
 }> {
   console.log(`\n${'#'.repeat(80)}`);
-  console.log(`# [Document Expiry] فحص الوثائق المنتهية`);
+  console.log(`# [Document Expiry] فحص الوثائق المنتهية - الإصدار المحسن`);
   console.log(`# التاريخ: ${new Date().toISOString()}`);
   console.log(`${'#'.repeat(80)}\n`);
   
@@ -659,6 +660,25 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
   };
   
   try {
+    // جلب إعدادات التنبيهات من قاعدة البيانات
+    const alertSettings = await db.getDocumentAlertSettings();
+    
+    // الإعدادات الافتراضية
+    const defaultSettings = {
+      iqama: { alertDays: [30, 15, 7], isEnabled: true, sendEmail: true },
+      health_cert: { alertDays: [15, 7, 3], isEnabled: true, sendEmail: true },
+      contract: { alertDays: [60, 30, 15], isEnabled: true, sendEmail: true },
+    };
+    
+    // دمج الإعدادات
+    const iqamaSetting = alertSettings.find(s => s.documentType === 'iqama') || defaultSettings.iqama;
+    const healthSetting = alertSettings.find(s => s.documentType === 'health_cert') || defaultSettings.health_cert;
+    const contractSetting = alertSettings.find(s => s.documentType === 'contract') || defaultSettings.contract;
+    
+    console.log(`[إعدادات] الإقامة: ${iqamaSetting.isEnabled ? 'مفعل' : 'معطل'} - أيام: ${JSON.stringify((iqamaSetting as any).alertDays)}`);
+    console.log(`[إعدادات] الشهادة الصحية: ${healthSetting.isEnabled ? 'مفعل' : 'معطل'} - أيام: ${JSON.stringify((healthSetting as any).alertDays)}`);
+    console.log(`[إعدادات] عقد العمل: ${contractSetting.isEnabled ? 'مفعل' : 'معطل'} - أيام: ${JSON.stringify((contractSetting as any).alertDays)}`);
+    
     // الحصول على جميع الموظفين النشطين
     const employees = await db.getAllEmployees();
     const branches = await db.getBranches();
@@ -676,16 +696,18 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
       
       const emp = employee as any;
       
-      // 1. فحص انتهاء الإقامة (قبل 30 يوم)
-      if (emp.iqamaExpiryDate && emp.iqamaNumber) {
+      // 1. فحص انتهاء الإقامة
+      if (iqamaSetting.isEnabled && emp.iqamaExpiryDate && emp.iqamaNumber) {
         const expiryDate = new Date(emp.iqamaExpiryDate);
         const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const alertDays = (iqamaSetting as any).alertDays || [30, 15, 7];
         
-        // إرسال إشعار قبل 30 يوم (شهر)
-        if (daysRemaining > 0 && daysRemaining <= 30) {
+        // التحقق من أن الأيام المتبقية تطابق إحدى فترات التنبيه
+        const shouldAlert = daysRemaining > 0 && alertDays.some((d: number) => daysRemaining <= d && daysRemaining > d - 5);
+        
+        if (shouldAlert) {
           // التحقق من عدم إرسال إشعار اليوم لهذا الموظف
-          const notificationKey = `iqama_${employee.id}_${today.toISOString().split('T')[0]}`;
-          const alreadySent = await wasDocumentNotificationSentToday(notificationKey);
+          const alreadySent = await db.wasDocumentAlertSentToday(employee.id, 'iqama', daysRemaining);
           
           if (!alreadySent) {
             console.log(`[Iqama] 📋 إرسال إشعار انتهاء إقامة: ${employee.name} - ${daysRemaining} يوم متبقي`);
@@ -700,21 +722,36 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
             });
             if (result.success) {
               results.iqamaReminders++;
-              await markDocumentNotificationSent(notificationKey);
+              // تسجيل التنبيه في قاعدة البيانات
+              await db.logDocumentAlert({
+                employeeId: employee.id,
+                employeeName: employee.name,
+                employeeCode: employee.code,
+                branchId: employee.branchId,
+                branchName: getBranchName(employee.branchId),
+                documentType: 'iqama',
+                expiryDate,
+                daysRemaining,
+                alertType: 'auto',
+                channel: 'email',
+                status: 'sent',
+              });
             }
           }
         }
       }
       
-      // 2. فحص انتهاء الشهادة الصحية (قبل 7 أيام)
-      if (emp.healthCertExpiryDate) {
+      // 2. فحص انتهاء الشهادة الصحية
+      if (healthSetting.isEnabled && emp.healthCertExpiryDate) {
         const expiryDate = new Date(emp.healthCertExpiryDate);
         const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const alertDays = (healthSetting as any).alertDays || [15, 7, 3];
         
-        // إرسال إشعار قبل 7 أيام (أسبوع)
-        if (daysRemaining > 0 && daysRemaining <= 7) {
-          const notificationKey = `health_${employee.id}_${today.toISOString().split('T')[0]}`;
-          const alreadySent = await wasDocumentNotificationSentToday(notificationKey);
+        // التحقق من أن الأيام المتبقية تطابق إحدى فترات التنبيه
+        const shouldAlert = daysRemaining > 0 && alertDays.some((d: number) => daysRemaining <= d && daysRemaining > d - 3);
+        
+        if (shouldAlert) {
+          const alreadySent = await db.wasDocumentAlertSentToday(employee.id, 'health_cert', daysRemaining);
           
           if (!alreadySent) {
             console.log(`[Health] 🏥 إرسال إشعار انتهاء شهادة صحية: ${employee.name} - ${daysRemaining} يوم متبقي`);
@@ -728,24 +765,40 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
             });
             if (result.success) {
               results.healthCertReminders++;
-              await markDocumentNotificationSent(notificationKey);
+              await db.logDocumentAlert({
+                employeeId: employee.id,
+                employeeName: employee.name,
+                employeeCode: employee.code,
+                branchId: employee.branchId,
+                branchName: getBranchName(employee.branchId),
+                documentType: 'health_cert',
+                expiryDate,
+                daysRemaining,
+                alertType: 'auto',
+                channel: 'email',
+                status: 'sent',
+              });
             }
           }
         }
       }
       
-      // 3. فحص انتهاء عقد العمل (قبل 60 يوم + 30 يوم)
-      if (emp.contractExpiryDate) {
+      // 3. فحص انتهاء عقد العمل
+      if (contractSetting.isEnabled && emp.contractExpiryDate) {
         const expiryDate = new Date(emp.contractExpiryDate);
         const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const alertDays = (contractSetting as any).alertDays || [60, 30, 15];
         
-        // إشعار قبل شهرين (55-60 يوم)
-        if (daysRemaining >= 55 && daysRemaining <= 60) {
-          const notificationKey = `contract_2m_${employee.id}_${today.toISOString().split('T')[0]}`;
-          const alreadySent = await wasDocumentNotificationSentToday(notificationKey);
+        // التحقق من أن الأيام المتبقية تطابق إحدى فترات التنبيه
+        const shouldAlert = daysRemaining > 0 && alertDays.some((d: number) => daysRemaining <= d && daysRemaining > d - 5);
+        
+        if (shouldAlert) {
+          const alreadySent = await db.wasDocumentAlertSentToday(employee.id, 'contract', daysRemaining);
           
           if (!alreadySent) {
-            console.log(`[Contract] 📄 إرسال إشعار انتهاء عقد (شهرين): ${employee.name} - ${daysRemaining} يوم متبقي`);
+            // تحديد نوع التذكير
+            const reminderType: 'two_months' | 'one_month' = daysRemaining > 45 ? 'two_months' : 'one_month';
+            console.log(`[Contract] 📄 إرسال إشعار انتهاء عقد: ${employee.name} - ${daysRemaining} يوم متبقي`);
             const result = await emailNotifications.notifyContractExpiry({
               employeeName: employee.name,
               employeeCode: employee.code,
@@ -753,34 +806,23 @@ export async function checkAndSendDocumentExpiryReminders(): Promise<{
               daysRemaining,
               branchName: getBranchName(employee.branchId),
               branchId: employee.branchId,
-              reminderType: 'two_months',
+              reminderType,
             });
             if (result.success) {
               results.contractReminders++;
-              await markDocumentNotificationSent(notificationKey);
-            }
-          }
-        }
-        
-        // إشعار قبل شهر (25-30 يوم)
-        if (daysRemaining >= 25 && daysRemaining <= 30) {
-          const notificationKey = `contract_1m_${employee.id}_${today.toISOString().split('T')[0]}`;
-          const alreadySent = await wasDocumentNotificationSentToday(notificationKey);
-          
-          if (!alreadySent) {
-            console.log(`[Contract] 📄 إرسال إشعار انتهاء عقد (شهر): ${employee.name} - ${daysRemaining} يوم متبقي`);
-            const result = await emailNotifications.notifyContractExpiry({
-              employeeName: employee.name,
-              employeeCode: employee.code,
-              expiryDate,
-              daysRemaining,
-              branchName: getBranchName(employee.branchId),
-              branchId: employee.branchId,
-              reminderType: 'one_month',
-            });
-            if (result.success) {
-              results.contractReminders++;
-              await markDocumentNotificationSent(notificationKey);
+              await db.logDocumentAlert({
+                employeeId: employee.id,
+                employeeName: employee.name,
+                employeeCode: employee.code,
+                branchId: employee.branchId,
+                branchName: getBranchName(employee.branchId),
+                documentType: 'contract',
+                expiryDate,
+                daysRemaining,
+                alertType: 'auto',
+                channel: 'email',
+                status: 'sent',
+              });
             }
           }
         }

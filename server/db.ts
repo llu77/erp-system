@@ -36,6 +36,8 @@ import {
   InsertLoyaltyVisit,
   receiptVouchers,
   loyaltyVisitDeletionRequests,
+  documentAlertSettings,
+  documentAlertLogs,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -10996,5 +10998,389 @@ export async function createDocumentReminder(data: {
   } catch (error) {
     console.error('Error creating document reminder:', error);
     return { success: false, error: 'فشل في إنشاء التذكير' };
+  }
+}
+
+
+// ==================== إدارة إعدادات التنبيهات التلقائية للوثائق ====================
+
+// جلب جميع إعدادات التنبيهات
+export async function getDocumentAlertSettings(): Promise<Array<{
+  id: number;
+  documentType: 'iqama' | 'health_cert' | 'contract';
+  nameAr: string;
+  isEnabled: boolean;
+  alertDays: number[];
+  sendEmail: boolean;
+  sendSms: boolean;
+  sendInApp: boolean;
+  sendHour: number;
+  notifyAdmin: boolean;
+  notifyGeneralSupervisor: boolean;
+  notifyBranchSupervisor: boolean;
+  notifyEmployee: boolean;
+  customMessage: string | null;
+  updatedAt: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  try {
+    const settings = await db.select().from(documentAlertSettings);
+    return settings.map((s: any) => ({
+      ...s,
+      alertDays: s.alertDays || [30, 15, 7],
+    }));
+  } catch (error) {
+    console.error('Error getting document alert settings:', error);
+    return [];
+  }
+}
+
+// جلب إعدادات تنبيه نوع وثيقة محدد
+export async function getDocumentAlertSettingByType(
+  documentType: 'iqama' | 'health_cert' | 'contract'
+): Promise<{
+  id: number;
+  documentType: 'iqama' | 'health_cert' | 'contract';
+  nameAr: string;
+  isEnabled: boolean;
+  alertDays: number[];
+  sendEmail: boolean;
+  sendSms: boolean;
+  sendInApp: boolean;
+  sendHour: number;
+  notifyAdmin: boolean;
+  notifyGeneralSupervisor: boolean;
+  notifyBranchSupervisor: boolean;
+  notifyEmployee: boolean;
+  customMessage: string | null;
+} | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  try {
+    const [setting] = await db
+      .select()
+      .from(documentAlertSettings)
+      .where(eq(documentAlertSettings.documentType, documentType))
+      .limit(1);
+    
+    if (!setting) return null;
+    
+    return {
+      ...setting,
+      alertDays: (setting as any).alertDays || [30, 15, 7],
+    };
+  } catch (error) {
+    console.error('Error getting document alert setting:', error);
+    return null;
+  }
+}
+
+// تحديث إعدادات تنبيه نوع وثيقة
+export async function updateDocumentAlertSetting(
+  documentType: 'iqama' | 'health_cert' | 'contract',
+  data: {
+    isEnabled?: boolean;
+    alertDays?: number[];
+    sendEmail?: boolean;
+    sendSms?: boolean;
+    sendInApp?: boolean;
+    sendHour?: number;
+    notifyAdmin?: boolean;
+    notifyGeneralSupervisor?: boolean;
+    notifyBranchSupervisor?: boolean;
+    notifyEmployee?: boolean;
+    customMessage?: string | null;
+    updatedBy?: number;
+    updatedByName?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'فشل الاتصال بقاعدة البيانات' };
+  
+  try {
+    // التحقق من وجود الإعداد
+    const [existing] = await db
+      .select()
+      .from(documentAlertSettings)
+      .where(eq(documentAlertSettings.documentType, documentType))
+      .limit(1);
+    
+    if (existing) {
+      // تحديث الإعداد الموجود
+      await db
+        .update(documentAlertSettings)
+        .set({
+          ...data,
+          alertDays: data.alertDays ? JSON.stringify(data.alertDays) : undefined,
+        } as any)
+        .where(eq(documentAlertSettings.documentType, documentType));
+    } else {
+      // إنشاء إعداد جديد
+      const nameAr = documentType === 'iqama' ? 'الإقامة' 
+        : documentType === 'health_cert' ? 'الشهادة الصحية' 
+        : 'عقد العمل';
+      
+      await db.insert(documentAlertSettings).values({
+        documentType,
+        nameAr,
+        isEnabled: data.isEnabled ?? true,
+        alertDays: JSON.stringify(data.alertDays || [30, 15, 7]) as any,
+        sendEmail: data.sendEmail ?? true,
+        sendSms: data.sendSms ?? false,
+        sendInApp: data.sendInApp ?? true,
+        sendHour: data.sendHour ?? 8,
+        notifyAdmin: data.notifyAdmin ?? true,
+        notifyGeneralSupervisor: data.notifyGeneralSupervisor ?? true,
+        notifyBranchSupervisor: data.notifyBranchSupervisor ?? true,
+        notifyEmployee: data.notifyEmployee ?? false,
+        customMessage: data.customMessage ?? null,
+        updatedBy: data.updatedBy,
+        updatedByName: data.updatedByName,
+      });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating document alert setting:', error);
+    return { success: false, error: 'فشل في تحديث الإعدادات' };
+  }
+}
+
+// إنشاء إعدادات افتراضية للتنبيهات
+export async function initializeDocumentAlertSettings(): Promise<{ success: boolean }> {
+  const db = await getDb();
+  if (!db) return { success: false };
+  
+  try {
+    // التحقق من وجود إعدادات
+    const existing = await db.select().from(documentAlertSettings);
+    
+    if (existing.length === 0) {
+      // إنشاء الإعدادات الافتراضية
+      const defaultSettings = [
+        {
+          documentType: 'iqama' as const,
+          nameAr: 'الإقامة',
+          isEnabled: true,
+          alertDays: JSON.stringify([30, 15, 7]) as any,
+          sendEmail: true,
+          sendSms: false,
+          sendInApp: true,
+          sendHour: 8,
+          notifyAdmin: true,
+          notifyGeneralSupervisor: true,
+          notifyBranchSupervisor: true,
+          notifyEmployee: false,
+        },
+        {
+          documentType: 'health_cert' as const,
+          nameAr: 'الشهادة الصحية',
+          isEnabled: true,
+          alertDays: JSON.stringify([15, 7, 3]) as any,
+          sendEmail: true,
+          sendSms: false,
+          sendInApp: true,
+          sendHour: 8,
+          notifyAdmin: true,
+          notifyGeneralSupervisor: true,
+          notifyBranchSupervisor: true,
+          notifyEmployee: false,
+        },
+        {
+          documentType: 'contract' as const,
+          nameAr: 'عقد العمل',
+          isEnabled: true,
+          alertDays: JSON.stringify([60, 30, 15]) as any,
+          sendEmail: true,
+          sendSms: false,
+          sendInApp: true,
+          sendHour: 8,
+          notifyAdmin: true,
+          notifyGeneralSupervisor: true,
+          notifyBranchSupervisor: true,
+          notifyEmployee: false,
+        },
+      ];
+      
+      for (const setting of defaultSettings) {
+        await db.insert(documentAlertSettings).values(setting);
+      }
+      
+      console.log('[DB] تم إنشاء إعدادات التنبيهات الافتراضية');
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error initializing document alert settings:', error);
+    return { success: false };
+  }
+}
+
+// تسجيل تنبيه وثيقة مرسل
+export async function logDocumentAlert(data: {
+  employeeId: number;
+  employeeName: string;
+  employeeCode?: string;
+  branchId?: number;
+  branchName?: string;
+  documentType: 'iqama' | 'health_cert' | 'contract';
+  expiryDate: Date;
+  daysRemaining: number;
+  alertType: 'auto' | 'manual';
+  channel: 'email' | 'sms' | 'both' | 'in_app';
+  status: 'sent' | 'failed' | 'pending';
+  recipientEmail?: string;
+  recipientPhone?: string;
+  recipientCount?: number;
+  errorMessage?: string;
+}): Promise<{ success: boolean; id?: number }> {
+  const db = await getDb();
+  if (!db) return { success: false };
+  
+  try {
+    const [result] = await db.insert(documentAlertLogs).values({
+      employeeId: data.employeeId,
+      employeeName: data.employeeName,
+      employeeCode: data.employeeCode,
+      branchId: data.branchId,
+      branchName: data.branchName,
+      documentType: data.documentType,
+      expiryDate: data.expiryDate,
+      daysRemaining: data.daysRemaining,
+      alertType: data.alertType,
+      channel: data.channel,
+      status: data.status,
+      sentAt: data.status === 'sent' ? new Date() : null,
+      recipientEmail: data.recipientEmail,
+      recipientPhone: data.recipientPhone,
+      recipientCount: data.recipientCount || 1,
+      errorMessage: data.errorMessage,
+    });
+    
+    return { success: true, id: (result as any).insertId };
+  } catch (error) {
+    console.error('Error logging document alert:', error);
+    return { success: false };
+  }
+}
+
+// جلب سجل التنبيهات المرسلة
+export async function getDocumentAlertLogs(
+  filters?: {
+    employeeId?: number;
+    documentType?: 'iqama' | 'health_cert' | 'contract';
+    alertType?: 'auto' | 'manual';
+    status?: 'sent' | 'failed' | 'pending';
+    fromDate?: Date;
+    toDate?: Date;
+  },
+  page: number = 1,
+  limit: number = 50
+): Promise<{
+  logs: Array<{
+    id: number;
+    employeeId: number;
+    employeeName: string;
+    employeeCode: string | null;
+    branchName: string | null;
+    documentType: 'iqama' | 'health_cert' | 'contract';
+    expiryDate: Date;
+    daysRemaining: number;
+    alertType: 'auto' | 'manual';
+    channel: string;
+    status: 'sent' | 'failed' | 'pending';
+    sentAt: Date | null;
+    recipientCount: number;
+    createdAt: Date;
+  }>;
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const db = await getDb();
+  if (!db) return { logs: [], total: 0, page: 1, totalPages: 0 };
+  
+  try {
+    let allLogs = await db
+      .select()
+      .from(documentAlertLogs)
+      .orderBy(desc(documentAlertLogs.createdAt));
+    
+    // تطبيق الفلاتر
+    if (filters) {
+      if (filters.employeeId) {
+        allLogs = allLogs.filter((l: any) => l.employeeId === filters.employeeId);
+      }
+      if (filters.documentType) {
+        allLogs = allLogs.filter((l: any) => l.documentType === filters.documentType);
+      }
+      if (filters.alertType) {
+        allLogs = allLogs.filter((l: any) => l.alertType === filters.alertType);
+      }
+      if (filters.status) {
+        allLogs = allLogs.filter((l: any) => l.status === filters.status);
+      }
+      if (filters.fromDate) {
+        allLogs = allLogs.filter((l: any) => new Date(l.createdAt) >= filters.fromDate!);
+      }
+      if (filters.toDate) {
+        allLogs = allLogs.filter((l: any) => new Date(l.createdAt) <= filters.toDate!);
+      }
+    }
+    
+    const total = allLogs.length;
+    const totalPages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+    const paginatedLogs = allLogs.slice(offset, offset + limit);
+    
+    return {
+      logs: paginatedLogs.map((l: any) => ({
+        ...l,
+        expiryDate: new Date(l.expiryDate),
+        sentAt: l.sentAt ? new Date(l.sentAt) : null,
+        createdAt: new Date(l.createdAt),
+      })),
+      total,
+      page,
+      totalPages,
+    };
+  } catch (error) {
+    console.error('Error getting document alert logs:', error);
+    return { logs: [], total: 0, page: 1, totalPages: 0 };
+  }
+}
+
+// التحقق مما إذا تم إرسال تنبيه لموظف ووثيقة محددة اليوم
+export async function wasDocumentAlertSentToday(
+  employeeId: number,
+  documentType: 'iqama' | 'health_cert' | 'contract',
+  daysRemaining: number
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const logs = await db
+      .select()
+      .from(documentAlertLogs)
+      .where(and(
+        eq(documentAlertLogs.employeeId, employeeId),
+        eq(documentAlertLogs.documentType, documentType),
+        eq(documentAlertLogs.daysRemaining, daysRemaining),
+        eq(documentAlertLogs.status, 'sent'),
+        gte(documentAlertLogs.createdAt, today)
+      ))
+      .limit(1);
+    
+    return logs.length > 0;
+  } catch (error) {
+    console.error('Error checking document alert sent today:', error);
+    return false;
   }
 }

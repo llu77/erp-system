@@ -2752,3 +2752,93 @@ export const scheduledAIReportLogs = mysqlTable("scheduledAIReportLogs", {
 
 export type ScheduledAIReportLog = typeof scheduledAIReportLogs.$inferSelect;
 export type InsertScheduledAIReportLog = typeof scheduledAIReportLogs.$inferInsert;
+
+
+// ==================== جدول إعدادات التنبيهات التلقائية للوثائق ====================
+/**
+ * DocumentAlertSettings - إعدادات التنبيهات التلقائية لانتهاء الوثائق
+ * يحدد فترات التنبيه وقنوات الإرسال لكل نوع وثيقة
+ */
+export const documentAlertSettings = mysqlTable("documentAlertSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // نوع الوثيقة
+  documentType: mysqlEnum("documentType", ["iqama", "health_cert", "contract"]).notNull(),
+  
+  // اسم الإعداد بالعربي
+  nameAr: varchar("nameAr", { length: 100 }).notNull(),
+  
+  // تفعيل التنبيهات
+  isEnabled: boolean("isEnabled").default(true).notNull(),
+  
+  // فترات التنبيه (بالأيام)
+  alertDays: json("alertDays").$type<number[]>().notNull(), // مثال: [60, 30, 15, 7]
+  
+  // قنوات الإرسال
+  sendEmail: boolean("sendEmail").default(true).notNull(),
+  sendSms: boolean("sendSms").default(false).notNull(),
+  sendInApp: boolean("sendInApp").default(true).notNull(),
+  
+  // وقت الإرسال اليومي (بالساعات 0-23)
+  sendHour: int("sendHour").default(8).notNull(),
+  
+  // المستلمون
+  notifyAdmin: boolean("notifyAdmin").default(true).notNull(),
+  notifyGeneralSupervisor: boolean("notifyGeneralSupervisor").default(true).notNull(),
+  notifyBranchSupervisor: boolean("notifyBranchSupervisor").default(true).notNull(),
+  notifyEmployee: boolean("notifyEmployee").default(false).notNull(),
+  
+  // رسالة مخصصة (اختياري)
+  customMessage: text("customMessage"),
+  
+  // آخر تحديث
+  updatedBy: int("updatedBy"),
+  updatedByName: varchar("updatedByName", { length: 255 }),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type DocumentAlertSetting = typeof documentAlertSettings.$inferSelect;
+export type InsertDocumentAlertSetting = typeof documentAlertSettings.$inferInsert;
+
+// ==================== جدول سجل التنبيهات المرسلة للوثائق ====================
+/**
+ * DocumentAlertLogs - سجل التنبيهات المرسلة لانتهاء الوثائق
+ */
+export const documentAlertLogs = mysqlTable("documentAlertLogs", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // معلومات الموظف
+  employeeId: int("employeeId").notNull(),
+  employeeName: varchar("employeeName", { length: 255 }).notNull(),
+  employeeCode: varchar("employeeCode", { length: 50 }),
+  branchId: int("branchId"),
+  branchName: varchar("branchName", { length: 255 }),
+  
+  // معلومات الوثيقة
+  documentType: mysqlEnum("documentType", ["iqama", "health_cert", "contract"]).notNull(),
+  expiryDate: date("expiryDate").notNull(),
+  daysRemaining: int("daysRemaining").notNull(),
+  
+  // معلومات التنبيه
+  alertType: mysqlEnum("alertType", ["auto", "manual"]).default("auto").notNull(),
+  channel: mysqlEnum("channel", ["email", "sms", "both", "in_app"]).notNull(),
+  
+  // حالة الإرسال
+  status: mysqlEnum("status", ["sent", "failed", "pending"]).default("pending").notNull(),
+  sentAt: timestamp("sentAt"),
+  
+  // تفاصيل الإرسال
+  recipientEmail: varchar("recipientEmail", { length: 320 }),
+  recipientPhone: varchar("recipientPhone", { length: 20 }),
+  recipientCount: int("recipientCount").default(1).notNull(),
+  
+  // رسالة الخطأ (إن وجد)
+  errorMessage: text("errorMessage"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type DocumentAlertLog = typeof documentAlertLogs.$inferSelect;
+export type InsertDocumentAlertLog = typeof documentAlertLogs.$inferInsert;
