@@ -3241,3 +3241,8 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إضافة جدول scheduledReports لتتبع التقارير المرسلة
 - [x] إضافة واجهة إعدادات الجدولة للمدير (ReportScheduleSettings.tsx)
 - [x] اختبارات vitest (726 اختبار ناجح)
+
+## إصلاح خطأ تسجيل الدخول (طلب جديد)
+- [x] إصلاح خطأ تحديث lastSignedIn عند تسجيل الدخول (إضافة try-catch لعدم إيقاف الدخول)
+- [x] التحقق من نوع البيانات في قاعدة البيانات (timestamp)
+- [x] اختبار تسجيل الدخول بعد الإصلاح (ناجح)

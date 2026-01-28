@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, username, name, role, lastSignedIn FROM users WHERE username = 'Admin';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, username, name, role, lastSignedIn FROM users WHERE username = 'Admin';",
+  "rows": [
+    {
+      "id": "240001",
+      "username": "Admin",
+      "name": "المدير العام",
+      "role": "admin",
+      "lastSignedIn": "2026-01-28 12:06:11"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\tname\trole\tlastSignedIn\n240001\tAdmin\tالمدير العام\tadmin\t2026-01-28 12:06:11\n",
+  "stderr": "",
+  "execution_time_ms": 1560
+}

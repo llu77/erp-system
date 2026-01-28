@@ -70,10 +70,15 @@ export async function localLogin(username: string, password: string) {
     }
 
     // تحديث آخر تسجيل دخول
-    await db
-      .update(users)
-      .set({ lastSignedIn: new Date() })
-      .where(eq(users.id, user.id));
+    try {
+      await db
+        .update(users)
+        .set({ lastSignedIn: new Date() })
+        .where(eq(users.id, user.id));
+    } catch (updateError) {
+      // عدم إيقاف تسجيل الدخول إذا فشل تحديث lastSignedIn
+      console.warn("[LocalAuth] Failed to update lastSignedIn:", updateError);
+    }
 
     return {
       success: true,
