@@ -6601,7 +6601,8 @@ ${discrepancyRows}
     create: supervisorInputProcedure
       .input(z.object({
         voucherDate: z.date(),
-        dueDate: z.date().optional(),
+        dueDate: z.date().optional(), // تاريخ الاستحقاق (من)
+        dueDateTo: z.date().optional(), // تاريخ الاستحقاق (إلى)
         payeeName: z.string().min(1),
         payeeAddress: z.string().optional(),
         payeePhone: z.string().optional(),

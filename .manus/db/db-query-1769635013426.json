@@ -1,0 +1,39 @@
+{
+  "query": "SELECT * FROM receiptVouchers WHERE voucherId = 'RV-2026-004';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT * FROM receiptVouchers WHERE voucherId = 'RV-2026-004';",
+  "rows": [
+    {
+      "id": "180003",
+      "voucherId": "RV-2026-004",
+      "voucherDate": "2026-01-27",
+      "dueDate": "NULL",
+      "payeeName": "عمر المطيري",
+      "payeeAddress": "",
+      "payeePhone": "",
+      "payeeEmail": "",
+      "branchId": "NULL",
+      "branchName": "",
+      "description": "تسليم مبالغ كاش",
+      "notes": "",
+      "totalAmount": "500.00",
+      "status": "draft",
+      "approvedBy": "NULL",
+      "approvedByName": "NULL",
+      "approvedAt": "NULL",
+      "paidBy": "NULL",
+      "paidByName": "NULL",
+      "paidAt": "NULL",
+      "signedBy1": "NULL",
+      "signedBy2": "NULL",
+      "createdBy": "240001",
+      "createdByName": "المدير العام",
+      "createdAt": "2026-01-28 21:15:13",
+      "updatedAt": "2026-01-28 21:15:13",
+      "dueDateTo": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tvoucherId\tvoucherDate\tdueDate\tpayeeName\tpayeeAddress\tpayeePhone\tpayeeEmail\tbranchId\tbranchName\tdescription\tnotes\ttotalAmount\tstatus\tapprovedBy\tapprovedByName\tapprovedAt\tpaidBy\tpaidByName\tpaidAt\tsignedBy1\tsignedBy2\tcreatedBy\tcreatedByName\tcreatedAt\tupdatedAt\tdueDateTo\n180003\tRV-2026-004\t2026-01-27\tNULL\tعمر المطيري\t\t\t\tNULL\t\tتسليم مبالغ كاش\t\t500.00\tdraft\tNULL\tNULL\tNULL\tNULL\tNULL\tNULL\tNULL\tNULL\t240001\tالمدير العام\t2026-01-28 21:15:13\t2026-01-28 21:15:13\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1564
+}

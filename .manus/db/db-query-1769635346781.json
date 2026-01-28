@@ -1,0 +1,21 @@
+{
+  "query": "SELECT id, voucherId, voucherDate, dueDate, dueDateTo, payeeName, branchId, branchName, status FROM receiptVouchers WHERE voucherId = 'RV-2026-005';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, voucherId, voucherDate, dueDate, dueDateTo, payeeName, branchId, branchName, status FROM receiptVouchers WHERE voucherId = 'RV-2026-005';",
+  "rows": [
+    {
+      "id": "180004",
+      "voucherId": "RV-2026-005",
+      "voucherDate": "2026-01-27",
+      "dueDate": "NULL",
+      "dueDateTo": "NULL",
+      "payeeName": "سالم الوادعي",
+      "branchId": "NULL",
+      "branchName": "",
+      "status": "draft"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tvoucherId\tvoucherDate\tdueDate\tdueDateTo\tpayeeName\tbranchId\tbranchName\tstatus\n180004\tRV-2026-005\t2026-01-27\tNULL\tNULL\tسالم الوادعي\tNULL\t\tdraft\n",
+  "stderr": "",
+  "execution_time_ms": 1566
+}

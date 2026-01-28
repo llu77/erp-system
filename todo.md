@@ -3402,3 +3402,18 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] documentAlerts.initializeSettings
 - [x] documentAlerts.getLogs
 - [x] documentAlerts.runManualCheck
+
+
+## إصلاح طباعة السند (29 يناير 2026) - مكتمل
+
+### المشكلة (تم حلها)
+- [x] تاريخ "إلى" يظهر نفس قيمة تاريخ "من" في طباعة السند
+- [x] تحسين تصميم طباعة السند ليكون أكثر احترافية
+
+### الحل المنفذ
+- [x] إضافة حقل dueDateTo في جدول receiptVouchers
+- [x] تحديث API إنشاء السند لحفظ التاريخين
+- [x] تحديث قالب الطباعة (pdfService.ts) لعرض التاريخين
+- [x] تحديث معاينة السند (ReceiptVoucher.tsx) لعرض التاريخين
+- [x] إضافة الفرع في شريط المعلومات
+- [x] الشعار والختم والتوقيعات موجودة

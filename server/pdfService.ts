@@ -45,7 +45,8 @@ const formatCurrency = (amount: number): string => {
 export async function generateSingleReceiptVoucherPDF(voucher: {
   voucherId: string;
   voucherDate: Date | string;
-  dueDate?: Date | string | null;
+  dueDate?: Date | string | null; // تاريخ الاستحقاق (من)
+  dueDateTo?: Date | string | null; // تاريخ الاستحقاق (إلى)
   payeeName: string;
   payeePhone?: string | null;
   payeeEmail?: string | null;
@@ -177,23 +178,29 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
     .info-bar {
       display: flex;
       justify-content: space-between;
+      flex-wrap: wrap;
       background: #f5f5f5;
-      padding: 15px 30px;
+      padding: 15px 20px;
       border-bottom: 2px solid #e0e0e0;
+      gap: 10px;
     }
     
     .info-item {
       text-align: center;
+      flex: 1;
+      min-width: 100px;
+      padding: 5px;
     }
     
     .info-label {
-      font-size: 11px;
+      font-size: 10px;
       color: #666;
       margin-bottom: 4px;
+      text-transform: uppercase;
     }
     
     .info-value {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       color: #1a1a1a;
     }
@@ -473,12 +480,16 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
     <!-- معلومات السند -->
     <div class="info-bar">
       <div class="info-item">
-        <div class="info-label">تاريخ السند</div>
+        <div class="info-label">التاريخ</div>
         <div class="info-value">${formatDate(voucher.voucherDate)}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">تاريخ الاستحقاق</div>
+        <div class="info-label">الاستحقاق (من)</div>
         <div class="info-value">${formatDate(voucher.dueDate)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">الاستحقاق (إلى)</div>
+        <div class="info-value">${formatDate(voucher.dueDateTo)}</div>
       </div>
       <div class="info-item">
         <div class="info-label">الفرع</div>

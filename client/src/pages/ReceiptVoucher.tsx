@@ -107,6 +107,7 @@ export default function ReceiptVoucher() {
       const result = await createVoucherMutation.mutateAsync({
         voucherDate: new Date(formData.voucherDate),
         dueDate: formData.dueDateFrom ? new Date(formData.dueDateFrom) : undefined,
+        dueDateTo: formData.dueDateTo ? new Date(formData.dueDateTo) : undefined,
         payeeName: recipientLabel,
         payeeAddress: formData.notes,
         payeePhone: formData.payeePhone,
@@ -511,7 +512,7 @@ export default function ReceiptVoucher() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm mt-4">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-4 text-xs sm:text-sm mt-4">
                   <div>
                     <p className="text-gray-600 text-xs mb-1">التاريخ</p>
                     <p className="font-semibold text-gray-900 text-xs sm:text-sm">
@@ -527,12 +528,29 @@ export default function ReceiptVoucher() {
                   <div>
                     <p className="text-gray-600 text-xs mb-1">الاستحقاق (إلى)</p>
                     <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                      {getVoucherQuery.data.dueDate ? new Date(getVoucherQuery.data.dueDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                      {getVoucherQuery.data.dueDateTo ? new Date(getVoucherQuery.data.dueDateTo).toLocaleDateString('ar-SA') : 'غير محدد'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600 text-xs mb-1">الفرع</p>
+                    <p className="font-semibold text-gray-900 text-xs sm:text-sm">
+                      {getVoucherQuery.data.branchName || 'غير محدد'}
                     </p>
                   </div>
                   <div className="text-left">
                     <p className="text-gray-600 text-xs mb-1">الحالة</p>
-                    <p className="font-semibold text-gray-900 text-xs sm:text-sm">مسودة</p>
+                    <p className="font-semibold text-xs sm:text-sm">
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        getVoucherQuery.data.status === 'approved' ? 'bg-green-100 text-green-800' :
+                        getVoucherQuery.data.status === 'paid' ? 'bg-blue-100 text-blue-800' :
+                        getVoucherQuery.data.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {getVoucherQuery.data.status === 'approved' ? 'معتمد' :
+                         getVoucherQuery.data.status === 'paid' ? 'مدفوع' :
+                         getVoucherQuery.data.status === 'cancelled' ? 'ملغي' : 'مسودة'}
+                      </span>
+                    </p>
                   </div>
                 </div>
               </div>

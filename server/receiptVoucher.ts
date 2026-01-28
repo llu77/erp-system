@@ -26,7 +26,8 @@ async function generateReceiptVoucherId(): Promise<string> {
 // إنشاء سند قبض جديد
 export async function createReceiptVoucher(data: {
   voucherDate: Date;
-  dueDate?: Date;
+  dueDate?: Date; // تاريخ الاستحقاق (من)
+  dueDateTo?: Date; // تاريخ الاستحقاق (إلى)
   payeeName: string;
   payeeAddress?: string;
   payeePhone?: string;
@@ -57,6 +58,7 @@ export async function createReceiptVoucher(data: {
       voucherId,
       voucherDate: data.voucherDate,
       dueDate: data.dueDate,
+      dueDateTo: data.dueDateTo,
       payeeName: data.payeeName,
       payeeAddress: data.payeeAddress,
       payeePhone: data.payeePhone,
