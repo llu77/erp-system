@@ -61,6 +61,7 @@ import ReportBuilder from "./pages/ReportBuilder";
 import AIAnalytics from "./pages/AIAnalytics";
 import EmployeeAssistant from "./pages/EmployeeAssistant";
 import EmployeePortal from "./pages/EmployeePortal";
+import AdminEmployeePortal from "./pages/AdminEmployeePortal";
 import EmployeeLogin from "./pages/EmployeeLogin";
 import EmployeeAccounts from "./pages/EmployeeAccounts";
 import PaidInvoicesReport from "./pages/PaidInvoicesReport";
@@ -75,6 +76,7 @@ function Router() {
       {/* بوابة الموظفين */}
       <Route path="/employee-login" component={EmployeeLogin} />
       <Route path="/employee-portal" component={EmployeePortal} />
+      <Route path="/admin-employee-portal" component={AdminEmployeePortal} />
       
       {/* إدارة حسابات الموظفين */}
       <Route path="/employee-accounts">

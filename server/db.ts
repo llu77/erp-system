@@ -941,13 +941,62 @@ export async function deleteBranch(id: number) {
 export async function getAllEmployees() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(employees).orderBy(employees.name);
+  const { branches } = await import('../drizzle/schema');
+  return await db.select({
+    id: employees.id,
+    code: employees.code,
+    name: employees.name,
+    branchId: employees.branchId,
+    branchName: branches.nameAr,
+    phone: employees.phone,
+    email: employees.email,
+    emailVerified: employees.emailVerified,
+    position: employees.position,
+    username: employees.username,
+    hasPortalAccess: employees.hasPortalAccess,
+    isSupervisor: employees.isSupervisor,
+    photoUrl: employees.photoUrl,
+    iqamaNumber: employees.iqamaNumber,
+    iqamaExpiryDate: employees.iqamaExpiryDate,
+    healthCertExpiryDate: employees.healthCertExpiryDate,
+    contractExpiryDate: employees.contractExpiryDate,
+    isActive: employees.isActive,
+    createdAt: employees.createdAt,
+    updatedAt: employees.updatedAt,
+  })
+    .from(employees)
+    .leftJoin(branches, eq(employees.branchId, branches.id))
+    .orderBy(employees.name);
 }
 
 export async function getEmployeesByBranch(branchId: number) {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(employees)
+  const { branches } = await import('../drizzle/schema');
+  return await db.select({
+    id: employees.id,
+    code: employees.code,
+    name: employees.name,
+    branchId: employees.branchId,
+    branchName: branches.nameAr,
+    phone: employees.phone,
+    email: employees.email,
+    emailVerified: employees.emailVerified,
+    position: employees.position,
+    username: employees.username,
+    hasPortalAccess: employees.hasPortalAccess,
+    isSupervisor: employees.isSupervisor,
+    photoUrl: employees.photoUrl,
+    iqamaNumber: employees.iqamaNumber,
+    iqamaExpiryDate: employees.iqamaExpiryDate,
+    healthCertExpiryDate: employees.healthCertExpiryDate,
+    contractExpiryDate: employees.contractExpiryDate,
+    isActive: employees.isActive,
+    createdAt: employees.createdAt,
+    updatedAt: employees.updatedAt,
+  })
+    .from(employees)
+    .leftJoin(branches, eq(employees.branchId, branches.id))
     .where(and(eq(employees.branchId, branchId), eq(employees.isActive, true)))
     .orderBy(employees.name);
 }

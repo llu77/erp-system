@@ -37,8 +37,14 @@ export default function EmployeeLogin() {
         }));
         localStorage.setItem('employeeToken', 'employee-session');
         
-        // التوجيه لبوابة الموظفين
-        setLocation('/employee-portal');
+        // التوجيه حسب الصلاحيات
+        if (result.employee.isAdmin || result.employee.isSupervisor) {
+          // الأدمن والمشرفين يتم توجيههم للداشبورد
+          setLocation('/admin-employee-portal');
+        } else {
+          // الموظفين العاديين يتم توجيههم لبوابة الموظفين
+          setLocation('/employee-portal');
+        }
       } else {
         setError(result.error || 'حدث خطأ في تسجيل الدخول');
       }
