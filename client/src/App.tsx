@@ -56,6 +56,7 @@ import SchedulerDashboard from "./pages/SchedulerDashboard";
 import SmartAlerts from "./pages/SmartAlerts";
 import ReceiptVoucher from "./pages/ReceiptVoucher";
 import ReceiptVoucherReports from "./pages/ReceiptVoucherReports";
+import VouchersReport from "./pages/VouchersReport";
 import BIDashboard from "./pages/BIDashboard";
 import ReportBuilder from "./pages/ReportBuilder";
 import AIAnalytics from "./pages/AIAnalytics";
@@ -69,7 +70,6 @@ import MonthlyReports from "./pages/MonthlyReports";
 import AIDecisionCenter from "./pages/AIDecisionCenter";
 import AuditCompliance from "./pages/AuditCompliance";
 import ReportScheduleSettings from "./pages/ReportScheduleSettings";
-import DocumentAlertSettings from "./pages/DocumentAlertSettings";
 
 function Router() {
   return (
@@ -251,11 +251,6 @@ function Router() {
           <ReportScheduleSettings />
         </DashboardLayout>
       </Route>
-      <Route path="/document-alert-settings">
-        <DashboardLayout>
-          <DocumentAlertSettings />
-        </DashboardLayout>
-      </Route>
       {/* Security & Audit */}
       <Route path="/security-alerts">
         <DashboardLayout>
@@ -366,6 +361,12 @@ function Router() {
       <Route path="/receipt-voucher-reports">
         <DashboardLayout>
           <ReceiptVoucherReports />
+        </DashboardLayout>
+      </Route>
+      {/* Vouchers Monthly Report */}
+      <Route path="/vouchers-report">
+        <DashboardLayout>
+          <VouchersReport />
         </DashboardLayout>
       </Route>
       {/* BI Dashboard - Advanced Analytics */}

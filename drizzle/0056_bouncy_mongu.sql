@@ -1,1 +1,0 @@
-ALTER TABLE `receiptVouchers` ADD `dueDateTo` date;

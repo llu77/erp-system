@@ -36,8 +36,6 @@ import {
   InsertLoyaltyVisit,
   receiptVouchers,
   loyaltyVisitDeletionRequests,
-  documentAlertSettings,
-  documentAlertLogs,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -10608,779 +10606,196 @@ export async function getEmployeeDetailsForPortalAdmin(employeeId: number): Prom
 }
 
 
-// ==================== دوال إدارة صور وبيانات الموظفين للأدمن ====================
+// ==================== تقرير السندات الشهري ====================
 
-// تحديث صورة الموظف
-export async function updateEmployeePhoto(
-  employeeId: number,
-  photoUrl: string | null
-): Promise<{ success: boolean; error?: string }> {
-  const db = await getDb();
-  if (!db) return { success: false, error: 'فشل الاتصال بقاعدة البيانات' };
-  
-  try {
-    await db
-      .update(employees)
-      .set({ 
-        photoUrl,
-        updatedAt: new Date() 
-      })
-      .where(eq(employees.id, employeeId));
-    
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating employee photo:', error);
-    return { success: false, error: 'فشل في تحديث صورة الموظف' };
-  }
+export interface VoucherReportFilters {
+  startDate: Date;
+  endDate: Date;
+  voucherType?: 'receipt' | 'payment' | 'all';
+  status?: 'draft' | 'approved' | 'paid' | 'cancelled' | 'all';
+  branchId?: string;
 }
 
-// تحديث بيانات الموظف الكاملة (للأدمن فقط)
-export async function updateEmployeeFullData(
-  employeeId: number,
-  adminId: number,
-  data: {
-    // البيانات الشخصية
-    name?: string;
-    phone?: string;
-    email?: string;
-    position?: string;
-    branchId?: number;
-    // بيانات الوثائق
-    iqamaNumber?: string;
-    iqamaExpiryDate?: Date | null;
-    healthCertExpiryDate?: Date | null;
-    contractExpiryDate?: Date | null;
-    // صور الوثائق
-    iqamaImageUrl?: string | null;
-    healthCertImageUrl?: string | null;
-    contractImageUrl?: string | null;
-    // صورة الموظف
-    photoUrl?: string | null;
-    // حالة الموظف
-    isActive?: boolean;
-    hasPortalAccess?: boolean;
-    isSupervisor?: boolean;
-  }
-): Promise<{ success: boolean; error?: string }> {
-  const db = await getDb();
-  if (!db) return { success: false, error: 'فشل الاتصال بقاعدة البيانات' };
-  
-  try {
-    // التحقق من وجود الموظف
-    const existing = await db
-      .select({ id: employees.id })
-      .from(employees)
-      .where(eq(employees.id, employeeId))
-      .limit(1);
-    
-    if (existing.length === 0) {
-      return { success: false, error: 'الموظف غير موجود' };
-    }
-    
-    // بناء كائن التحديث
-    const updateData: Record<string, unknown> = {
-      updatedAt: new Date(),
-    };
-    
-    // البيانات الشخصية
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.phone !== undefined) updateData.phone = data.phone;
-    if (data.email !== undefined) updateData.email = data.email;
-    if (data.position !== undefined) updateData.position = data.position;
-    if (data.branchId !== undefined) updateData.branchId = data.branchId;
-    
-    // بيانات الوثائق
-    if (data.iqamaNumber !== undefined) updateData.iqamaNumber = data.iqamaNumber;
-    if (data.iqamaExpiryDate !== undefined) updateData.iqamaExpiryDate = data.iqamaExpiryDate;
-    if (data.healthCertExpiryDate !== undefined) updateData.healthCertExpiryDate = data.healthCertExpiryDate;
-    if (data.contractExpiryDate !== undefined) updateData.contractExpiryDate = data.contractExpiryDate;
-    
-    // صور الوثائق
-    if (data.iqamaImageUrl !== undefined) updateData.iqamaImageUrl = data.iqamaImageUrl;
-    if (data.healthCertImageUrl !== undefined) updateData.healthCertImageUrl = data.healthCertImageUrl;
-    if (data.contractImageUrl !== undefined) updateData.contractImageUrl = data.contractImageUrl;
-    
-    // صورة الموظف
-    if (data.photoUrl !== undefined) updateData.photoUrl = data.photoUrl;
-    
-    // حالة الموظف
-    if (data.isActive !== undefined) updateData.isActive = data.isActive;
-    if (data.hasPortalAccess !== undefined) updateData.hasPortalAccess = data.hasPortalAccess;
-    if (data.isSupervisor !== undefined) updateData.isSupervisor = data.isSupervisor;
-    
-    // تسجيل من قام بالتعديل
-    updateData.infoSubmittedBy = adminId;
-    
-    await db
-      .update(employees)
-      .set(updateData)
-      .where(eq(employees.id, employeeId));
-    
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating employee full data:', error);
-    return { success: false, error: 'فشل في تحديث بيانات الموظف' };
-  }
-}
-
-// جلب الموظفين مع صورهم للعرض في لوحة التحكم
-export async function getEmployeesWithPhotos(
-  branchId?: number,
-  search?: string,
-  page: number = 1,
-  limit: number = 20
-): Promise<{
-  employees: Array<{
+export interface VoucherReportData {
+  vouchers: Array<{
     id: number;
-    name: string;
-    code: string;
-    branchId: number;
-    branchName: string;
-    position: string | null;
-    phone: string | null;
-    email: string | null;
-    photoUrl: string | null;
-    isActive: boolean;
-    hasPortalAccess: boolean;
-    isSupervisor: boolean;
-    iqamaExpiryDate: Date | null;
-    healthCertExpiryDate: Date | null;
-    contractExpiryDate: Date | null;
-  }>;
-  total: number;
-  page: number;
-  totalPages: number;
-}> {
-  const db = await getDb();
-  if (!db) {
-    return { employees: [], total: 0, page: 1, totalPages: 0 };
-  }
-
-  try {
-    // جلب جميع الموظفين
-    let allEmps = await db
-      .select({
-        id: employees.id,
-        name: employees.name,
-        code: employees.code,
-        branchId: employees.branchId,
-        position: employees.position,
-        phone: employees.phone,
-        email: employees.email,
-        photoUrl: employees.photoUrl,
-        isActive: employees.isActive,
-        hasPortalAccess: employees.hasPortalAccess,
-        isSupervisor: employees.isSupervisor,
-        iqamaExpiryDate: employees.iqamaExpiryDate,
-        healthCertExpiryDate: employees.healthCertExpiryDate,
-        contractExpiryDate: employees.contractExpiryDate,
-      })
-      .from(employees);
-
-    // جلب أسماء الفروع
-    const branchList = await db.select().from(branches);
-    const branchMap = new Map(branchList.map((b: { id: number; name: string }) => [b.id, b.name]));
-
-    // تحويل البيانات مع أسماء الفروع
-    let result = allEmps.map((emp: typeof allEmps[0]) => ({
-      ...emp,
-      branchName: branchMap.get(emp.branchId) || 'غير محدد',
-    }));
-
-    // فلترة حسب الفرع
-    if (branchId) {
-      result = result.filter(emp => emp.branchId === branchId);
-    }
-
-    // فلترة حسب البحث
-    if (search) {
-      const searchLower = search.toLowerCase();
-      result = result.filter(emp => 
-        emp.name.toLowerCase().includes(searchLower) ||
-        emp.code.toLowerCase().includes(searchLower) ||
-        (emp.phone && emp.phone.includes(search))
-      );
-    }
-
-    // حساب الإجمالي
-    const total = result.length;
-    const totalPages = Math.ceil(total / limit);
-
-    // تطبيق pagination
-    const startIndex = (page - 1) * limit;
-    const paginatedResult = result.slice(startIndex, startIndex + limit);
-
-    return {
-      employees: paginatedResult,
-      total,
-      page,
-      totalPages,
-    };
-  } catch (error) {
-    console.error('Error getting employees with photos:', error);
-    return { employees: [], total: 0, page: 1, totalPages: 0 };
-  }
-}
-
-// جلب الوثائق المنتهية والقريبة الانتهاء مع تفاصيل إضافية
-export async function getExpiringDocumentsDetailed(
-  daysBeforeExpiry: number = 30
-): Promise<{
-  expired: Array<{
-    employeeId: number;
-    employeeName: string;
-    employeeCode: string;
-    branchName: string;
-    documentType: 'iqama' | 'healthCert' | 'contract';
-    documentTypeName: string;
-    expiryDate: Date;
-    daysOverdue: number;
-    phone: string | null;
-    email: string | null;
-  }>;
-  expiringSoon: Array<{
-    employeeId: number;
-    employeeName: string;
-    employeeCode: string;
-    branchName: string;
-    documentType: 'iqama' | 'healthCert' | 'contract';
-    documentTypeName: string;
-    expiryDate: Date;
-    daysUntilExpiry: number;
-    phone: string | null;
-    email: string | null;
-  }>;
-}> {
-  const db = await getDb();
-  if (!db) {
-    return { expired: [], expiringSoon: [] };
-  }
-
-  try {
-    const now = new Date();
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + daysBeforeExpiry);
-
-    // جلب الموظفين النشطين مع وثائقهم
-    const emps = await db
-      .select({
-        id: employees.id,
-        name: employees.name,
-        code: employees.code,
-        branchId: employees.branchId,
-        phone: employees.phone,
-        email: employees.email,
-        iqamaExpiryDate: employees.iqamaExpiryDate,
-        healthCertExpiryDate: employees.healthCertExpiryDate,
-        contractExpiryDate: employees.contractExpiryDate,
-      })
-      .from(employees)
-      .where(eq(employees.isActive, true));
-
-    // جلب أسماء الفروع
-    const branchList = await db.select().from(branches);
-    const branchMap = new Map(branchList.map((b: { id: number; name: string }) => [b.id, b.name]));
-
-    const documentTypeNames: Record<string, string> = {
-      iqama: 'الإقامة',
-      healthCert: 'الشهادة الصحية',
-      contract: 'العقد',
-    };
-
-    const expired: Array<{
-      employeeId: number;
-      employeeName: string;
-      employeeCode: string;
-      branchName: string;
-      documentType: 'iqama' | 'healthCert' | 'contract';
-      documentTypeName: string;
-      expiryDate: Date;
-      daysOverdue: number;
-      phone: string | null;
-      email: string | null;
-    }> = [];
-
-    const expiringSoon: Array<{
-      employeeId: number;
-      employeeName: string;
-      employeeCode: string;
-      branchName: string;
-      documentType: 'iqama' | 'healthCert' | 'contract';
-      documentTypeName: string;
-      expiryDate: Date;
-      daysUntilExpiry: number;
-      phone: string | null;
-      email: string | null;
-    }> = [];
-
-    for (const emp of emps) {
-      const branchName = branchMap.get(emp.branchId) || 'غير محدد';
-      
-      // فحص كل نوع من الوثائق
-      const documents: Array<{ type: 'iqama' | 'healthCert' | 'contract'; date: Date | null }> = [
-        { type: 'iqama', date: emp.iqamaExpiryDate },
-        { type: 'healthCert', date: emp.healthCertExpiryDate },
-        { type: 'contract', date: emp.contractExpiryDate },
-      ];
-
-      for (const doc of documents) {
-        if (!doc.date) continue;
-
-        const expiryDate = new Date(doc.date);
-        const diffTime = expiryDate.getTime() - now.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays < 0) {
-          // منتهية
-          expired.push({
-            employeeId: emp.id,
-            employeeName: emp.name,
-            employeeCode: emp.code,
-            branchName,
-            documentType: doc.type,
-            documentTypeName: documentTypeNames[doc.type],
-            expiryDate,
-            daysOverdue: Math.abs(diffDays),
-            phone: emp.phone,
-            email: emp.email,
-          });
-        } else if (diffDays <= daysBeforeExpiry) {
-          // قريبة الانتهاء
-          expiringSoon.push({
-            employeeId: emp.id,
-            employeeName: emp.name,
-            employeeCode: emp.code,
-            branchName,
-            documentType: doc.type,
-            documentTypeName: documentTypeNames[doc.type],
-            expiryDate,
-            daysUntilExpiry: diffDays,
-            phone: emp.phone,
-            email: emp.email,
-          });
-        }
-      }
-    }
-
-    // ترتيب حسب الأولوية
-    expired.sort((a, b) => b.daysOverdue - a.daysOverdue);
-    expiringSoon.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
-
-    return { expired, expiringSoon };
-  } catch (error) {
-    console.error('Error getting expiring documents detailed:', error);
-    return { expired: [], expiringSoon: [] };
-  }
-}
-
-// إنشاء سجل تذكير للوثائق
-export async function createDocumentReminder(data: {
-  employeeId: number;
-  documentType: 'iqama' | 'healthCert' | 'contract';
-  reminderType: 'email' | 'sms' | 'system';
-  sentTo: string;
-  sentBy: number;
-  message: string;
-}): Promise<{ success: boolean; error?: string }> {
-  const db = await getDb();
-  if (!db) return { success: false, error: 'فشل الاتصال بقاعدة البيانات' };
-  
-  try {
-    // إنشاء إشعار في جدول الإشعارات (استخدام 'system' كنوع صالح)
-    await db.insert(notifications).values({
-      title: `تذكير بانتهاء ${data.documentType === 'iqama' ? 'الإقامة' : data.documentType === 'healthCert' ? 'الشهادة الصحية' : 'العقد'}`,
-      message: data.message,
-      type: 'system',
-      userId: data.employeeId,
-    });
-    
-    return { success: true };
-  } catch (error) {
-    console.error('Error creating document reminder:', error);
-    return { success: false, error: 'فشل في إنشاء التذكير' };
-  }
-}
-
-
-// ==================== إدارة إعدادات التنبيهات التلقائية للوثائق ====================
-
-// جلب جميع إعدادات التنبيهات
-export async function getDocumentAlertSettings(): Promise<Array<{
-  id: number;
-  documentType: 'iqama' | 'health_cert' | 'contract';
-  nameAr: string;
-  isEnabled: boolean;
-  alertDays: number[];
-  sendEmail: boolean;
-  sendSms: boolean;
-  sendInApp: boolean;
-  sendHour: number;
-  notifyAdmin: boolean;
-  notifyGeneralSupervisor: boolean;
-  notifyBranchSupervisor: boolean;
-  notifyEmployee: boolean;
-  customMessage: string | null;
-  updatedAt: Date;
-}>> {
-  const db = await getDb();
-  if (!db) return [];
-  
-  try {
-    const settings = await db.select().from(documentAlertSettings);
-    return settings.map((s: any) => ({
-      ...s,
-      alertDays: s.alertDays || [30, 15, 7],
-    }));
-  } catch (error) {
-    console.error('Error getting document alert settings:', error);
-    return [];
-  }
-}
-
-// جلب إعدادات تنبيه نوع وثيقة محدد
-export async function getDocumentAlertSettingByType(
-  documentType: 'iqama' | 'health_cert' | 'contract'
-): Promise<{
-  id: number;
-  documentType: 'iqama' | 'health_cert' | 'contract';
-  nameAr: string;
-  isEnabled: boolean;
-  alertDays: number[];
-  sendEmail: boolean;
-  sendSms: boolean;
-  sendInApp: boolean;
-  sendHour: number;
-  notifyAdmin: boolean;
-  notifyGeneralSupervisor: boolean;
-  notifyBranchSupervisor: boolean;
-  notifyEmployee: boolean;
-  customMessage: string | null;
-} | null> {
-  const db = await getDb();
-  if (!db) return null;
-  
-  try {
-    const [setting] = await db
-      .select()
-      .from(documentAlertSettings)
-      .where(eq(documentAlertSettings.documentType, documentType))
-      .limit(1);
-    
-    if (!setting) return null;
-    
-    return {
-      ...setting,
-      alertDays: (setting as any).alertDays || [30, 15, 7],
-    };
-  } catch (error) {
-    console.error('Error getting document alert setting:', error);
-    return null;
-  }
-}
-
-// تحديث إعدادات تنبيه نوع وثيقة
-export async function updateDocumentAlertSetting(
-  documentType: 'iqama' | 'health_cert' | 'contract',
-  data: {
-    isEnabled?: boolean;
-    alertDays?: number[];
-    sendEmail?: boolean;
-    sendSms?: boolean;
-    sendInApp?: boolean;
-    sendHour?: number;
-    notifyAdmin?: boolean;
-    notifyGeneralSupervisor?: boolean;
-    notifyBranchSupervisor?: boolean;
-    notifyEmployee?: boolean;
-    customMessage?: string | null;
-    updatedBy?: number;
-    updatedByName?: string;
-  }
-): Promise<{ success: boolean; error?: string }> {
-  const db = await getDb();
-  if (!db) return { success: false, error: 'فشل الاتصال بقاعدة البيانات' };
-  
-  try {
-    // التحقق من وجود الإعداد
-    const [existing] = await db
-      .select()
-      .from(documentAlertSettings)
-      .where(eq(documentAlertSettings.documentType, documentType))
-      .limit(1);
-    
-    if (existing) {
-      // تحديث الإعداد الموجود
-      await db
-        .update(documentAlertSettings)
-        .set({
-          ...data,
-          alertDays: data.alertDays ? JSON.stringify(data.alertDays) : undefined,
-        } as any)
-        .where(eq(documentAlertSettings.documentType, documentType));
-    } else {
-      // إنشاء إعداد جديد
-      const nameAr = documentType === 'iqama' ? 'الإقامة' 
-        : documentType === 'health_cert' ? 'الشهادة الصحية' 
-        : 'عقد العمل';
-      
-      await db.insert(documentAlertSettings).values({
-        documentType,
-        nameAr,
-        isEnabled: data.isEnabled ?? true,
-        alertDays: JSON.stringify(data.alertDays || [30, 15, 7]) as any,
-        sendEmail: data.sendEmail ?? true,
-        sendSms: data.sendSms ?? false,
-        sendInApp: data.sendInApp ?? true,
-        sendHour: data.sendHour ?? 8,
-        notifyAdmin: data.notifyAdmin ?? true,
-        notifyGeneralSupervisor: data.notifyGeneralSupervisor ?? true,
-        notifyBranchSupervisor: data.notifyBranchSupervisor ?? true,
-        notifyEmployee: data.notifyEmployee ?? false,
-        customMessage: data.customMessage ?? null,
-        updatedBy: data.updatedBy,
-        updatedByName: data.updatedByName,
-      });
-    }
-    
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating document alert setting:', error);
-    return { success: false, error: 'فشل في تحديث الإعدادات' };
-  }
-}
-
-// إنشاء إعدادات افتراضية للتنبيهات
-export async function initializeDocumentAlertSettings(): Promise<{ success: boolean }> {
-  const db = await getDb();
-  if (!db) return { success: false };
-  
-  try {
-    // التحقق من وجود إعدادات
-    const existing = await db.select().from(documentAlertSettings);
-    
-    if (existing.length === 0) {
-      // إنشاء الإعدادات الافتراضية
-      const defaultSettings = [
-        {
-          documentType: 'iqama' as const,
-          nameAr: 'الإقامة',
-          isEnabled: true,
-          alertDays: JSON.stringify([30, 15, 7]) as any,
-          sendEmail: true,
-          sendSms: false,
-          sendInApp: true,
-          sendHour: 8,
-          notifyAdmin: true,
-          notifyGeneralSupervisor: true,
-          notifyBranchSupervisor: true,
-          notifyEmployee: false,
-        },
-        {
-          documentType: 'health_cert' as const,
-          nameAr: 'الشهادة الصحية',
-          isEnabled: true,
-          alertDays: JSON.stringify([15, 7, 3]) as any,
-          sendEmail: true,
-          sendSms: false,
-          sendInApp: true,
-          sendHour: 8,
-          notifyAdmin: true,
-          notifyGeneralSupervisor: true,
-          notifyBranchSupervisor: true,
-          notifyEmployee: false,
-        },
-        {
-          documentType: 'contract' as const,
-          nameAr: 'عقد العمل',
-          isEnabled: true,
-          alertDays: JSON.stringify([60, 30, 15]) as any,
-          sendEmail: true,
-          sendSms: false,
-          sendInApp: true,
-          sendHour: 8,
-          notifyAdmin: true,
-          notifyGeneralSupervisor: true,
-          notifyBranchSupervisor: true,
-          notifyEmployee: false,
-        },
-      ];
-      
-      for (const setting of defaultSettings) {
-        await db.insert(documentAlertSettings).values(setting);
-      }
-      
-      console.log('[DB] تم إنشاء إعدادات التنبيهات الافتراضية');
-    }
-    
-    return { success: true };
-  } catch (error) {
-    console.error('Error initializing document alert settings:', error);
-    return { success: false };
-  }
-}
-
-// تسجيل تنبيه وثيقة مرسل
-export async function logDocumentAlert(data: {
-  employeeId: number;
-  employeeName: string;
-  employeeCode?: string;
-  branchId?: number;
-  branchName?: string;
-  documentType: 'iqama' | 'health_cert' | 'contract';
-  expiryDate: Date;
-  daysRemaining: number;
-  alertType: 'auto' | 'manual';
-  channel: 'email' | 'sms' | 'both' | 'in_app';
-  status: 'sent' | 'failed' | 'pending';
-  recipientEmail?: string;
-  recipientPhone?: string;
-  recipientCount?: number;
-  errorMessage?: string;
-}): Promise<{ success: boolean; id?: number }> {
-  const db = await getDb();
-  if (!db) return { success: false };
-  
-  try {
-    const [result] = await db.insert(documentAlertLogs).values({
-      employeeId: data.employeeId,
-      employeeName: data.employeeName,
-      employeeCode: data.employeeCode,
-      branchId: data.branchId,
-      branchName: data.branchName,
-      documentType: data.documentType,
-      expiryDate: data.expiryDate,
-      daysRemaining: data.daysRemaining,
-      alertType: data.alertType,
-      channel: data.channel,
-      status: data.status,
-      sentAt: data.status === 'sent' ? new Date() : null,
-      recipientEmail: data.recipientEmail,
-      recipientPhone: data.recipientPhone,
-      recipientCount: data.recipientCount || 1,
-      errorMessage: data.errorMessage,
-    });
-    
-    return { success: true, id: (result as any).insertId };
-  } catch (error) {
-    console.error('Error logging document alert:', error);
-    return { success: false };
-  }
-}
-
-// جلب سجل التنبيهات المرسلة
-export async function getDocumentAlertLogs(
-  filters?: {
-    employeeId?: number;
-    documentType?: 'iqama' | 'health_cert' | 'contract';
-    alertType?: 'auto' | 'manual';
-    status?: 'sent' | 'failed' | 'pending';
-    fromDate?: Date;
-    toDate?: Date;
-  },
-  page: number = 1,
-  limit: number = 50
-): Promise<{
-  logs: Array<{
-    id: number;
-    employeeId: number;
-    employeeName: string;
-    employeeCode: string | null;
+    voucherId: string;
+    voucherDate: Date;
+    dueDate: Date | null;
+    dueDateTo: Date | null;
+    payeeName: string;
+    payeePhone: string | null;
+    totalAmount: string;
+    status: string;
     branchName: string | null;
-    documentType: 'iqama' | 'health_cert' | 'contract';
-    expiryDate: Date;
-    daysRemaining: number;
-    alertType: 'auto' | 'manual';
-    channel: string;
-    status: 'sent' | 'failed' | 'pending';
-    sentAt: Date | null;
-    recipientCount: number;
+    notes: string | null;
+    createdByName: string;
     createdAt: Date;
   }>;
-  total: number;
-  page: number;
-  totalPages: number;
-}> {
-  const db = await getDb();
-  if (!db) return { logs: [], total: 0, page: 1, totalPages: 0 };
-  
-  try {
-    let allLogs = await db
-      .select()
-      .from(documentAlertLogs)
-      .orderBy(desc(documentAlertLogs.createdAt));
-    
-    // تطبيق الفلاتر
-    if (filters) {
-      if (filters.employeeId) {
-        allLogs = allLogs.filter((l: any) => l.employeeId === filters.employeeId);
-      }
-      if (filters.documentType) {
-        allLogs = allLogs.filter((l: any) => l.documentType === filters.documentType);
-      }
-      if (filters.alertType) {
-        allLogs = allLogs.filter((l: any) => l.alertType === filters.alertType);
-      }
-      if (filters.status) {
-        allLogs = allLogs.filter((l: any) => l.status === filters.status);
-      }
-      if (filters.fromDate) {
-        allLogs = allLogs.filter((l: any) => new Date(l.createdAt) >= filters.fromDate!);
-      }
-      if (filters.toDate) {
-        allLogs = allLogs.filter((l: any) => new Date(l.createdAt) <= filters.toDate!);
-      }
-    }
-    
-    const total = allLogs.length;
-    const totalPages = Math.ceil(total / limit);
-    const offset = (page - 1) * limit;
-    const paginatedLogs = allLogs.slice(offset, offset + limit);
-    
-    return {
-      logs: paginatedLogs.map((l: any) => ({
-        ...l,
-        expiryDate: new Date(l.expiryDate),
-        sentAt: l.sentAt ? new Date(l.sentAt) : null,
-        createdAt: new Date(l.createdAt),
-      })),
-      total,
-      page,
-      totalPages,
-    };
-  } catch (error) {
-    console.error('Error getting document alert logs:', error);
-    return { logs: [], total: 0, page: 1, totalPages: 0 };
-  }
+  statistics: {
+    totalCount: number;
+    draftCount: number;
+    approvedCount: number;
+    paidCount: number;
+    cancelledCount: number;
+    totalAmount: number;
+    draftAmount: number;
+    approvedAmount: number;
+    paidAmount: number;
+  };
+  filters: {
+    startDate: string;
+    endDate: string;
+    voucherType: string;
+    status: string;
+    branchName: string;
+  };
 }
 
-// التحقق مما إذا تم إرسال تنبيه لموظف ووثيقة محددة اليوم
-export async function wasDocumentAlertSentToday(
-  employeeId: number,
-  documentType: 'iqama' | 'health_cert' | 'contract',
-  daysRemaining: number
-): Promise<boolean> {
+export async function getVouchersForReport(filters: VoucherReportFilters): Promise<VoucherReportData | null> {
   const db = await getDb();
-  if (!db) return false;
-  
+  if (!db) return null;
+
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const logs = await db
-      .select()
-      .from(documentAlertLogs)
-      .where(and(
-        eq(documentAlertLogs.employeeId, employeeId),
-        eq(documentAlertLogs.documentType, documentType),
-        eq(documentAlertLogs.daysRemaining, daysRemaining),
-        eq(documentAlertLogs.status, 'sent'),
-        gte(documentAlertLogs.createdAt, today)
-      ))
-      .limit(1);
-    
-    return logs.length > 0;
+    const conditions: SQL[] = [
+      gte(receiptVouchers.voucherDate, filters.startDate),
+      lte(receiptVouchers.voucherDate, filters.endDate),
+    ];
+
+    if (filters.status && filters.status !== 'all') {
+      conditions.push(eq(receiptVouchers.status, filters.status));
+    }
+
+    if (filters.branchId) {
+      conditions.push(eq(receiptVouchers.branchId, parseInt(filters.branchId)));
+    }
+
+    // جلب السندات
+    const vouchersResult = await db.select({
+      id: receiptVouchers.id,
+      voucherId: receiptVouchers.voucherId,
+      voucherDate: receiptVouchers.voucherDate,
+      dueDate: receiptVouchers.dueDate,
+      payeeName: receiptVouchers.payeeName,
+      payeePhone: receiptVouchers.payeePhone,
+      totalAmount: receiptVouchers.totalAmount,
+      status: receiptVouchers.status,
+      branchId: receiptVouchers.branchId,
+      notes: receiptVouchers.notes,
+      createdBy: receiptVouchers.createdBy,
+      createdAt: receiptVouchers.createdAt,
+    })
+      .from(receiptVouchers)
+      .where(and(...conditions))
+      .orderBy(desc(receiptVouchers.voucherDate));
+
+    // جلب أسماء الفروع والمستخدمين
+    const branchIds = Array.from(new Set(vouchersResult.filter(v => v.branchId).map(v => Number(v.branchId!))));
+    const userIds = Array.from(new Set(vouchersResult.filter(v => v.createdBy).map(v => v.createdBy!)));
+
+    let branchMap: Record<number, string> = {};
+    let userMap: Record<string, string> = {};
+
+    if (branchIds.length > 0) {
+      const branchesResult = await db.select({
+        id: branches.id,
+        name: branches.name,
+      }).from(branches).where(inArray(branches.id, branchIds as number[]));
+      branchMap = Object.fromEntries(branchesResult.map(b => [b.id, b.name]));
+    }
+
+    if (userIds.length > 0) {
+      const usersResult = await db.select({
+        id: users.id,
+        name: users.name,
+      }).from(users).where(inArray(users.id, userIds));
+      userMap = Object.fromEntries(usersResult.map(u => [u.id, u.name || '']));
+    }
+
+    // حساب الإحصائيات
+    let totalAmount = 0;
+    let draftAmount = 0;
+    let approvedAmount = 0;
+    let paidAmount = 0;
+    let draftCount = 0;
+    let approvedCount = 0;
+    let paidCount = 0;
+    let cancelledCount = 0;
+
+    const vouchers = vouchersResult.map(v => {
+      const amount = parseFloat(v.totalAmount || '0');
+      totalAmount += amount;
+
+      switch (v.status) {
+        case 'draft':
+          draftCount++;
+          draftAmount += amount;
+          break;
+        case 'approved':
+          approvedCount++;
+          approvedAmount += amount;
+          break;
+        case 'paid':
+          paidCount++;
+          paidAmount += amount;
+          break;
+        case 'cancelled':
+          cancelledCount++;
+          break;
+      }
+
+      return {
+        id: v.id,
+        voucherId: v.voucherId,
+        voucherDate: v.voucherDate,
+        dueDate: v.dueDate,
+        dueDateTo: null,
+        payeeName: v.payeeName,
+        payeePhone: v.payeePhone,
+        totalAmount: v.totalAmount,
+        status: v.status,
+        branchName: v.branchId ? branchMap[v.branchId] || null : null,
+        notes: v.notes,
+        createdByName: v.createdBy ? userMap[v.createdBy] || 'غير معروف' : 'غير معروف',
+        createdAt: v.createdAt,
+      };
+    });
+
+    // جلب اسم الفرع للفلتر
+    let filterBranchName = 'جميع الفروع';
+    if (filters.branchId) {
+      const branchResult = await db.select({ name: branches.name })
+        .from(branches)
+        .where(eq(branches.id, parseInt(filters.branchId)))
+        .limit(1);
+      if (branchResult.length > 0) {
+        filterBranchName = branchResult[0].name;
+      }
+    }
+
+    return {
+      vouchers,
+      statistics: {
+        totalCount: vouchers.length,
+        draftCount,
+        approvedCount,
+        paidCount,
+        cancelledCount,
+        totalAmount,
+        draftAmount,
+        approvedAmount,
+        paidAmount,
+      },
+      filters: {
+        startDate: filters.startDate.toISOString(),
+        endDate: filters.endDate.toISOString(),
+        voucherType: filters.voucherType || 'all',
+        status: filters.status || 'all',
+        branchName: filterBranchName,
+      },
+    };
   } catch (error) {
-    console.error('Error checking document alert sent today:', error);
-    return false;
+    console.error('Error getting vouchers for report:', error);
+    return null;
   }
 }

@@ -45,8 +45,7 @@ const formatCurrency = (amount: number): string => {
 export async function generateSingleReceiptVoucherPDF(voucher: {
   voucherId: string;
   voucherDate: Date | string;
-  dueDate?: Date | string | null; // تاريخ الاستحقاق (من)
-  dueDateTo?: Date | string | null; // تاريخ الاستحقاق (إلى)
+  dueDate?: Date | string | null;
   payeeName: string;
   payeePhone?: string | null;
   payeeEmail?: string | null;
@@ -178,29 +177,23 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
     .info-bar {
       display: flex;
       justify-content: space-between;
-      flex-wrap: wrap;
       background: #f5f5f5;
-      padding: 15px 20px;
+      padding: 15px 30px;
       border-bottom: 2px solid #e0e0e0;
-      gap: 10px;
     }
     
     .info-item {
       text-align: center;
-      flex: 1;
-      min-width: 100px;
-      padding: 5px;
     }
     
     .info-label {
-      font-size: 10px;
+      font-size: 11px;
       color: #666;
       margin-bottom: 4px;
-      text-transform: uppercase;
     }
     
     .info-value {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 600;
       color: #1a1a1a;
     }
@@ -480,16 +473,12 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
     <!-- معلومات السند -->
     <div class="info-bar">
       <div class="info-item">
-        <div class="info-label">التاريخ</div>
+        <div class="info-label">تاريخ السند</div>
         <div class="info-value">${formatDate(voucher.voucherDate)}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">الاستحقاق (من)</div>
+        <div class="info-label">تاريخ الاستحقاق</div>
         <div class="info-value">${formatDate(voucher.dueDate)}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">الاستحقاق (إلى)</div>
-        <div class="info-value">${formatDate(voucher.dueDateTo)}</div>
       </div>
       <div class="info-item">
         <div class="info-label">الفرع</div>
@@ -610,7 +599,8 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
 
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    executablePath: '/usr/bin/chromium-browser',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   });
 
   try {
@@ -959,7 +949,8 @@ export async function generateReceiptVoucherReportPDF(data: ReportData): Promise
 
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    executablePath: '/usr/bin/chromium-browser',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   });
 
   try {
@@ -1678,7 +1669,8 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
 
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    executablePath: '/usr/bin/chromium-browser',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   });
 
   try {
@@ -1692,6 +1684,601 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
         top: '15mm',
         right: '10mm',
         bottom: '15mm',
+        left: '10mm'
+      }
+    });
+
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await browser.close();
+  }
+}
+
+
+// ==================== تقرير السندات الشهري ====================
+
+interface VoucherReportPDFData {
+  vouchers: Array<{
+    voucherId: string;
+    voucherDate: Date;
+    payeeName: string;
+    totalAmount: string;
+    status: string;
+    branchName: string | null;
+  }>;
+  statistics: {
+    totalCount: number;
+    draftCount: number;
+    approvedCount: number;
+    paidCount: number;
+    cancelledCount: number;
+    totalAmount: number;
+    draftAmount: number;
+    approvedAmount: number;
+    paidAmount: number;
+  };
+  filters: {
+    startDate: string;
+    endDate: string;
+    status: string;
+    branchName: string;
+  };
+}
+
+export async function generateVouchersReportPDF(data: VoucherReportPDFData): Promise<Buffer> {
+  const formatDate = (date: Date | string): string => {
+    const d = new Date(date);
+    return d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
+  const formatCurrencyLocal = (amount: number): string => {
+    return `${amount.toLocaleString('ar-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
+  };
+
+  const getStatusLabelLocal = (status: string): string => {
+    switch (status) {
+      case 'draft': return 'مسودة';
+      case 'approved': return 'معتمد';
+      case 'paid': return 'مدفوع';
+      case 'cancelled': return 'ملغي';
+      case 'all': return 'جميع الحالات';
+      default: return status || '-';
+    }
+  };
+
+  const getStatusColorLocal = (status: string): string => {
+    switch (status) {
+      case 'draft': return '#6b7280';
+      case 'approved': return '#059669';
+      case 'paid': return '#2563eb';
+      case 'cancelled': return '#dc2626';
+      default: return '#374151';
+    }
+  };
+
+  // إنشاء صفوف الجدول
+  const tableRows = data.vouchers.map((v, index) => `
+    <tr class="${index % 2 === 0 ? 'even-row' : 'odd-row'}">
+      <td class="text-center">${index + 1}</td>
+      <td class="text-center font-bold">${v.voucherId}</td>
+      <td class="text-center">${formatDate(v.voucherDate)}</td>
+      <td>${v.payeeName}</td>
+      <td class="text-center">${v.branchName || 'غير محدد'}</td>
+      <td class="text-center amount">${formatCurrencyLocal(parseFloat(v.totalAmount || '0'))}</td>
+      <td class="text-center">
+        <span class="status-badge" style="background-color: ${getStatusColorLocal(v.status)}20; color: ${getStatusColorLocal(v.status)}; border: 1px solid ${getStatusColorLocal(v.status)}40;">
+          ${getStatusLabelLocal(v.status)}
+        </span>
+      </td>
+    </tr>
+  `).join('');
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير السندات الشهري</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;600;700;800&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Tajawal', sans-serif;
+      background: #fff;
+      color: #1f2937;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    
+    .report-container {
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 15mm;
+    }
+    
+    /* رأس التقرير */
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 15px;
+      border-bottom: 3px solid #1e3a5f;
+      margin-bottom: 20px;
+    }
+    
+    .logo-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .logo {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      font-weight: 800;
+    }
+    
+    .company-info h1 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #1e3a5f;
+      margin-bottom: 2px;
+    }
+    
+    .company-info p {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    
+    .report-title-section {
+      text-align: left;
+    }
+    
+    .report-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e3a5f;
+      margin-bottom: 5px;
+    }
+    
+    .report-date {
+      font-size: 10px;
+      color: #6b7280;
+    }
+    
+    /* معلومات الفلاتر */
+    .filters-section {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 15px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    
+    .filter-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .filter-label {
+      font-size: 10px;
+      color: #6b7280;
+      font-weight: 500;
+    }
+    
+    .filter-value {
+      font-size: 11px;
+      color: #1f2937;
+      font-weight: 600;
+    }
+    
+    /* بطاقات الإحصائيات */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .stat-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    
+    .stat-card.primary {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+      color: white;
+      border: none;
+    }
+    
+    .stat-card.primary .stat-label,
+    .stat-card.primary .stat-value {
+      color: white;
+    }
+    
+    .stat-label {
+      font-size: 10px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    
+    .stat-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1f2937;
+    }
+    
+    .stat-amount {
+      font-size: 11px;
+      color: #059669;
+      margin-top: 2px;
+    }
+    
+    .stat-card.primary .stat-amount {
+      color: #a7f3d0;
+    }
+    
+    /* جدول السندات */
+    .table-section {
+      margin-bottom: 20px;
+    }
+    
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1e3a5f;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+    
+    thead {
+      background: #1e3a5f;
+      color: white;
+    }
+    
+    th {
+      padding: 10px 8px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 10px;
+    }
+    
+    td {
+      padding: 8px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #1f2937;
+    }
+    
+    .even-row {
+      background: #f8fafc;
+    }
+    
+    .odd-row {
+      background: #fff;
+    }
+    
+    .text-center {
+      text-align: center;
+    }
+    
+    .font-bold {
+      font-weight: 600;
+    }
+    
+    .amount {
+      font-weight: 700;
+      color: #1f2937;
+      font-size: 11px;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 9px;
+      font-weight: 600;
+    }
+    
+    /* ملخص الإجماليات */
+    .summary-section {
+      background: #f8fafc;
+      border: 2px solid #1e3a5f;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 25px;
+    }
+    
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+    }
+    
+    .summary-item {
+      text-align: center;
+    }
+    
+    .summary-label {
+      font-size: 10px;
+      color: #6b7280;
+      margin-bottom: 3px;
+    }
+    
+    .summary-value {
+      font-size: 18px;
+      font-weight: 800;
+      color: #1e3a5f;
+    }
+    
+    .summary-value.total {
+      color: #059669;
+    }
+    
+    /* قسم التوقيعات */
+    .signatures-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #e2e8f0;
+    }
+    
+    .signature-box {
+      text-align: center;
+      width: 150px;
+    }
+    
+    .signature-image {
+      height: 50px;
+      margin-bottom: 5px;
+    }
+    
+    .signature-line {
+      border-top: 1px solid #1f2937;
+      padding-top: 5px;
+    }
+    
+    .signature-name {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1f2937;
+    }
+    
+    .signature-title {
+      font-size: 9px;
+      color: #6b7280;
+    }
+    
+    .stamp-section {
+      text-align: center;
+    }
+    
+    .stamp {
+      width: 80px;
+      height: 80px;
+      border: 3px solid #1e3a5f;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 5px;
+    }
+    
+    .stamp-text {
+      font-size: 10px;
+      font-weight: 700;
+      color: #1e3a5f;
+    }
+    
+    .stamp-company {
+      font-size: 8px;
+      color: #6b7280;
+    }
+    
+    /* ذيل التقرير */
+    .report-footer {
+      margin-top: 20px;
+      padding-top: 10px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      font-size: 9px;
+      color: #9ca3af;
+    }
+    
+    @media print {
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      
+      .report-container {
+        padding: 10mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="report-container">
+    <!-- رأس التقرير -->
+    <div class="report-header">
+      <div class="logo-section">
+        <div class="logo">S</div>
+        <div class="company-info">
+          <h1>Symbol AI</h1>
+          <p>نظام إدارة الموارد المتكامل</p>
+        </div>
+      </div>
+      <div class="report-title-section">
+        <div class="report-title">تقرير السندات الشهري</div>
+        <div class="report-date">تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</div>
+      </div>
+    </div>
+    
+    <!-- معلومات الفلاتر -->
+    <div class="filters-section">
+      <div class="filter-item">
+        <span class="filter-label">الفترة من:</span>
+        <span class="filter-value">${formatDate(data.filters.startDate)}</span>
+      </div>
+      <div class="filter-item">
+        <span class="filter-label">إلى:</span>
+        <span class="filter-value">${formatDate(data.filters.endDate)}</span>
+      </div>
+      <div class="filter-item">
+        <span class="filter-label">الحالة:</span>
+        <span class="filter-value">${getStatusLabelLocal(data.filters.status)}</span>
+      </div>
+      <div class="filter-item">
+        <span class="filter-label">الفرع:</span>
+        <span class="filter-value">${data.filters.branchName}</span>
+      </div>
+    </div>
+    
+    <!-- بطاقات الإحصائيات -->
+    <div class="stats-grid">
+      <div class="stat-card primary">
+        <div class="stat-label">إجمالي السندات</div>
+        <div class="stat-value">${data.statistics.totalCount}</div>
+        <div class="stat-amount">${formatCurrencyLocal(data.statistics.totalAmount)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">المسودات</div>
+        <div class="stat-value">${data.statistics.draftCount}</div>
+        <div class="stat-amount">${formatCurrencyLocal(data.statistics.draftAmount)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">المعتمدة</div>
+        <div class="stat-value">${data.statistics.approvedCount}</div>
+        <div class="stat-amount">${formatCurrencyLocal(data.statistics.approvedAmount)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">المدفوعة</div>
+        <div class="stat-value">${data.statistics.paidCount}</div>
+        <div class="stat-amount">${formatCurrencyLocal(data.statistics.paidAmount)}</div>
+      </div>
+    </div>
+    
+    <!-- جدول السندات -->
+    <div class="table-section">
+      <div class="section-title">قائمة السندات (${data.vouchers.length} سند)</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 5%;">#</th>
+            <th style="width: 12%;">رقم السند</th>
+            <th style="width: 15%;">التاريخ</th>
+            <th style="width: 20%;">المستقبل</th>
+            <th style="width: 15%;">الفرع</th>
+            <th style="width: 18%;">المبلغ</th>
+            <th style="width: 15%;">الحالة</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- ملخص الإجماليات -->
+    <div class="summary-section">
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="summary-label">إجمالي عدد السندات</div>
+          <div class="summary-value">${data.statistics.totalCount} سند</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">إجمالي المبالغ المعتمدة</div>
+          <div class="summary-value">${formatCurrencyLocal(data.statistics.approvedAmount + data.statistics.paidAmount)}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">الإجمالي الكلي</div>
+          <div class="summary-value total">${formatCurrencyLocal(data.statistics.totalAmount)}</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- قسم التوقيعات -->
+    <div class="signatures-section">
+      <div class="signature-box">
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCA0MGMxNS0yMCAzMC0xMCA0NS0yNSIgc3Ryb2tlPSIjMWUzYTVmIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiLz48cGF0aCBkPSJNNTUgMTVjMTAgMTUgMjAgMjAgMzUgMjUiIHN0cm9rZT0iIzFlM2E1ZiIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJub25lIi8+PC9zdmc+" class="signature-image" alt="توقيع">
+        <div class="signature-line">
+          <div class="signature-name">سالم الوادعي</div>
+          <div class="signature-title">مدير المالية</div>
+        </div>
+      </div>
+      
+      <div class="stamp-section">
+        <div class="stamp">
+          <div class="stamp-text">الإدارة</div>
+          <div class="stamp-company">Symbol AI</div>
+        </div>
+      </div>
+      
+      <div class="signature-box">
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAzNWMyMC0xMCA0MC01IDYwLTIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik03MCAxNWM1IDEwIDEwIDE1IDIwIDIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" class="signature-image" alt="توقيع">
+        <div class="signature-line">
+          <div class="signature-name">عمر المطيري</div>
+          <div class="signature-title">المراجع المالي</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ذيل التقرير -->
+    <div class="report-footer">
+      تم إنشاء هذا التقرير بواسطة نظام Symbol AI | التاريخ: ${new Date().toLocaleDateString('ar-SA')} | الوقت: ${new Date().toLocaleTimeString('ar-SA')}
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: '/usr/bin/chromium-browser',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '10mm',
+        right: '10mm',
+        bottom: '10mm',
         left: '10mm'
       }
     });

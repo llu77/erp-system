@@ -1,8 +1,0 @@
-{
-  "query": "SELECT id, voucherId, voucherDate, dueDate, dueDateTo, payeeName, branchId, branchName, status FROM receipt_vouchers WHERE voucherId = 'RV-2026-005';",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, voucherId, voucherDate, dueDate, dueDateTo, payeeName, branchId, branchName, status FROM receipt_vouchers WHERE voucherId = 'RV-2026-005';",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1146 (42S02) at line 1: Table 'dslttk22lx4ib7jabif6k8.receipt_vouchers' doesn't exist"
-  ]
-}
