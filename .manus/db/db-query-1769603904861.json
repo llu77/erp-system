@@ -1,0 +1,23 @@
+{
+  "query": "SELECT id, requestNumber, employeeId, employeeName, branchId, requestType, status, vacationType, vacationDays, vacationStartDate, vacationEndDate FROM employeeRequests WHERE requestNumber = 'REQ-260123-6102';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, requestNumber, employeeId, employeeName, branchId, requestType, status, vacationType, vacationDays, vacationStartDate, vacationEndDate FROM employeeRequests WHERE requestNumber = 'REQ-260123-6102';",
+  "rows": [
+    {
+      "id": "660001",
+      "requestNumber": "REQ-260123-6102",
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "branchId": "1",
+      "requestType": "vacation",
+      "status": "approved",
+      "vacationType": "unpaid",
+      "vacationDays": "1",
+      "vacationStartDate": "2026-01-23 00:00:00",
+      "vacationEndDate": "2026-01-23 00:00:00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trequestNumber\temployeeId\temployeeName\tbranchId\trequestType\tstatus\tvacationType\tvacationDays\tvacationStartDate\tvacationEndDate\n660001\tREQ-260123-6102\t30002\tعلاء ناصر\t1\tvacation\tapproved\tunpaid\t1\t2026-01-23 00:00:00\t2026-01-23 00:00:00\n",
+  "stderr": "",
+  "execution_time_ms": 1542
+}

@@ -166,7 +166,25 @@ export default function Payrolls() {
         
         // جلب الإجازات بدون راتب للموظف تلقائياً
         const employeeLeaves = deductionsPreview?.leaves?.[emp.id];
-        const unpaidLeaveDeduction = employeeLeaves?.totalDeduction || 0;
+        // حساب خصم الإجازة بناءً على نوعها
+        let unpaidLeaveDeduction = 0;
+        if (employeeLeaves && employeeLeaves.leaves) {
+          const dailySalary = baseSalary / 30;
+          for (const leave of employeeLeaves.leaves) {
+            const leaveType = leave.type?.toLowerCase().trim();
+            // إجازة سنوية أو مرضية - مدفوعة بالكامل
+            if (leaveType === 'annual' || leaveType === 'سنوية' || leaveType === 'sick' || leaveType === 'مرضية') {
+              continue;
+            }
+            // إجازة طارئة - خصم 50%
+            if (leaveType === 'emergency' || leaveType === 'طارئة') {
+              unpaidLeaveDeduction += dailySalary * leave.days * 0.5;
+            } else {
+              // إجازة بدون راتب - خصم كامل
+              unpaidLeaveDeduction += dailySalary * leave.days;
+            }
+          }
+        }
         
         const grossSalary = baseSalary;
         const totalDeductions = advanceDeduction + negativeInvoicesDeduction + unpaidLeaveDeduction;

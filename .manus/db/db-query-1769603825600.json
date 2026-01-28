@@ -1,0 +1,170 @@
+{
+  "query": "SELECT id, requestNumber, employeeId, employeeName, requestType, status FROM employeeRequests ORDER BY createdAt DESC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, requestNumber, employeeId, employeeName, requestType, status FROM employeeRequests ORDER BY createdAt DESC LIMIT 20;",
+  "rows": [
+    {
+      "id": "840001",
+      "requestNumber": "REQ-20260128-548661",
+      "employeeId": "30007",
+      "employeeName": "السيد محمد",
+      "requestType": "advance",
+      "status": "rejected"
+    },
+    {
+      "id": "810003",
+      "requestNumber": "REQ-20260126-968541",
+      "employeeId": "30007",
+      "employeeName": "السيد محمد",
+      "requestType": "permission",
+      "status": "approved"
+    },
+    {
+      "id": "810002",
+      "requestNumber": "REQ-20260126-413133",
+      "employeeId": "60001",
+      "employeeName": "محمد ناصر",
+      "requestType": "resignation",
+      "status": "approved"
+    },
+    {
+      "id": "810001",
+      "requestNumber": "REQ-20260126-783755",
+      "employeeId": "30007",
+      "employeeName": "السيد محمد",
+      "requestType": "permission",
+      "status": "rejected"
+    },
+    {
+      "id": "780001",
+      "requestNumber": "REQ-20260126-713667",
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "requestType": "advance",
+      "status": "rejected"
+    },
+    {
+      "id": "750001",
+      "requestNumber": "REQ-260125-6088",
+      "employeeId": "30007",
+      "employeeName": "السيد محمد",
+      "requestType": "permission",
+      "status": "approved"
+    },
+    {
+      "id": "720001",
+      "requestNumber": "REQ-20260125-565150",
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "requestType": "vacation",
+      "status": "rejected"
+    },
+    {
+      "id": "690004",
+      "requestNumber": "REQ-20260124-935125",
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "requestType": "advance",
+      "status": "rejected"
+    },
+    {
+      "id": "690003",
+      "requestNumber": "REQ-20260124-208996",
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "requestType": "advance",
+      "status": "rejected"
+    },
+    {
+      "id": "690002",
+      "requestNumber": "REQ-20260124-282006",
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "requestType": "advance",
+      "status": "rejected"
+    },
+    {
+      "id": "690001",
+      "requestNumber": "REQ-20260124-546560",
+      "employeeId": "180001",
+      "employeeName": "Saud",
+      "requestType": "vacation",
+      "status": "rejected"
+    },
+    {
+      "id": "660001",
+      "requestNumber": "REQ-260123-6102",
+      "employeeId": "30002",
+      "employeeName": "علاء ناصر",
+      "requestType": "vacation",
+      "status": "approved"
+    },
+    {
+      "id": "630004",
+      "requestNumber": "REQ-260117-5487",
+      "employeeId": "90002",
+      "employeeName": "عمرو",
+      "requestType": "arrears",
+      "status": "rejected"
+    },
+    {
+      "id": "630003",
+      "requestNumber": "REQ-260117-0516",
+      "employeeId": "90003",
+      "employeeName": "محمد اسماعيل",
+      "requestType": "arrears",
+      "status": "rejected"
+    },
+    {
+      "id": "630002",
+      "requestNumber": "REQ-260117-6839",
+      "employeeId": "60001",
+      "employeeName": "محمد ناصر",
+      "requestType": "arrears",
+      "status": "rejected"
+    },
+    {
+      "id": "630001",
+      "requestNumber": "REQ-260117-5255",
+      "employeeId": "90001",
+      "employeeName": "فارس محمد ",
+      "requestType": "arrears",
+      "status": "approved"
+    },
+    {
+      "id": "600001",
+      "requestNumber": "REQ-260112-5832",
+      "employeeId": "60001",
+      "employeeName": "محمد ناصر",
+      "requestType": "advance",
+      "status": "approved"
+    },
+    {
+      "id": "570003",
+      "requestNumber": "REQ-260104-2777",
+      "employeeId": "60001",
+      "employeeName": "محمد ناصر",
+      "requestType": "advance",
+      "status": "rejected"
+    },
+    {
+      "id": "570002",
+      "requestNumber": "REQ-260104-6722",
+      "employeeId": "90001",
+      "employeeName": "فارس محمد ",
+      "requestType": "advance",
+      "status": "rejected"
+    },
+    {
+      "id": "570001",
+      "requestNumber": "REQ-260104-7282",
+      "employeeId": "90003",
+      "employeeName": "محمد اسماعيل",
+      "requestType": "advance",
+      "status": "rejected"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\trequestNumber\temployeeId\temployeeName\trequestType\tstatus\n840001\tREQ-20260128-548661\t30007\tالسيد محمد\tadvance\trejected\n810003\tREQ-20260126-968541\t30007\tالسيد محمد\tpermission\tapproved\n810002\tREQ-20260126-413133\t60001\tمحمد ناصر\tresignation\tapproved\n810001\tREQ-20260126-783755\t30007\tالسيد محمد\tpermission\trejected\n780001\tREQ-20260126-713667\t30002\tعلاء ناصر\tadvance\trejected\n750001\tREQ-260125-6088\t30007\tالسيد محمد\tpermission\tapproved\n720001\tREQ-20260125-565150\t30002\tعلاء ناصر\tvacation\trejected\n690004\tREQ-20260124-935125\t30002\tعلاء ناصر\tadvance\trejected\n690003\tREQ-20260124-208996\t30002\tعلاء ناصر\tadvance\trejected\n690002\tREQ-20260124-282006\t30002\tعلاء ناصر\tadvance\trejected\n690001\tREQ-20260124-546560\t180001\tSaud\tvacation\trejected\n660001\tREQ-260123-6102\t30002\tعلاء ناصر\tvacation\tapproved\n630004\tREQ-260117-5487\t90002\tعمرو\tarrears\trejected\n630003\tREQ-260117-0516\t90003\tمحمد اسماعيل\tarrears\trejected\n630002\tREQ-260117-6839\t60001\tمحمد ناصر\tarrears\trejected\n630001\tREQ-260117-5255\t90001\tفارس محمد \tarrears\tapproved\n600001\tREQ-260112-5832\t60001\tمحمد ناصر\tadvance\tapproved\n570003\tREQ-260104-2777\t60001\tمحمد ناصر\tadvance\trejected\n570002\tREQ-260104-6722\t90001\tفارس محمد \tadvance\trejected\n570001\tREQ-260104-7282\t90003\tمحمد اسماعيل\tadvance\trejected\n",
+  "stderr": "",
+  "execution_time_ms": 1540
+}
