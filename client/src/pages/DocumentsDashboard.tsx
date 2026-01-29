@@ -335,77 +335,116 @@ export default function DocumentsDashboard() {
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeDocument | null>(null);
   const [activeTab, setActiveTab] = useState('all');
   
-  const { data: documentsData, isLoading, refetch } = trpc.employees.getExpiringDocuments.useQuery();
+  // جلب جميع الموظفين مع وثائقهم
+  const { data: allEmployeesData, isLoading, refetch } = trpc.employees.getDocumentsDashboard.useQuery();
   const { data: branches } = trpc.branches.list.useQuery();
   
   // تحويل البيانات إلى قائمة موظفين موحدة
   const allEmployees = useMemo(() => {
-    if (!documentsData || !documentsData.expired || !documentsData.expiring) return [];
+    if (!allEmployeesData) return [];
     
-    const employeeMap = new Map<number, EmployeeDocument>();
-    
-    // جمع جميع الموظفين من expired و expiring
-    const addEmployees = (emps: any[]) => {
-      emps.forEach(emp => {
-        if (!employeeMap.has(emp.id)) {
-          employeeMap.set(emp.id, {
-            id: emp.id,
-            code: emp.code,
-            name: emp.name,
-            branchId: emp.branchId,
-            branchName: emp.branchName || 'غير محدد',
-            phone: emp.phone,
-            position: emp.position,
-            photoUrl: null,
-            iqamaNumber: emp.iqamaNumber,
-            iqamaExpiryDate: emp.iqamaExpiryDate,
-            iqamaImageUrl: emp.iqamaImageUrl,
-            healthCertExpiryDate: emp.healthCertExpiryDate,
-            healthCertImageUrl: emp.healthCertImageUrl,
-            contractExpiryDate: emp.contractExpiryDate,
-            contractImageUrl: emp.contractImageUrl,
-            isActive: emp.isActive ?? true,
-          });
-        }
-      });
-    };
-    
-    addEmployees(documentsData.expired.iqama || []);
-    addEmployees(documentsData.expired.healthCert || []);
-    addEmployees(documentsData.expired.contract || []);
-    addEmployees(documentsData.expiring.iqama || []);
-    addEmployees(documentsData.expiring.healthCert || []);
-    addEmployees(documentsData.expiring.contract || []);
-    
-    return Array.from(employeeMap.values());
-  }, [documentsData]);
+    return allEmployeesData.map((emp: any) => ({
+      id: emp.id,
+      code: emp.code,
+      name: emp.name,
+      branchId: emp.branchId,
+      branchName: emp.branchName || 'غير محدد',
+      phone: emp.phone,
+      position: emp.position,
+      photoUrl: emp.photoUrl,
+      iqamaNumber: emp.documents?.find((d: any) => d.type === 'iqama')?.number || null,
+      iqamaExpiryDate: emp.documents?.find((d: any) => d.type === 'iqama')?.expiryDate || null,
+      iqamaImageUrl: emp.documents?.find((d: any) => d.type === 'iqama')?.imageUrl || null,
+      healthCertExpiryDate: emp.documents?.find((d: any) => d.type === 'healthCert')?.expiryDate || null,
+      healthCertImageUrl: emp.documents?.find((d: any) => d.type === 'healthCert')?.imageUrl || null,
+      contractExpiryDate: emp.documents?.find((d: any) => d.type === 'contract')?.expiryDate || null,
+      contractImageUrl: emp.documents?.find((d: any) => d.type === 'contract')?.imageUrl || null,
+      isActive: emp.isActive ?? true,
+      // إضافة بيانات الإحصائيات
+      expiredCount: emp.expiredCount || 0,
+      expiringSoonCount: emp.expiringSoonCount || 0,
+      validCount: emp.validCount || 0,
+      missingCount: emp.missingCount || 0,
+    }));
+  }, [allEmployeesData]);
   
-  // حساب الإحصائيات
+  // حساب الإحصائيات من بيانات الموظفين
   const stats = useMemo(() => {
-    if (!documentsData?.summary) {
+    if (!allEmployees.length) {
       return {
+        totalEmployees: 0,
         totalExpired: 0,
         totalExpiring: 0,
+        totalValid: 0,
+        totalMissing: 0,
         expiredIqama: 0,
         expiredHealthCert: 0,
         expiredContract: 0,
         expiringIqama: 0,
         expiringHealthCert: 0,
         expiringContract: 0,
+        complianceRate: 0,
+        employeesNeedingAttention: 0,
       };
     }
     
+    let expiredIqama = 0, expiredHealthCert = 0, expiredContract = 0;
+    let expiringIqama = 0, expiringHealthCert = 0, expiringContract = 0;
+    let totalExpired = 0, totalExpiring = 0, totalValid = 0, totalMissing = 0;
+    let employeesNeedingAttention = 0;
+    
+    allEmployees.forEach(emp => {
+      // الإقامة
+      const iqamaDays = getDaysRemaining(emp.iqamaExpiryDate);
+      if (iqamaDays !== null) {
+        if (iqamaDays < 0) { expiredIqama++; totalExpired++; }
+        else if (iqamaDays <= 30) { expiringIqama++; totalExpiring++; }
+        else { totalValid++; }
+      } else { totalMissing++; }
+      
+      // الشهادة الصحية
+      const healthDays = getDaysRemaining(emp.healthCertExpiryDate);
+      if (healthDays !== null) {
+        if (healthDays < 0) { expiredHealthCert++; totalExpired++; }
+        else if (healthDays <= 30) { expiringHealthCert++; totalExpiring++; }
+        else { totalValid++; }
+      } else { totalMissing++; }
+      
+      // العقد
+      const contractDays = getDaysRemaining(emp.contractExpiryDate);
+      if (contractDays !== null) {
+        if (contractDays < 0) { expiredContract++; totalExpired++; }
+        else if (contractDays <= 30) { expiringContract++; totalExpiring++; }
+        else { totalValid++; }
+      } else { totalMissing++; }
+      
+      // موظفين يحتاجون متابعة
+      if ((iqamaDays !== null && iqamaDays <= 30) ||
+          (healthDays !== null && healthDays <= 30) ||
+          (contractDays !== null && contractDays <= 30)) {
+        employeesNeedingAttention++;
+      }
+    });
+    
+    const totalDocs = allEmployees.length * 3;
+    const complianceRate = totalDocs > 0 ? Math.round((totalValid / totalDocs) * 100) : 0;
+    
     return {
-      totalExpired: documentsData.summary.totalExpired || 0,
-      totalExpiring: documentsData.summary.totalExpiring || 0,
-      expiredIqama: documentsData.summary.expiredIqamaCount || 0,
-      expiredHealthCert: documentsData.summary.expiredHealthCertCount || 0,
-      expiredContract: documentsData.summary.expiredContractCount || 0,
-      expiringIqama: documentsData.summary.expiringIqamaCount || 0,
-      expiringHealthCert: documentsData.summary.expiringHealthCertCount || 0,
-      expiringContract: documentsData.summary.expiringContractCount || 0,
+      totalEmployees: allEmployees.length,
+      totalExpired,
+      totalExpiring,
+      totalValid,
+      totalMissing,
+      expiredIqama,
+      expiredHealthCert,
+      expiredContract,
+      expiringIqama,
+      expiringHealthCert,
+      expiringContract,
+      complianceRate,
+      employeesNeedingAttention,
     };
-  }, [documentsData]);
+  }, [allEmployees]);
   
   // فلترة الموظفين
   const filteredEmployees = useMemo(() => {
@@ -551,9 +590,9 @@ export default function DocumentsDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">{allEmployees.length}</div>
+            <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">{stats.totalEmployees}</div>
             <div className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-              موظف يحتاج متابعة
+              {stats.employeesNeedingAttention} موظف يحتاج متابعة
             </div>
           </CardContent>
         </Card>
@@ -567,10 +606,10 @@ export default function DocumentsDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-700 dark:text-green-300">
-              {allEmployees.length > 0 ? Math.round(((allEmployees.length - stats.totalExpired) / allEmployees.length) * 100) : 100}%
+              {stats.complianceRate}%
             </div>
             <Progress 
-              value={allEmployees.length > 0 ? ((allEmployees.length - stats.totalExpired) / allEmployees.length) * 100 : 100} 
+              value={stats.complianceRate} 
               className="mt-2 h-2"
             />
           </CardContent>
@@ -611,7 +650,7 @@ export default function DocumentsDashboard() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="all">
-            الكل ({allEmployees.length})
+            الكل ({stats.totalEmployees})
           </TabsTrigger>
           <TabsTrigger value="expired" className="text-red-600">
             منتهية ({stats.totalExpired})

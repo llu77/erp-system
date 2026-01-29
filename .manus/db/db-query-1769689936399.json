@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, name, code FROM employees;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, name, code FROM employees;",
+  "rows": [
+    {
+      "id": "30002",
+      "name": "علاء ناصر",
+      "code": "EMP-002"
+    },
+    {
+      "id": "30004",
+      "name": "عبدالحي جلال",
+      "code": "EMP-004"
+    },
+    {
+      "id": "30007",
+      "name": "السيد محمد",
+      "code": "EMP-007"
+    },
+    {
+      "id": "30012",
+      "name": "محمود عماره ",
+      "code": "EMP-012"
+    },
+    {
+      "id": "60001",
+      "name": "محمد ناصر",
+      "code": "EMP100"
+    },
+    {
+      "id": "90001",
+      "name": "فارس محمد ",
+      "code": "T03"
+    },
+    {
+      "id": "90002",
+      "name": "عمرو",
+      "code": "T2"
+    },
+    {
+      "id": "90003",
+      "name": "محمد اسماعيل",
+      "code": "T4"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcode\n30002\tعلاء ناصر\tEMP-002\n30004\tعبدالحي جلال\tEMP-004\n30007\tالسيد محمد\tEMP-007\n30012\tمحمود عماره \tEMP-012\n60001\tمحمد ناصر\tEMP100\n90001\tفارس محمد \tT03\n90002\tعمرو\tT2\n90003\tمحمد اسماعيل\tT4\n",
+  "stderr": "",
+  "execution_time_ms": 1525
+}
