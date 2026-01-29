@@ -1,0 +1,22 @@
+ALTER TABLE `employees` ADD `driverLicenseNumber` varchar(20);--> statement-breakpoint
+ALTER TABLE `employees` ADD `driverLicenseExpiryDate` timestamp;--> statement-breakpoint
+ALTER TABLE `employees` ADD `driverLicenseImageUrl` varchar(500);--> statement-breakpoint
+ALTER TABLE `employees` ADD `passportNumber` varchar(20);--> statement-breakpoint
+ALTER TABLE `employees` ADD `passportExpiryDate` timestamp;--> statement-breakpoint
+ALTER TABLE `employees` ADD `passportImageUrl` varchar(500);--> statement-breakpoint
+ALTER TABLE `employees` ADD `insuranceNumber` varchar(50);--> statement-breakpoint
+ALTER TABLE `employees` ADD `insuranceExpiryDate` timestamp;--> statement-breakpoint
+ALTER TABLE `employees` ADD `insuranceImageUrl` varchar(500);--> statement-breakpoint
+ALTER TABLE `employees` ADD `workPermitNumber` varchar(50);--> statement-breakpoint
+ALTER TABLE `employees` ADD `workPermitExpiryDate` timestamp;--> statement-breakpoint
+ALTER TABLE `employees` ADD `workPermitImageUrl` varchar(500);--> statement-breakpoint
+ALTER TABLE `employees` ADD `nationality` varchar(100);--> statement-breakpoint
+ALTER TABLE `employees` ADD `dateOfBirth` timestamp;--> statement-breakpoint
+ALTER TABLE `employees` ADD `hireDate` timestamp;--> statement-breakpoint
+ALTER TABLE `employees` ADD `bankName` varchar(100);--> statement-breakpoint
+ALTER TABLE `employees` ADD `bankAccountNumber` varchar(50);--> statement-breakpoint
+ALTER TABLE `employees` ADD `bankIban` varchar(50);--> statement-breakpoint
+ALTER TABLE `employees` ADD `emergencyContactName` varchar(255);--> statement-breakpoint
+ALTER TABLE `employees` ADD `emergencyContactPhone` varchar(50);--> statement-breakpoint
+ALTER TABLE `employees` ADD `address` text;--> statement-breakpoint
+ALTER TABLE `employees` ADD `notes` text;

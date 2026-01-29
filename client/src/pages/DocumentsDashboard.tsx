@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,15 +7,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { trpc } from '@/lib/trpc';
 import { 
   AlertTriangle, 
   Clock, 
   FileText, 
-  Upload, 
-  Download, 
   Eye,
   Search,
   RefreshCw,
@@ -28,12 +24,12 @@ import {
   FileSignature,
   CheckCircle2,
   XCircle,
-  TrendingUp,
   Users,
   Shield,
   ChevronLeft,
   ChevronRight,
-  CalendarDays
+  Download,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -47,6 +43,7 @@ interface EmployeeDocument {
   branchName: string;
   phone: string | null;
   position: string | null;
+  photoUrl: string | null;
   iqamaNumber: string | null;
   iqamaExpiryDate: Date | null;
   iqamaImageUrl: string | null;
@@ -57,17 +54,55 @@ interface EmployeeDocument {
   isActive: boolean;
 }
 
+// حساب الأيام المتبقية
+function getDaysRemaining(date: Date | null | undefined): number | null {
+  if (!date) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const expiryDate = new Date(date);
+  expiryDate.setHours(0, 0, 0, 0);
+  const diffTime = expiryDate.getTime() - now.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+// تنسيق التاريخ
+function formatDate(date: Date | null | undefined): string {
+  if (!date) return '-';
+  return new Date(date).toLocaleDateString('ar-SA', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+// الحصول على لون الحالة
+function getStatusColor(days: number | null): string {
+  if (days === null) return 'bg-gray-100 text-gray-600';
+  if (days < 0) return 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300';
+  if (days <= 7) return 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300';
+  if (days <= 30) return 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300';
+  if (days <= 60) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300';
+  return 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300';
+}
+
+// الحصول على نص الحالة
+function getStatusText(days: number | null): string {
+  if (days === null) return 'غير محدد';
+  if (days < 0) return `منتهية منذ ${Math.abs(days)} يوم`;
+  if (days === 0) return 'تنتهي اليوم!';
+  if (days === 1) return 'تنتهي غداً!';
+  return `${days} يوم متبقي`;
+}
+
 // مكون التقويم المرئي
-function DocumentCalendar({ documentsData, selectedBranch }: { 
-  documentsData: any; 
+function DocumentCalendar({ employees, selectedBranch }: { 
+  employees: EmployeeDocument[]; 
   selectedBranch: string;
 }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
   // جمع جميع الوثائق مع تواريخها
   const allDocuments = useMemo(() => {
-    if (!documentsData) return [];
-    
     const docs: Array<{
       employeeId: number;
       employeeName: string;
@@ -79,8 +114,11 @@ function DocumentCalendar({ documentsData, selectedBranch }: {
       expiryDate: Date;
     }> = [];
     
-    // الإقامات
-    [...(documentsData.expired?.iqama || []), ...(documentsData.expiring?.iqama || [])].forEach(emp => {
+    const filteredEmployees = selectedBranch === 'all' 
+      ? employees 
+      : employees.filter(e => e.branchId === parseInt(selectedBranch));
+    
+    filteredEmployees.forEach(emp => {
       if (emp.iqamaExpiryDate) {
         docs.push({
           employeeId: emp.id,
@@ -93,10 +131,6 @@ function DocumentCalendar({ documentsData, selectedBranch }: {
           expiryDate: new Date(emp.iqamaExpiryDate),
         });
       }
-    });
-    
-    // الشهادات الصحية
-    [...(documentsData.expired?.healthCert || []), ...(documentsData.expiring?.healthCert || [])].forEach(emp => {
       if (emp.healthCertExpiryDate) {
         docs.push({
           employeeId: emp.id,
@@ -109,10 +143,6 @@ function DocumentCalendar({ documentsData, selectedBranch }: {
           expiryDate: new Date(emp.healthCertExpiryDate),
         });
       }
-    });
-    
-    // العقود
-    [...(documentsData.expired?.contract || []), ...(documentsData.expiring?.contract || [])].forEach(emp => {
       if (emp.contractExpiryDate) {
         docs.push({
           employeeId: emp.id,
@@ -127,14 +157,8 @@ function DocumentCalendar({ documentsData, selectedBranch }: {
       }
     });
     
-    // فلتر حسب الفرع
-    if (selectedBranch !== 'all') {
-      const branchId = parseInt(selectedBranch);
-      return docs.filter(d => d.branchId === branchId);
-    }
-    
     return docs;
-  }, [documentsData, selectedBranch]);
+  }, [employees, selectedBranch]);
   
   // أيام الشهر الحالي
   const calendarDays = useMemo(() => {
@@ -299,42 +323,6 @@ function DocumentCalendar({ documentsData, selectedBranch }: {
           );
         })}
       </div>
-      
-      {/* ملخص الشهر */}
-      {allDocuments.length > 0 && (
-        <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
-          <h4 className="font-bold mb-2 text-black dark:text-white">ملخص الشهر</h4>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">إقامات:</span>
-              <span className="font-bold mr-2 text-blue-600">
-                {allDocuments.filter(d => d.documentType === 'iqama' && 
-                  new Date(d.expiryDate).getMonth() === currentMonth.getMonth() &&
-                  new Date(d.expiryDate).getFullYear() === currentMonth.getFullYear()
-                ).length}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">شهادات صحية:</span>
-              <span className="font-bold mr-2 text-green-600">
-                {allDocuments.filter(d => d.documentType === 'healthCert' && 
-                  new Date(d.expiryDate).getMonth() === currentMonth.getMonth() &&
-                  new Date(d.expiryDate).getFullYear() === currentMonth.getFullYear()
-                ).length}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">عقود:</span>
-              <span className="font-bold mr-2 text-purple-600">
-                {allDocuments.filter(d => d.documentType === 'contract' && 
-                  new Date(d.expiryDate).getMonth() === currentMonth.getMonth() &&
-                  new Date(d.expiryDate).getFullYear() === currentMonth.getFullYear()
-                ).length}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -343,577 +331,507 @@ export default function DocumentsDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeDocument | null>(null);
-  const [uploadType, setUploadType] = useState<'iqama' | 'healthCert' | 'contract'>('iqama');
-  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
   
   const { data: documentsData, isLoading, refetch } = trpc.employees.getExpiringDocuments.useQuery();
   const { data: branches } = trpc.branches.list.useQuery();
-  const uploadMutation = trpc.employees.uploadDocumentImage.useMutation({
-    onSuccess: () => {
-      toast.success('تم رفع الصورة بنجاح');
-      refetch();
-      setIsUploadDialogOpen(false);
-    },
-    onError: (error) => {
-      toast.error('فشل رفع الصورة: ' + error.message);
-    },
-  });
   
-  // حساب الإحصائيات المتقدمة
-  const advancedStats = useMemo(() => {
-    if (!documentsData) return null;
+  // تحويل البيانات إلى قائمة موظفين موحدة
+  const allEmployees = useMemo(() => {
+    if (!documentsData || !documentsData.expired || !documentsData.expiring) return [];
     
-    const totalEmployees = new Set([
-      ...documentsData.expired.iqama.map(e => e.id),
-      ...documentsData.expired.healthCert.map(e => e.id),
-      ...documentsData.expired.contract.map(e => e.id),
-      ...documentsData.expiring.iqama.map(e => e.id),
-      ...documentsData.expiring.healthCert.map(e => e.id),
-      ...documentsData.expiring.contract.map(e => e.id),
-    ]).size;
+    const employeeMap = new Map<number, EmployeeDocument>();
     
-    const criticalCount = documentsData.summary.totalExpired;
-    const warningCount = documentsData.summary.totalExpiring;
+    // جمع جميع الموظفين من expired و expiring
+    const addEmployees = (emps: any[]) => {
+      emps.forEach(emp => {
+        if (!employeeMap.has(emp.id)) {
+          employeeMap.set(emp.id, {
+            id: emp.id,
+            code: emp.code,
+            name: emp.name,
+            branchId: emp.branchId,
+            branchName: emp.branchName || 'غير محدد',
+            phone: emp.phone,
+            position: emp.position,
+            photoUrl: null,
+            iqamaNumber: emp.iqamaNumber,
+            iqamaExpiryDate: emp.iqamaExpiryDate,
+            iqamaImageUrl: emp.iqamaImageUrl,
+            healthCertExpiryDate: emp.healthCertExpiryDate,
+            healthCertImageUrl: emp.healthCertImageUrl,
+            contractExpiryDate: emp.contractExpiryDate,
+            contractImageUrl: emp.contractImageUrl,
+            isActive: emp.isActive ?? true,
+          });
+        }
+      });
+    };
     
-    // حساب نسبة الامتثال (افتراضي 100 موظف)
-    const assumedTotalEmployees = Math.max(totalEmployees * 2, 20);
-    const complianceRate = Math.max(0, Math.round(((assumedTotalEmployees - totalEmployees) / assumedTotalEmployees) * 100));
+    addEmployees(documentsData.expired.iqama || []);
+    addEmployees(documentsData.expired.healthCert || []);
+    addEmployees(documentsData.expired.contract || []);
+    addEmployees(documentsData.expiring.iqama || []);
+    addEmployees(documentsData.expiring.healthCert || []);
+    addEmployees(documentsData.expiring.contract || []);
+    
+    return Array.from(employeeMap.values());
+  }, [documentsData]);
+  
+  // حساب الإحصائيات
+  const stats = useMemo(() => {
+    if (!documentsData?.summary) {
+      return {
+        totalExpired: 0,
+        totalExpiring: 0,
+        expiredIqama: 0,
+        expiredHealthCert: 0,
+        expiredContract: 0,
+        expiringIqama: 0,
+        expiringHealthCert: 0,
+        expiringContract: 0,
+      };
+    }
     
     return {
-      totalAffectedEmployees: totalEmployees,
-      criticalCount,
-      warningCount,
-      complianceRate,
-      iqamaIssues: documentsData.summary.expiredIqamaCount + documentsData.summary.expiringIqamaCount,
-      healthCertIssues: documentsData.summary.expiredHealthCertCount + documentsData.summary.expiringHealthCertCount,
-      contractIssues: documentsData.summary.expiredContractCount + documentsData.summary.expiringContractCount,
+      totalExpired: documentsData.summary.totalExpired || 0,
+      totalExpiring: documentsData.summary.totalExpiring || 0,
+      expiredIqama: documentsData.summary.expiredIqamaCount || 0,
+      expiredHealthCert: documentsData.summary.expiredHealthCertCount || 0,
+      expiredContract: documentsData.summary.expiredContractCount || 0,
+      expiringIqama: documentsData.summary.expiringIqamaCount || 0,
+      expiringHealthCert: documentsData.summary.expiringHealthCertCount || 0,
+      expiringContract: documentsData.summary.expiringContractCount || 0,
     };
   }, [documentsData]);
   
-  const formatDate = (date: Date | null) => {
-    if (!date) return 'غير محدد';
-    return new Date(date).toLocaleDateString('ar-SA', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-  
-  const formatDateShort = (date: Date | null) => {
-    if (!date) return 'غير محدد';
-    return new Date(date).toLocaleDateString('ar-SA');
-  };
-  
-  const getDaysRemaining = (date: Date | null) => {
-    if (!date) return null;
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const expiry = new Date(date);
-    expiry.setHours(0, 0, 0, 0);
-    const diff = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return diff;
-  };
-  
-  const getStatusBadge = (date: Date | null) => {
-    const days = getDaysRemaining(date);
-    if (days === null) return <Badge variant="outline" className="text-slate-500">غير محدد</Badge>;
-    if (days < 0) return <Badge variant="destructive" className="bg-red-600 text-white font-bold">منتهية منذ {Math.abs(days)} يوم</Badge>;
-    if (days === 0) return <Badge variant="destructive" className="bg-red-600 text-white font-bold animate-pulse">تنتهي اليوم!</Badge>;
-    if (days <= 7) return <Badge variant="destructive" className="bg-red-500 text-white font-semibold">{days} أيام متبقية</Badge>;
-    if (days <= 30) return <Badge className="bg-orange-500 text-white font-semibold">{days} يوم متبقي</Badge>;
-    if (days <= 60) return <Badge className="bg-yellow-500 text-black font-semibold">{days} يوم متبقي</Badge>;
-    return <Badge variant="secondary" className="bg-green-100 text-green-700 font-semibold">سارية</Badge>;
-  };
-  
-  const getUrgencyLevel = (date: Date | null): 'critical' | 'high' | 'medium' | 'low' | 'none' => {
-    const days = getDaysRemaining(date);
-    if (days === null) return 'none';
-    if (days < 0) return 'critical';
-    if (days <= 7) return 'high';
-    if (days <= 30) return 'medium';
-    if (days <= 60) return 'low';
-    return 'none';
-  };
-  
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedEmployee) return;
-    
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = reader.result as string;
-      await uploadMutation.mutateAsync({
-        employeeId: selectedEmployee.id,
-        documentType: uploadType,
-        base64Data: base64,
-        fileName: file.name,
-        contentType: file.type,
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-  
-  const generatePDFReport = async () => {
-    if (!documentsData) return;
-    
-    const doc = new jsPDF('landscape', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    
-    // تحميل الصور
-    const loadImage = (src: string): Promise<string> => {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = reject;
-        img.src = src;
-      });
-    };
-    
-    try {
-      const [logoData, stampData, supervisorSigData, managerSigData] = await Promise.all([
-        loadImage('/symbol-ai-logo.png'),
-        loadImage('/signatures/company_stamp.png'),
-        loadImage('/signatures/supervisor_signature.png'),
-        loadImage('/signatures/manager_signature.png'),
-      ]);
-      
-      // === الصفحة الأولى: ملخص تنفيذي ===
-      
-      // خلفية الهيدر
-      doc.setFillColor(15, 23, 42); // slate-900
-      doc.rect(0, 0, pageWidth, 50, 'F');
-      
-      // الشعار
-      doc.addImage(logoData, 'PNG', 14, 8, 35, 18);
-      
-      // العنوان الرئيسي
-      doc.setFontSize(24);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      doc.text('Employee Documents Status Report', pageWidth / 2, 22, { align: 'center' });
-      
-      // العنوان الفرعي
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(148, 163, 184); // slate-400
-      doc.text('Symbol AI - Human Resources Management System', pageWidth / 2, 32, { align: 'center' });
-      
-      // رقم التقرير والتاريخ
-      const reportNumber = `DOC-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(Date.now()).slice(-4)}`;
-      doc.setFontSize(9);
-      doc.setTextColor(148, 163, 184);
-      doc.text(`Report #: ${reportNumber}`, pageWidth - 14, 42, { align: 'right' });
-      doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 14, 42);
-      
-      // خط فاصل ذهبي
-      doc.setDrawColor(245, 158, 11); // amber-500
-      doc.setLineWidth(1.5);
-      doc.line(14, 52, pageWidth - 14, 52);
-      
-      // === قسم الملخص التنفيذي ===
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0, 0, 0);
-      doc.text('Executive Summary', 14, 62);
-      
-      // بطاقات الملخص
-      const cardY = 68;
-      const cardHeight = 28;
-      const cardWidth = 62;
-      const cardGap = 8;
-      
-      // بطاقة الوثائق المنتهية (أحمر)
-      doc.setFillColor(254, 226, 226); // red-100
-      doc.roundedRect(14, cardY, cardWidth, cardHeight, 3, 3, 'F');
-      doc.setDrawColor(220, 38, 38); // red-600
-      doc.setLineWidth(0.5);
-      doc.roundedRect(14, cardY, cardWidth, cardHeight, 3, 3, 'S');
-      doc.setFontSize(10);
-      doc.setTextColor(127, 29, 29); // red-900
-      doc.text('Expired Documents', 14 + cardWidth/2, cardY + 10, { align: 'center' });
-      doc.setFontSize(22);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(220, 38, 38);
-      doc.text(String(documentsData.summary.totalExpired), 14 + cardWidth/2, cardY + 22, { align: 'center' });
-      
-      // بطاقة الوثائق قريبة الانتهاء (برتقالي)
-      const card2X = 14 + cardWidth + cardGap;
-      doc.setFillColor(254, 243, 199); // amber-100
-      doc.roundedRect(card2X, cardY, cardWidth, cardHeight, 3, 3, 'F');
-      doc.setDrawColor(217, 119, 6); // amber-600
-      doc.roundedRect(card2X, cardY, cardWidth, cardHeight, 3, 3, 'S');
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(120, 53, 15); // amber-900
-      doc.text('Expiring Soon', card2X + cardWidth/2, cardY + 10, { align: 'center' });
-      doc.setFontSize(22);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(217, 119, 6);
-      doc.text(String(documentsData.summary.totalExpiring), card2X + cardWidth/2, cardY + 22, { align: 'center' });
-      
-      // بطاقة مشاكل الإقامة (أزرق)
-      const card3X = card2X + cardWidth + cardGap;
-      doc.setFillColor(219, 234, 254); // blue-100
-      doc.roundedRect(card3X, cardY, cardWidth, cardHeight, 3, 3, 'F');
-      doc.setDrawColor(37, 99, 235); // blue-600
-      doc.roundedRect(card3X, cardY, cardWidth, cardHeight, 3, 3, 'S');
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(30, 58, 138); // blue-900
-      doc.text('Iqama Issues', card3X + cardWidth/2, cardY + 10, { align: 'center' });
-      doc.setFontSize(22);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(37, 99, 235);
-      doc.text(String(documentsData.summary.expiredIqamaCount + documentsData.summary.expiringIqamaCount), card3X + cardWidth/2, cardY + 22, { align: 'center' });
-      
-      // بطاقة مشاكل العقود (بنفسجي)
-      const card4X = card3X + cardWidth + cardGap;
-      doc.setFillColor(243, 232, 255); // purple-100
-      doc.roundedRect(card4X, cardY, cardWidth, cardHeight, 3, 3, 'F');
-      doc.setDrawColor(147, 51, 234); // purple-600
-      doc.roundedRect(card4X, cardY, cardWidth, cardHeight, 3, 3, 'S');
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(88, 28, 135); // purple-900
-      doc.text('Contract Issues', card4X + cardWidth/2, cardY + 10, { align: 'center' });
-      doc.setFontSize(22);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(147, 51, 234);
-      doc.text(String(documentsData.summary.expiredContractCount + documentsData.summary.expiringContractCount), card4X + cardWidth/2, cardY + 22, { align: 'center' });
-      
-      let yPos = cardY + cardHeight + 15;
-      
-      // === جدول الوثائق المنتهية ===
-      if (documentsData.summary.totalExpired > 0) {
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(220, 38, 38);
-        doc.text('CRITICAL: Expired Documents Requiring Immediate Action', 14, yPos);
-        yPos += 6;
-        
-        const expiredData: string[][] = [];
-        
-        documentsData.expired.iqama.forEach(emp => {
-          const days = getDaysRemaining(emp.iqamaExpiryDate);
-          expiredData.push([emp.name, emp.branchName, 'Iqama', formatDateShort(emp.iqamaExpiryDate), `${Math.abs(days || 0)} days overdue`, 'CRITICAL']);
-        });
-        documentsData.expired.healthCert.forEach(emp => {
-          const days = getDaysRemaining(emp.healthCertExpiryDate);
-          expiredData.push([emp.name, emp.branchName, 'Health Certificate', formatDateShort(emp.healthCertExpiryDate), `${Math.abs(days || 0)} days overdue`, 'CRITICAL']);
-        });
-        documentsData.expired.contract.forEach(emp => {
-          const days = getDaysRemaining(emp.contractExpiryDate);
-          expiredData.push([emp.name, emp.branchName, 'Employment Contract', formatDateShort(emp.contractExpiryDate), `${Math.abs(days || 0)} days overdue`, 'CRITICAL']);
-        });
-        
-        if (expiredData.length > 0) {
-          autoTable(doc, {
-            startY: yPos,
-            head: [['Employee Name', 'Branch', 'Document Type', 'Expiry Date', 'Status', 'Priority']],
-            body: expiredData,
-            theme: 'grid',
-            headStyles: { 
-              fillColor: [220, 38, 38],
-              textColor: [255, 255, 255],
-              fontStyle: 'bold',
-              fontSize: 10
-            },
-            bodyStyles: {
-              textColor: [0, 0, 0],
-              fontSize: 9
-            },
-            alternateRowStyles: {
-              fillColor: [254, 242, 242]
-            },
-            columnStyles: {
-              5: { fontStyle: 'bold', textColor: [220, 38, 38] }
-            }
-          });
-          yPos = (doc as any).lastAutoTable.finalY + 12;
-        }
-      }
-      
-      // === جدول الوثائق قريبة الانتهاء ===
-      if (documentsData.summary.totalExpiring > 0) {
-        // التحقق من الحاجة لصفحة جديدة
-        if (yPos > pageHeight - 60) {
-          doc.addPage();
-          yPos = 20;
-        }
-        
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(217, 119, 6);
-        doc.text('WARNING: Documents Expiring Soon', 14, yPos);
-        yPos += 6;
-        
-        const expiringData: string[][] = [];
-        
-        documentsData.expiring.iqama.forEach(emp => {
-          const days = getDaysRemaining(emp.iqamaExpiryDate);
-          const priority = days && days <= 7 ? 'HIGH' : days && days <= 30 ? 'MEDIUM' : 'LOW';
-          expiringData.push([emp.name, emp.branchName, 'Iqama', formatDateShort(emp.iqamaExpiryDate), `${days} days remaining`, priority]);
-        });
-        documentsData.expiring.healthCert.forEach(emp => {
-          const days = getDaysRemaining(emp.healthCertExpiryDate);
-          const priority = days && days <= 7 ? 'HIGH' : days && days <= 30 ? 'MEDIUM' : 'LOW';
-          expiringData.push([emp.name, emp.branchName, 'Health Certificate', formatDateShort(emp.healthCertExpiryDate), `${days} days remaining`, priority]);
-        });
-        documentsData.expiring.contract.forEach(emp => {
-          const days = getDaysRemaining(emp.contractExpiryDate);
-          const priority = days && days <= 7 ? 'HIGH' : days && days <= 30 ? 'MEDIUM' : 'LOW';
-          expiringData.push([emp.name, emp.branchName, 'Employment Contract', formatDateShort(emp.contractExpiryDate), `${days} days remaining`, priority]);
-        });
-        
-        // ترتيب حسب الأولوية
-        expiringData.sort((a, b) => {
-          const priorityOrder = { 'HIGH': 0, 'MEDIUM': 1, 'LOW': 2 };
-          return (priorityOrder[a[5] as keyof typeof priorityOrder] || 2) - (priorityOrder[b[5] as keyof typeof priorityOrder] || 2);
-        });
-        
-        if (expiringData.length > 0) {
-          autoTable(doc, {
-            startY: yPos,
-            head: [['Employee Name', 'Branch', 'Document Type', 'Expiry Date', 'Time Remaining', 'Priority']],
-            body: expiringData,
-            theme: 'grid',
-            headStyles: { 
-              fillColor: [217, 119, 6],
-              textColor: [255, 255, 255],
-              fontStyle: 'bold',
-              fontSize: 10
-            },
-            bodyStyles: {
-              textColor: [0, 0, 0],
-              fontSize: 9
-            },
-            alternateRowStyles: {
-              fillColor: [254, 252, 232]
-            },
-            columnStyles: {
-              5: { 
-                fontStyle: 'bold',
-                cellWidth: 25
-              }
-            },
-            didParseCell: (data) => {
-              if (data.column.index === 5 && data.section === 'body') {
-                const priority = data.cell.raw;
-                if (priority === 'HIGH') {
-                  data.cell.styles.textColor = [220, 38, 38];
-                } else if (priority === 'MEDIUM') {
-                  data.cell.styles.textColor = [217, 119, 6];
-                } else {
-                  data.cell.styles.textColor = [22, 163, 74];
-                }
-              }
-            }
-          });
-        }
-      }
-      
-      // === التوقيعات والختم ===
-      const lastPage = doc.getNumberOfPages();
-      doc.setPage(lastPage);
-      
-      const sigY = pageHeight - 55;
-      
-      // خط فاصل
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.5);
-      doc.line(14, sigY - 5, pageWidth - 14, sigY - 5);
-      
-      // الختم في المنتصف
-      doc.addImage(stampData, 'PNG', pageWidth / 2 - 22, sigY - 2, 44, 44);
-      
-      // كلمة معتمد
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(22, 163, 74);
-      doc.text('APPROVED', pageWidth / 2, sigY + 45, { align: 'center' });
-      
-      // توقيع المشرف العام (يمين)
-      doc.addImage(supervisorSigData, 'PNG', pageWidth - 90, sigY, 60, 30);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0, 0, 0);
-      doc.text('General Supervisor', pageWidth - 60, sigY + 35, { align: 'center' });
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Salem Al-Wadei', pageWidth - 60, sigY + 40, { align: 'center' });
-      
-      // توقيع المدير (يسار)
-      doc.addImage(managerSigData, 'PNG', 20, sigY, 60, 30);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Manager', 50, sigY + 35, { align: 'center' });
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Omar Al-Mutairi', 50, sigY + 40, { align: 'center' });
-      
-      // ترقيم الصفحات
-      const pageCount = doc.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(148, 163, 184);
-        doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 8, { align: 'center' });
-        doc.text('Symbol AI - Confidential Document', 14, pageHeight - 8);
-        doc.text(reportNumber, pageWidth - 14, pageHeight - 8, { align: 'right' });
-      }
-      
-      doc.save(`Documents_Status_Report_${reportNumber}.pdf`);
-      toast.success('تم تحميل التقرير بنجاح');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      toast.error('حدث خطأ أثناء إنشاء التقرير');
-    }
-  };
-  
-  const filterEmployees = (employees: EmployeeDocument[]) => {
-    let filtered = employees;
+  // فلترة الموظفين
+  const filteredEmployees = useMemo(() => {
+    let result = allEmployees;
     
     // فلتر الفرع
     if (selectedBranch !== 'all') {
-      const branchId = parseInt(selectedBranch);
-      filtered = filtered.filter(emp => emp.branchId === branchId);
+      result = result.filter(e => e.branchId === parseInt(selectedBranch));
     }
     
     // فلتر البحث
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(emp => 
-        emp.name.toLowerCase().includes(term) ||
-        emp.code.toLowerCase().includes(term) ||
-        emp.branchName.toLowerCase().includes(term)
+      result = result.filter(e => 
+        e.name.toLowerCase().includes(term) ||
+        e.code.toLowerCase().includes(term) ||
+        (e.iqamaNumber && e.iqamaNumber.toLowerCase().includes(term))
       );
     }
     
-    return filtered;
-  };
+    // فلتر التبويب
+    if (activeTab === 'expired') {
+      result = result.filter(e => {
+        const iqamaDays = getDaysRemaining(e.iqamaExpiryDate);
+        const healthDays = getDaysRemaining(e.healthCertExpiryDate);
+        const contractDays = getDaysRemaining(e.contractExpiryDate);
+        return (iqamaDays !== null && iqamaDays < 0) ||
+               (healthDays !== null && healthDays < 0) ||
+               (contractDays !== null && contractDays < 0);
+      });
+    } else if (activeTab === 'expiring') {
+      result = result.filter(e => {
+        const iqamaDays = getDaysRemaining(e.iqamaExpiryDate);
+        const healthDays = getDaysRemaining(e.healthCertExpiryDate);
+        const contractDays = getDaysRemaining(e.contractExpiryDate);
+        return (iqamaDays !== null && iqamaDays >= 0 && iqamaDays <= 30) ||
+               (healthDays !== null && healthDays >= 0 && healthDays <= 30) ||
+               (contractDays !== null && contractDays >= 0 && contractDays <= 30);
+      });
+    }
+    
+    return result;
+  }, [allEmployees, selectedBranch, searchTerm, activeTab]);
   
-  const renderEmployeeTable = (employees: EmployeeDocument[], documentType: 'iqama' | 'healthCert' | 'contract') => {
-    const filtered = filterEmployees(employees);
+  // تصدير PDF
+  const exportPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
     
-    if (filtered.length === 0) {
-      return (
-        <div className="text-center py-12 text-muted-foreground">
-          <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-green-500 opacity-50" />
-          <p className="text-lg font-medium">لا توجد وثائق تحتاج إلى متابعة</p>
-          <p className="text-sm mt-1">جميع الوثائق سارية المفعول</p>
-        </div>
-      );
-    }
+    doc.setFontSize(18);
+    doc.text('Documents Expiry Report', 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-US')}`, 14, 28);
     
-    const getExpiryDate = (emp: EmployeeDocument) => {
-      switch (documentType) {
-        case 'iqama': return emp.iqamaExpiryDate;
-        case 'healthCert': return emp.healthCertExpiryDate;
-        case 'contract': return emp.contractExpiryDate;
-      }
-    };
+    const tableData = filteredEmployees.map(emp => [
+      emp.code,
+      emp.name,
+      emp.branchName,
+      formatDate(emp.iqamaExpiryDate),
+      getStatusText(getDaysRemaining(emp.iqamaExpiryDate)),
+      formatDate(emp.healthCertExpiryDate),
+      getStatusText(getDaysRemaining(emp.healthCertExpiryDate)),
+      formatDate(emp.contractExpiryDate),
+      getStatusText(getDaysRemaining(emp.contractExpiryDate)),
+    ]);
     
-    const getImageUrl = (emp: EmployeeDocument) => {
-      switch (documentType) {
-        case 'iqama': return emp.iqamaImageUrl;
-        case 'healthCert': return emp.healthCertImageUrl;
-        case 'contract': return emp.contractImageUrl;
-      }
-    };
-    
-    // ترتيب حسب الأولوية (الأكثر إلحاحاً أولاً)
-    const sortedEmployees = [...filtered].sort((a, b) => {
-      const daysA = getDaysRemaining(getExpiryDate(a)) ?? 999;
-      const daysB = getDaysRemaining(getExpiryDate(b)) ?? 999;
-      return daysA - daysB;
+    autoTable(doc, {
+      head: [['Code', 'Name', 'Branch', 'Iqama Expiry', 'Iqama Status', 'Health Cert', 'Health Status', 'Contract', 'Contract Status']],
+      body: tableData,
+      startY: 35,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [15, 23, 42] },
     });
     
+    doc.save('documents-report.pdf');
+    toast.success('تم تصدير التقرير بنجاح');
+  };
+  
+  if (isLoading) {
     return (
-      <div className="overflow-x-auto">
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  
+  return (
+    <div className="space-y-6 p-6">
+      {/* العنوان */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-black dark:text-white">لوحة تحكم الوثائق</h1>
+          <p className="text-muted-foreground mt-1">متابعة وثائق جميع الموظفين والتنبيهات</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => refetch()}>
+            <RefreshCw className="w-4 h-4 ml-2" />
+            تحديث
+          </Button>
+          <Button onClick={exportPDF}>
+            <Download className="w-4 h-4 ml-2" />
+            تصدير PDF
+          </Button>
+        </div>
+      </div>
+      
+      {/* بطاقات الإحصائيات */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border-red-200 bg-red-50 dark:bg-red-950/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2 text-red-700 dark:text-red-300">
+              <XCircle className="w-5 h-5" />
+              وثائق منتهية
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-red-700 dark:text-red-300">{stats.totalExpired}</div>
+            <div className="text-sm text-red-600 dark:text-red-400 mt-1">
+              إقامة: {stats.expiredIqama} | صحية: {stats.expiredHealthCert} | عقد: {stats.expiredContract}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2 text-orange-700 dark:text-orange-300">
+              <AlertTriangle className="w-5 h-5" />
+              قريبة من الانتهاء
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-orange-700 dark:text-orange-300">{stats.totalExpiring}</div>
+            <div className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+              إقامة: {stats.expiringIqama} | صحية: {stats.expiringHealthCert} | عقد: {stats.expiringContract}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2 text-blue-700 dark:text-blue-300">
+              <Users className="w-5 h-5" />
+              إجمالي الموظفين
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">{allEmployees.length}</div>
+            <div className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+              موظف يحتاج متابعة
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-green-200 bg-green-50 dark:bg-green-950/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2 text-green-700 dark:text-green-300">
+              <Shield className="w-5 h-5" />
+              نسبة الامتثال
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-700 dark:text-green-300">
+              {allEmployees.length > 0 ? Math.round(((allEmployees.length - stats.totalExpired) / allEmployees.length) * 100) : 100}%
+            </div>
+            <Progress 
+              value={allEmployees.length > 0 ? ((allEmployees.length - stats.totalExpired) / allEmployees.length) * 100 : 100} 
+              className="mt-2 h-2"
+            />
+          </CardContent>
+        </Card>
+      </div>
+      
+      {/* الفلاتر */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex-1 min-w-[200px] max-w-[400px]">
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="بحث بالاسم أو الكود أو رقم الإقامة..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pr-10"
+            />
+          </div>
+        </div>
+        
+        <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+          <SelectTrigger className="w-[200px]">
+            <Building className="w-4 h-4 ml-2" />
+            <SelectValue placeholder="جميع الفروع" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">جميع الفروع</SelectItem>
+            {branches?.map((branch) => (
+              <SelectItem key={branch.id} value={branch.id.toString()}>
+                {branch.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      {/* التبويبات */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="all">
+            الكل ({allEmployees.length})
+          </TabsTrigger>
+          <TabsTrigger value="expired" className="text-red-600">
+            منتهية ({stats.totalExpired})
+          </TabsTrigger>
+          <TabsTrigger value="expiring" className="text-orange-600">
+            قريبة من الانتهاء ({stats.totalExpiring})
+          </TabsTrigger>
+          <TabsTrigger value="calendar">
+            <Calendar className="w-4 h-4 ml-1" />
+            التقويم
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="all" className="mt-4">
+          <EmployeesTable employees={filteredEmployees} onViewEmployee={setSelectedEmployee} />
+        </TabsContent>
+        
+        <TabsContent value="expired" className="mt-4">
+          <EmployeesTable employees={filteredEmployees} onViewEmployee={setSelectedEmployee} />
+        </TabsContent>
+        
+        <TabsContent value="expiring" className="mt-4">
+          <EmployeesTable employees={filteredEmployees} onViewEmployee={setSelectedEmployee} />
+        </TabsContent>
+        
+        <TabsContent value="calendar" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5" />
+                تقويم انتهاء الوثائق
+              </CardTitle>
+              <CardDescription>عرض مرئي لتواريخ انتهاء الوثائق</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DocumentCalendar employees={allEmployees} selectedBranch={selectedBranch} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+      
+      {/* نافذة تفاصيل الموظف */}
+      <Dialog open={!!selectedEmployee} onOpenChange={() => setSelectedEmployee(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="w-5 h-5" />
+              تفاصيل وثائق الموظف
+            </DialogTitle>
+          </DialogHeader>
+          {selectedEmployee && (
+            <div className="space-y-6">
+              {/* معلومات الموظف */}
+              <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User className="w-8 h-8 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">{selectedEmployee.name}</h3>
+                  <p className="text-muted-foreground">{selectedEmployee.code} | {selectedEmployee.branchName}</p>
+                  {selectedEmployee.position && (
+                    <p className="text-sm text-muted-foreground">{selectedEmployee.position}</p>
+                  )}
+                </div>
+              </div>
+              
+              {/* الوثائق */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* الإقامة */}
+                <Card className={getStatusColor(getDaysRemaining(selectedEmployee.iqamaExpiryDate))}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <IdCard className="w-4 h-4" />
+                      الإقامة
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-lg font-bold">{selectedEmployee.iqamaNumber || '-'}</div>
+                    <div className="text-sm mt-1">
+                      <div>تاريخ الانتهاء: {formatDate(selectedEmployee.iqamaExpiryDate)}</div>
+                      <div className="font-bold mt-1">{getStatusText(getDaysRemaining(selectedEmployee.iqamaExpiryDate))}</div>
+                    </div>
+                    {selectedEmployee.iqamaImageUrl && (
+                      <Button variant="outline" size="sm" className="mt-2 w-full" asChild>
+                        <a href={selectedEmployee.iqamaImageUrl} target="_blank" rel="noopener noreferrer">
+                          <Eye className="w-4 h-4 ml-1" />
+                          عرض الصورة
+                        </a>
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+                
+                {/* الشهادة الصحية */}
+                <Card className={getStatusColor(getDaysRemaining(selectedEmployee.healthCertExpiryDate))}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Heart className="w-4 h-4" />
+                      الشهادة الصحية
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-sm mt-1">
+                      <div>تاريخ الانتهاء: {formatDate(selectedEmployee.healthCertExpiryDate)}</div>
+                      <div className="font-bold mt-1">{getStatusText(getDaysRemaining(selectedEmployee.healthCertExpiryDate))}</div>
+                    </div>
+                    {selectedEmployee.healthCertImageUrl && (
+                      <Button variant="outline" size="sm" className="mt-2 w-full" asChild>
+                        <a href={selectedEmployee.healthCertImageUrl} target="_blank" rel="noopener noreferrer">
+                          <Eye className="w-4 h-4 ml-1" />
+                          عرض الصورة
+                        </a>
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+                
+                {/* العقد */}
+                <Card className={getStatusColor(getDaysRemaining(selectedEmployee.contractExpiryDate))}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <FileSignature className="w-4 h-4" />
+                      عقد العمل
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-sm mt-1">
+                      <div>تاريخ الانتهاء: {formatDate(selectedEmployee.contractExpiryDate)}</div>
+                      <div className="font-bold mt-1">{getStatusText(getDaysRemaining(selectedEmployee.contractExpiryDate))}</div>
+                    </div>
+                    {selectedEmployee.contractImageUrl && (
+                      <Button variant="outline" size="sm" className="mt-2 w-full" asChild>
+                        <a href={selectedEmployee.contractImageUrl} target="_blank" rel="noopener noreferrer">
+                          <Eye className="w-4 h-4 ml-1" />
+                          عرض الصورة
+                        </a>
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// مكون جدول الموظفين
+function EmployeesTable({ 
+  employees, 
+  onViewEmployee 
+}: { 
+  employees: EmployeeDocument[]; 
+  onViewEmployee: (emp: EmployeeDocument) => void;
+}) {
+  if (employees.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <CheckCircle2 className="w-12 h-12 mx-auto text-green-500 mb-4" />
+          <h3 className="text-lg font-bold">لا توجد وثائق تحتاج متابعة</h3>
+          <p className="text-muted-foreground">جميع الوثائق سارية المفعول</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  return (
+    <Card>
+      <CardContent className="p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50 dark:bg-slate-800/50">
-              <TableHead className="font-bold text-black dark:text-white">الموظف</TableHead>
-              <TableHead className="font-bold text-black dark:text-white">الفرع</TableHead>
-              <TableHead className="font-bold text-black dark:text-white">تاريخ الانتهاء</TableHead>
-              <TableHead className="font-bold text-black dark:text-white">الحالة</TableHead>
-              <TableHead className="font-bold text-black dark:text-white">الصورة</TableHead>
-              <TableHead className="font-bold text-black dark:text-white">إجراءات</TableHead>
+            <TableRow>
+              <TableHead className="text-right">الموظف</TableHead>
+              <TableHead className="text-right">الفرع</TableHead>
+              <TableHead className="text-center">الإقامة</TableHead>
+              <TableHead className="text-center">الشهادة الصحية</TableHead>
+              <TableHead className="text-center">العقد</TableHead>
+              <TableHead className="text-center">إجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedEmployees.map((emp) => {
-              const urgency = getUrgencyLevel(getExpiryDate(emp));
-              const rowClass = urgency === 'critical' ? 'bg-red-50 dark:bg-red-950/30' : 
-                              urgency === 'high' ? 'bg-orange-50 dark:bg-orange-950/30' : '';
+            {employees.map((emp) => {
+              const iqamaDays = getDaysRemaining(emp.iqamaExpiryDate);
+              const healthDays = getDaysRemaining(emp.healthCertExpiryDate);
+              const contractDays = getDaysRemaining(emp.contractExpiryDate);
               
               return (
-                <TableRow key={emp.id} className={rowClass}>
+                <TableRow key={emp.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        urgency === 'critical' ? 'bg-red-100 text-red-600' :
-                        urgency === 'high' ? 'bg-orange-100 text-orange-600' :
-                        'bg-slate-100 text-slate-600'
-                      }`}>
-                        <User className="w-5 h-5" />
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="w-5 h-5 text-primary" />
                       </div>
                       <div>
-                        <div className="font-bold text-black dark:text-white">{emp.name}</div>
-                        <div className="text-xs text-muted-foreground">{emp.code}</div>
+                        <div className="font-bold">{emp.name}</div>
+                        <div className="text-sm text-muted-foreground">{emp.code}</div>
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Building className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium text-black dark:text-white">{emp.branchName}</span>
-                    </div>
+                  <TableCell>{emp.branchName}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge className={getStatusColor(iqamaDays)}>
+                      {getStatusText(iqamaDays)}
+                    </Badge>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium text-black dark:text-white">{formatDate(getExpiryDate(emp))}</span>
-                    </div>
+                  <TableCell className="text-center">
+                    <Badge className={getStatusColor(healthDays)}>
+                      {getStatusText(healthDays)}
+                    </Badge>
                   </TableCell>
-                  <TableCell>{getStatusBadge(getExpiryDate(emp))}</TableCell>
-                  <TableCell>
-                    {getImageUrl(emp) ? (
-                      <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-800" asChild>
-                        <a href={getImageUrl(emp)!} target="_blank" rel="noopener noreferrer">
-                          <Eye className="w-4 h-4 ml-1" />
-                          عرض
-                        </a>
-                      </Button>
-                    ) : (
-                      <span className="text-muted-foreground text-sm flex items-center gap-1">
-                        <XCircle className="w-4 h-4" />
-                        لا توجد صورة
-                      </span>
-                    )}
+                  <TableCell className="text-center">
+                    <Badge className={getStatusColor(contractDays)}>
+                      {getStatusText(contractDays)}
+                    </Badge>
                   </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-primary text-primary hover:bg-primary hover:text-white"
-                      onClick={() => {
-                        setSelectedEmployee(emp);
-                        setUploadType(documentType);
-                        setIsUploadDialogOpen(true);
-                      }}
-                    >
-                      <Upload className="w-4 h-4 ml-1" />
-                      رفع صورة
+                  <TableCell className="text-center">
+                    <Button variant="outline" size="sm" onClick={() => onViewEmployee(emp)}>
+                      <Eye className="w-4 h-4 ml-1" />
+                      تفاصيل
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -921,390 +839,7 @@ export default function DocumentsDashboard() {
             })}
           </TableBody>
         </Table>
-      </div>
-    );
-  };
-  
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <RefreshCw className="w-12 h-12 animate-spin text-primary" />
-        <p className="text-muted-foreground">جاري تحميل بيانات الوثائق...</p>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="space-y-6 p-1">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 rounded-xl">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-bold flex items-center gap-3">
-            <Shield className="w-8 h-8 text-amber-400" />
-            لوحة تحكم الوثائق
-          </h1>
-          <p className="text-slate-300 mt-2">متابعة حالة وثائق الموظفين والتنبيهات - تحديث فوري</p>
-        </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={() => refetch()} className="bg-transparent border-white/30 text-white hover:bg-white/10">
-            <RefreshCw className="w-4 h-4 ml-2" />
-            تحديث
-          </Button>
-          <Button onClick={generatePDFReport} className="bg-amber-500 hover:bg-amber-600 text-black font-bold">
-            <Download className="w-4 h-4 ml-2" />
-            تصدير PDF
-          </Button>
-        </div>
-      </div>
-      
-      {/* Summary Cards - تصميم محسن */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-2 border-red-200 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/40 dark:to-red-900/20 shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base lg:text-lg flex items-center gap-2 text-red-700 dark:text-red-400">
-              <div className="p-2 bg-red-200 dark:bg-red-800 rounded-lg">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              وثائق منتهية
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl lg:text-5xl font-black text-red-600 dark:text-red-400">
-              {documentsData?.summary.totalExpired || 0}
-            </div>
-            <p className="text-sm text-red-600/70 mt-1">تتطلب إجراء فوري</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-950/40 dark:to-amber-900/20 shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base lg:text-lg flex items-center gap-2 text-orange-700 dark:text-orange-400">
-              <div className="p-2 bg-orange-200 dark:bg-orange-800 rounded-lg">
-                <Clock className="w-5 h-5" />
-              </div>
-              قريبة الانتهاء
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl lg:text-5xl font-black text-orange-600 dark:text-orange-400">
-              {documentsData?.summary.totalExpiring || 0}
-            </div>
-            <p className="text-sm text-orange-600/70 mt-1">خلال 30-60 يوم</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/40 dark:to-blue-900/20 shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base lg:text-lg flex items-center gap-2 text-blue-700 dark:text-blue-400">
-              <div className="p-2 bg-blue-200 dark:bg-blue-800 rounded-lg">
-                <IdCard className="w-5 h-5" />
-              </div>
-              إقامات
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-black text-red-600">{documentsData?.summary.expiredIqamaCount || 0}</span>
-                <span className="text-sm text-red-600">منتهية</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-black text-orange-600">{documentsData?.summary.expiringIqamaCount || 0}</span>
-                <span className="text-sm text-orange-600">قريبة</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/40 dark:to-purple-900/20 shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base lg:text-lg flex items-center gap-2 text-purple-700 dark:text-purple-400">
-              <div className="p-2 bg-purple-200 dark:bg-purple-800 rounded-lg">
-                <FileSignature className="w-5 h-5" />
-              </div>
-              عقود
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-black text-red-600">{documentsData?.summary.expiredContractCount || 0}</span>
-                <span className="text-sm text-red-600">منتهية</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-black text-orange-600">{documentsData?.summary.expiringContractCount || 0}</span>
-                <span className="text-sm text-orange-600">قريبة</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      
-      {/* إحصائيات إضافية */}
-      {advancedStats && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="bg-slate-50 dark:bg-slate-800/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Users className="w-4 h-4 text-slate-500" />
-                الموظفون المتأثرون
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-black dark:text-white">{advancedStats.totalAffectedEmployees}</div>
-              <p className="text-xs text-muted-foreground">موظف يحتاج متابعة</p>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-slate-50 dark:bg-slate-800/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Heart className="w-4 h-4 text-pink-500" />
-                الشهادات الصحية
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4">
-                <div>
-                  <span className="text-2xl font-bold text-red-600">{documentsData?.summary.expiredHealthCertCount || 0}</span>
-                  <span className="text-sm text-muted-foreground mr-1">منتهية</span>
-                </div>
-                <div>
-                  <span className="text-2xl font-bold text-orange-600">{documentsData?.summary.expiringHealthCertCount || 0}</span>
-                  <span className="text-sm text-muted-foreground mr-1">قريبة</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-slate-50 dark:bg-slate-800/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-green-500" />
-                نسبة الامتثال التقديرية
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="text-3xl font-bold text-green-600">{advancedStats.complianceRate}%</div>
-                <Progress value={advancedStats.complianceRate} className="h-2" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      
-      {/* Search & Branch Filter */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <Input
-            placeholder="بحث بالاسم أو الكود..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pr-12 h-12 text-lg border-2"
-          />
-        </div>
-        
-        <div className="w-full sm:w-64">
-          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger className="h-12 text-lg border-2">
-              <Building className="w-5 h-5 ml-2 text-muted-foreground" />
-              <SelectValue placeholder="جميع الفروع" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                <span className="font-medium">جميع الفروع</span>
-              </SelectItem>
-              {branches?.map((branch) => (
-                <SelectItem key={branch.id} value={branch.id.toString()}>
-                  {branch.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      
-      {/* Tabs */}
-      <Tabs defaultValue="expired" className="space-y-4">
-        <TabsList className="h-12 p-1 bg-slate-100 dark:bg-slate-800">
-          <TabsTrigger value="expired" className="gap-2 h-10 px-6 data-[state=active]:bg-red-500 data-[state=active]:text-white">
-            <AlertTriangle className="w-5 h-5" />
-            <span className="font-bold">منتهية ({documentsData?.summary.totalExpired || 0})</span>
-          </TabsTrigger>
-          <TabsTrigger value="expiring" className="gap-2 h-10 px-6 data-[state=active]:bg-orange-500 data-[state=active]:text-white">
-            <Clock className="w-5 h-5" />
-            <span className="font-bold">قريبة الانتهاء ({documentsData?.summary.totalExpiring || 0})</span>
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="expired" className="space-y-4">
-          <Tabs defaultValue="iqama">
-            <TabsList className="bg-red-50 dark:bg-red-950/30">
-              <TabsTrigger value="iqama" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
-                <IdCard className="w-4 h-4 ml-1" />
-                الإقامة ({documentsData?.expired.iqama.length || 0})
-              </TabsTrigger>
-              <TabsTrigger value="healthCert" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
-                <Heart className="w-4 h-4 ml-1" />
-                الشهادة الصحية ({documentsData?.expired.healthCert.length || 0})
-              </TabsTrigger>
-              <TabsTrigger value="contract" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">
-                <FileSignature className="w-4 h-4 ml-1" />
-                عقد العمل ({documentsData?.expired.contract.length || 0})
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="iqama">
-              <Card className="border-red-200">
-                <CardHeader className="bg-red-50 dark:bg-red-950/30 rounded-t-lg">
-                  <CardTitle className="text-red-700 dark:text-red-400">إقامات منتهية</CardTitle>
-                  <CardDescription>الموظفون الذين انتهت صلاحية إقامتهم - يتطلب إجراء فوري</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  {renderEmployeeTable(documentsData?.expired.iqama || [], 'iqama')}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="healthCert">
-              <Card className="border-red-200">
-                <CardHeader className="bg-red-50 dark:bg-red-950/30 rounded-t-lg">
-                  <CardTitle className="text-red-700 dark:text-red-400">شهادات صحية منتهية</CardTitle>
-                  <CardDescription>الموظفون الذين انتهت صلاحية شهادتهم الصحية</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  {renderEmployeeTable(documentsData?.expired.healthCert || [], 'healthCert')}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="contract">
-              <Card className="border-red-200">
-                <CardHeader className="bg-red-50 dark:bg-red-950/30 rounded-t-lg">
-                  <CardTitle className="text-red-700 dark:text-red-400">عقود عمل منتهية</CardTitle>
-                  <CardDescription>الموظفون الذين انتهت عقود عملهم</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  {renderEmployeeTable(documentsData?.expired.contract || [], 'contract')}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </TabsContent>
-        
-        <TabsContent value="expiring" className="space-y-4">
-          <Tabs defaultValue="iqama">
-            <TabsList className="bg-orange-50 dark:bg-orange-950/30">
-              <TabsTrigger value="iqama" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
-                <IdCard className="w-4 h-4 ml-1" />
-                الإقامة ({documentsData?.expiring.iqama.length || 0})
-              </TabsTrigger>
-              <TabsTrigger value="healthCert" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
-                <Heart className="w-4 h-4 ml-1" />
-                الشهادة الصحية ({documentsData?.expiring.healthCert.length || 0})
-              </TabsTrigger>
-              <TabsTrigger value="contract" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
-                <FileSignature className="w-4 h-4 ml-1" />
-                عقد العمل ({documentsData?.expiring.contract.length || 0})
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="iqama">
-              <Card className="border-orange-200">
-                <CardHeader className="bg-orange-50 dark:bg-orange-950/30 rounded-t-lg">
-                  <CardTitle className="text-orange-700 dark:text-orange-400">إقامات قريبة الانتهاء</CardTitle>
-                  <CardDescription>الموظفون الذين ستنتهي إقامتهم خلال 30 يوم</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  {renderEmployeeTable(documentsData?.expiring.iqama || [], 'iqama')}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="healthCert">
-              <Card className="border-orange-200">
-                <CardHeader className="bg-orange-50 dark:bg-orange-950/30 rounded-t-lg">
-                  <CardTitle className="text-orange-700 dark:text-orange-400">شهادات صحية قريبة الانتهاء</CardTitle>
-                  <CardDescription>الموظفون الذين ستنتهي شهادتهم الصحية خلال أسبوع</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  {renderEmployeeTable(documentsData?.expiring.healthCert || [], 'healthCert')}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="contract">
-              <Card className="border-orange-200">
-                <CardHeader className="bg-orange-50 dark:bg-orange-950/30 rounded-t-lg">
-                  <CardTitle className="text-orange-700 dark:text-orange-400">عقود عمل قريبة الانتهاء</CardTitle>
-                  <CardDescription>الموظفون الذين ستنتهي عقودهم خلال شهرين</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  {renderEmployeeTable(documentsData?.expiring.contract || [], 'contract')}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </TabsContent>
-      </Tabs>
-      
-      {/* Calendar View */}
-      <Card className="border-2 border-slate-200 dark:border-slate-700">
-        <CardHeader className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900">
-          <CardTitle className="flex items-center gap-3 text-xl">
-            <CalendarDays className="w-6 h-6 text-primary" />
-            تقويم تواريخ انتهاء الوثائق
-          </CardTitle>
-          <CardDescription>عرض مرئي لتواريخ انتهاء الوثائق خلال الأشهر القادمة</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <DocumentCalendar documentsData={documentsData} selectedBranch={selectedBranch} />
-        </CardContent>
-      </Card>
-      
-      {/* Upload Dialog */}
-      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Upload className="w-5 h-5 text-primary" />
-              رفع صورة الوثيقة
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
-              <Label className="text-muted-foreground">الموظف</Label>
-              <p className="text-lg font-bold text-black dark:text-white">{selectedEmployee?.name}</p>
-              <p className="text-sm text-muted-foreground">{selectedEmployee?.code}</p>
-            </div>
-            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
-              <Label className="text-muted-foreground">نوع الوثيقة</Label>
-              <p className="text-lg font-bold text-black dark:text-white">
-                {uploadType === 'iqama' ? 'الإقامة' : uploadType === 'healthCert' ? 'الشهادة الصحية' : 'عقد العمل'}
-              </p>
-            </div>
-            <div>
-              <Label htmlFor="file" className="text-base font-medium">اختر الصورة</Label>
-              <Input
-                id="file"
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                disabled={uploadMutation.isPending}
-                className="mt-2 h-12"
-              />
-            </div>
-            {uploadMutation.isPending && (
-              <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-                <RefreshCw className="w-5 h-5 animate-spin text-blue-500" />
-                <span className="text-blue-700 dark:text-blue-400 font-medium">جاري الرفع...</span>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

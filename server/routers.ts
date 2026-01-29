@@ -1815,6 +1815,30 @@ export const appRouter = router({
       .query(async () => {
         return await db.getDocumentStatistics();
       }),
+
+    // لوحة تحكم الوثائق الشاملة
+    getDocumentsDashboard: protectedProcedure
+      .input(z.object({ branchId: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        return await db.getEmployeesDocumentsDashboard(input?.branchId);
+      }),
+
+    // ملخص حالة الوثائق
+    getDocumentsSummary: protectedProcedure
+      .input(z.object({ branchId: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        return await db.getDocumentsSummary(input?.branchId);
+      }),
+
+    // الوثائق المنتهية أو القريبة من الانتهاء (مع فلترة)
+    getExpiringDocumentsFiltered: protectedProcedure
+      .input(z.object({ 
+        daysThreshold: z.number().default(30),
+        branchId: z.number().optional() 
+      }).optional())
+      .query(async ({ input }) => {
+        return await db.getExpiringDocuments(input?.daysThreshold || 30, input?.branchId);
+      }),
   }),
   // ==================== إدارة الإيرادات ====================
   revenues: router({

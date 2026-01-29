@@ -11142,3 +11142,258 @@ export async function getMonthlyCashFlowReport(year: number, month: number) {
     return null;
   }
 }
+
+
+// ==================== دوال لوحة تحكم الوثائق الشاملة ====================
+
+// نوع الوثيقة
+export type DocumentType = 'iqama' | 'healthCert' | 'contract' | 'driverLicense' | 'passport' | 'insurance' | 'workPermit';
+
+// حالة الوثيقة
+export type DocumentStatus = 'expired' | 'expiring_soon' | 'valid' | 'missing';
+
+// واجهة بيانات الوثيقة
+export interface DocumentInfo {
+  type: DocumentType;
+  typeName: string;
+  number: string | null;
+  expiryDate: Date | null;
+  imageUrl: string | null;
+  daysRemaining: number | null;
+  status: DocumentStatus;
+}
+
+// واجهة بيانات الموظف مع الوثائق
+export interface EmployeeWithDocuments {
+  id: number;
+  code: string;
+  name: string;
+  branchId: number;
+  branchName: string;
+  position: string | null;
+  phone: string | null;
+  photoUrl: string | null;
+  isActive: boolean;
+  documents: DocumentInfo[];
+  expiredCount: number;
+  expiringSoonCount: number;
+  validCount: number;
+  missingCount: number;
+}
+
+// حساب الأيام المتبقية وحالة الوثيقة
+function calculateDocumentStatus(expiryDate: Date | null, imageUrl: string | null): { daysRemaining: number | null; status: DocumentStatus } {
+  if (!expiryDate) {
+    return { daysRemaining: null, status: imageUrl ? 'valid' : 'missing' };
+  }
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(expiryDate);
+  expiry.setHours(0, 0, 0, 0);
+  
+  const diffTime = expiry.getTime() - today.getTime();
+  const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (daysRemaining < 0) {
+    return { daysRemaining, status: 'expired' };
+  } else if (daysRemaining <= 30) {
+    return { daysRemaining, status: 'expiring_soon' };
+  } else {
+    return { daysRemaining, status: 'valid' };
+  }
+}
+
+// جلب جميع الموظفين مع وثائقهم والأيام المتبقية
+export async function getEmployeesDocumentsDashboard(branchId?: number): Promise<EmployeeWithDocuments[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  try {
+    let query = db.select({
+      id: employees.id,
+      code: employees.code,
+      name: employees.name,
+      branchId: employees.branchId,
+      branchName: branches.name,
+      position: employees.position,
+      phone: employees.phone,
+      photoUrl: employees.photoUrl,
+      isActive: employees.isActive,
+      // وثائق الإقامة
+      iqamaNumber: employees.iqamaNumber,
+      iqamaExpiryDate: employees.iqamaExpiryDate,
+      iqamaImageUrl: employees.iqamaImageUrl,
+      // الشهادة الصحية
+      healthCertExpiryDate: employees.healthCertExpiryDate,
+      healthCertImageUrl: employees.healthCertImageUrl,
+      // العقد
+      contractExpiryDate: employees.contractExpiryDate,
+      contractImageUrl: employees.contractImageUrl,
+    })
+    .from(employees)
+    .leftJoin(branches, eq(employees.branchId, branches.id))
+    .where(branchId 
+      ? and(eq(employees.isActive, true), eq(employees.branchId, branchId))
+      : eq(employees.isActive, true)
+    );
+    
+    const results = await query.orderBy(employees.name);
+    
+    return results.map(emp => {
+      const documents: DocumentInfo[] = [];
+      
+      // الإقامة
+      const iqamaStatus = calculateDocumentStatus(emp.iqamaExpiryDate, emp.iqamaImageUrl);
+      documents.push({
+        type: 'iqama',
+        typeName: 'الإقامة',
+        number: emp.iqamaNumber,
+        expiryDate: emp.iqamaExpiryDate,
+        imageUrl: emp.iqamaImageUrl,
+        ...iqamaStatus,
+      });
+      
+      // الشهادة الصحية
+      const healthStatus = calculateDocumentStatus(emp.healthCertExpiryDate, emp.healthCertImageUrl);
+      documents.push({
+        type: 'healthCert',
+        typeName: 'الشهادة الصحية',
+        number: null,
+        expiryDate: emp.healthCertExpiryDate,
+        imageUrl: emp.healthCertImageUrl,
+        ...healthStatus,
+      });
+      
+      // العقد
+      const contractStatus = calculateDocumentStatus(emp.contractExpiryDate, emp.contractImageUrl);
+      documents.push({
+        type: 'contract',
+        typeName: 'عقد العمل',
+        number: null,
+        expiryDate: emp.contractExpiryDate,
+        imageUrl: emp.contractImageUrl,
+        ...contractStatus,
+      });
+      
+      // حساب الإحصائيات
+      const expiredCount = documents.filter(d => d.status === 'expired').length;
+      const expiringSoonCount = documents.filter(d => d.status === 'expiring_soon').length;
+      const validCount = documents.filter(d => d.status === 'valid').length;
+      const missingCount = documents.filter(d => d.status === 'missing').length;
+      
+      return {
+        id: emp.id,
+        code: emp.code,
+        name: emp.name,
+        branchId: emp.branchId,
+        branchName: emp.branchName || 'غير محدد',
+        position: emp.position,
+        phone: emp.phone,
+        photoUrl: emp.photoUrl,
+        isActive: emp.isActive,
+        documents,
+        expiredCount,
+        expiringSoonCount,
+        validCount,
+        missingCount,
+      };
+    });
+  } catch (error) {
+    console.error('Error getting employees with documents:', error);
+    return [];
+  }
+}
+
+// جلب ملخص حالة الوثائق
+export async function getDocumentsSummary(branchId?: number) {
+  const employees = await getEmployeesDocumentsDashboard(branchId);
+  
+  const summary = {
+    totalEmployees: employees.length,
+    expiredDocuments: 0,
+    expiringSoonDocuments: 0,
+    validDocuments: 0,
+    missingDocuments: 0,
+    employeesWithExpired: 0,
+    employeesWithExpiringSoon: 0,
+    employeesAllValid: 0,
+    byDocumentType: {
+      iqama: { expired: 0, expiringSoon: 0, valid: 0, missing: 0 },
+      healthCert: { expired: 0, expiringSoon: 0, valid: 0, missing: 0 },
+      contract: { expired: 0, expiringSoon: 0, valid: 0, missing: 0 },
+    } as Record<string, { expired: number; expiringSoon: number; valid: number; missing: number }>,
+  };
+  
+  for (const emp of employees) {
+    if (emp.expiredCount > 0) summary.employeesWithExpired++;
+    if (emp.expiringSoonCount > 0) summary.employeesWithExpiringSoon++;
+    if (emp.expiredCount === 0 && emp.expiringSoonCount === 0 && emp.missingCount === 0) {
+      summary.employeesAllValid++;
+    }
+    
+    for (const doc of emp.documents) {
+      if (doc.status === 'expired') {
+        summary.expiredDocuments++;
+        summary.byDocumentType[doc.type].expired++;
+      } else if (doc.status === 'expiring_soon') {
+        summary.expiringSoonDocuments++;
+        summary.byDocumentType[doc.type].expiringSoon++;
+      } else if (doc.status === 'valid') {
+        summary.validDocuments++;
+        summary.byDocumentType[doc.type].valid++;
+      } else {
+        summary.missingDocuments++;
+        summary.byDocumentType[doc.type].missing++;
+      }
+    }
+  }
+  
+  return summary;
+}
+
+// جلب الوثائق المنتهية أو القريبة من الانتهاء
+export async function getExpiringDocuments(daysThreshold: number = 30, branchId?: number) {
+  const employees = await getEmployeesDocumentsDashboard(branchId);
+  
+  const expiringDocuments: Array<{
+    employeeId: number;
+    employeeName: string;
+    employeeCode: string;
+    branchName: string;
+    documentType: string;
+    documentTypeName: string;
+    expiryDate: Date | null;
+    daysRemaining: number | null;
+    status: DocumentStatus;
+    imageUrl: string | null;
+  }> = [];
+  
+  for (const emp of employees) {
+    for (const doc of emp.documents) {
+      if (doc.status === 'expired' || (doc.status === 'expiring_soon' && doc.daysRemaining !== null && doc.daysRemaining <= daysThreshold)) {
+        expiringDocuments.push({
+          employeeId: emp.id,
+          employeeName: emp.name,
+          employeeCode: emp.code,
+          branchName: emp.branchName,
+          documentType: doc.type,
+          documentTypeName: doc.typeName,
+          expiryDate: doc.expiryDate,
+          daysRemaining: doc.daysRemaining,
+          status: doc.status,
+          imageUrl: doc.imageUrl,
+        });
+      }
+    }
+  }
+  
+  // ترتيب حسب الأيام المتبقية (المنتهية أولاً، ثم الأقرب للانتهاء)
+  expiringDocuments.sort((a, b) => {
+    if (a.daysRemaining === null) return 1;
+    if (b.daysRemaining === null) return -1;
+    return a.daysRemaining - b.daysRemaining;
+  });
+  
+  return expiringDocuments;
+}
