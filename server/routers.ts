@@ -8284,6 +8284,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
   // ==================== لوحة تحكم الأدمن في بوابة الموظفين ====================
   portalAdmin: router({
     // جلب قائمة الموظفين (للأدمن في بوابة الموظفين)
+    // المشرف يرى فقط موظفي فرعه، الأدمن يرى الكل
     getEmployees: publicProcedure
       .input(z.object({
         adminId: z.number(),
@@ -8297,7 +8298,12 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
         }
         
-        return await db.getEmployeesForPortalAdmin(input.branchId, input.search);
+        // إذا كان مشرف فرع (من جدول employees)، فلتر حسب فرعه فقط
+        const effectiveBranchId = adminCheck.isFromEmployeesTable && adminCheck.branchId 
+          ? adminCheck.branchId 
+          : input.branchId;
+        
+        return await db.getEmployeesForPortalAdmin(effectiveBranchId, input.search);
       }),
 
     // جلب قائمة الفروع (للأدمن في بوابة الموظفين)
@@ -8316,6 +8322,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
 
     // جلب قائمة الطلبات (للأدمن في بوابة الموظفين)
+    // المشرف يرى فقط طلبات موظفي فرعه، الأدمن يرى الكل
     getRequests: publicProcedure
       .input(z.object({
         adminId: z.number(),
@@ -8331,7 +8338,12 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         }
         
         const { adminId, ...filters } = input;
-        return await db.getAllEmployeeRequests(filters);
+        // إذا كان مشرف فرع (من جدول employees)، فلتر حسب فرعه فقط
+        const effectiveBranchId = adminCheck.isFromEmployeesTable && adminCheck.branchId 
+          ? adminCheck.branchId 
+          : filters.branchId;
+        
+        return await db.getAllEmployeeRequests({ ...filters, branchId: effectiveBranchId });
       }),
 
     // تحديث حالة طلب (للأدمن في بوابة الموظفين)
@@ -8380,6 +8392,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
 
     // جلب إحصائيات لوحة التحكم (للأدمن في بوابة الموظفين)
+    // المشرف يرى إحصائيات فرعه فقط، الأدمن يرى الكل
     getDashboardStats: publicProcedure
       .input(z.object({
         adminId: z.number(),
@@ -8391,7 +8404,12 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
         }
         
-        return await db.getPortalAdminDashboardStats();
+        // إذا كان مشرف فرع (من جدول employees)، فلتر حسب فرعه فقط
+        const effectiveBranchId = adminCheck.isFromEmployeesTable && adminCheck.branchId 
+          ? adminCheck.branchId 
+          : undefined;
+        
+        return await db.getPortalAdminDashboardStats(effectiveBranchId);
       }),
 
     // جلب تفاصيل موظف (للأدمن في بوابة الموظفين)

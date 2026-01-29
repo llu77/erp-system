@@ -10301,10 +10301,13 @@ export async function getDocumentStatistics() {
 // ==================== دوال لوحة تحكم الأدمن في بوابة الموظفين ====================
 
 // التحقق من صلاحيات الأدمن في بوابة الموظفين
+// يدعم المستخدمين من جدول users والمشرفين من جدول employees
 export async function checkPortalAdminAccess(userId: number): Promise<{
   isAdmin: boolean;
   adminName?: string;
   adminRole?: string;
+  branchId?: number;
+  isFromEmployeesTable?: boolean;
 }> {
   const db = await getDb();
   if (!db) {
@@ -10312,13 +10315,14 @@ export async function checkPortalAdminAccess(userId: number): Promise<{
   }
 
   try {
-    // البحث في جدول المستخدمين
+    // أولاً: البحث في جدول المستخدمين (users)
     const user = await db
       .select({
         id: users.id,
         name: users.name,
         role: users.role,
         username: users.username,
+        branchId: users.branchId,
       })
       .from(users)
       .where(eq(users.id, userId))
@@ -10329,6 +10333,32 @@ export async function checkPortalAdminAccess(userId: number): Promise<{
         isAdmin: true,
         adminName: user[0].name || user[0].username || 'Admin',
         adminRole: user[0].role,
+        branchId: user[0].branchId || undefined,
+        isFromEmployeesTable: false,
+      };
+    }
+
+    // ثانياً: البحث في جدول الموظفين (employees) للمشرفين
+    const employee = await db
+      .select({
+        id: employees.id,
+        name: employees.name,
+        code: employees.code,
+        branchId: employees.branchId,
+        isSupervisor: employees.isSupervisor,
+        isActive: employees.isActive,
+      })
+      .from(employees)
+      .where(eq(employees.id, userId))
+      .limit(1);
+
+    if (employee.length > 0 && employee[0].isSupervisor && employee[0].isActive) {
+      return {
+        isAdmin: true,
+        adminName: employee[0].name || employee[0].code || 'Supervisor',
+        adminRole: 'branch_supervisor',
+        branchId: employee[0].branchId,
+        isFromEmployeesTable: true,
       };
     }
 
@@ -10457,7 +10487,8 @@ export async function getBranchesForPortalAdmin(): Promise<Array<{
 }
 
 // جلب إحصائيات لوحة تحكم الأدمن في بوابة الموظفين
-export async function getPortalAdminDashboardStats(): Promise<{
+// يدعم فلترة حسب الفرع للمشرفين
+export async function getPortalAdminDashboardStats(branchId?: number): Promise<{
   totalEmployees: number;
   activeEmployees: number;
   pendingRequests: number;
@@ -10480,18 +10511,43 @@ export async function getPortalAdminDashboardStats(): Promise<{
   }
 
   try {
-    // عدد الموظفين
-    const allEmployees = await db.select({ id: employees.id }).from(employees);
-    const activeEmps = await db
-      .select({ id: employees.id })
+    // عدد الموظفين (مع فلترة الفرع إن وجدت)
+    let allEmployeesQuery = db.select({ id: employees.id, branchId: employees.branchId }).from(employees);
+    let activeEmpsQuery = db
+      .select({ id: employees.id, branchId: employees.branchId })
       .from(employees)
       .where(eq(employees.isActive, true));
 
-    // عدد الطلبات
-    const allRequests = await db.select({ id: employeeRequests.id, status: employeeRequests.status }).from(employeeRequests);
-    const pendingReqs = allRequests.filter((r: { status: string }) => r.status === 'pending').length;
-    const approvedReqs = allRequests.filter((r: { status: string }) => r.status === 'approved').length;
-    const rejectedReqs = allRequests.filter((r: { status: string }) => r.status === 'rejected').length;
+    const allEmployees = await allEmployeesQuery;
+    const activeEmps = await activeEmpsQuery;
+
+    // فلترة حسب الفرع إن وجدت
+    const filteredAllEmployees = branchId 
+      ? allEmployees.filter((e: { branchId: number }) => e.branchId === branchId)
+      : allEmployees;
+    const filteredActiveEmps = branchId 
+      ? activeEmps.filter((e: { branchId: number }) => e.branchId === branchId)
+      : activeEmps;
+
+    // عدد الطلبات (مع فلترة الفرع إن وجدت)
+    const allRequests = await db.select({ 
+      id: employeeRequests.id, 
+      status: employeeRequests.status,
+      employeeId: employeeRequests.employeeId 
+    }).from(employeeRequests);
+    
+    // جلب معرفات موظفي الفرع للفلترة
+    const branchEmployeeIds = branchId 
+      ? new Set(filteredAllEmployees.map((e: { id: number }) => e.id))
+      : null;
+    
+    const filteredRequests = branchEmployeeIds
+      ? allRequests.filter((r: { employeeId: number | null }) => r.employeeId && branchEmployeeIds.has(r.employeeId))
+      : allRequests;
+    
+    const pendingReqs = filteredRequests.filter((r: { status: string }) => r.status === 'pending').length;
+    const approvedReqs = filteredRequests.filter((r: { status: string }) => r.status === 'approved').length;
+    const rejectedReqs = filteredRequests.filter((r: { status: string }) => r.status === 'rejected').length;
 
     // عدد الفروع
     const branchList = await db.select({ id: branches.id }).from(branches);
@@ -10500,8 +10556,8 @@ export async function getPortalAdminDashboardStats(): Promise<{
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
     
-    const expiringDocs = await db
-      .select({ id: employees.id })
+    let expiringDocsQuery = db
+      .select({ id: employees.id, branchId: employees.branchId })
       .from(employees)
       .where(
         and(
@@ -10522,15 +10578,20 @@ export async function getPortalAdminDashboardStats(): Promise<{
           )
         )
       );
+    
+    const expiringDocs = await expiringDocsQuery;
+    const filteredExpiringDocs = branchId 
+      ? expiringDocs.filter((e: { branchId: number }) => e.branchId === branchId)
+      : expiringDocs;
 
     return {
-      totalEmployees: allEmployees.length,
-      activeEmployees: activeEmps.length,
+      totalEmployees: filteredAllEmployees.length,
+      activeEmployees: filteredActiveEmps.length,
       pendingRequests: pendingReqs,
       approvedRequests: approvedReqs,
       rejectedRequests: rejectedReqs,
-      expiringDocuments: expiringDocs.length,
-      branchCount: branchList.length,
+      expiringDocuments: filteredExpiringDocs.length,
+      branchCount: branchId ? 1 : branchList.length,
     };
   } catch (error) {
     console.error('Error getting portal admin dashboard stats:', error);
