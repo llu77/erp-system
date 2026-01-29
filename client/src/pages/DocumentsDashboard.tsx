@@ -29,7 +29,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Loader2
+  Loader2,
+  Upload,
+  Image
 } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -652,109 +654,11 @@ export default function DocumentsDashboard() {
       </Tabs>
       
       {/* نافذة تفاصيل الموظف */}
-      <Dialog open={!!selectedEmployee} onOpenChange={() => setSelectedEmployee(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <User className="w-5 h-5" />
-              تفاصيل وثائق الموظف
-            </DialogTitle>
-          </DialogHeader>
-          {selectedEmployee && (
-            <div className="space-y-6">
-              {/* معلومات الموظف */}
-              <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="w-8 h-8 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">{selectedEmployee.name}</h3>
-                  <p className="text-muted-foreground">{selectedEmployee.code} | {selectedEmployee.branchName}</p>
-                  {selectedEmployee.position && (
-                    <p className="text-sm text-muted-foreground">{selectedEmployee.position}</p>
-                  )}
-                </div>
-              </div>
-              
-              {/* الوثائق */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* الإقامة */}
-                <Card className={getStatusColor(getDaysRemaining(selectedEmployee.iqamaExpiryDate))}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <IdCard className="w-4 h-4" />
-                      الإقامة
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-lg font-bold">{selectedEmployee.iqamaNumber || '-'}</div>
-                    <div className="text-sm mt-1">
-                      <div>تاريخ الانتهاء: {formatDate(selectedEmployee.iqamaExpiryDate)}</div>
-                      <div className="font-bold mt-1">{getStatusText(getDaysRemaining(selectedEmployee.iqamaExpiryDate))}</div>
-                    </div>
-                    {selectedEmployee.iqamaImageUrl && (
-                      <Button variant="outline" size="sm" className="mt-2 w-full" asChild>
-                        <a href={selectedEmployee.iqamaImageUrl} target="_blank" rel="noopener noreferrer">
-                          <Eye className="w-4 h-4 ml-1" />
-                          عرض الصورة
-                        </a>
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-                
-                {/* الشهادة الصحية */}
-                <Card className={getStatusColor(getDaysRemaining(selectedEmployee.healthCertExpiryDate))}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Heart className="w-4 h-4" />
-                      الشهادة الصحية
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-sm mt-1">
-                      <div>تاريخ الانتهاء: {formatDate(selectedEmployee.healthCertExpiryDate)}</div>
-                      <div className="font-bold mt-1">{getStatusText(getDaysRemaining(selectedEmployee.healthCertExpiryDate))}</div>
-                    </div>
-                    {selectedEmployee.healthCertImageUrl && (
-                      <Button variant="outline" size="sm" className="mt-2 w-full" asChild>
-                        <a href={selectedEmployee.healthCertImageUrl} target="_blank" rel="noopener noreferrer">
-                          <Eye className="w-4 h-4 ml-1" />
-                          عرض الصورة
-                        </a>
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-                
-                {/* العقد */}
-                <Card className={getStatusColor(getDaysRemaining(selectedEmployee.contractExpiryDate))}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <FileSignature className="w-4 h-4" />
-                      عقد العمل
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-sm mt-1">
-                      <div>تاريخ الانتهاء: {formatDate(selectedEmployee.contractExpiryDate)}</div>
-                      <div className="font-bold mt-1">{getStatusText(getDaysRemaining(selectedEmployee.contractExpiryDate))}</div>
-                    </div>
-                    {selectedEmployee.contractImageUrl && (
-                      <Button variant="outline" size="sm" className="mt-2 w-full" asChild>
-                        <a href={selectedEmployee.contractImageUrl} target="_blank" rel="noopener noreferrer">
-                          <Eye className="w-4 h-4 ml-1" />
-                          عرض الصورة
-                        </a>
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <EmployeeDocumentsModal 
+        employee={selectedEmployee} 
+        onClose={() => setSelectedEmployee(null)} 
+        onRefresh={refetch}
+      />
     </div>
   );
 }
@@ -839,6 +743,252 @@ function EmployeesTable({
             })}
           </TableBody>
         </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+
+// مكون نافذة تفاصيل الموظف مع رفع الصور
+function EmployeeDocumentsModal({ 
+  employee, 
+  onClose, 
+  onRefresh 
+}: { 
+  employee: EmployeeDocument | null; 
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const [uploadingDoc, setUploadingDoc] = useState<'iqama' | 'healthCert' | 'contract' | null>(null);
+  
+  const uploadMutation = trpc.employees.uploadDocumentImage.useMutation({
+    onSuccess: (data) => {
+      toast.success('تم رفع الصورة بنجاح');
+      onRefresh();
+      setUploadingDoc(null);
+    },
+    onError: (error) => {
+      toast.error(`فشل رفع الصورة: ${error.message}`);
+      setUploadingDoc(null);
+    },
+  });
+  
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    documentType: 'iqama' | 'healthCert' | 'contract'
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file || !employee) return;
+    
+    // التحقق من نوع الملف
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('نوع الملف غير مدعوم. يرجى رفع صورة (JPG, PNG, WebP) أو PDF');
+      return;
+    }
+    
+    // التحقق من حجم الملف (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('حجم الملف كبير جداً. الحد الأقصى 5 ميجابايت');
+      return;
+    }
+    
+    setUploadingDoc(documentType);
+    
+    try {
+      // تحويل الملف إلى Base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64Data = reader.result as string;
+        
+        await uploadMutation.mutateAsync({
+          employeeId: employee.id,
+          documentType,
+          base64Data,
+          fileName: file.name,
+          contentType: file.type,
+        });
+      };
+      reader.onerror = () => {
+        toast.error('فشل قراءة الملف');
+        setUploadingDoc(null);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      toast.error('حدث خطأ أثناء رفع الملف');
+      setUploadingDoc(null);
+    }
+  };
+  
+  const getDocumentTypeName = (type: 'iqama' | 'healthCert' | 'contract') => {
+    switch (type) {
+      case 'iqama': return 'الإقامة';
+      case 'healthCert': return 'الشهادة الصحية';
+      case 'contract': return 'عقد العمل';
+    }
+  };
+  
+  if (!employee) return null;
+  
+  return (
+    <Dialog open={!!employee} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <User className="w-5 h-5" />
+            تفاصيل وثائق الموظف
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-6">
+          {/* معلومات الموظف */}
+          <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+              {employee.photoUrl ? (
+                <img src={employee.photoUrl} alt={employee.name} className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-8 h-8 text-primary" />
+              )}
+            </div>
+            <div>
+              <h3 className="text-xl font-bold">{employee.name}</h3>
+              <p className="text-muted-foreground">{employee.code} | {employee.branchName}</p>
+              {employee.position && (
+                <p className="text-sm text-muted-foreground">{employee.position}</p>
+              )}
+            </div>
+          </div>
+          
+          {/* الوثائق */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* الإقامة */}
+            <DocumentCard
+              type="iqama"
+              title="الإقامة"
+              icon={<IdCard className="w-4 h-4" />}
+              number={employee.iqamaNumber}
+              expiryDate={employee.iqamaExpiryDate}
+              imageUrl={employee.iqamaImageUrl}
+              isUploading={uploadingDoc === 'iqama'}
+              onUpload={(e) => handleFileUpload(e, 'iqama')}
+            />
+            
+            {/* الشهادة الصحية */}
+            <DocumentCard
+              type="healthCert"
+              title="الشهادة الصحية"
+              icon={<Heart className="w-4 h-4" />}
+              expiryDate={employee.healthCertExpiryDate}
+              imageUrl={employee.healthCertImageUrl}
+              isUploading={uploadingDoc === 'healthCert'}
+              onUpload={(e) => handleFileUpload(e, 'healthCert')}
+            />
+            
+            {/* العقد */}
+            <DocumentCard
+              type="contract"
+              title="عقد العمل"
+              icon={<FileSignature className="w-4 h-4" />}
+              expiryDate={employee.contractExpiryDate}
+              imageUrl={employee.contractImageUrl}
+              isUploading={uploadingDoc === 'contract'}
+              onUpload={(e) => handleFileUpload(e, 'contract')}
+            />
+          </div>
+          
+          {/* ملاحظة */}
+          <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm text-blue-700 dark:text-blue-300">
+            <p className="flex items-center gap-2">
+              <Image className="w-4 h-4" />
+              يمكنك رفع صور الوثائق بصيغة JPG أو PNG أو WebP أو PDF (الحد الأقصى 5 ميجابايت)
+            </p>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// مكون بطاقة الوثيقة
+function DocumentCard({
+  type,
+  title,
+  icon,
+  number,
+  expiryDate,
+  imageUrl,
+  isUploading,
+  onUpload,
+}: {
+  type: 'iqama' | 'healthCert' | 'contract';
+  title: string;
+  icon: React.ReactNode;
+  number?: string | null;
+  expiryDate: Date | null;
+  imageUrl: string | null;
+  isUploading: boolean;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const days = getDaysRemaining(expiryDate);
+  const inputId = `upload-${type}`;
+  
+  return (
+    <Card className={getStatusColor(days)}>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          {icon}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {number && (
+          <div className="text-lg font-bold">{number}</div>
+        )}
+        <div className="text-sm">
+          <div>تاريخ الانتهاء: {formatDate(expiryDate)}</div>
+          <div className="font-bold mt-1">{getStatusText(days)}</div>
+        </div>
+        
+        {/* أزرار العرض والرفع */}
+        <div className="flex flex-col gap-2">
+          {imageUrl && (
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <a href={imageUrl} target="_blank" rel="noopener noreferrer">
+                <Eye className="w-4 h-4 ml-1" />
+                عرض الصورة
+              </a>
+            </Button>
+          )}
+          
+          <div className="relative">
+            <input
+              type="file"
+              id={inputId}
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={onUpload}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              disabled={isUploading}
+            />
+            <Button 
+              variant={imageUrl ? "ghost" : "default"} 
+              size="sm" 
+              className="w-full pointer-events-none"
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-1 animate-spin" />
+                  جاري الرفع...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 ml-1" />
+                  {imageUrl ? 'تحديث الصورة' : 'رفع صورة'}
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
