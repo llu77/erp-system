@@ -3640,3 +3640,49 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إضافة تبويب "ملفي" في AdminEmployeePortal.tsx
 - [x] إضافة EmployeeProfile و EmployeeInfoForm للمشرفين
 - [x] اختبار الإصلاح - المشرف يمكنه رؤية وتعديل بياناته الشخصية
+
+
+## تحسينات معمارية لبوابة الموظفين (30 يناير 2026)
+
+### 1. Shared Portal Core Module
+- [ ] إنشاء client/src/lib/portal/constants.ts
+- [ ] إنشاء client/src/lib/portal/types.ts
+- [ ] إنشاء client/src/lib/portal/hooks/useEmployeeData.ts
+- [ ] إنشاء client/src/lib/portal/hooks/useDocumentStatus.ts
+- [ ] إنشاء client/src/lib/portal/hooks/useRequestManagement.ts
+- [ ] إنشاء client/src/lib/portal/utils.ts
+- [ ] إنشاء client/src/lib/portal/index.ts
+
+### 2. Role-Aware Layout Component
+- [ ] إنشاء client/src/components/portal/PortalLayout.tsx
+- [ ] إنشاء client/src/components/portal/PortalHeader.tsx
+- [ ] إنشاء client/src/components/portal/PortalNavigation.tsx
+- [ ] إنشاء client/src/components/portal/DocumentStatusCard.tsx
+
+### 3. Document Status Service (Backend)
+- [ ] إنشاء server/services/documentStatusService.ts
+- [ ] إضافة API endpoints للـ Document Status
+- [ ] اختبار الخدمة
+
+
+
+## تحسينات معمارية لبوابة الموظفين (30 يناير 2026)
+
+### 1. Shared Portal Core Module ✅
+- [x] إنشاء الثوابت المشتركة (constants.ts)
+- [x] إنشاء الأنواع المشتركة (types.ts)
+- [x] إنشاء الدوال المساعدة (utils.ts)
+- [x] إنشاء hooks/useEmployeeData.ts
+- [x] إنشاء hooks/useDocumentStatus.ts
+- [x] إنشاء hooks/useRequestManagement.ts
+
+### 2. Role-Aware Layout Component ✅
+- [x] إنشاء PortalHeader.tsx
+- [x] إنشاء PortalNavigation.tsx
+- [x] إنشاء DocumentStatusCard.tsx
+
+### 3. Document Status Service (Backend) ✅
+- [x] إنشاء documentStatusService.ts
+- [x] دوال تحليل حالة الوثائق
+- [x] حساب نقاط صحة الوثائق (Health Score)
+- [x] استخراج التذكيرات للوثائق المنتهية
