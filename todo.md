@@ -3662,3 +3662,20 @@ node scripts/scheduledTasks.mjs weekly-report
 - server/db.ts (checkPortalAdminAccess, getPortalAdminDashboardStats)
 - server/routers.ts (getEmployees, getDashboardStats, getRequests)
 
+
+
+## إضافة صفحة تعديل البيانات الشخصية للمشرف + إشعارات الوثائق (طلب جديد - 29 يناير 2026)
+
+### 1. صفحة/نافذة تعديل البيانات الشخصية للمشرف
+- [x] إضافة API لجلب بيانات المشرف الشخصية (getMyProfile)
+- [x] إضافة API لتحديث بيانات المشرف (updateMyProfile)
+- [x] إضافة تبويب "بياناتي" في بوابة الموظفين لتعديل البيانات الشخصية
+- [x] إضافة رفع صور الوثائق (uploadMyDocumentImage)
+- [x] إضافة دوال قاعدة البيانات (getSupervisorProfile, updateSupervisorProfile, getExpiringDocumentsForBranch, getActiveSupervisors)
+
+### 2. إشعارات انتهاء وثائق موظفي الفرع للمشرف
+- [x] تعديل نظام الإشعارات ليرسل للمشرف عند اقتراب انتهاء وثائق موظفي فرعه
+- [x] إضافة المشرفين من جدول employees لقائمة مستلمي إشعارات فرعهم
+- [x] إضافة حقل receiveDocumentExpiryAlerts لجدول notificationRecipients
+- [x] اختبارات vitest (17 اختبار ناجح)
+

@@ -8427,6 +8427,161 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         
         return await db.getEmployeeDetailsForPortalAdmin(input.employeeId);
       }),
+
+    // جلب بيانات المشرف الشخصية (صفحة بياناتي)
+    getMyProfile: publicProcedure
+      .input(z.object({
+        supervisorId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        // التحقق من أن المستخدم مشرف
+        const adminCheck = await db.checkPortalAdminAccess(input.supervisorId);
+        if (!adminCheck.isAdmin || !adminCheck.isFromEmployeesTable) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        return await db.getSupervisorProfile(input.supervisorId);
+      }),
+
+    // تحديث بيانات المشرف الشخصية
+    updateMyProfile: publicProcedure
+      .input(z.object({
+        supervisorId: z.number(),
+        data: z.object({
+          phone: z.string().optional(),
+          email: z.string().email().optional(),
+          // بيانات الإقامة
+          iqamaNumber: z.string().optional(),
+          iqamaExpiryDate: z.string().optional().nullable(),
+          iqamaImageUrl: z.string().optional(),
+          // الشهادة الصحية
+          healthCertExpiryDate: z.string().optional().nullable(),
+          healthCertImageUrl: z.string().optional(),
+          // عقد العمل
+          contractExpiryDate: z.string().optional().nullable(),
+          contractImageUrl: z.string().optional(),
+          // رخصة القيادة
+          driverLicenseNumber: z.string().optional(),
+          driverLicenseExpiryDate: z.string().optional().nullable(),
+          driverLicenseImageUrl: z.string().optional(),
+          // جواز السفر
+          passportNumber: z.string().optional(),
+          passportExpiryDate: z.string().optional().nullable(),
+          passportImageUrl: z.string().optional(),
+          // التأمين الصحي
+          insuranceNumber: z.string().optional(),
+          insuranceExpiryDate: z.string().optional().nullable(),
+          insuranceImageUrl: z.string().optional(),
+          // بطاقة العمل
+          workPermitNumber: z.string().optional(),
+          workPermitExpiryDate: z.string().optional().nullable(),
+          workPermitImageUrl: z.string().optional(),
+          // بيانات إضافية
+          nationality: z.string().optional(),
+          dateOfBirth: z.string().optional().nullable(),
+          bankName: z.string().optional(),
+          bankAccountNumber: z.string().optional(),
+          bankIban: z.string().optional(),
+          emergencyContactName: z.string().optional(),
+          emergencyContactPhone: z.string().optional(),
+          address: z.string().optional(),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        // التحقق من أن المستخدم مشرف
+        const adminCheck = await db.checkPortalAdminAccess(input.supervisorId);
+        if (!adminCheck.isAdmin || !adminCheck.isFromEmployeesTable) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        // تحويل التواريخ من string إلى Date
+        const updateData: any = { ...input.data };
+        const dateFields = [
+          'iqamaExpiryDate', 'healthCertExpiryDate', 'contractExpiryDate',
+          'driverLicenseExpiryDate', 'passportExpiryDate', 'insuranceExpiryDate',
+          'workPermitExpiryDate', 'dateOfBirth'
+        ];
+        
+        for (const field of dateFields) {
+          if (updateData[field] !== undefined) {
+            updateData[field] = updateData[field] ? new Date(updateData[field]) : null;
+          }
+        }
+        
+        const result = await db.updateSupervisorProfile(input.supervisorId, updateData);
+        if (!result.success) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في تحديث البيانات' });
+        }
+        
+        return { success: true, message: 'تم تحديث البيانات بنجاح' };
+      }),
+
+    // رفع صورة وثيقة للمشرف
+    uploadMyDocumentImage: publicProcedure
+      .input(z.object({
+        supervisorId: z.number(),
+        documentType: z.enum(['iqama', 'healthCert', 'contract', 'driverLicense', 'passport', 'insurance', 'workPermit']),
+        fileName: z.string(),
+        fileData: z.string(), // Base64
+        contentType: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        // التحقق من أن المستخدم مشرف
+        const adminCheck = await db.checkPortalAdminAccess(input.supervisorId);
+        if (!adminCheck.isAdmin || !adminCheck.isFromEmployeesTable) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        // رفع الصورة إلى S3
+        const { storagePut } = await import('./storage');
+        const buffer = Buffer.from(input.fileData, 'base64');
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const fileKey = `supervisor-documents/${input.supervisorId}/${input.documentType}-${timestamp}-${randomSuffix}-${input.fileName}`;
+        
+        const { url, key } = await storagePut(fileKey, buffer, input.contentType);
+        
+        // تحديث رابط الصورة في قاعدة البيانات
+        const imageFieldMap: Record<string, string> = {
+          'iqama': 'iqamaImageUrl',
+          'healthCert': 'healthCertImageUrl',
+          'contract': 'contractImageUrl',
+          'driverLicense': 'driverLicenseImageUrl',
+          'passport': 'passportImageUrl',
+          'insurance': 'insuranceImageUrl',
+          'workPermit': 'workPermitImageUrl',
+        };
+        
+        const imageField = imageFieldMap[input.documentType];
+        if (imageField) {
+          await db.updateSupervisorProfile(input.supervisorId, { [imageField]: url });
+        }
+        
+        // تسجيل النشاط
+        await db.createActivityLog({
+          action: 'upload',
+          entityType: 'supervisor_document',
+          details: `تم رفع صورة ${input.documentType} للمشرف رقم ${input.supervisorId}`,
+        });
+        
+        return { success: true, url, key };
+      }),
+
+    // جلب الوثائق المنتهية لموظفي فرع المشرف
+    getMyBranchExpiringDocuments: publicProcedure
+      .input(z.object({
+        supervisorId: z.number(),
+        daysThreshold: z.number().default(30),
+      }))
+      .query(async ({ input }) => {
+        // التحقق من أن المستخدم مشرف
+        const adminCheck = await db.checkPortalAdminAccess(input.supervisorId);
+        if (!adminCheck.isAdmin || !adminCheck.isFromEmployeesTable || !adminCheck.branchId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+        }
+        
+        return await db.getExpiringDocumentsForBranch(adminCheck.branchId, input.daysThreshold);
+      }),
   }),
 
   // ==================== التقارير الأسبوعية التلقائية ====================

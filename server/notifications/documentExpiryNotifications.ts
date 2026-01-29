@@ -362,9 +362,9 @@ export async function sendDocumentExpiryNotifications(): Promise<{
       }
     }
 
-    // إرسال لمشرفي الفروع (وثائق فرعهم فقط)
+    // إرسال لمشرفي الفروع من جدول notificationRecipients (وثائق فرعهم فقط)
     const branchSupervisors = recipients.filter(
-      (r: any) => r.role === 'branch_supervisor' && r.email && r.branchId
+      (r: any) => r.role === 'branch_supervisor' && r.email && r.branchId && r.receiveDocumentExpiryAlerts !== false
     );
 
     for (const supervisor of branchSupervisors) {
@@ -384,6 +384,38 @@ export async function sendDocumentExpiryNotifications(): Promise<{
         
         sentCount++;
         console.log(`✓ تم إرسال تقرير الوثائق إلى مشرف الفرع ${supervisor.email}`);
+      } catch (error) {
+        const errorMsg = `فشل إرسال البريد إلى ${supervisor.email}: ${error}`;
+        errors.push(errorMsg);
+        console.error(errorMsg);
+      }
+    }
+
+    // إرسال للمشرفين من جدول employees (الذين لديهم isSupervisor = true وبريد إلكتروني)
+    const employeeSupervisors = await db.getActiveSupervisors();
+    const sentEmails = new Set(branchSupervisors.map((s: any) => s.email?.toLowerCase()));
+    
+    for (const supervisor of employeeSupervisors) {
+      // تجنب إرسال مكرر إذا كان البريد موجود في notificationRecipients
+      if (!supervisor.email || sentEmails.has(supervisor.email.toLowerCase())) continue;
+      
+      const branchDocs = expiringDocs.filter(d => d.branchId === supervisor.branchId);
+      
+      if (branchDocs.length === 0) continue;
+      
+      try {
+        const html = generateDocumentExpiryEmail(branchDocs, supervisor.name || 'المشرف');
+        
+        await resend.emails.send({
+          from: FROM_EMAIL,
+          to: supervisor.email,
+          subject: `📋 تقرير وثائق فرعك (${supervisor.branchName}) - ${branchDocs.length} وثيقة تحتاج متابعة | Symbol AI`,
+          html,
+        });
+        
+        sentCount++;
+        sentEmails.add(supervisor.email.toLowerCase());
+        console.log(`✓ تم إرسال تقرير الوثائق إلى مشرف الفرع (موظف) ${supervisor.email}`);
       } catch (error) {
         const errorMsg = `فشل إرسال البريد إلى ${supervisor.email}: ${error}`;
         errors.push(errorMsg);

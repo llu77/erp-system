@@ -1251,6 +1251,7 @@ export const notificationRecipients = mysqlTable("notificationRecipients", {
   receiveRequestNotifications: boolean("receiveRequestNotifications").default(true).notNull(),
   receiveReportNotifications: boolean("receiveReportNotifications").default(true).notNull(),
   receiveBonusNotifications: boolean("receiveBonusNotifications").default(true).notNull(),
+  receiveDocumentExpiryAlerts: boolean("receiveDocumentExpiryAlerts").default(true).notNull(),
   
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
