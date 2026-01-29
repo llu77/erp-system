@@ -1279,6 +1279,14 @@ export default function Expenses() {
                             <DollarSign className="h-4 w-4 text-blue-600" />
                           </Button>
                         )}
+                        {/* زر الحذف للأدمن - يظهر في جميع الحالات */}
+                        {canDelete && expense.status !== 'pending' && (
+                          <Button variant="ghost" size="sm" onClick={() => {
+                            if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) deleteMutation.mutate({ id: expense.id });
+                          }}>
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        )}
                       </div>
                     </Card>
                   ))}
@@ -1428,6 +1436,21 @@ export default function Expenses() {
                                   title="تأكيد الدفع"
                                 >
                                   <DollarSign className="h-4 w-4 text-blue-600" />
+                                </Button>
+                              )}
+                              {/* زر الحذف للأدمن - يظهر في جميع الحالات */}
+                              {canDelete && expense.status !== 'pending' && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
+                                      deleteMutation.mutate({ id: expense.id });
+                                    }
+                                  }}
+                                  title="حذف"
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
                                 </Button>
                               )}
                             </div>
