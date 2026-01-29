@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useAuth } from '@/_core/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -502,6 +503,7 @@ function EmployeeDocumentsModal({
 
 // الصفحة الرئيسية
 export default function DocumentsDashboard() {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeDocument | null>(null);
@@ -509,6 +511,13 @@ export default function DocumentsDashboard() {
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // التحقق من الصلاحيات
+  const isAdmin = user?.role === 'admin';
+  const isManager = user?.role === 'manager';
+  const isSupervisor = user?.role === 'supervisor';
+  const isViewer = user?.role === 'viewer';
+  const userBranchId = user?.branchId;
   
   // جلب جميع الموظفين مع وثائقهم
   const { data: allEmployeesData, isLoading, refetch } = trpc.employees.getDocumentsDashboard.useQuery();
@@ -518,7 +527,8 @@ export default function DocumentsDashboard() {
   const allEmployees = useMemo(() => {
     if (!allEmployeesData) return [];
     
-    return allEmployeesData.map((emp: any) => ({
+    // تحويل البيانات
+    let employees = allEmployeesData.map((emp: any) => ({
       id: emp.id,
       code: emp.code,
       name: emp.name,
@@ -536,7 +546,14 @@ export default function DocumentsDashboard() {
       contractImageUrl: emp.documents?.find((d: any) => d.type === 'contract')?.imageUrl || null,
       isActive: emp.isActive ?? true,
     }));
-  }, [allEmployeesData]);
+    
+    // المشرف يرى فقط موظفي فرعه
+    if (isSupervisor && userBranchId) {
+      employees = employees.filter(emp => emp.branchId === userBranchId);
+    }
+    
+    return employees;
+  }, [allEmployeesData, isSupervisor, userBranchId]);
   
   // حساب الإحصائيات
   const stats = useMemo(() => {

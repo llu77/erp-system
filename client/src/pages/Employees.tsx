@@ -192,6 +192,11 @@ export default function Employees() {
 
   // فلترة الموظفين
   const filteredEmployees = employees?.filter((employee) => {
+    // المشرف يرى فقط موظفي فرعه
+    if (user?.role === 'supervisor' && user?.branchId) {
+      if (employee.branchId !== user.branchId) return false;
+    }
+
     const matchesSearch = 
       employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       employee.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -204,15 +209,35 @@ export default function Employees() {
     return matchesSearch && matchesBranch;
   });
 
-  // التحقق من صلاحية المسؤول أو المدير
-  if (user?.role !== "admin" && user?.role !== "manager") {
+  // التحقق من الصلاحيات - الأدمن والمدير والمشرف
+  const isAdmin = user?.role === "admin";
+  const isManager = user?.role === "manager";
+  const isSupervisor = user?.role === "supervisor";
+  const isViewer = user?.role === "viewer";
+  const userBranchId = user?.branchId;
+
+  // المشرف يمكنه الوصول للصفحة ولكن فقط لموظفي فرعه
+  // المشاهد يمكنه الرؤية فقط
+  const canAccessPage = isAdmin || isManager || isSupervisor || isViewer;
+  const canAdd = isAdmin || isManager; // فقط الأدمن والمدير يمكنهم الإضافة
+  const canEdit = isAdmin || isManager || isSupervisor; // المشرف يمكنه التعديل لموظفي فرعه
+  const canDelete = isAdmin; // فقط الأدمن يمكنه الحذف
+
+  // التحقق من إمكانية تعديل موظف معين (المشرف يعدل فقط موظفي فرعه)
+  const canEditEmployee = (employeeBranchId: number | null) => {
+    if (isAdmin || isManager) return true;
+    if (isSupervisor && userBranchId && employeeBranchId === userBranchId) return true;
+    return false;
+  };
+
+  if (!canAccessPage) {
     return (
       <DashboardLayout>
         <Card>
           <CardContent className="p-12 text-center">
             <Users className="h-16 w-16 mx-auto mb-4 text-destructive" />
             <h3 className="text-lg font-medium mb-2">غير مصرح</h3>
-            <p className="text-muted-foreground">هذه الصفحة متاحة للمسؤول والمدير فقط</p>
+            <p className="text-muted-foreground">هذه الصفحة غير متاحة لك</p>
           </CardContent>
         </Card>
       </DashboardLayout>
@@ -231,10 +256,12 @@ export default function Employees() {
             </h1>
             <p className="text-muted-foreground">إضافة وتعديل وحذف الموظفين</p>
           </div>
+{canAdd && (
           <Button onClick={openAddDialog} className="gap-2">
             <Plus className="h-4 w-4" />
             إضافة موظف
           </Button>
+          )}
         </div>
 
         {/* البحث والفلترة */}
@@ -327,23 +354,27 @@ export default function Employees() {
                           )}
                         </div>
                         <div className="flex items-center justify-end gap-2 border-t pt-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(employee)}
-                          >
-                            <Pencil className="h-4 w-4 ml-1" />
-                            تعديل
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(employee.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 ml-1" />
-                            حذف
-                          </Button>
+                          {canEditEmployee(employee.branchId) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(employee)}
+                            >
+                              <Pencil className="h-4 w-4 ml-1" />
+                              تعديل
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(employee.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 ml-1" />
+                              حذف
+                            </Button>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -399,22 +430,26 @@ export default function Employees() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(employee)}
-                                className="h-8 w-8"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(employee.id)}
-                                className="h-8 w-8 text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              {canEditEmployee(employee.branchId) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEdit(employee)}
+                                  className="h-8 w-8"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {canDelete && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDelete(employee.id)}
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
