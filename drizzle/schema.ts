@@ -2761,3 +2761,65 @@ export const scheduledAIReportLogs = mysqlTable("scheduledAIReportLogs", {
 
 export type ScheduledAIReportLog = typeof scheduledAIReportLogs.$inferSelect;
 export type InsertScheduledAIReportLog = typeof scheduledAIReportLogs.$inferInsert;
+
+
+// ==================== جدول إشعارات بوابة الموظفين ====================
+/**
+ * PortalNotifications - إشعارات داخلية لبوابة الموظفين والمشرفين
+ * تظهر في جرس الإشعارات داخل البوابة
+ */
+export const portalNotifications = mysqlTable("portalNotifications", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // المستلم (موظف أو مشرف)
+  employeeId: int("employeeId").notNull(),
+  
+  // نوع الإشعار
+  type: mysqlEnum("type", [
+    "request_approved",      // تمت الموافقة على طلبك
+    "request_rejected",      // تم رفض طلبك
+    "request_pending",       // طلب جديد بانتظار المراجعة
+    "document_expiring",     // وثيقة قاربت على الانتهاء
+    "document_expired",      // وثيقة منتهية
+    "salary_ready",          // الراتب جاهز
+    "bonus_approved",        // تمت الموافقة على البونص
+    "announcement",          // إعلان عام
+    "task_assigned",         // مهمة جديدة
+    "reminder",              // تذكير
+    "system"                 // إشعار نظام
+  ]).notNull(),
+  
+  // محتوى الإشعار
+  title: varchar("title", { length: 200 }).notNull(),
+  message: text("message").notNull(),
+  
+  // رابط الإجراء (اختياري)
+  actionUrl: varchar("actionUrl", { length: 500 }),
+  actionLabel: varchar("actionLabel", { length: 100 }),
+  
+  // بيانات إضافية
+  metadata: json("metadata").$type<{
+    requestId?: number;
+    requestType?: string;
+    documentType?: string;
+    expiryDate?: string;
+    amount?: number;
+    branchId?: number;
+    branchName?: string;
+  }>(),
+  
+  // الأولوية
+  priority: mysqlEnum("priority", ["low", "normal", "high", "urgent"]).default("normal").notNull(),
+  
+  // حالة القراءة
+  isRead: boolean("isRead").default(false).notNull(),
+  readAt: timestamp("readAt"),
+  
+  // تاريخ انتهاء الصلاحية (للإشعارات المؤقتة)
+  expiresAt: timestamp("expiresAt"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PortalNotification = typeof portalNotifications.$inferSelect;
+export type InsertPortalNotification = typeof portalNotifications.$inferInsert;

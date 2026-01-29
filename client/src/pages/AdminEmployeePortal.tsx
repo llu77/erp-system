@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
 import { EmployeeProfile, EmployeeInfoForm } from '@/components/portal';
+import { NotificationBell } from '@/components/portal/NotificationBell';
 import { 
   Users, 
   FileText, 
@@ -293,6 +294,14 @@ export default function AdminEmployeePortal() {
             </div>
             
             <div className="flex items-center gap-4">
+              {/* جرس الإشعارات */}
+              {adminInfo.id && (
+                <NotificationBell 
+                  employeeId={adminInfo.id} 
+                  className="text-slate-400 hover:text-white"
+                />
+              )}
+              
               <div className="text-left hidden sm:block">
                 <p className="text-sm font-medium text-white">{adminInfo.name}</p>
                 <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs">

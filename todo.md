@@ -3703,3 +3703,40 @@ node scripts/scheduledTasks.mjs weekly-report
 - [ ] إصلاح عرض الطلبات للمشرف (تحميل لا نهائي)
 - [ ] تحسين تبويب ملفي للمشرف
 - [ ] اختبار التحسينات
+
+
+## فحص شامل لبوابة الموظفين واقتراح تحسينات متقدمة (30 يناير 2026)
+
+- [ ] فحص شامل للبنية الحالية لبوابة الموظفين
+- [ ] تحليل نقاط القوة والضعف
+- [ ] إعداد تقرير شامل بالتحسينات المتقدمة
+- [ ] تسليم التقرير للمستخدم
+
+
+## نظام الإشعارات الداخلية لبوابة الموظفين (جرس الإشعارات) - 30 يناير 2026
+
+### 1. Database Schema
+- [x] إنشاء جدول portalNotifications
+- [x] تعريف أنواع الإشعارات (11 نوع)
+- [x] تعريف مستويات الأولوية (4 مستويات)
+
+### 2. Backend APIs
+- [x] إنشاء portalNotificationService.ts
+- [x] إضافة APIs (getNotifications, getUnreadCount, markAsRead, markAllAsRead, deleteNotification)
+- [x] إضافة دوال إنشاء الإشعارات التلقائية (notifyRequestApproved, notifyRequestRejected, notifyDocumentExpiring, etc.)
+- [x] إضافة tRPC endpoints في routers.ts
+
+### 3. Frontend Component
+- [x] إنشاء NotificationBell.tsx مع عداد الإشعارات غير المقروءة
+- [x] قائمة منسدلة لعرض الإشعارات
+- [x] تحديث تلقائي كل 30 ثانية
+- [x] أيقونات وألوان حسب نوع الإشعار
+
+### 4. الدمج
+- [x] دمج الجرس في EmployeePortal
+- [x] دمج الجرس في AdminEmployeePortal
+- [x] تحديث PortalHeader لدعم الإشعارات
+
+### 5. الاختبارات
+- [x] إنشاء portalNotifications.test.ts (26 اختبار)
+- [x] جميع الاختبارات ناجحة (790 اختبار)

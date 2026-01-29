@@ -21,6 +21,7 @@ import { handleDatabaseError, handleNotFoundError, handleBusinessRuleError } fro
 import * as auditService from "./audit/auditService";
 import * as executiveDashboard from "./executive/executiveDashboardService";
 import * as aiDecisionEngine from "./ai/aiDecisionEngine";
+import * as portalNotificationService from "./services/portalNotificationService";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -8677,6 +8678,100 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         const { url } = await storagePut(`reports/${fileName}`, htmlContent, 'text/html; charset=utf-8');
         
         return { url, fileName };
+      }),
+  }),
+
+  // ==================== إشعارات بوابة الموظفين ====================
+  portalNotifications: router({
+    // جلب الإشعارات
+    getNotifications: publicProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        unreadOnly: z.boolean().optional(),
+        type: z.enum([
+          "request_approved", "request_rejected", "request_pending",
+          "document_expiring", "document_expired", "salary_ready",
+          "bonus_approved", "announcement", "task_assigned",
+          "reminder", "system"
+        ]).optional(),
+        limit: z.number().optional(),
+        offset: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await portalNotificationService.getNotifications(input);
+      }),
+
+    // عدد الإشعارات غير المقروءة
+    getUnreadCount: publicProcedure
+      .input(z.object({ employeeId: z.number() }))
+      .query(async ({ input }) => {
+        return await portalNotificationService.getUnreadCount(input.employeeId);
+      }),
+
+    // تحديد إشعار كمقروء
+    markAsRead: publicProcedure
+      .input(z.object({
+        notificationId: z.number(),
+        employeeId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        return await portalNotificationService.markAsRead(input.notificationId, input.employeeId);
+      }),
+
+    // تحديد جميع الإشعارات كمقروءة
+    markAllAsRead: publicProcedure
+      .input(z.object({ employeeId: z.number() }))
+      .mutation(async ({ input }) => {
+        return await portalNotificationService.markAllAsRead(input.employeeId);
+      }),
+
+    // حذف إشعار
+    deleteNotification: publicProcedure
+      .input(z.object({
+        notificationId: z.number(),
+        employeeId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        return await portalNotificationService.deleteNotification(input.notificationId, input.employeeId);
+      }),
+
+    // إنشاء إشعار (للاستخدام الداخلي أو من الأدمن)
+    createNotification: adminProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        type: z.enum([
+          "request_approved", "request_rejected", "request_pending",
+          "document_expiring", "document_expired", "salary_ready",
+          "bonus_approved", "announcement", "task_assigned",
+          "reminder", "system"
+        ]),
+        title: z.string(),
+        message: z.string(),
+        actionUrl: z.string().optional(),
+        actionLabel: z.string().optional(),
+        priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await portalNotificationService.createNotification(input);
+      }),
+
+    // إرسال إعلان لمجموعة موظفين
+    sendAnnouncement: adminProcedure
+      .input(z.object({
+        employeeIds: z.array(z.number()),
+        title: z.string(),
+        message: z.string(),
+        branchId: z.number().optional(),
+        branchName: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await portalNotificationService.notifyAnnouncement(
+          input.employeeIds,
+          input.title,
+          input.message,
+          input.branchId,
+          input.branchName
+        );
       }),
   }),
 });

@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
 import { SalarySlip, LeaveBalance, EmployeeProfile, BonusReport, RequestTimeline, RequestAttachments, EmployeeInfoForm } from '@/components/portal';
+import { NotificationBell } from '@/components/portal/NotificationBell';
 import { EmailSetupModal } from '@/components/portal/EmailSetupModal';
 
 interface Message {
@@ -284,6 +285,14 @@ export default function EmployeePortal() {
             </div>
             
             <div className="flex items-center gap-2 sm:gap-4">
+              {/* جرس الإشعارات */}
+              {employeeInfo.id && (
+                <NotificationBell 
+                  employeeId={employeeInfo.id} 
+                  className="text-slate-400 hover:text-white"
+                />
+              )}
+              
               {/* معلومات الموظف - مخفية على الموبايل الصغير */}
               <div className="text-left hidden sm:block">
                 <p className="text-sm font-medium text-white">{employeeInfo.name}</p>

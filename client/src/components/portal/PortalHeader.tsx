@@ -16,9 +16,11 @@ import {
 import { getInitials } from '@/lib/portal/utils';
 import type { PortalUser, UserRole } from '@/lib/portal/types';
 import { DocumentStatusSummary } from './DocumentStatusCard';
+import { NotificationBell } from './NotificationBell';
 
 interface PortalHeaderProps {
   user: PortalUser;
+  employeeId?: number; // لنظام الإشعارات
   title?: string;
   showDocumentStatus?: boolean;
   documentStatus?: {
@@ -32,6 +34,7 @@ interface PortalHeaderProps {
   onDocumentStatusClick?: () => void;
   onBackClick?: () => void;
   showBackButton?: boolean;
+  showNotifications?: boolean; // إظهار جرس الإشعارات
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -48,6 +51,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
 
 export function PortalHeader({
   user,
+  employeeId,
   title,
   showDocumentStatus = false,
   documentStatus,
@@ -57,6 +61,7 @@ export function PortalHeader({
   onDocumentStatusClick,
   onBackClick,
   showBackButton = false,
+  showNotifications = true,
 }: PortalHeaderProps) {
   return (
     <header className="sticky top-0 z-50 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800">
@@ -107,8 +112,16 @@ export function PortalHeader({
 
           {/* Right Section - User Info & Actions */}
           <div className="flex items-center gap-3">
-            {/* Notifications */}
-            {onNotificationsClick && (
+            {/* Notifications Bell */}
+            {showNotifications && employeeId && (
+              <NotificationBell 
+                employeeId={employeeId} 
+                className="text-slate-400 hover:text-white"
+              />
+            )}
+            
+            {/* Legacy Notifications Button (fallback) */}
+            {!showNotifications && onNotificationsClick && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -116,7 +129,6 @@ export function PortalHeader({
                 className="text-slate-400 hover:text-white relative"
               >
                 <Bell className="h-5 w-5" />
-                {/* Notification badge - can be dynamic */}
               </Button>
             )}
 
