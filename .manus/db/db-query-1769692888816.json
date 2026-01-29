@@ -1,0 +1,58 @@
+{
+  "query": "SELECT id, code, name, branchId FROM employees LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, code, name, branchId FROM employees LIMIT 20;",
+  "rows": [
+    {
+      "id": "30002",
+      "code": "EMP-002",
+      "name": "علاء ناصر",
+      "branchId": "1"
+    },
+    {
+      "id": "30004",
+      "code": "EMP-004",
+      "name": "عبدالحي جلال",
+      "branchId": "1"
+    },
+    {
+      "id": "30007",
+      "code": "EMP-007",
+      "name": "السيد محمد",
+      "branchId": "1"
+    },
+    {
+      "id": "30012",
+      "code": "EMP-012",
+      "name": "محمود عماره ",
+      "branchId": "1"
+    },
+    {
+      "id": "60001",
+      "code": "EMP100",
+      "name": "محمد ناصر",
+      "branchId": "30001"
+    },
+    {
+      "id": "90001",
+      "code": "T03",
+      "name": "فارس محمد ",
+      "branchId": "30001"
+    },
+    {
+      "id": "90002",
+      "code": "T2",
+      "name": "عمرو",
+      "branchId": "30001"
+    },
+    {
+      "id": "90003",
+      "code": "T4",
+      "name": "محمد اسماعيل",
+      "branchId": "30001"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcode\tname\tbranchId\n30002\tEMP-002\tعلاء ناصر\t1\n30004\tEMP-004\tعبدالحي جلال\t1\n30007\tEMP-007\tالسيد محمد\t1\n30012\tEMP-012\tمحمود عماره \t1\n60001\tEMP100\tمحمد ناصر\t30001\n90001\tT03\tفارس محمد \t30001\n90002\tT2\tعمرو\t30001\n90003\tT4\tمحمد اسماعيل\t30001\n",
+  "stderr": "",
+  "execution_time_ms": 1507
+}
