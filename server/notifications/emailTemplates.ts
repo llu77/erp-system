@@ -277,14 +277,34 @@ export function getBaseTemplate(content: string, title: string): string {
         ${content}
         
         <div class="footer">
-          <div class="footer-logo">Symbol AI</div>
+          <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 15px;">
+            <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+              <span style="color: white; font-size: 18px; font-weight: bold;">S</span>
+            </div>
+            <div class="footer-logo" style="margin: 0;">Symbol AI</div>
+          </div>
           <div class="footer-text">
             نظام إدارة الأعمال المتكامل<br>
             هذا البريد تم إرساله تلقائياً - الرجاء عدم الرد عليه
           </div>
-          <div class="timestamp">
+          <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+            <div style="display: flex; justify-content: center; gap: 30px; margin-bottom: 10px;">
+              <div style="text-align: center;">
+                <div style="font-size: 10px; color: #94a3b8;">المشرف العام</div>
+                <div style="font-size: 12px; color: #1a1a2e; font-weight: 600;">سالم الوادعي</div>
+              </div>
+              <div style="text-align: center;">
+                <div style="font-size: 10px; color: #94a3b8;">المدير</div>
+                <div style="font-size: 12px; color: #1a1a2e; font-weight: 600;">عمر المطيري</div>
+              </div>
+            </div>
+          </div>
+          <div class="timestamp" style="margin-top: 10px;">
             ${new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             ${new Date().toLocaleTimeString('ar-SA')}
+          </div>
+          <div style="margin-top: 10px; font-size: 10px; color: #94a3b8;">
+            All rights reserved to Symbol AI © ${new Date().getFullYear()}
           </div>
         </div>
       </div>

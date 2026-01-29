@@ -818,6 +818,20 @@ export default function EmployeePortal() {
           }}
         />
       )}
+
+      {/* شعار Symbol AI */}
+      <footer className="py-4 border-t border-slate-700/50 mt-4">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-center gap-2">
+            <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-1.5 rounded-lg shadow-lg">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            <span className="text-sm font-semibold text-white">Symbol AI</span>
+            <span className="text-xs text-slate-400">بوابة الموظفين الذكية</span>
+          </div>
+          <p className="text-center text-[10px] text-slate-500 mt-1">جميع الحقوق محفوظة © {new Date().getFullYear()}</p>
+        </div>
+      </footer>
     </div>
   );
 }

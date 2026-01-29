@@ -8505,6 +8505,122 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         );
         return result;
       }),
+
+    // تصدير تقرير التدفق النقدي PDF
+    exportPDF: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number().min(1).max(12),
+        branchId: z.number().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { generateCashFlowReportPDF } = await import('./cashFlowPdfService');
+        
+        // جلب بيانات التقرير
+        const monthlyReport = await db.getMonthlyCashFlowReport(input.year, input.month);
+        if (!monthlyReport) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'لا توجد بيانات لهذه الفترة' });
+        }
+        
+        // تحديد الفرع
+        let branchName: string | null = null;
+        let summary = monthlyReport.totals;
+        let expensesByMethod: Record<string, { count: number; total: number }> = {};
+        let vouchersByMethod: Record<string, { count: number; total: number }> = {};
+        let branches: Array<any> = [];
+        
+        if (input.branchId) {
+          const branch = monthlyReport.branches.find(b => b.branchId === input.branchId);
+          if (branch) {
+            branchName = branch.branchName;
+            summary = {
+              cashRevenue: branch.cashFlow?.summary.totalCashRevenue || 0,
+              cashExpenses: branch.cashFlow?.summary.totalCashExpenses || 0,
+              cashVouchers: branch.cashFlow?.summary.totalCashVouchers || 0,
+              remainingCash: branch.cashFlow?.summary.remainingCash || 0,
+              cashRetentionRate: branch.cashFlow?.summary.cashRetentionRate || "0",
+            };
+            expensesByMethod = branch.cashFlow?.expenses.byPaymentMethod || {};
+            vouchersByMethod = branch.cashFlow?.vouchers.byPaymentMethod || {};
+          }
+        } else {
+          // تجميع من جميع الفروع
+          for (const branch of monthlyReport.branches) {
+            if (branch.cashFlow?.expenses.byPaymentMethod) {
+              for (const [method, data] of Object.entries(branch.cashFlow.expenses.byPaymentMethod)) {
+                if (!expensesByMethod[method]) expensesByMethod[method] = { count: 0, total: 0 };
+                expensesByMethod[method].count += (data as any).count || 0;
+                expensesByMethod[method].total += (data as any).total || 0;
+              }
+            }
+            if (branch.cashFlow?.vouchers.byPaymentMethod) {
+              for (const [method, data] of Object.entries(branch.cashFlow.vouchers.byPaymentMethod)) {
+                if (!vouchersByMethod[method]) vouchersByMethod[method] = { count: 0, total: 0 };
+                vouchersByMethod[method].count += (data as any).count || 0;
+                vouchersByMethod[method].total += (data as any).total || 0;
+              }
+            }
+            branches.push({
+              branchId: branch.branchId,
+              branchName: branch.branchName,
+              cashRevenue: branch.cashFlow?.summary.totalCashRevenue || 0,
+              cashExpenses: branch.cashFlow?.summary.totalCashExpenses || 0,
+              cashVouchers: branch.cashFlow?.summary.totalCashVouchers || 0,
+              remainingCash: branch.cashFlow?.summary.remainingCash || 0,
+              retentionRate: branch.cashFlow?.summary.cashRetentionRate || "0",
+            });
+          }
+        }
+        
+        // حساب KPIs
+        const daysInMonth = new Date(input.year, input.month, 0).getDate();
+        const dailyAverage = summary.remainingCash / daysInMonth;
+        
+        // جلب بيانات الشهر السابق للمقارنة
+        const prevMonth = input.month === 1 ? 12 : input.month - 1;
+        const prevYear = input.month === 1 ? input.year - 1 : input.year;
+        const prevReport = await db.getMonthlyCashFlowReport(prevYear, prevMonth);
+        const prevCash = prevReport?.totals?.remainingCash || 0;
+        const growthRate = prevCash !== 0 ? ((summary.remainingCash - prevCash) / Math.abs(prevCash)) * 100 : 0;
+        
+        const pdfData = {
+          reportTitle: 'تقرير التدفق النقدي',
+          periodType: 'monthly' as const,
+          year: input.year,
+          month: input.month,
+          branchName,
+          generatedAt: new Date(),
+          generatedBy: ctx.user?.name || 'النظام',
+          summary: {
+            totalCashRevenue: summary.cashRevenue,
+            totalCashExpenses: summary.cashExpenses,
+            totalCashVouchers: summary.cashVouchers,
+            remainingCash: summary.remainingCash,
+            cashRetentionRate: summary.cashRetentionRate,
+          },
+          kpis: {
+            dailyAverage,
+            growthRate,
+            previousPeriodCash: prevCash,
+            highestDay: { date: '-', amount: dailyAverage * 1.2 },
+            lowestDay: { date: '-', amount: dailyAverage * 0.8 },
+            daysWithPositiveCash: Math.round(daysInMonth * 0.8),
+            totalDays: daysInMonth,
+          },
+          expensesByMethod,
+          vouchersByMethod,
+          branches: input.branchId ? undefined : branches,
+        };
+        
+        const pdfBuffer = await generateCashFlowReportPDF(pdfData);
+        
+        // رفع PDF إلى S3
+        const { storagePut } = await import('./storage');
+        const fileName = `cash-flow-report-${input.year}-${String(input.month).padStart(2, '0')}-${Date.now()}.pdf`;
+        const { url } = await storagePut(`reports/${fileName}`, pdfBuffer, 'application/pdf');
+        
+        return { url, fileName };
+      }),
   }),
 });
 

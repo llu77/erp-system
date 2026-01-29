@@ -31,6 +31,8 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
+  Download,
+  FileDown,
 } from "lucide-react";
 import {
   Table,
@@ -119,6 +121,26 @@ export default function CashFlowReport() {
     });
 
   const isLoading = selectedBranchId ? isLoadingBranch : isLoadingMonthly;
+
+  // تصدير PDF
+  const exportPDF = trpc.cashFlow.exportPDF.useMutation({
+    onSuccess: (data) => {
+      // فتح الملف في نافذة جديدة
+      window.open(data.url, '_blank');
+      toast.success('تم تصدير التقرير بنجاح');
+    },
+    onError: (error) => {
+      toast.error('فشل في تصدير التقرير: ' + error.message);
+    },
+  });
+
+  const handleExportPDF = () => {
+    exportPDF.mutate({
+      year: selectedYear,
+      month: selectedMonth,
+      branchId: selectedBranchId || undefined,
+    });
+  };
 
   // حساب الإجماليات
   const totals = useMemo(() => {
@@ -303,6 +325,21 @@ export default function CashFlowReport() {
               disabled={isLoading}
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+
+            {/* زر تصدير PDF */}
+            <Button
+              variant="default"
+              onClick={handleExportPDF}
+              disabled={isLoading || exportPDF.isPending}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {exportPDF.isPending ? (
+                <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+              ) : (
+                <FileDown className="h-4 w-4 ml-2" />
+              )}
+              تصدير PDF
             </Button>
           </div>
         </div>
