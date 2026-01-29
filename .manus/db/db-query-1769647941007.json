@@ -1,0 +1,25 @@
+{
+  "query": "SELECT COUNT(*) as count, SUM(amount) as total, status FROM expenses WHERE branchId = 30001 AND expenseDate >= '2026-01-01' AND expenseDate <= '2026-01-31' GROUP BY status;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT COUNT(*) as count, SUM(amount) as total, status FROM expenses WHERE branchId = 30001 AND expenseDate >= '2026-01-01' AND expenseDate <= '2026-01-31' GROUP BY status;",
+  "rows": [
+    {
+      "count": "17",
+      "total": "8449.25",
+      "status": "approved"
+    },
+    {
+      "count": "3",
+      "total": "3383.00",
+      "status": "rejected"
+    },
+    {
+      "count": "2",
+      "total": "1839.00",
+      "status": "paid"
+    }
+  ],
+  "messages": [],
+  "stdout": "count\ttotal\tstatus\n17\t8449.25\tapproved\n3\t3383.00\trejected\n2\t1839.00\tpaid\n",
+  "stderr": "",
+  "execution_time_ms": 1507
+}

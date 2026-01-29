@@ -1,0 +1,32 @@
+{
+  "query": "SELECT * FROM branches;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT * FROM branches;",
+  "rows": [
+    {
+      "id": "1",
+      "code": "لبن",
+      "name": "Laban",
+      "nameAr": "لبن ",
+      "address": "الرياض",
+      "phone": "0598441020",
+      "isActive": "1",
+      "createdAt": "2025-12-18 20:54:53",
+      "updatedAt": "2025-12-24 19:40:16"
+    },
+    {
+      "id": "30001",
+      "code": "RYD-001",
+      "name": "Twiq Branch - Riyadh",
+      "nameAr": "طويق- الرياض",
+      "address": "شارع الامير عبدالرحمن بن سعود، الرياض",
+      "phone": "0112345678",
+      "isActive": "1",
+      "createdAt": "2025-12-18 22:14:36",
+      "updatedAt": "2025-12-20 15:22:00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcode\tname\tnameAr\taddress\tphone\tisActive\tcreatedAt\tupdatedAt\n1\tلبن\tLaban\tلبن \tالرياض\t0598441020\t1\t2025-12-18 20:54:53\t2025-12-24 19:40:16\n30001\tRYD-001\tTwiq Branch - Riyadh\tطويق- الرياض\tشارع الامير عبدالرحمن بن سعود، الرياض\t0112345678\t1\t2025-12-18 22:14:36\t2025-12-20 15:22:00\n",
+  "stderr": "",
+  "execution_time_ms": 1557
+}

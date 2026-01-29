@@ -105,7 +105,9 @@ export default function CashFlowReport() {
 
   // جلب التدفق النقدي لفرع محدد
   const startDate = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-01`;
-  const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+  // حساب آخر يوم في الشهر بدون مشاكل timezone
+  const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+  const endDate = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
   
   const { data: branchCashFlow, isLoading: isLoadingBranch, refetch: refetchBranch } = 
     trpc.cashFlow.branchCashFlow.useQuery({
@@ -507,6 +509,108 @@ export default function CashFlowReport() {
                 </CollapsibleContent>
               </Card>
             </Collapsible>
+
+            {/* تفاصيل السندات */}
+            {selectedBranchId && branchCashFlow && branchCashFlow.vouchers.byPaymentMethod && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                    تفاصيل سندات القبض
+                  </CardTitle>
+                  <CardDescription>
+                    جميع سندات القبض للفترة المحددة
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">رقم السند</TableHead>
+                        <TableHead className="text-right">التاريخ</TableHead>
+                        <TableHead className="text-right">المستفيد</TableHead>
+                        <TableHead className="text-right">المبلغ</TableHead>
+                        <TableHead className="text-right">طريقة الدفع</TableHead>
+                        <TableHead className="text-right">الحالة</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.entries(branchCashFlow.vouchers.byPaymentMethod).flatMap(([method, data]: [string, any]) =>
+                        (data?.vouchers || []).map((voucher: any) => (
+                          <TableRow key={voucher.id}>
+                            <TableCell className="font-medium">{voucher.voucherNumber}</TableCell>
+                            <TableCell>{new Date(voucher.voucherDate).toLocaleDateString('ar-SA')}</TableCell>
+                            <TableCell>{voucher.beneficiaryName}</TableCell>
+                            <TableCell className="font-bold text-primary">
+                              {formatCurrency(parseFloat(voucher.totalAmount))}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={paymentMethodColors[method]}>
+                                {paymentMethodIcons[method]}
+                                <span className="mr-1">{paymentMethodNames[method]}</span>
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={voucher.status === 'paid' ? 'default' : voucher.status === 'approved' ? 'secondary' : 'outline'}>
+                                {voucher.status === 'draft' ? 'مسودة' : voucher.status === 'approved' ? 'معتمد' : voucher.status === 'paid' ? 'مدفوع' : voucher.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* تفاصيل المصاريف */}
+            {selectedBranchId && branchCashFlow && branchCashFlow.expenses.byPaymentMethod && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingDown className="h-5 w-5 text-red-500" />
+                    تفاصيل المصاريف
+                  </CardTitle>
+                  <CardDescription>
+                    جميع المصاريف للفترة المحددة
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">التاريخ</TableHead>
+                        <TableHead className="text-right">الوصف</TableHead>
+                        <TableHead className="text-right">الفئة</TableHead>
+                        <TableHead className="text-right">المبلغ</TableHead>
+                        <TableHead className="text-right">طريقة الدفع</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.entries(branchCashFlow.expenses.byPaymentMethod).flatMap(([method, data]: [string, any]) =>
+                        (data?.expenses || []).map((expense: any) => (
+                          <TableRow key={expense.id}>
+                            <TableCell>{new Date(expense.date).toLocaleDateString('ar-SA')}</TableCell>
+                            <TableCell className="font-medium">{expense.description}</TableCell>
+                            <TableCell>{expense.category}</TableCell>
+                            <TableCell className="font-bold text-red-500">
+                              {formatCurrency(parseFloat(expense.amount))}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={paymentMethodColors[method]}>
+                                {paymentMethodIcons[method]}
+                                <span className="mr-1">{paymentMethodNames[method]}</span>
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
 
             {/* تفاصيل الفروع (إذا كان عرض جميع الفروع) */}
             {!selectedBranchId && monthlyReport && (

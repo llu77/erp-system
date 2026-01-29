@@ -10892,7 +10892,7 @@ export async function getVouchersByPaymentMethod(
     const conditions = [
       gte(receiptVouchers.voucherDate, new Date(startDate)),
       lte(receiptVouchers.voucherDate, new Date(endDate)),
-      inArray(receiptVouchers.status, ['approved', 'paid']),
+      inArray(receiptVouchers.status, ['draft', 'approved', 'paid']),
     ];
 
     if (branchId) {
