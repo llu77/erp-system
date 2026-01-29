@@ -3797,3 +3797,32 @@ node scripts/scheduledTasks.mjs weekly-report
 ### 4. الاختبارات
 - [x] إنشاء portalEmailService.test.ts (39 اختبار)
 - [x] جميع الاختبارات ناجحة (850 اختبار إجمالي)
+
+
+## تحسينات الواجهة الأمامية للبرنامج الرئيسي (Dashboard) - 30 يناير 2026
+
+### 1. لوحة التحكم الرئيسية (Dashboard.tsx)
+- [x] تحسين بطاقات الإحصائيات: إضافة تأثيرات hover متقدمة وgradients وshadow-glow
+- [x] تحسين تنبيه نفاد المخزون: تصميم أكثر وضوحاً مع أيقونات ملونة وزر عرض الكل
+- [x] تحسين عرض آخر الفواتير وأوامر الشراء بتصميم cards حديث مع أرقام تسلسلية
+- [x] إضافة empty-state محسن للقوائم الفارغة
+
+### 2. القائمة الجانبية (DashboardLayout.tsx)
+- [x] تحسين مؤشر العنصر النشط بخلفية وأيقونة ملونة
+- [x] إضافة تأثيرات hover سلسة لعناصر القائمة
+- [x] تحسين footer القائمة بخلفية مميزة
+- [x] تحسين header الصفحة بتأثير glassmorphism
+
+### 3. نظام الألوان والتصميم العام (index.css)
+- [x] إضافة shadow-glow للبطاقات
+- [x] إضافة stat-card-enhanced مع hover effects
+- [x] إضافة header-glass بتأثير glassmorphism
+- [x] إضافة sidebar-item-hover و sidebar-item-active
+- [x] تحسين skeleton-enhanced بتأثير shimmer
+- [x] إضافة empty-state محسن
+- [x] إضافة scrollbar-thin للقوائم
+
+### 4. لوحة التحكم التنفيذية (ExecutiveDashboard.tsx)
+- [x] تحسين بطاقات KPI بتصميم stat-card-enhanced
+- [x] إضافة shadow-glow لجميع البطاقات
+- [x] إزالة الحدود واستبدالها بظلال ناعمة

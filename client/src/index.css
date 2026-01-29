@@ -299,3 +299,323 @@
     font-size: 1.25rem;
   }
 }
+
+
+/* ==================== تحسينات التصميم المتقدمة ==================== */
+
+/* تأثيرات Glassmorphism للبطاقات المهمة */
+.glass-card {
+  background: oklch(0.21 0.006 285.885 / 80%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid oklch(1 0 0 / 10%);
+}
+
+.dark .glass-card {
+  background: oklch(0.21 0.006 285.885 / 60%);
+}
+
+/* تحسين البطاقات الإحصائية المتقدمة */
+.stat-card-enhanced {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stat-card-enhanced::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, oklch(0.623 0.214 259.815 / 15%) 0%, transparent 70%);
+  transform: translate(30%, -30%);
+  transition: transform 0.3s ease;
+}
+
+.stat-card-enhanced:hover::before {
+  transform: translate(20%, -20%) scale(1.2);
+}
+
+.stat-card-enhanced:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -8px oklch(0 0 0 / 20%);
+}
+
+/* تأثيرات الأيقونات المتحركة */
+.icon-pulse {
+  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.05);
+  }
+}
+
+/* تحسين الظلال للبطاقات */
+.shadow-glow {
+  box-shadow: 
+    0 4px 6px -1px oklch(0 0 0 / 10%),
+    0 2px 4px -2px oklch(0 0 0 / 10%),
+    0 0 0 1px oklch(1 0 0 / 5%);
+}
+
+.dark .shadow-glow {
+  box-shadow: 
+    0 4px 6px -1px oklch(0 0 0 / 30%),
+    0 2px 4px -2px oklch(0 0 0 / 20%),
+    0 0 0 1px oklch(1 0 0 / 5%);
+}
+
+.shadow-glow-hover:hover {
+  box-shadow: 
+    0 10px 25px -5px oklch(0 0 0 / 15%),
+    0 8px 10px -6px oklch(0 0 0 / 10%),
+    0 0 0 1px oklch(1 0 0 / 8%);
+}
+
+/* تحسين التدرجات */
+.gradient-primary {
+  background: linear-gradient(135deg, oklch(0.623 0.214 259.815) 0%, oklch(0.488 0.243 264.376) 100%);
+}
+
+.gradient-success {
+  background: linear-gradient(135deg, oklch(0.723 0.191 142.495) 0%, oklch(0.627 0.194 149.214) 100%);
+}
+
+.gradient-warning {
+  background: linear-gradient(135deg, oklch(0.795 0.184 86.047) 0%, oklch(0.705 0.213 47.604) 100%);
+}
+
+.gradient-danger {
+  background: linear-gradient(135deg, oklch(0.704 0.191 22.216) 0%, oklch(0.577 0.245 27.325) 100%);
+}
+
+.gradient-info {
+  background: linear-gradient(135deg, oklch(0.707 0.165 254.624) 0%, oklch(0.623 0.214 259.815) 100%);
+}
+
+/* تحسين القائمة الجانبية */
+.sidebar-item-active {
+  position: relative;
+  background: linear-gradient(90deg, oklch(0.623 0.214 259.815 / 15%) 0%, transparent 100%);
+}
+
+.sidebar-item-active::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, oklch(0.623 0.214 259.815) 0%, oklch(0.488 0.243 264.376) 100%);
+  border-radius: 3px 0 0 3px;
+}
+
+/* تحسين hover للقائمة */
+.sidebar-item-hover {
+  transition: all 0.2s ease;
+}
+
+.sidebar-item-hover:hover {
+  background: oklch(1 0 0 / 5%);
+  transform: translateX(-2px);
+}
+
+.dark .sidebar-item-hover:hover {
+  background: oklch(1 0 0 / 8%);
+}
+
+/* تحسين الأزرار */
+.btn-enhanced {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-enhanced::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: oklch(1 0 0 / 20%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.4s ease, height 0.4s ease;
+}
+
+.btn-enhanced:active::after {
+  width: 200px;
+  height: 200px;
+}
+
+/* تحسين الجداول */
+.table-enhanced tbody tr {
+  transition: all 0.2s ease;
+}
+
+.table-enhanced tbody tr:hover {
+  background: oklch(0.623 0.214 259.815 / 5%);
+}
+
+.dark .table-enhanced tbody tr:hover {
+  background: oklch(0.623 0.214 259.815 / 10%);
+}
+
+/* تحسين الـ Badges */
+.badge-glow {
+  box-shadow: 0 0 8px oklch(0.623 0.214 259.815 / 40%);
+}
+
+/* تحسين الـ Progress bars */
+.progress-animated {
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-animated::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 30%), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    left: 100%;
+  }
+}
+
+/* تحسين الـ Skeleton loaders */
+.skeleton-enhanced {
+  background: linear-gradient(
+    90deg,
+    oklch(0.274 0.006 286.033) 0%,
+    oklch(0.35 0.006 286.033) 50%,
+    oklch(0.274 0.006 286.033) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-wave {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* تحسين الـ Tooltips */
+.tooltip-enhanced {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* تحسين الـ Scrollbars */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: oklch(0.274 0.006 286.033 / 50%);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: oklch(0.5 0.006 286.033);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.6 0.006 286.033);
+}
+
+/* تحسين الـ Focus states */
+.focus-ring-enhanced:focus-visible {
+  outline: none;
+  box-shadow: 
+    0 0 0 2px oklch(0.141 0.005 285.823),
+    0 0 0 4px oklch(0.623 0.214 259.815 / 50%);
+}
+
+/* تحسين الـ Transitions */
+.transition-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* تحسين الـ Cards للموبايل */
+@media (max-width: 767px) {
+  .stat-card-enhanced:hover {
+    transform: none;
+  }
+  
+  .stat-card-enhanced::before {
+    width: 60px;
+    height: 60px;
+  }
+}
+
+/* تحسين الـ Header */
+.header-glass {
+  background: oklch(0.21 0.006 285.885 / 90%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid oklch(1 0 0 / 10%);
+}
+
+/* تحسين الـ Notifications */
+.notification-dot {
+  position: relative;
+}
+
+.notification-dot::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: oklch(0.704 0.191 22.216);
+  border-radius: 50%;
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+/* تحسين الـ Empty states */
+.empty-state {
+  background: linear-gradient(135deg, oklch(0.274 0.006 286.033 / 50%) 0%, oklch(0.21 0.006 285.885 / 50%) 100%);
+  border: 2px dashed oklch(0.5 0.006 286.033 / 50%);
+  border-radius: 12px;
+}
+
+/* تحسين الـ Dividers */
+.divider-gradient {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, oklch(0.5 0.006 286.033 / 50%), transparent);
+}

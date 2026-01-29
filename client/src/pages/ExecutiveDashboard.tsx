@@ -586,10 +586,10 @@ export default function ExecutiveDashboard() {
         </div>
       )}
 
-      {/* مؤشرات الأداء الرئيسية */}
+      {/* مؤشرات الأداء الرئيسية - تصميم محسن */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* إجمالي الإيرادات */}
-        <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
+        <Card className="stat-card-enhanced shadow-glow bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">إجمالي الإيرادات</CardTitle>
             <DollarSign className="h-4 w-4 text-emerald-600" />
@@ -617,7 +617,7 @@ export default function ExecutiveDashboard() {
         </Card>
 
         {/* صافي الربح */}
-        <Card className={`bg-gradient-to-br ${(kpis?.netProfit || 0) >= 0 ? 'from-blue-500/10 to-blue-600/5 border-blue-500/20' : 'from-red-500/10 to-red-600/5 border-red-500/20'}`}>
+        <Card className={`stat-card-enhanced shadow-glow border-0 bg-gradient-to-br ${(kpis?.netProfit || 0) >= 0 ? 'from-blue-500/10 to-blue-600/5' : 'from-red-500/10 to-red-600/5'}`}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">صافي الربح</CardTitle>
             {(kpis?.netProfit || 0) >= 0 ? <TrendingUp className="h-4 w-4 text-blue-600" /> : <TrendingDown className="h-4 w-4 text-red-600" />}
@@ -642,7 +642,7 @@ export default function ExecutiveDashboard() {
         </Card>
 
         {/* إجمالي الالتزامات (مصاريف + رواتب) */}
-        <Card className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/20">
+        <Card className="stat-card-enhanced shadow-glow border-0 bg-gradient-to-br from-amber-500/10 to-amber-600/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">إجمالي الالتزامات</CardTitle>
             <Wallet className="h-4 w-4 text-amber-600" />
@@ -676,7 +676,7 @@ export default function ExecutiveDashboard() {
         </Card>
 
         {/* هامش الربح */}
-        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
+        <Card className="stat-card-enhanced shadow-glow border-0 bg-gradient-to-br from-purple-500/10 to-purple-600/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">هامش الربح</CardTitle>
             <Percent className="h-4 w-4 text-purple-600" />
@@ -705,7 +705,7 @@ export default function ExecutiveDashboard() {
       {/* تفاصيل الإيرادات */}
       <div className="grid gap-4 md:grid-cols-3">
         {/* النقدي */}
-        <Card>
+        <Card className="shadow-glow border-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">إجمالي النقدي</CardTitle>
             <Banknote className="h-4 w-4 text-green-600" />
@@ -728,7 +728,7 @@ export default function ExecutiveDashboard() {
         </Card>
 
         {/* الشبكة */}
-        <Card>
+        <Card className="shadow-glow border-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">إجمالي الشبكة</CardTitle>
             <CreditCard className="h-4 w-4 text-blue-600" />
@@ -751,7 +751,7 @@ export default function ExecutiveDashboard() {
         </Card>
 
         {/* الرصيد */}
-        <Card>
+        <Card className="shadow-glow border-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">إجمالي الرصيد</CardTitle>
             <BarChart3 className="h-4 w-4 text-purple-600" />
@@ -776,7 +776,7 @@ export default function ExecutiveDashboard() {
       {/* إحصائيات سندات القبض */}
       <div className="grid gap-4 md:grid-cols-3">
         {/* عدد السندات */}
-        <Card className="bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 border-cyan-500/20">
+        <Card className="stat-card-enhanced shadow-glow border-0 bg-gradient-to-br from-cyan-500/10 to-cyan-600/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">عدد السندات</CardTitle>
             <FileText className="h-4 w-4 text-cyan-600" />

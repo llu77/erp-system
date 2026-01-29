@@ -482,12 +482,14 @@ function DashboardLayoutContent({
                         isActive={isActive}
                         onClick={() => setLocation(item.path!)}
                         tooltip={item.label}
-                        className={`h-10 transition-all font-normal`}
+                        className={`h-10 transition-all font-normal sidebar-item-hover ${isActive ? "sidebar-item-active" : ""}`}
                       >
-                        <item.icon
-                          className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                        />
-                        <span>{item.label}</span>
+                        <div className={`p-1.5 rounded-lg transition-colors ${isActive ? "bg-primary/15" : "bg-transparent"}`}>
+                          <item.icon
+                            className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+                          />
+                        </div>
+                        <span className={isActive ? "font-medium text-primary" : ""}>{item.label}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
@@ -508,14 +510,16 @@ function DashboardLayoutContent({
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton
                           tooltip={item.label}
-                          className={`h-10 transition-all font-normal ${hasActiveChild ? "bg-accent/50" : ""}`}
+                          className={`h-10 transition-all font-normal sidebar-item-hover ${hasActiveChild ? "bg-primary/5" : ""}`}
                         >
-                          <item.icon
-                            className={`h-4 w-4 ${hasActiveChild ? "text-primary" : ""}`}
-                          />
-                          <span className={hasActiveChild ? "font-medium" : ""}>{item.label}</span>
+                          <div className={`p-1.5 rounded-lg transition-colors ${hasActiveChild ? "bg-primary/15" : "bg-transparent"}`}>
+                            <item.icon
+                              className={`h-4 w-4 ${hasActiveChild ? "text-primary" : "text-muted-foreground"}`}
+                            />
+                          </div>
+                          <span className={hasActiveChild ? "font-medium text-primary" : ""}>{item.label}</span>
                           <ChevronDown
-                            className={`mr-auto h-4 w-4 transition-transform duration-200 ${
+                            className={`mr-auto h-4 w-4 transition-transform duration-300 ${hasActiveChild ? "text-primary" : "text-muted-foreground"} ${
                               isOpen ? "rotate-180" : ""
                             }`}
                           />
@@ -547,7 +551,7 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3 border-t">
+          <SidebarFooter className="p-3 border-t bg-muted/30">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-right group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -596,7 +600,7 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset className="flex-1">
-        <header className="flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+        <header className="flex h-14 items-center justify-between border-b px-4 sticky top-0 z-40 header-glass">
           <div className="flex items-center gap-3">
             {isMobile && <SidebarTrigger className="h-9 w-9 rounded-lg" />}
             <h1 className="font-semibold text-lg">

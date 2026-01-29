@@ -34,6 +34,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("ar-SA", {
@@ -144,22 +145,27 @@ export default function Dashboard() {
         </Alert>
       )}
 
-      {/* Stats Cards */}
+      {/* Stats Cards - تصميم محسن */}
       <div className={`grid gap-3 sm:gap-4 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'}`}>
         {statsCards.map((stat, index) => (
-          <Card key={index} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
+          <Card 
+            key={index} 
+            className="stat-card-enhanced shadow-glow shadow-glow-hover border-0 bg-card/80 backdrop-blur-sm"
+          >
+            <CardContent className="p-4 relative">
               <div className="flex items-center justify-between">
-                <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+                <div className={`p-2.5 rounded-xl ${stat.bgColor} shadow-sm`}>
                   <stat.icon className={`h-5 w-5 ${stat.color}`} />
                 </div>
-              </div>
-              <div className="mt-3">
-                <p className="text-2xl font-bold">{stat.value}</p>
-                <p className="text-sm text-muted-foreground">{stat.title}</p>
                 {stat.subValue && (
-                  <p className="text-xs text-muted-foreground mt-1">{stat.subValue}</p>
+                  <Badge variant="secondary" className="text-xs font-normal">
+                    {stat.subValue}
+                  </Badge>
                 )}
+              </div>
+              <div className="mt-4">
+                <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
+                <p className="text-sm text-muted-foreground mt-1">{stat.title}</p>
               </div>
             </CardContent>
           </Card>
@@ -226,33 +232,45 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Low Stock Alert */}
+      {/* Low Stock Alert - تصميم محسن */}
       {lowStockProducts && lowStockProducts.length > 0 && (
-        <Card className="border-orange-200 bg-orange-50/50">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-600" />
-              <CardTitle className="text-lg text-orange-800">
-                تنبيه نفاد المخزون
-              </CardTitle>
+        <Card className="border-0 shadow-glow overflow-hidden">
+          <div className="gradient-warning p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                  <AlertTriangle className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">
+                    تنبيه نفاد المخزون
+                  </h3>
+                  <p className="text-white/80 text-sm">
+                    {lowStockProducts.length} منتج وصل للحد الأدنى من المخزون
+                  </p>
+                </div>
+              </div>
+              <Link href="/products">
+                <Button variant="secondary" size="sm" className="bg-white/20 hover:bg-white/30 text-white border-0">
+                  عرض الكل
+                  <ArrowUpRight className="h-4 w-4 mr-1" />
+                </Button>
+              </Link>
             </div>
-            <CardDescription className="text-orange-700">
-              {lowStockProducts.length} منتج وصل للحد الأدنى من المخزون
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className={`grid gap-3 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
-              {lowStockProducts.slice(0, isMobile ? 4 : 4).map((product) => (
+          </div>
+          <CardContent className="p-4 bg-card">
+            <div className={`grid gap-3 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'}`}>
+              {lowStockProducts.slice(0, isMobile ? 4 : 5).map((product) => (
                 <div
                   key={product.id}
-                  className="flex items-center justify-between p-3 bg-white rounded-lg border border-orange-200"
+                  className="flex items-center justify-between p-3 bg-muted/50 rounded-xl border border-border/50 hover:border-orange-300 transition-colors"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{product.name}</p>
-                    <p className="text-sm text-muted-foreground">{product.sku}</p>
+                    <p className="font-medium truncate text-sm">{product.name}</p>
+                    <p className="text-xs text-muted-foreground">{product.sku}</p>
                   </div>
-                  <Badge variant="destructive" className="shrink-0 mr-2">
-                    {product.quantity} {product.unit}
+                  <Badge variant="destructive" className="shrink-0 mr-2 rounded-full">
+                    {product.quantity} قطعة
                   </Badge>
                 </div>
               ))}
@@ -261,36 +279,48 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Recent Activity */}
+      {/* Recent Activity - تصميم محسن */}
       <div className={`grid gap-4 sm:gap-6 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
         {/* Recent Invoices */}
-        <Card>
-          <CardHeader>
+        <Card className="shadow-glow border-0">
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                <CardTitle className="text-lg">آخر الفواتير</CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
+                  <FileText className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">آخر الفواتير</CardTitle>
+                  <p className="text-xs text-muted-foreground">أحدث المعاملات</p>
+                </div>
               </div>
-              <Badge variant="secondary">{stats?.recentInvoices?.length || 0}</Badge>
+              <Badge variant="secondary" className="rounded-full">
+                {stats?.recentInvoices?.length || 0}
+              </Badge>
             </div>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[280px]">
+            <ScrollArea className="h-[280px] scrollbar-thin">
               {stats?.recentInvoices && stats.recentInvoices.length > 0 ? (
-                <div className="space-y-3">
-                  {stats.recentInvoices.map((invoice) => (
+                <div className="space-y-2">
+                  {stats.recentInvoices.map((invoice, idx) => (
                     <div
                       key={invoice.id}
-                      className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-muted/30 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50"
                     >
-                      <div className="min-w-0">
-                        <p className="font-medium">{invoice.invoiceNumber}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {invoice.customerName || "عميل نقدي"}
-                        </p>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-xs font-bold text-emerald-600">
+                          {idx + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm">{invoice.invoiceNumber}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {invoice.customerName || "عميل نقدي"}
+                          </p>
+                        </div>
                       </div>
                       <div className="text-left shrink-0 mr-3">
-                        <p className="font-semibold text-green-600">
+                        <p className="font-semibold text-emerald-600 text-sm">
                           {formatCurrency(parseFloat(invoice.total))}
                         </p>
                         <p className="text-xs text-muted-foreground">
@@ -301,42 +331,55 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  لا توجد فواتير حديثة
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground empty-state p-8">
+                  <FileText className="h-12 w-12 mb-3 opacity-50" />
+                  <p>لا توجد فواتير حديثة</p>
                 </div>
               )}
             </ScrollArea>
           </CardContent>
         </Card>
 
-        {/* Recent Purchase Orders */}
-        <Card>
-          <CardHeader>
+        {/* Recent Purchase Orders - تصميم محسن */}
+        <Card className="shadow-glow border-0">
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5 text-primary" />
-                <CardTitle className="text-lg">آخر أوامر الشراء</CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-orange-100 dark:bg-orange-900/30">
+                  <ShoppingCart className="h-5 w-5 text-orange-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">آخر أوامر الشراء</CardTitle>
+                  <p className="text-xs text-muted-foreground">طلبات المشتريات</p>
+                </div>
               </div>
-              <Badge variant="secondary">{stats?.recentPurchases?.length || 0}</Badge>
+              <Badge variant="secondary" className="rounded-full">
+                {stats?.recentPurchases?.length || 0}
+              </Badge>
             </div>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[280px]">
+            <ScrollArea className="h-[280px] scrollbar-thin">
               {stats?.recentPurchases && stats.recentPurchases.length > 0 ? (
-                <div className="space-y-3">
-                  {stats.recentPurchases.map((order) => (
+                <div className="space-y-2">
+                  {stats.recentPurchases.map((order, idx) => (
                     <div
                       key={order.id}
-                      className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-muted/30 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50"
                     >
-                      <div className="min-w-0">
-                        <p className="font-medium">{order.orderNumber}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {order.supplierName || "مورد غير محدد"}
-                        </p>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-xs font-bold text-orange-600">
+                          {idx + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm">{order.orderNumber}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {order.supplierName || "مورد غير محدد"}
+                          </p>
+                        </div>
                       </div>
                       <div className="text-left shrink-0 mr-3">
-                        <p className="font-semibold text-orange-600">
+                        <p className="font-semibold text-orange-600 text-sm">
                           {formatCurrency(parseFloat(order.total))}
                         </p>
                         <Badge
@@ -347,7 +390,7 @@ export default function Dashboard() {
                               ? "secondary"
                               : "outline"
                           }
-                          className="text-xs"
+                          className="text-xs rounded-full"
                         >
                           {order.status === "received"
                             ? "مستلم"
@@ -362,8 +405,9 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  لا توجد أوامر شراء حديثة
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground empty-state p-8">
+                  <ShoppingCart className="h-12 w-12 mb-3 opacity-50" />
+                  <p>لا توجد أوامر شراء حديثة</p>
                 </div>
               )}
             </ScrollArea>
@@ -379,11 +423,11 @@ function DashboardSkeleton() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {Array.from({ length: 6 }).map((_, i) => (
-          <Card key={i}>
+          <Card key={i} className="shadow-glow border-0">
             <CardContent className="p-4">
-              <Skeleton className="h-10 w-10 rounded-lg" />
-              <Skeleton className="h-8 w-20 mt-3" />
-              <Skeleton className="h-4 w-24 mt-2" />
+              <Skeleton className="h-10 w-10 rounded-xl skeleton-enhanced" />
+              <Skeleton className="h-8 w-20 mt-3 skeleton-enhanced" />
+              <Skeleton className="h-4 w-24 mt-2 skeleton-enhanced" />
             </CardContent>
           </Card>
         ))}
