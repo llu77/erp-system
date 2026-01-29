@@ -48,11 +48,7 @@ import {
   Activity,
   Shield,
   Settings,
-  Home,
-  Save,
-  Upload,
-  Camera,
-  Edit3
+  Home
 } from 'lucide-react';
 
 // أنواع الطلبات
@@ -343,10 +339,6 @@ export default function AdminEmployeePortal() {
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">التقارير</span>
             </TabsTrigger>
-            <TabsTrigger value="myprofile" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white gap-2">
-              <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">بياناتي</span>
-            </TabsTrigger>
           </TabsList>
 
           {/* Dashboard Tab */}
@@ -529,13 +521,201 @@ export default function AdminEmployeePortal() {
                         ))}
                       </div>
                     )}
-                  </ScrollArea>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* قسم تفصيلي لتنبيهات الوثائق */}
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <AlertCircle className="h-5 w-5 text-red-500" />
+                      ملخص حالة وثائق الموظفين
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-red-500/20 text-red-400">
+                        {dashboardStats.expiredDocs} منتهية
+                      </Badge>
+                      <Badge className="bg-amber-500/20 text-amber-400">
+                        {dashboardStats.expiringDocsCount} قريبة الانتهاء
+                      </Badge>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!expiringDocs ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
+                    </div>
+                  ) : dashboardStats.expiredDocs === 0 && dashboardStats.expiringDocsCount === 0 ? (
+                    <div className="text-center py-8 text-slate-400">
+                      <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-emerald-500" />
+                      <p className="text-lg font-medium text-emerald-400">جميع الوثائق سارية</p>
+                      <p className="text-sm text-slate-500">لا توجد وثائق منتهية أو قريبة من الانتهاء</p>
+                    </div>
+                  ) : (
+                    <div className="grid md:grid-cols-3 gap-4">
+                      {/* الإقامات */}
+                      <div className="bg-slate-700/30 rounded-lg p-4 border border-slate-600">
+                        <div className="flex items-center gap-2 mb-3">
+                          <IdCard className="h-5 w-5 text-blue-400" />
+                          <h4 className="font-medium text-white">الإقامات</h4>
+                        </div>
+                        <div className="space-y-2">
+                          {expiringDocs?.expired?.iqama?.length > 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-red-400">منتهية</span>
+                              <Badge className="bg-red-500/20 text-red-400">{expiringDocs.expired.iqama.length}</Badge>
+                            </div>
+                          )}
+                          {expiringDocs?.expiring?.iqama?.length > 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-amber-400">قريبة الانتهاء</span>
+                              <Badge className="bg-amber-500/20 text-amber-400">{expiringDocs.expiring.iqama.length}</Badge>
+                            </div>
+                          )}
+                          {(!expiringDocs?.expired?.iqama?.length && !expiringDocs?.expiring?.iqama?.length) && (
+                            <p className="text-sm text-emerald-400 flex items-center gap-1">
+                              <CheckCircle2 className="h-4 w-4" />
+                              جميعها سارية
+                            </p>
+                          )}
+                        </div>
+                        {/* قائمة الموظفين */}
+                        {(expiringDocs?.expired?.iqama?.length > 0 || expiringDocs?.expiring?.iqama?.length > 0) && (
+                          <div className="mt-3 pt-3 border-t border-slate-600">
+                            <ScrollArea className="h-[150px]">
+                              <div className="space-y-2">
+                                {expiringDocs?.expired?.iqama?.map((emp: any) => (
+                                  <div key={`iq-exp-${emp.id}`} className="flex items-center justify-between text-xs bg-red-500/10 p-2 rounded">
+                                    <span className="text-white">{emp.name}</span>
+                                    <span className="text-red-400">منتهية</span>
+                                  </div>
+                                ))}
+                                {expiringDocs?.expiring?.iqama?.map((emp: any) => (
+                                  <div key={`iq-soon-${emp.id}`} className="flex items-center justify-between text-xs bg-amber-500/10 p-2 rounded">
+                                    <span className="text-white">{emp.name}</span>
+                                    <span className="text-amber-400">
+                                      {emp.iqamaExpiryDate ? `${Math.ceil((new Date(emp.iqamaExpiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} يوم` : 'قريباً'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* الشهادات الصحية */}
+                      <div className="bg-slate-700/30 rounded-lg p-4 border border-slate-600">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Heart className="h-5 w-5 text-pink-400" />
+                          <h4 className="font-medium text-white">الشهادات الصحية</h4>
+                        </div>
+                        <div className="space-y-2">
+                          {expiringDocs?.expired?.healthCert?.length > 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-red-400">منتهية</span>
+                              <Badge className="bg-red-500/20 text-red-400">{expiringDocs.expired.healthCert.length}</Badge>
+                            </div>
+                          )}
+                          {expiringDocs?.expiring?.healthCert?.length > 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-amber-400">قريبة الانتهاء</span>
+                              <Badge className="bg-amber-500/20 text-amber-400">{expiringDocs.expiring.healthCert.length}</Badge>
+                            </div>
+                          )}
+                          {(!expiringDocs?.expired?.healthCert?.length && !expiringDocs?.expiring?.healthCert?.length) && (
+                            <p className="text-sm text-emerald-400 flex items-center gap-1">
+                              <CheckCircle2 className="h-4 w-4" />
+                              جميعها سارية
+                            </p>
+                          )}
+                        </div>
+                        {/* قائمة الموظفين */}
+                        {(expiringDocs?.expired?.healthCert?.length > 0 || expiringDocs?.expiring?.healthCert?.length > 0) && (
+                          <div className="mt-3 pt-3 border-t border-slate-600">
+                            <ScrollArea className="h-[150px]">
+                              <div className="space-y-2">
+                                {expiringDocs?.expired?.healthCert?.map((emp: any) => (
+                                  <div key={`hc-exp-${emp.id}`} className="flex items-center justify-between text-xs bg-red-500/10 p-2 rounded">
+                                    <span className="text-white">{emp.name}</span>
+                                    <span className="text-red-400">منتهية</span>
+                                  </div>
+                                ))}
+                                {expiringDocs?.expiring?.healthCert?.map((emp: any) => (
+                                  <div key={`hc-soon-${emp.id}`} className="flex items-center justify-between text-xs bg-amber-500/10 p-2 rounded">
+                                    <span className="text-white">{emp.name}</span>
+                                    <span className="text-amber-400">
+                                      {emp.healthCertExpiryDate ? `${Math.ceil((new Date(emp.healthCertExpiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} يوم` : 'قريباً'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* العقود */}
+                      <div className="bg-slate-700/30 rounded-lg p-4 border border-slate-600">
+                        <div className="flex items-center gap-2 mb-3">
+                          <FileSignature className="h-5 w-5 text-purple-400" />
+                          <h4 className="font-medium text-white">عقود العمل</h4>
+                        </div>
+                        <div className="space-y-2">
+                          {expiringDocs?.expired?.contract?.length > 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-red-400">منتهية</span>
+                              <Badge className="bg-red-500/20 text-red-400">{expiringDocs.expired.contract.length}</Badge>
+                            </div>
+                          )}
+                          {expiringDocs?.expiring?.contract?.length > 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-amber-400">قريبة الانتهاء</span>
+                              <Badge className="bg-amber-500/20 text-amber-400">{expiringDocs.expiring.contract.length}</Badge>
+                            </div>
+                          )}
+                          {(!expiringDocs?.expired?.contract?.length && !expiringDocs?.expiring?.contract?.length) && (
+                            <p className="text-sm text-emerald-400 flex items-center gap-1">
+                              <CheckCircle2 className="h-4 w-4" />
+                              جميعها سارية
+                            </p>
+                          )}
+                        </div>
+                        {/* قائمة الموظفين */}
+                        {(expiringDocs?.expired?.contract?.length > 0 || expiringDocs?.expiring?.contract?.length > 0) && (
+                          <div className="mt-3 pt-3 border-t border-slate-600">
+                            <ScrollArea className="h-[150px]">
+                              <div className="space-y-2">
+                                {expiringDocs?.expired?.contract?.map((emp: any) => (
+                                  <div key={`ct-exp-${emp.id}`} className="flex items-center justify-between text-xs bg-red-500/10 p-2 rounded">
+                                    <span className="text-white">{emp.name}</span>
+                                    <span className="text-red-400">منتهية</span>
+                                  </div>
+                                ))}
+                                {expiringDocs?.expiring?.contract?.map((emp: any) => (
+                                  <div key={`ct-soon-${emp.id}`} className="flex items-center justify-between text-xs bg-amber-500/10 p-2 rounded">
+                                    <span className="text-white">{emp.name}</span>
+                                    <span className="text-amber-400">
+                                      {emp.contractExpiryDate ? `${Math.ceil((new Date(emp.contractExpiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} يوم` : 'قريباً'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            </div>
-          </TabsContent>
+            </TabsContent>
 
-          {/* Requests Tab */}
+            {/* Requests Tab */}
           <TabsContent value="requests" className="space-y-4">
             {/* Filters */}
             <Card className="bg-slate-800/50 border-slate-700">
@@ -891,11 +1071,6 @@ export default function AdminEmployeePortal() {
               </Card>
             </div>
           </TabsContent>
-
-          {/* My Profile Tab */}
-          <TabsContent value="myprofile" className="space-y-6">
-            <MyProfileSection adminInfo={adminInfo} />
-          </TabsContent>
         </Tabs>
       </div>
 
@@ -1170,554 +1345,6 @@ export default function AdminEmployeePortal() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-// مكون صفحة بياناتي
-function MyProfileSection({ adminInfo }: { adminInfo: AdminInfo }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadingField, setUploadingField] = useState<string | null>(null);
-  
-  // جلب بيانات الموظف الحالي
-  const { data: myData, isLoading, refetch } = trpc.portalAdmin.getMyProfile.useQuery(
-    { supervisorId: adminInfo.id },
-    { enabled: !!adminInfo.id }
-  );
-  
-  // تحديث البيانات
-  const updateProfileMutation = trpc.portalAdmin.updateMyProfile.useMutation({
-    onSuccess: () => {
-      refetch();
-      setIsEditing(false);
-      setIsSaving(false);
-    },
-    onError: () => {
-      setIsSaving(false);
-    }
-  });
-  
-  // رفع صورة الوثيقة
-  const uploadDocImageMutation = trpc.portalAdmin.uploadMyDocumentImage.useMutation({
-    onSuccess: () => {
-      refetch();
-      setIsUploading(false);
-      setUploadingField(null);
-    },
-    onError: () => {
-      setIsUploading(false);
-      setUploadingField(null);
-    }
-  });
-  
-  // حالة النموذج
-  const [formData, setFormData] = useState({
-    phone: '',
-    email: '',
-    iqamaNumber: '',
-    iqamaExpiryDate: '',
-    healthCertExpiryDate: '',
-    contractExpiryDate: '',
-    bankName: '',
-    iban: '',
-  });
-  
-  // تحديث النموذج عند تحميل البيانات
-  useEffect(() => {
-    if (myData) {
-      setFormData({
-        phone: myData.phone || '',
-        email: myData.email || '',
-        iqamaNumber: myData.iqamaNumber || '',
-        iqamaExpiryDate: myData.iqamaExpiryDate ? new Date(myData.iqamaExpiryDate).toISOString().split('T')[0] : '',
-        healthCertExpiryDate: myData.healthCertExpiryDate ? new Date(myData.healthCertExpiryDate).toISOString().split('T')[0] : '',
-        contractExpiryDate: myData.contractExpiryDate ? new Date(myData.contractExpiryDate).toISOString().split('T')[0] : '',
-        bankName: myData.bankName || '',
-        iban: myData.bankIban || '',
-      });
-    }
-  }, [myData]);
-  
-  // حفظ التعديلات
-  const handleSave = async () => {
-    setIsSaving(true);
-    await updateProfileMutation.mutateAsync({
-      supervisorId: adminInfo.id,
-      data: {
-        phone: formData.phone || undefined,
-        email: formData.email || undefined,
-        iqamaNumber: formData.iqamaNumber || undefined,
-        iqamaExpiryDate: formData.iqamaExpiryDate || null,
-        healthCertExpiryDate: formData.healthCertExpiryDate || null,
-        contractExpiryDate: formData.contractExpiryDate || null,
-        bankName: formData.bankName || undefined,
-        bankIban: formData.iban || undefined,
-      },
-    });
-  };
-  
-  // رفع صورة
-  const handleImageUpload = async (field: 'iqama' | 'healthCert' | 'contract', file: File) => {
-    setIsUploading(true);
-    setUploadingField(field);
-    
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = (reader.result as string).split(',')[1];
-      await uploadDocImageMutation.mutateAsync({
-        supervisorId: adminInfo.id,
-        documentType: field,
-        fileData: base64,
-        fileName: file.name,
-        contentType: file.type,
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-  
-  // حساب حالة الوثيقة
-  const getDocStatus = (expiryDate: Date | string | null | undefined) => {
-    if (!expiryDate) return { status: 'unknown', color: 'text-slate-400', bg: 'bg-slate-500/20' };
-    const expiry = expiryDate instanceof Date ? expiryDate : new Date(expiryDate);
-    const today = new Date();
-    const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysLeft < 0) return { status: 'منتهية', color: 'text-red-400', bg: 'bg-red-500/20', days: Math.abs(daysLeft) };
-    if (daysLeft <= 30) return { status: 'قريبة الانتهاء', color: 'text-amber-400', bg: 'bg-amber-500/20', days: daysLeft };
-    return { status: 'سارية', color: 'text-emerald-400', bg: 'bg-emerald-500/20', days: daysLeft };
-  };
-  
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-      </div>
-    );
-  }
-  
-  return (
-    <div className="space-y-6">
-      {/* العنوان */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white">بياناتي الشخصية</h2>
-          <p className="text-slate-400">إدارة وتحديث بياناتك الشخصية ووثائقك</p>
-        </div>
-        <Button
-          onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-          disabled={isSaving}
-          className={isEditing ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-amber-500 hover:bg-amber-600'}
-        >
-          {isSaving ? (
-            <Loader2 className="h-4 w-4 animate-spin ml-2" />
-          ) : isEditing ? (
-            <Save className="h-4 w-4 ml-2" />
-          ) : (
-            <Edit3 className="h-4 w-4 ml-2" />
-          )}
-          {isEditing ? 'حفظ التعديلات' : 'تعديل البيانات'}
-        </Button>
-      </div>
-      
-      {/* المعلومات الأساسية */}
-      <Card className="bg-gradient-to-br from-amber-500/10 to-orange-600/10 border-amber-500/30">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-xl">
-              <UserCircle className="h-16 w-16 text-white" />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-white">{myData?.name || adminInfo.name}</h3>
-              <p className="text-slate-400">{myData?.code || adminInfo.username}</p>
-              <div className="flex items-center gap-2 mt-2">
-                <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-                  {myData?.branchName || adminInfo.branchName || 'غير محدد'}
-                </Badge>
-                <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
-                  {adminInfo.isAdmin ? 'مدير النظام' : 'مشرف'}
-                </Badge>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* بيانات التواصل */}
-        <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
-              <Phone className="h-5 w-5 text-blue-500" />
-              بيانات التواصل
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm text-slate-400 mb-1 block">رقم الجوال</label>
-              {isEditing ? (
-                <Input
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="bg-slate-700 border-slate-600 text-white"
-                  placeholder="05xxxxxxxx"
-                  dir="ltr"
-                />
-              ) : (
-                <p className="text-white">{myData?.phone || 'غير محدد'}</p>
-              )}
-            </div>
-            <div>
-              <label className="text-sm text-slate-400 mb-1 block">البريد الإلكتروني</label>
-              {isEditing ? (
-                <Input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="bg-slate-700 border-slate-600 text-white"
-                  placeholder="example@email.com"
-                  dir="ltr"
-                />
-              ) : (
-                <p className="text-white">{myData?.email || 'غير محدد'}</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* بيانات البنك */}
-        <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
-              <CreditCard className="h-5 w-5 text-amber-500" />
-              بيانات البنك
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm text-slate-400 mb-1 block">اسم البنك</label>
-              {isEditing ? (
-                <Input
-                  value={formData.bankName}
-                  onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                  className="bg-slate-700 border-slate-600 text-white"
-                  placeholder="اسم البنك"
-                />
-              ) : (
-                <p className="text-white">{myData?.bankName || 'غير محدد'}</p>
-              )}
-            </div>
-            <div>
-              <label className="text-sm text-slate-400 mb-1 block">رقم الحساب (IBAN)</label>
-              {isEditing ? (
-                <Input
-                  value={formData.iban}
-                  onChange={(e) => setFormData({ ...formData, iban: e.target.value })}
-                  className="bg-slate-700 border-slate-600 text-white font-mono text-sm"
-                  placeholder="SA..."
-                  dir="ltr"
-                />
-              ) : (
-                <p className="text-white font-mono text-sm">{myData?.bankIban || 'غير محدد'}</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      
-      {/* الوثائق */}
-      <Card className="bg-slate-800/50 border-slate-700">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <IdCard className="h-5 w-5 text-purple-500" />
-            الوثائق والمستندات
-          </CardTitle>
-          <CardDescription className="text-slate-400">
-            قم بتحديث بيانات وثائقك ورفع صورها
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-3 gap-4">
-            {/* الإقامة */}
-            <div className="p-4 bg-slate-700/50 rounded-lg border border-slate-600">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-bold text-white flex items-center gap-2">
-                  <IdCard className="h-4 w-4 text-blue-500" />
-                  الإقامة
-                </h4>
-                {(() => {
-                  const status = getDocStatus(myData?.iqamaExpiryDate);
-                  return (
-                    <Badge className={`${status.bg} ${status.color} border-0`}>
-                      {status.status}
-                    </Badge>
-                  );
-                })()}
-              </div>
-              
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">رقم الإقامة</label>
-                  {isEditing ? (
-                    <Input
-                      value={formData.iqamaNumber}
-                      onChange={(e) => setFormData({ ...formData, iqamaNumber: e.target.value })}
-                      className="bg-slate-600 border-slate-500 text-white text-sm"
-                      placeholder="رقم الإقامة"
-                      dir="ltr"
-                    />
-                  ) : (
-                    <p className="text-white text-sm">{myData?.iqamaNumber || 'غير محدد'}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">تاريخ الانتهاء</label>
-                  {isEditing ? (
-                    <Input
-                      type="date"
-                      value={formData.iqamaExpiryDate}
-                      onChange={(e) => setFormData({ ...formData, iqamaExpiryDate: e.target.value })}
-                      className="bg-slate-600 border-slate-500 text-white text-sm"
-                    />
-                  ) : (
-                    <p className="text-white text-sm">
-                      {myData?.iqamaExpiryDate ? new Date(myData.iqamaExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                    </p>
-                  )}
-                </div>
-                
-                {/* صورة الإقامة */}
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">صورة الإقامة</label>
-                  {myData?.iqamaImageUrl ? (
-                    <div className="relative group">
-                      <img 
-                        src={myData.iqamaImageUrl} 
-                        alt="صورة الإقامة" 
-                        className="w-full h-24 object-cover rounded-lg border border-slate-600"
-                      />
-                      <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer rounded-lg transition-opacity">
-                        <Camera className="h-6 w-6 text-white" />
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          className="hidden"
-                          onChange={(e) => e.target.files?.[0] && handleImageUpload('iqama', e.target.files[0])}
-                          disabled={isUploading}
-                        />
-                      </label>
-                    </div>
-                  ) : (
-                    <label className="flex items-center justify-center h-24 border-2 border-dashed border-slate-600 rounded-lg cursor-pointer hover:border-amber-500 transition-colors">
-                      {isUploading && uploadingField === 'iqama' ? (
-                        <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-                      ) : (
-                        <div className="text-center">
-                          <Upload className="h-6 w-6 text-slate-400 mx-auto mb-1" />
-                          <span className="text-xs text-slate-400">رفع صورة</span>
-                        </div>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        className="hidden"
-                        onChange={(e) => e.target.files?.[0] && handleImageUpload('iqama', e.target.files[0])}
-                        disabled={isUploading}
-                      />
-                    </label>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            {/* الشهادة الصحية */}
-            <div className="p-4 bg-slate-700/50 rounded-lg border border-slate-600">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-bold text-white flex items-center gap-2">
-                  <Heart className="h-4 w-4 text-pink-500" />
-                  الشهادة الصحية
-                </h4>
-                {(() => {
-                  const status = getDocStatus(myData?.healthCertExpiryDate);
-                  return (
-                    <Badge className={`${status.bg} ${status.color} border-0`}>
-                      {status.status}
-                    </Badge>
-                  );
-                })()}
-              </div>
-              
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">تاريخ الانتهاء</label>
-                  {isEditing ? (
-                    <Input
-                      type="date"
-                      value={formData.healthCertExpiryDate}
-                      onChange={(e) => setFormData({ ...formData, healthCertExpiryDate: e.target.value })}
-                      className="bg-slate-600 border-slate-500 text-white text-sm"
-                    />
-                  ) : (
-                    <p className="text-white text-sm">
-                      {myData?.healthCertExpiryDate ? new Date(myData.healthCertExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                    </p>
-                  )}
-                </div>
-                
-                {/* صورة الشهادة الصحية */}
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">صورة الشهادة</label>
-                  {myData?.healthCertImageUrl ? (
-                    <div className="relative group">
-                      <img 
-                        src={myData.healthCertImageUrl} 
-                        alt="صورة الشهادة الصحية" 
-                        className="w-full h-24 object-cover rounded-lg border border-slate-600"
-                      />
-                      <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer rounded-lg transition-opacity">
-                        <Camera className="h-6 w-6 text-white" />
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          className="hidden"
-                          onChange={(e) => e.target.files?.[0] && handleImageUpload('healthCert', e.target.files[0])}
-                          disabled={isUploading}
-                        />
-                      </label>
-                    </div>
-                  ) : (
-                    <label className="flex items-center justify-center h-24 border-2 border-dashed border-slate-600 rounded-lg cursor-pointer hover:border-amber-500 transition-colors">
-                      {isUploading && uploadingField === 'healthCert' ? (
-                        <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-                      ) : (
-                        <div className="text-center">
-                          <Upload className="h-6 w-6 text-slate-400 mx-auto mb-1" />
-                          <span className="text-xs text-slate-400">رفع صورة</span>
-                        </div>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        className="hidden"
-                        onChange={(e) => e.target.files?.[0] && handleImageUpload('healthCert', e.target.files[0])}
-                        disabled={isUploading}
-                      />
-                    </label>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            {/* عقد العمل */}
-            <div className="p-4 bg-slate-700/50 rounded-lg border border-slate-600">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-bold text-white flex items-center gap-2">
-                  <FileSignature className="h-4 w-4 text-emerald-500" />
-                  عقد العمل
-                </h4>
-                {(() => {
-                  const status = getDocStatus(myData?.contractExpiryDate);
-                  return (
-                    <Badge className={`${status.bg} ${status.color} border-0`}>
-                      {status.status}
-                    </Badge>
-                  );
-                })()}
-              </div>
-              
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">تاريخ الانتهاء</label>
-                  {isEditing ? (
-                    <Input
-                      type="date"
-                      value={formData.contractExpiryDate}
-                      onChange={(e) => setFormData({ ...formData, contractExpiryDate: e.target.value })}
-                      className="bg-slate-600 border-slate-500 text-white text-sm"
-                    />
-                  ) : (
-                    <p className="text-white text-sm">
-                      {myData?.contractExpiryDate ? new Date(myData.contractExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                    </p>
-                  )}
-                </div>
-                
-                {/* صورة العقد */}
-                <div>
-                  <label className="text-xs text-slate-400 block mb-1">صورة العقد</label>
-                  {myData?.contractImageUrl ? (
-                    <div className="relative group">
-                      <img 
-                        src={myData.contractImageUrl} 
-                        alt="صورة عقد العمل" 
-                        className="w-full h-24 object-cover rounded-lg border border-slate-600"
-                      />
-                      <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer rounded-lg transition-opacity">
-                        <Camera className="h-6 w-6 text-white" />
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          className="hidden"
-                          onChange={(e) => e.target.files?.[0] && handleImageUpload('contract', e.target.files[0])}
-                          disabled={isUploading}
-                        />
-                      </label>
-                    </div>
-                  ) : (
-                    <label className="flex items-center justify-center h-24 border-2 border-dashed border-slate-600 rounded-lg cursor-pointer hover:border-amber-500 transition-colors">
-                      {isUploading && uploadingField === 'contract' ? (
-                        <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-                      ) : (
-                        <div className="text-center">
-                          <Upload className="h-6 w-6 text-slate-400 mx-auto mb-1" />
-                          <span className="text-xs text-slate-400">رفع صورة</span>
-                        </div>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        className="hidden"
-                        onChange={(e) => e.target.files?.[0] && handleImageUpload('contract', e.target.files[0])}
-                        disabled={isUploading}
-                      />
-                    </label>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      
-      {/* زر إلغاء التعديل */}
-      {isEditing && (
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setIsEditing(false);
-              // إعادة تعيين النموذج
-              if (myData) {
-                setFormData({
-                  phone: myData.phone || '',
-                  email: myData.email || '',
-                  iqamaNumber: myData.iqamaNumber || '',
-                  iqamaExpiryDate: myData.iqamaExpiryDate ? new Date(myData.iqamaExpiryDate).toISOString().split('T')[0] : '',
-                  healthCertExpiryDate: myData.healthCertExpiryDate ? new Date(myData.healthCertExpiryDate).toISOString().split('T')[0] : '',
-                  contractExpiryDate: myData.contractExpiryDate ? new Date(myData.contractExpiryDate).toISOString().split('T')[0] : '',
-                  bankName: myData.bankName || '',
-                  iban: myData.bankIban || '',
-                });
-              }
-            }}
-            className="border-slate-600 text-slate-300"
-          >
-            إلغاء
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

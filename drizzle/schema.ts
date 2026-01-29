@@ -291,33 +291,6 @@ export const employees = mysqlTable("employees", {
   healthCertImageUrl: varchar("healthCertImageUrl", { length: 500 }),
   contractExpiryDate: timestamp("contractExpiryDate"),
   contractImageUrl: varchar("contractImageUrl", { length: 500 }),
-  // رخصة القيادة
-  driverLicenseNumber: varchar("driverLicenseNumber", { length: 20 }),
-  driverLicenseExpiryDate: timestamp("driverLicenseExpiryDate"),
-  driverLicenseImageUrl: varchar("driverLicenseImageUrl", { length: 500 }),
-  // جواز السفر
-  passportNumber: varchar("passportNumber", { length: 20 }),
-  passportExpiryDate: timestamp("passportExpiryDate"),
-  passportImageUrl: varchar("passportImageUrl", { length: 500 }),
-  // التأمين الصحي
-  insuranceNumber: varchar("insuranceNumber", { length: 50 }),
-  insuranceExpiryDate: timestamp("insuranceExpiryDate"),
-  insuranceImageUrl: varchar("insuranceImageUrl", { length: 500 }),
-  // بطاقة العمل (للعمالة الوافدة)
-  workPermitNumber: varchar("workPermitNumber", { length: 50 }),
-  workPermitExpiryDate: timestamp("workPermitExpiryDate"),
-  workPermitImageUrl: varchar("workPermitImageUrl", { length: 500 }),
-  // بيانات إضافية
-  nationality: varchar("nationality", { length: 100 }),
-  dateOfBirth: timestamp("dateOfBirth"),
-  hireDate: timestamp("hireDate"),
-  bankName: varchar("bankName", { length: 100 }),
-  bankAccountNumber: varchar("bankAccountNumber", { length: 50 }),
-  bankIban: varchar("bankIban", { length: 50 }),
-  emergencyContactName: varchar("emergencyContactName", { length: 255 }),
-  emergencyContactPhone: varchar("emergencyContactPhone", { length: 50 }),
-  address: text("address"),
-  notes: text("notes"),
   // حقل تسجيل المعلومات من الموظف (لمرة واحدة فقط)
   infoSubmittedAt: timestamp("infoSubmittedAt"),
   infoSubmittedBy: int("infoSubmittedBy"), // null = الموظف نفسه، أو ID الأدمن
@@ -1251,7 +1224,6 @@ export const notificationRecipients = mysqlTable("notificationRecipients", {
   receiveRequestNotifications: boolean("receiveRequestNotifications").default(true).notNull(),
   receiveReportNotifications: boolean("receiveReportNotifications").default(true).notNull(),
   receiveBonusNotifications: boolean("receiveBonusNotifications").default(true).notNull(),
-  receiveDocumentExpiryAlerts: boolean("receiveDocumentExpiryAlerts").default(true).notNull(),
   
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

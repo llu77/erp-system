@@ -1,1 +1,0 @@
-ALTER TABLE `notificationRecipients` ADD `receiveDocumentExpiryAlerts` boolean DEFAULT true NOT NULL;

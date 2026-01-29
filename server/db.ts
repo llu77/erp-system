@@ -10301,13 +10301,10 @@ export async function getDocumentStatistics() {
 // ==================== دوال لوحة تحكم الأدمن في بوابة الموظفين ====================
 
 // التحقق من صلاحيات الأدمن في بوابة الموظفين
-// يدعم المستخدمين من جدول users والمشرفين من جدول employees
 export async function checkPortalAdminAccess(userId: number): Promise<{
   isAdmin: boolean;
   adminName?: string;
   adminRole?: string;
-  branchId?: number;
-  isFromEmployeesTable?: boolean;
 }> {
   const db = await getDb();
   if (!db) {
@@ -10315,14 +10312,13 @@ export async function checkPortalAdminAccess(userId: number): Promise<{
   }
 
   try {
-    // أولاً: البحث في جدول المستخدمين (users)
+    // البحث في جدول المستخدمين
     const user = await db
       .select({
         id: users.id,
         name: users.name,
         role: users.role,
         username: users.username,
-        branchId: users.branchId,
       })
       .from(users)
       .where(eq(users.id, userId))
@@ -10333,32 +10329,6 @@ export async function checkPortalAdminAccess(userId: number): Promise<{
         isAdmin: true,
         adminName: user[0].name || user[0].username || 'Admin',
         adminRole: user[0].role,
-        branchId: user[0].branchId || undefined,
-        isFromEmployeesTable: false,
-      };
-    }
-
-    // ثانياً: البحث في جدول الموظفين (employees) للمشرفين
-    const employee = await db
-      .select({
-        id: employees.id,
-        name: employees.name,
-        code: employees.code,
-        branchId: employees.branchId,
-        isSupervisor: employees.isSupervisor,
-        isActive: employees.isActive,
-      })
-      .from(employees)
-      .where(eq(employees.id, userId))
-      .limit(1);
-
-    if (employee.length > 0 && employee[0].isSupervisor && employee[0].isActive) {
-      return {
-        isAdmin: true,
-        adminName: employee[0].name || employee[0].code || 'Supervisor',
-        adminRole: 'branch_supervisor',
-        branchId: employee[0].branchId,
-        isFromEmployeesTable: true,
       };
     }
 
@@ -10487,8 +10457,7 @@ export async function getBranchesForPortalAdmin(): Promise<Array<{
 }
 
 // جلب إحصائيات لوحة تحكم الأدمن في بوابة الموظفين
-// يدعم فلترة حسب الفرع للمشرفين
-export async function getPortalAdminDashboardStats(branchId?: number): Promise<{
+export async function getPortalAdminDashboardStats(): Promise<{
   totalEmployees: number;
   activeEmployees: number;
   pendingRequests: number;
@@ -10511,43 +10480,18 @@ export async function getPortalAdminDashboardStats(branchId?: number): Promise<{
   }
 
   try {
-    // عدد الموظفين (مع فلترة الفرع إن وجدت)
-    let allEmployeesQuery = db.select({ id: employees.id, branchId: employees.branchId }).from(employees);
-    let activeEmpsQuery = db
-      .select({ id: employees.id, branchId: employees.branchId })
+    // عدد الموظفين
+    const allEmployees = await db.select({ id: employees.id }).from(employees);
+    const activeEmps = await db
+      .select({ id: employees.id })
       .from(employees)
       .where(eq(employees.isActive, true));
 
-    const allEmployees = await allEmployeesQuery;
-    const activeEmps = await activeEmpsQuery;
-
-    // فلترة حسب الفرع إن وجدت
-    const filteredAllEmployees = branchId 
-      ? allEmployees.filter((e: { branchId: number }) => e.branchId === branchId)
-      : allEmployees;
-    const filteredActiveEmps = branchId 
-      ? activeEmps.filter((e: { branchId: number }) => e.branchId === branchId)
-      : activeEmps;
-
-    // عدد الطلبات (مع فلترة الفرع إن وجدت)
-    const allRequests = await db.select({ 
-      id: employeeRequests.id, 
-      status: employeeRequests.status,
-      employeeId: employeeRequests.employeeId 
-    }).from(employeeRequests);
-    
-    // جلب معرفات موظفي الفرع للفلترة
-    const branchEmployeeIds = branchId 
-      ? new Set(filteredAllEmployees.map((e: { id: number }) => e.id))
-      : null;
-    
-    const filteredRequests = branchEmployeeIds
-      ? allRequests.filter((r: { employeeId: number | null }) => r.employeeId && branchEmployeeIds.has(r.employeeId))
-      : allRequests;
-    
-    const pendingReqs = filteredRequests.filter((r: { status: string }) => r.status === 'pending').length;
-    const approvedReqs = filteredRequests.filter((r: { status: string }) => r.status === 'approved').length;
-    const rejectedReqs = filteredRequests.filter((r: { status: string }) => r.status === 'rejected').length;
+    // عدد الطلبات
+    const allRequests = await db.select({ id: employeeRequests.id, status: employeeRequests.status }).from(employeeRequests);
+    const pendingReqs = allRequests.filter((r: { status: string }) => r.status === 'pending').length;
+    const approvedReqs = allRequests.filter((r: { status: string }) => r.status === 'approved').length;
+    const rejectedReqs = allRequests.filter((r: { status: string }) => r.status === 'rejected').length;
 
     // عدد الفروع
     const branchList = await db.select({ id: branches.id }).from(branches);
@@ -10556,8 +10500,8 @@ export async function getPortalAdminDashboardStats(branchId?: number): Promise<{
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
     
-    let expiringDocsQuery = db
-      .select({ id: employees.id, branchId: employees.branchId })
+    const expiringDocs = await db
+      .select({ id: employees.id })
       .from(employees)
       .where(
         and(
@@ -10578,20 +10522,15 @@ export async function getPortalAdminDashboardStats(branchId?: number): Promise<{
           )
         )
       );
-    
-    const expiringDocs = await expiringDocsQuery;
-    const filteredExpiringDocs = branchId 
-      ? expiringDocs.filter((e: { branchId: number }) => e.branchId === branchId)
-      : expiringDocs;
 
     return {
-      totalEmployees: filteredAllEmployees.length,
-      activeEmployees: filteredActiveEmps.length,
+      totalEmployees: allEmployees.length,
+      activeEmployees: activeEmps.length,
       pendingRequests: pendingReqs,
       approvedRequests: approvedReqs,
       rejectedRequests: rejectedReqs,
-      expiringDocuments: filteredExpiringDocs.length,
-      branchCount: branchId ? 1 : branchList.length,
+      expiringDocuments: expiringDocs.length,
+      branchCount: branchList.length,
     };
   } catch (error) {
     console.error('Error getting portal admin dashboard stats:', error);
@@ -11201,616 +11140,5 @@ export async function getMonthlyCashFlowReport(year: number, month: number) {
   } catch (error) {
     console.error('Error getting monthly cash flow report:', error);
     return null;
-  }
-}
-
-
-// ==================== دوال لوحة تحكم الوثائق الشاملة ====================
-
-// نوع الوثيقة
-export type DocumentType = 'iqama' | 'healthCert' | 'contract' | 'driverLicense' | 'passport' | 'insurance' | 'workPermit';
-
-// حالة الوثيقة
-export type DocumentStatus = 'expired' | 'expiring_soon' | 'valid' | 'missing';
-
-// واجهة بيانات الوثيقة
-export interface DocumentInfo {
-  type: DocumentType;
-  typeName: string;
-  number: string | null;
-  expiryDate: Date | null;
-  imageUrl: string | null;
-  daysRemaining: number | null;
-  status: DocumentStatus;
-}
-
-// واجهة بيانات الموظف مع الوثائق
-export interface EmployeeWithDocuments {
-  id: number;
-  code: string;
-  name: string;
-  branchId: number;
-  branchName: string;
-  position: string | null;
-  phone: string | null;
-  photoUrl: string | null;
-  isActive: boolean;
-  documents: DocumentInfo[];
-  expiredCount: number;
-  expiringSoonCount: number;
-  validCount: number;
-  missingCount: number;
-}
-
-// حساب الأيام المتبقية وحالة الوثيقة
-function calculateDocumentStatus(expiryDate: Date | null, imageUrl: string | null): { daysRemaining: number | null; status: DocumentStatus } {
-  if (!expiryDate) {
-    return { daysRemaining: null, status: imageUrl ? 'valid' : 'missing' };
-  }
-  
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expiry = new Date(expiryDate);
-  expiry.setHours(0, 0, 0, 0);
-  
-  const diffTime = expiry.getTime() - today.getTime();
-  const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  if (daysRemaining < 0) {
-    return { daysRemaining, status: 'expired' };
-  } else if (daysRemaining <= 30) {
-    return { daysRemaining, status: 'expiring_soon' };
-  } else {
-    return { daysRemaining, status: 'valid' };
-  }
-}
-
-// جلب جميع الموظفين مع وثائقهم والأيام المتبقية
-export async function getEmployeesDocumentsDashboard(branchId?: number): Promise<EmployeeWithDocuments[]> {
-  const db = await getDb();
-  if (!db) return [];
-  
-  try {
-    let query = db.select({
-      id: employees.id,
-      code: employees.code,
-      name: employees.name,
-      branchId: employees.branchId,
-      branchName: branches.name,
-      position: employees.position,
-      phone: employees.phone,
-      photoUrl: employees.photoUrl,
-      isActive: employees.isActive,
-      // وثائق الإقامة
-      iqamaNumber: employees.iqamaNumber,
-      iqamaExpiryDate: employees.iqamaExpiryDate,
-      iqamaImageUrl: employees.iqamaImageUrl,
-      // الشهادة الصحية
-      healthCertExpiryDate: employees.healthCertExpiryDate,
-      healthCertImageUrl: employees.healthCertImageUrl,
-      // العقد
-      contractExpiryDate: employees.contractExpiryDate,
-      contractImageUrl: employees.contractImageUrl,
-    })
-    .from(employees)
-    .leftJoin(branches, eq(employees.branchId, branches.id))
-    .where(branchId 
-      ? and(eq(employees.isActive, true), eq(employees.branchId, branchId))
-      : eq(employees.isActive, true)
-    );
-    
-    const results = await query.orderBy(employees.name);
-    
-    return results.map(emp => {
-      const documents: DocumentInfo[] = [];
-      
-      // الإقامة
-      const iqamaStatus = calculateDocumentStatus(emp.iqamaExpiryDate, emp.iqamaImageUrl);
-      documents.push({
-        type: 'iqama',
-        typeName: 'الإقامة',
-        number: emp.iqamaNumber,
-        expiryDate: emp.iqamaExpiryDate,
-        imageUrl: emp.iqamaImageUrl,
-        ...iqamaStatus,
-      });
-      
-      // الشهادة الصحية
-      const healthStatus = calculateDocumentStatus(emp.healthCertExpiryDate, emp.healthCertImageUrl);
-      documents.push({
-        type: 'healthCert',
-        typeName: 'الشهادة الصحية',
-        number: null,
-        expiryDate: emp.healthCertExpiryDate,
-        imageUrl: emp.healthCertImageUrl,
-        ...healthStatus,
-      });
-      
-      // العقد
-      const contractStatus = calculateDocumentStatus(emp.contractExpiryDate, emp.contractImageUrl);
-      documents.push({
-        type: 'contract',
-        typeName: 'عقد العمل',
-        number: null,
-        expiryDate: emp.contractExpiryDate,
-        imageUrl: emp.contractImageUrl,
-        ...contractStatus,
-      });
-      
-      // حساب الإحصائيات
-      const expiredCount = documents.filter(d => d.status === 'expired').length;
-      const expiringSoonCount = documents.filter(d => d.status === 'expiring_soon').length;
-      const validCount = documents.filter(d => d.status === 'valid').length;
-      const missingCount = documents.filter(d => d.status === 'missing').length;
-      
-      return {
-        id: emp.id,
-        code: emp.code,
-        name: emp.name,
-        branchId: emp.branchId,
-        branchName: emp.branchName || 'غير محدد',
-        position: emp.position,
-        phone: emp.phone,
-        photoUrl: emp.photoUrl,
-        isActive: emp.isActive,
-        documents,
-        expiredCount,
-        expiringSoonCount,
-        validCount,
-        missingCount,
-      };
-    });
-  } catch (error) {
-    console.error('Error getting employees with documents:', error);
-    return [];
-  }
-}
-
-// جلب ملخص حالة الوثائق
-export async function getDocumentsSummary(branchId?: number) {
-  const employees = await getEmployeesDocumentsDashboard(branchId);
-  
-  const summary = {
-    totalEmployees: employees.length,
-    expiredDocuments: 0,
-    expiringSoonDocuments: 0,
-    validDocuments: 0,
-    missingDocuments: 0,
-    employeesWithExpired: 0,
-    employeesWithExpiringSoon: 0,
-    employeesAllValid: 0,
-    byDocumentType: {
-      iqama: { expired: 0, expiringSoon: 0, valid: 0, missing: 0 },
-      healthCert: { expired: 0, expiringSoon: 0, valid: 0, missing: 0 },
-      contract: { expired: 0, expiringSoon: 0, valid: 0, missing: 0 },
-    } as Record<string, { expired: number; expiringSoon: number; valid: number; missing: number }>,
-  };
-  
-  for (const emp of employees) {
-    if (emp.expiredCount > 0) summary.employeesWithExpired++;
-    if (emp.expiringSoonCount > 0) summary.employeesWithExpiringSoon++;
-    if (emp.expiredCount === 0 && emp.expiringSoonCount === 0 && emp.missingCount === 0) {
-      summary.employeesAllValid++;
-    }
-    
-    for (const doc of emp.documents) {
-      if (doc.status === 'expired') {
-        summary.expiredDocuments++;
-        summary.byDocumentType[doc.type].expired++;
-      } else if (doc.status === 'expiring_soon') {
-        summary.expiringSoonDocuments++;
-        summary.byDocumentType[doc.type].expiringSoon++;
-      } else if (doc.status === 'valid') {
-        summary.validDocuments++;
-        summary.byDocumentType[doc.type].valid++;
-      } else {
-        summary.missingDocuments++;
-        summary.byDocumentType[doc.type].missing++;
-      }
-    }
-  }
-  
-  return summary;
-}
-
-// جلب الوثائق المنتهية أو القريبة من الانتهاء
-export async function getExpiringDocuments(daysThreshold: number = 30, branchId?: number) {
-  const employees = await getEmployeesDocumentsDashboard(branchId);
-  
-  const expiringDocuments: Array<{
-    employeeId: number;
-    employeeName: string;
-    employeeCode: string;
-    branchName: string;
-    documentType: string;
-    documentTypeName: string;
-    expiryDate: Date | null;
-    daysRemaining: number | null;
-    status: DocumentStatus;
-    imageUrl: string | null;
-  }> = [];
-  
-  for (const emp of employees) {
-    for (const doc of emp.documents) {
-      if (doc.status === 'expired' || (doc.status === 'expiring_soon' && doc.daysRemaining !== null && doc.daysRemaining <= daysThreshold)) {
-        expiringDocuments.push({
-          employeeId: emp.id,
-          employeeName: emp.name,
-          employeeCode: emp.code,
-          branchName: emp.branchName,
-          documentType: doc.type,
-          documentTypeName: doc.typeName,
-          expiryDate: doc.expiryDate,
-          daysRemaining: doc.daysRemaining,
-          status: doc.status,
-          imageUrl: doc.imageUrl,
-        });
-      }
-    }
-  }
-  
-  // ترتيب حسب الأيام المتبقية (المنتهية أولاً، ثم الأقرب للانتهاء)
-  expiringDocuments.sort((a, b) => {
-    if (a.daysRemaining === null) return 1;
-    if (b.daysRemaining === null) return -1;
-    return a.daysRemaining - b.daysRemaining;
-  });
-  
-  return expiringDocuments;
-}
-
-
-// ==================== دوال الملف الشخصي للمشرف ====================
-
-/**
- * جلب بيانات المشرف الشخصية (لصفحة بياناتي)
- * @param supervisorId معرف المشرف (من جدول employees)
- */
-export async function getSupervisorProfile(supervisorId: number): Promise<{
-  id: number;
-  code: string;
-  name: string;
-  branchId: number;
-  branchName: string;
-  phone: string | null;
-  email: string | null;
-  position: string | null;
-  photoUrl: string | null;
-  // بيانات الإقامة
-  iqamaNumber: string | null;
-  iqamaExpiryDate: Date | null;
-  iqamaImageUrl: string | null;
-  // الشهادة الصحية
-  healthCertExpiryDate: Date | null;
-  healthCertImageUrl: string | null;
-  // عقد العمل
-  contractExpiryDate: Date | null;
-  contractImageUrl: string | null;
-  // رخصة القيادة
-  driverLicenseNumber: string | null;
-  driverLicenseExpiryDate: Date | null;
-  driverLicenseImageUrl: string | null;
-  // جواز السفر
-  passportNumber: string | null;
-  passportExpiryDate: Date | null;
-  passportImageUrl: string | null;
-  // التأمين الصحي
-  insuranceNumber: string | null;
-  insuranceExpiryDate: Date | null;
-  insuranceImageUrl: string | null;
-  // بطاقة العمل
-  workPermitNumber: string | null;
-  workPermitExpiryDate: Date | null;
-  workPermitImageUrl: string | null;
-  // بيانات إضافية
-  nationality: string | null;
-  dateOfBirth: Date | null;
-  hireDate: Date | null;
-  bankName: string | null;
-  bankAccountNumber: string | null;
-  bankIban: string | null;
-  emergencyContactName: string | null;
-  emergencyContactPhone: string | null;
-  address: string | null;
-  isSupervisor: boolean;
-} | null> {
-  const db = await getDb();
-  if (!db) return null;
-
-  try {
-    const emp = await db
-      .select()
-      .from(employees)
-      .where(and(eq(employees.id, supervisorId), eq(employees.isSupervisor, true)))
-      .limit(1);
-
-    if (emp.length === 0) {
-      return null;
-    }
-
-    const employee = emp[0];
-
-    // جلب اسم الفرع
-    const branch = await db
-      .select({ name: branches.name })
-      .from(branches)
-      .where(eq(branches.id, employee.branchId))
-      .limit(1);
-
-    return {
-      id: employee.id,
-      code: employee.code,
-      name: employee.name,
-      branchId: employee.branchId,
-      branchName: branch.length > 0 ? branch[0].name : 'غير محدد',
-      phone: employee.phone,
-      email: employee.email,
-      position: employee.position,
-      photoUrl: employee.photoUrl,
-      // بيانات الإقامة
-      iqamaNumber: employee.iqamaNumber,
-      iqamaExpiryDate: employee.iqamaExpiryDate,
-      iqamaImageUrl: employee.iqamaImageUrl,
-      // الشهادة الصحية
-      healthCertExpiryDate: employee.healthCertExpiryDate,
-      healthCertImageUrl: employee.healthCertImageUrl,
-      // عقد العمل
-      contractExpiryDate: employee.contractExpiryDate,
-      contractImageUrl: employee.contractImageUrl,
-      // رخصة القيادة
-      driverLicenseNumber: employee.driverLicenseNumber,
-      driverLicenseExpiryDate: employee.driverLicenseExpiryDate,
-      driverLicenseImageUrl: employee.driverLicenseImageUrl,
-      // جواز السفر
-      passportNumber: employee.passportNumber,
-      passportExpiryDate: employee.passportExpiryDate,
-      passportImageUrl: employee.passportImageUrl,
-      // التأمين الصحي
-      insuranceNumber: employee.insuranceNumber,
-      insuranceExpiryDate: employee.insuranceExpiryDate,
-      insuranceImageUrl: employee.insuranceImageUrl,
-      // بطاقة العمل
-      workPermitNumber: employee.workPermitNumber,
-      workPermitExpiryDate: employee.workPermitExpiryDate,
-      workPermitImageUrl: employee.workPermitImageUrl,
-      // بيانات إضافية
-      nationality: employee.nationality,
-      dateOfBirth: employee.dateOfBirth,
-      hireDate: employee.hireDate,
-      bankName: employee.bankName,
-      bankAccountNumber: employee.bankAccountNumber,
-      bankIban: employee.bankIban,
-      emergencyContactName: employee.emergencyContactName,
-      emergencyContactPhone: employee.emergencyContactPhone,
-      address: employee.address,
-      isSupervisor: employee.isSupervisor,
-    };
-  } catch (error) {
-    console.error('Error getting supervisor profile:', error);
-    return null;
-  }
-}
-
-/**
- * تحديث بيانات المشرف الشخصية
- * @param supervisorId معرف المشرف
- * @param data البيانات المراد تحديثها
- */
-export async function updateSupervisorProfile(
-  supervisorId: number,
-  data: {
-    phone?: string;
-    email?: string;
-    // بيانات الإقامة
-    iqamaNumber?: string;
-    iqamaExpiryDate?: Date | null;
-    iqamaImageUrl?: string;
-    // الشهادة الصحية
-    healthCertExpiryDate?: Date | null;
-    healthCertImageUrl?: string;
-    // عقد العمل
-    contractExpiryDate?: Date | null;
-    contractImageUrl?: string;
-    // رخصة القيادة
-    driverLicenseNumber?: string;
-    driverLicenseExpiryDate?: Date | null;
-    driverLicenseImageUrl?: string;
-    // جواز السفر
-    passportNumber?: string;
-    passportExpiryDate?: Date | null;
-    passportImageUrl?: string;
-    // التأمين الصحي
-    insuranceNumber?: string;
-    insuranceExpiryDate?: Date | null;
-    insuranceImageUrl?: string;
-    // بطاقة العمل
-    workPermitNumber?: string;
-    workPermitExpiryDate?: Date | null;
-    workPermitImageUrl?: string;
-    // بيانات إضافية
-    nationality?: string;
-    dateOfBirth?: Date | null;
-    bankName?: string;
-    bankAccountNumber?: string;
-    bankIban?: string;
-    emergencyContactName?: string;
-    emergencyContactPhone?: string;
-    address?: string;
-  }
-): Promise<{ success: boolean; error?: string }> {
-  const db = await getDb();
-  if (!db) return { success: false, error: 'قاعدة البيانات غير متاحة' };
-
-  try {
-    // التحقق من أن المستخدم مشرف
-    const emp = await db
-      .select({ id: employees.id, isSupervisor: employees.isSupervisor })
-      .from(employees)
-      .where(eq(employees.id, supervisorId))
-      .limit(1);
-
-    if (emp.length === 0) {
-      return { success: false, error: 'الموظف غير موجود' };
-    }
-
-    if (!emp[0].isSupervisor) {
-      return { success: false, error: 'غير مصرح لك بتعديل البيانات' };
-    }
-
-    // تحديث البيانات
-    await db
-      .update(employees)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(eq(employees.id, supervisorId));
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating supervisor profile:', error);
-    return { success: false, error: 'فشل في تحديث البيانات' };
-  }
-}
-
-/**
- * جلب الموظفين ذوي الوثائق المنتهية أو قريبة الانتهاء لفرع معين (للمشرف)
- * @param branchId معرف الفرع
- * @param daysThreshold عدد الأيام للتنبيه (افتراضي 30)
- */
-export async function getExpiringDocumentsForBranch(
-  branchId: number,
-  daysThreshold: number = 30
-): Promise<Array<{
-  employeeId: number;
-  employeeName: string;
-  employeeCode: string;
-  documentType: string;
-  documentTypeName: string;
-  expiryDate: Date | null;
-  daysRemaining: number | null;
-  status: 'expired' | 'expiring_soon';
-}>> {
-  const db = await getDb();
-  if (!db) return [];
-
-  try {
-    const today = new Date();
-    const thresholdDate = new Date();
-    thresholdDate.setDate(thresholdDate.getDate() + daysThreshold);
-
-    // جلب موظفي الفرع النشطين
-    const emps = await db
-      .select()
-      .from(employees)
-      .where(and(eq(employees.branchId, branchId), eq(employees.isActive, true)));
-
-    const results: Array<{
-      employeeId: number;
-      employeeName: string;
-      employeeCode: string;
-      documentType: string;
-      documentTypeName: string;
-      expiryDate: Date | null;
-      daysRemaining: number | null;
-      status: 'expired' | 'expiring_soon';
-    }> = [];
-
-    const documentTypes = [
-      { field: 'iqamaExpiryDate', type: 'iqama', name: 'الإقامة' },
-      { field: 'healthCertExpiryDate', type: 'healthCert', name: 'الشهادة الصحية' },
-      { field: 'contractExpiryDate', type: 'contract', name: 'عقد العمل' },
-      { field: 'driverLicenseExpiryDate', type: 'driverLicense', name: 'رخصة القيادة' },
-      { field: 'passportExpiryDate', type: 'passport', name: 'جواز السفر' },
-      { field: 'insuranceExpiryDate', type: 'insurance', name: 'التأمين الصحي' },
-      { field: 'workPermitExpiryDate', type: 'workPermit', name: 'بطاقة العمل' },
-    ];
-
-    for (const emp of emps) {
-      for (const docType of documentTypes) {
-        const expiryDate = (emp as any)[docType.field] as Date | null;
-        if (expiryDate) {
-          const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-          
-          if (daysRemaining <= 0) {
-            // منتهية
-            results.push({
-              employeeId: emp.id,
-              employeeName: emp.name,
-              employeeCode: emp.code,
-              documentType: docType.type,
-              documentTypeName: docType.name,
-              expiryDate,
-              daysRemaining,
-              status: 'expired',
-            });
-          } else if (daysRemaining <= daysThreshold) {
-            // قريبة الانتهاء
-            results.push({
-              employeeId: emp.id,
-              employeeName: emp.name,
-              employeeCode: emp.code,
-              documentType: docType.type,
-              documentTypeName: docType.name,
-              expiryDate,
-              daysRemaining,
-              status: 'expiring_soon',
-            });
-          }
-        }
-      }
-    }
-
-    // ترتيب حسب الأيام المتبقية
-    results.sort((a, b) => {
-      if (a.daysRemaining === null) return 1;
-      if (b.daysRemaining === null) return -1;
-      return a.daysRemaining - b.daysRemaining;
-    });
-
-    return results;
-  } catch (error) {
-    console.error('Error getting expiring documents for branch:', error);
-    return [];
-  }
-}
-
-/**
- * جلب المشرفين النشطين مع بيانات فروعهم (لإرسال الإشعارات)
- */
-export async function getActiveSupervisors(): Promise<Array<{
-  id: number;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  branchId: number;
-  branchName: string;
-}>> {
-  const db = await getDb();
-  if (!db) return [];
-
-  try {
-    const supervisors = await db
-      .select({
-        id: employees.id,
-        name: employees.name,
-        email: employees.email,
-        phone: employees.phone,
-        branchId: employees.branchId,
-      })
-      .from(employees)
-      .where(and(eq(employees.isSupervisor, true), eq(employees.isActive, true)));
-
-    // جلب أسماء الفروع
-    const branchList = await db.select().from(branches);
-    const branchMap = new Map(branchList.map((b: { id: number; name: string }) => [b.id, b.name]));
-
-    return supervisors.map((sup: typeof supervisors[0]) => ({
-      ...sup,
-      branchName: branchMap.get(sup.branchId) || 'غير محدد',
-    }));
-  } catch (error) {
-    console.error('Error getting active supervisors:', error);
-    return [];
   }
 }
