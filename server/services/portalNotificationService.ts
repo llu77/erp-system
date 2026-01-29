@@ -6,6 +6,7 @@
 import { getDb } from "../db";
 import { portalNotifications, PortalNotification } from "../../drizzle/schema";
 import { eq, and, desc, isNull, or, lte, sql } from "drizzle-orm";
+import { sendNotificationEmail } from "./portalEmailService";
 
 // ==================== Types ====================
 
@@ -74,7 +75,25 @@ export async function createNotification(input: CreateNotificationInput): Promis
     isRead: false,
   });
 
-  return (result[0] as any)?.insertId || 0;
+  const notificationId = (result[0] as any)?.insertId || 0;
+
+  // إرسال بريد إلكتروني للإشعارات العاجلة والمهمة
+  if (notificationId > 0) {
+    sendNotificationEmail({
+      employeeId: input.employeeId,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      priority: input.priority || "normal",
+      actionUrl: input.actionUrl,
+      actionLabel: input.actionLabel,
+      metadata: input.metadata,
+    }).catch((err) => {
+      console.error("[PortalNotification] Failed to send email:", err);
+    });
+  }
+
+  return notificationId;
 }
 
 /**

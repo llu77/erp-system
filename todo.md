@@ -3772,3 +3772,28 @@ node scripts/scheduledTasks.mjs weekly-report
 ### 5. الاختبارات
 - [x] إنشاء pushNotifications.test.ts (26 اختبار)
 - [x] جميع الاختبارات ناجحة (811 اختبار إجمالي)
+
+
+## إشعارات البريد الإلكتروني للموظفين - 30 يناير 2026
+
+### 1. خدمة البريد الإلكتروني
+- [x] إنشاء portalEmailService.ts
+- [x] دمج مع Resend API
+- [x] دعم الإشعارات العاجلة والعادية (تحديد تلقائي حسب الأولوية والنوع)
+
+### 2. قوالب البريد
+- [x] قالب إشعار عام (عربي RTL مع خط Cairo)
+- [x] قالب موافقة/رفض طلب (sendRequestApprovedEmail, sendRequestRejectedEmail)
+- [x] قالب انتهاء وثيقة (sendDocumentExpiringEmail, sendDocumentExpiredEmail)
+- [x] قالب راتب جاهز (sendSalaryReadyEmail)
+- [x] قالب مكافأة (sendBonusApprovedEmail)
+- [x] تصميم متجاوب للموبايل
+
+### 3. الربط التلقائي
+- [x] ربط createNotification بإرسال البريد تلقائياً
+- [x] إرسال بريد للإشعارات urgent و high
+- [x] إرسال بريد لأنواع مهمة (موافقة/رفض/وثائق/راتب/مكافأة)
+
+### 4. الاختبارات
+- [x] إنشاء portalEmailService.test.ts (39 اختبار)
+- [x] جميع الاختبارات ناجحة (850 اختبار إجمالي)
