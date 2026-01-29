@@ -163,11 +163,16 @@ export async function employeeLogin(username: string, password: string): Promise
     }
 
     // إذا لم يُوجد في جدول الموظفين، ابحث في جدول المستخدمين (للمشرفين والأدمن)
+    // البحث case-insensitive للمرونة
     const user = await db
       .select()
       .from(users)
       .where(and(
-        eq(users.username, username),
+        or(
+          eq(users.username, username),
+          eq(users.username, username.toLowerCase()),
+          eq(users.username, username.charAt(0).toUpperCase() + username.slice(1).toLowerCase())
+        ),
         eq(users.isActive, true)
       ))
       .limit(1);
