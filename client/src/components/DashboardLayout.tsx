@@ -600,18 +600,18 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset className="flex-1">
-        <header className="flex h-14 items-center justify-between border-b px-4 sticky top-0 z-40 header-glass">
-          <div className="flex items-center gap-3">
-            {isMobile && <SidebarTrigger className="h-9 w-9 rounded-lg" />}
-            <h1 className="font-semibold text-lg">
+        <header className={`flex items-center justify-between border-b sticky top-0 z-40 header-glass ${isMobile ? 'h-12 px-2' : 'h-14 px-4'}`}>
+          <div className={`flex items-center ${isMobile ? 'gap-2' : 'gap-3'}`}>
+            {isMobile && <SidebarTrigger className="h-8 w-8 rounded-lg" />}
+            <h1 className={`font-semibold ${isMobile ? 'text-sm' : 'text-lg'}`}>
               {activeMenuItem?.label ?? "لوحة التحكم"}
             </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-2'}`}>
             <NotificationBell />
           </div>
         </header>
-        <main className={`flex-1 ${isMobile ? 'p-3' : 'p-4 md:p-6'}`}>{children}</main>
+        <main className={`flex-1 ${isMobile ? 'p-2' : 'p-4 md:p-6'}`}>{children}</main>
         <ScrollToTop />
       </SidebarInset>
     </div>

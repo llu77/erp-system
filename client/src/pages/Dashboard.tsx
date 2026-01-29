@@ -152,20 +152,20 @@ export default function Dashboard() {
             key={index} 
             className="stat-card-enhanced shadow-glow shadow-glow-hover border-0 bg-card/80 backdrop-blur-sm"
           >
-            <CardContent className="p-4 relative">
+            <CardContent className={`relative ${isMobile ? 'p-3' : 'p-4'}`}>
               <div className="flex items-center justify-between">
-                <div className={`p-2.5 rounded-xl ${stat.bgColor} shadow-sm`}>
-                  <stat.icon className={`h-5 w-5 ${stat.color}`} />
+                <div className={`${isMobile ? 'p-1.5' : 'p-2.5'} rounded-xl ${stat.bgColor} shadow-sm`}>
+                  <stat.icon className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} ${stat.color}`} />
                 </div>
                 {stat.subValue && (
-                  <Badge variant="secondary" className="text-xs font-normal">
+                  <Badge variant="secondary" className={`font-normal ${isMobile ? 'text-[10px] px-1.5 py-0.5' : 'text-xs'}`}>
                     {stat.subValue}
                   </Badge>
                 )}
               </div>
-              <div className="mt-4">
-                <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
-                <p className="text-sm text-muted-foreground mt-1">{stat.title}</p>
+              <div className={isMobile ? 'mt-2' : 'mt-4'}>
+                <p className={`font-bold tracking-tight ${isMobile ? 'text-lg' : 'text-2xl'}`}>{stat.value}</p>
+                <p className={`text-muted-foreground mt-0.5 ${isMobile ? 'text-xs' : 'text-sm'}`}>{stat.title}</p>
               </div>
             </CardContent>
           </Card>
@@ -235,41 +235,41 @@ export default function Dashboard() {
       {/* Low Stock Alert - تصميم محسن */}
       {lowStockProducts && lowStockProducts.length > 0 && (
         <Card className="border-0 shadow-glow overflow-hidden">
-          <div className="gradient-warning p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                  <AlertTriangle className="h-5 w-5 text-white" />
+          <div className={`gradient-warning ${isMobile ? 'p-3' : 'p-4'}`}>
+            <div className={`flex items-center justify-between ${isMobile ? 'flex-col gap-2' : ''}`}>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-white/20 rounded-lg backdrop-blur-sm`}>
+                  <AlertTriangle className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-white`} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">
+                  <h3 className={`font-bold text-white ${isMobile ? 'text-sm' : 'text-lg'}`}>
                     تنبيه نفاد المخزون
                   </h3>
-                  <p className="text-white/80 text-sm">
+                  <p className={`text-white/80 ${isMobile ? 'text-xs' : 'text-sm'}`}>
                     {lowStockProducts.length} منتج وصل للحد الأدنى من المخزون
                   </p>
                 </div>
               </div>
               <Link href="/products">
-                <Button variant="secondary" size="sm" className="bg-white/20 hover:bg-white/30 text-white border-0">
+                <Button variant="secondary" size="sm" className={`bg-white/20 hover:bg-white/30 text-white border-0 ${isMobile ? 'text-xs px-2 py-1' : ''}`}>
                   عرض الكل
-                  <ArrowUpRight className="h-4 w-4 mr-1" />
+                  <ArrowUpRight className={`${isMobile ? 'h-3 w-3' : 'h-4 w-4'} mr-1`} />
                 </Button>
               </Link>
             </div>
           </div>
-          <CardContent className="p-4 bg-card">
-            <div className={`grid gap-3 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'}`}>
+          <CardContent className={`bg-card ${isMobile ? 'p-3' : 'p-4'}`}>
+            <div className={`grid ${isMobile ? 'gap-2 grid-cols-2' : 'gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'}`}>
               {lowStockProducts.slice(0, isMobile ? 4 : 5).map((product) => (
                 <div
                   key={product.id}
-                  className="flex items-center justify-between p-3 bg-muted/50 rounded-xl border border-border/50 hover:border-orange-300 transition-colors"
+                  className={`flex items-center justify-between bg-muted/50 rounded-xl border border-border/50 hover:border-orange-300 transition-colors ${isMobile ? 'p-2 flex-col gap-1' : 'p-3'}`}
                 >
-                  <div className="min-w-0">
-                    <p className="font-medium truncate text-sm">{product.name}</p>
-                    <p className="text-xs text-muted-foreground">{product.sku}</p>
+                  <div className="min-w-0 w-full">
+                    <p className={`font-medium truncate ${isMobile ? 'text-xs' : 'text-sm'}`}>{product.name}</p>
+                    <p className={`text-muted-foreground ${isMobile ? 'text-[10px]' : 'text-xs'}`}>{product.sku}</p>
                   </div>
-                  <Badge variant="destructive" className="shrink-0 mr-2 rounded-full">
+                  <Badge variant="destructive" className={`shrink-0 rounded-full ${isMobile ? 'text-[10px] px-1.5 py-0.5 self-start' : 'mr-2'}`}>
                     {product.quantity} قطعة
                   </Badge>
                 </div>
@@ -283,47 +283,47 @@ export default function Dashboard() {
       <div className={`grid gap-4 sm:gap-6 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
         {/* Recent Invoices */}
         <Card className="shadow-glow border-0">
-          <CardHeader className="pb-3">
+          <CardHeader className={isMobile ? 'pb-2 px-3' : 'pb-3'}>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
-                  <FileText className="h-5 w-5 text-emerald-600" />
+              <div className={`flex items-center ${isMobile ? 'gap-2' : 'gap-3'}`}>
+                <div className={`${isMobile ? 'p-1.5' : 'p-2'} rounded-xl bg-emerald-100 dark:bg-emerald-900/30`}>
+                  <FileText className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-emerald-600`} />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">آخر الفواتير</CardTitle>
-                  <p className="text-xs text-muted-foreground">أحدث المعاملات</p>
+                  <CardTitle className={isMobile ? 'text-sm' : 'text-lg'}>آخر الفواتير</CardTitle>
+                  <p className={`text-muted-foreground ${isMobile ? 'text-[10px]' : 'text-xs'}`}>أحدث المعاملات</p>
                 </div>
               </div>
-              <Badge variant="secondary" className="rounded-full">
+              <Badge variant="secondary" className={`rounded-full ${isMobile ? 'text-[10px] px-1.5' : ''}`}>
                 {stats?.recentInvoices?.length || 0}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[280px] scrollbar-thin">
+          <CardContent className={isMobile ? 'px-3 pb-3' : ''}>
+            <ScrollArea className={`scrollbar-thin ${isMobile ? 'h-[200px]' : 'h-[280px]'}`}>
               {stats?.recentInvoices && stats.recentInvoices.length > 0 ? (
-                <div className="space-y-2">
+                <div className={isMobile ? 'space-y-1.5' : 'space-y-2'}>
                   {stats.recentInvoices.map((invoice, idx) => (
                     <div
                       key={invoice.id}
-                      className="flex items-center justify-between p-3 bg-muted/30 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50"
+                      className={`flex items-center justify-between bg-muted/30 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50 ${isMobile ? 'p-2' : 'p-3'}`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-xs font-bold text-emerald-600">
+                      <div className={`flex items-center min-w-0 ${isMobile ? 'gap-2' : 'gap-3'}`}>
+                        <div className={`rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center font-bold text-emerald-600 ${isMobile ? 'w-6 h-6 text-[10px]' : 'w-8 h-8 text-xs'}`}>
                           {idx + 1}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-sm">{invoice.invoiceNumber}</p>
-                          <p className="text-xs text-muted-foreground truncate">
+                          <p className={`font-medium ${isMobile ? 'text-xs' : 'text-sm'}`}>{invoice.invoiceNumber}</p>
+                          <p className={`text-muted-foreground truncate ${isMobile ? 'text-[10px] max-w-[80px]' : 'text-xs'}`}>
                             {invoice.customerName || "عميل نقدي"}
                           </p>
                         </div>
                       </div>
-                      <div className="text-left shrink-0 mr-3">
-                        <p className="font-semibold text-emerald-600 text-sm">
+                      <div className={`text-left shrink-0 ${isMobile ? 'mr-1' : 'mr-3'}`}>
+                        <p className={`font-semibold text-emerald-600 ${isMobile ? 'text-xs' : 'text-sm'}`}>
                           {formatCurrency(parseFloat(invoice.total))}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className={`text-muted-foreground ${isMobile ? 'text-[10px]' : 'text-xs'}`}>
                           {formatDate(invoice.invoiceDate)}
                         </p>
                       </div>
@@ -331,9 +331,9 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground empty-state p-8">
-                  <FileText className="h-12 w-12 mb-3 opacity-50" />
-                  <p>لا توجد فواتير حديثة</p>
+                <div className={`flex flex-col items-center justify-center h-full text-muted-foreground empty-state ${isMobile ? 'p-4' : 'p-8'}`}>
+                  <FileText className={`mb-3 opacity-50 ${isMobile ? 'h-8 w-8' : 'h-12 w-12'}`} />
+                  <p className={isMobile ? 'text-sm' : ''}>لا توجد فواتير حديثة</p>
                 </div>
               )}
             </ScrollArea>
@@ -342,44 +342,44 @@ export default function Dashboard() {
 
         {/* Recent Purchase Orders - تصميم محسن */}
         <Card className="shadow-glow border-0">
-          <CardHeader className="pb-3">
+          <CardHeader className={isMobile ? 'pb-2 px-3' : 'pb-3'}>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-orange-100 dark:bg-orange-900/30">
-                  <ShoppingCart className="h-5 w-5 text-orange-600" />
+              <div className={`flex items-center ${isMobile ? 'gap-2' : 'gap-3'}`}>
+                <div className={`${isMobile ? 'p-1.5' : 'p-2'} rounded-xl bg-orange-100 dark:bg-orange-900/30`}>
+                  <ShoppingCart className={`${isMobile ? 'h-4 w-4' : 'h-5 w-5'} text-orange-600`} />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">آخر أوامر الشراء</CardTitle>
-                  <p className="text-xs text-muted-foreground">طلبات المشتريات</p>
+                  <CardTitle className={isMobile ? 'text-sm' : 'text-lg'}>آخر أوامر الشراء</CardTitle>
+                  <p className={`text-muted-foreground ${isMobile ? 'text-[10px]' : 'text-xs'}`}>طلبات المشتريات</p>
                 </div>
               </div>
-              <Badge variant="secondary" className="rounded-full">
+              <Badge variant="secondary" className={`rounded-full ${isMobile ? 'text-[10px] px-1.5' : ''}`}>
                 {stats?.recentPurchases?.length || 0}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[280px] scrollbar-thin">
+          <CardContent className={isMobile ? 'px-3 pb-3' : ''}>
+            <ScrollArea className={`scrollbar-thin ${isMobile ? 'h-[200px]' : 'h-[280px]'}`}>
               {stats?.recentPurchases && stats.recentPurchases.length > 0 ? (
-                <div className="space-y-2">
+                <div className={isMobile ? 'space-y-1.5' : 'space-y-2'}>
                   {stats.recentPurchases.map((order, idx) => (
                     <div
                       key={order.id}
-                      className="flex items-center justify-between p-3 bg-muted/30 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50"
+                      className={`flex items-center justify-between bg-muted/30 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50 ${isMobile ? 'p-2' : 'p-3'}`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-xs font-bold text-orange-600">
+                      <div className={`flex items-center min-w-0 ${isMobile ? 'gap-2' : 'gap-3'}`}>
+                        <div className={`rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center font-bold text-orange-600 ${isMobile ? 'w-6 h-6 text-[10px]' : 'w-8 h-8 text-xs'}`}>
                           {idx + 1}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-sm">{order.orderNumber}</p>
-                          <p className="text-xs text-muted-foreground truncate">
+                          <p className={`font-medium ${isMobile ? 'text-xs' : 'text-sm'}`}>{order.orderNumber}</p>
+                          <p className={`text-muted-foreground truncate ${isMobile ? 'text-[10px] max-w-[80px]' : 'text-xs'}`}>
                             {order.supplierName || "مورد غير محدد"}
                           </p>
                         </div>
                       </div>
-                      <div className="text-left shrink-0 mr-3">
-                        <p className="font-semibold text-orange-600 text-sm">
+                      <div className={`text-left shrink-0 ${isMobile ? 'mr-1' : 'mr-3'}`}>
+                        <p className={`font-semibold text-orange-600 ${isMobile ? 'text-xs' : 'text-sm'}`}>
                           {formatCurrency(parseFloat(order.total))}
                         </p>
                         <Badge
@@ -390,7 +390,7 @@ export default function Dashboard() {
                               ? "secondary"
                               : "outline"
                           }
-                          className="text-xs rounded-full"
+                          className={`rounded-full ${isMobile ? 'text-[10px] px-1.5 py-0' : 'text-xs'}`}
                         >
                           {order.status === "received"
                             ? "مستلم"
@@ -405,9 +405,9 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground empty-state p-8">
-                  <ShoppingCart className="h-12 w-12 mb-3 opacity-50" />
-                  <p>لا توجد أوامر شراء حديثة</p>
+                <div className={`flex flex-col items-center justify-center h-full text-muted-foreground empty-state ${isMobile ? 'p-4' : 'p-8'}`}>
+                  <ShoppingCart className={`mb-3 opacity-50 ${isMobile ? 'h-8 w-8' : 'h-12 w-12'}`} />
+                  <p className={isMobile ? 'text-sm' : ''}>لا توجد أوامر شراء حديثة</p>
                 </div>
               )}
             </ScrollArea>
