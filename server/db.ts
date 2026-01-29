@@ -10299,10 +10299,12 @@ export async function getDocumentStatistics() {
 // ==================== دوال لوحة تحكم الأدمن في بوابة الموظفين ====================
 
 // التحقق من صلاحيات الأدمن في بوابة الموظفين
+// يبحث في جدول users أولاً، ثم في جدول employees للمشرفين
 export async function checkPortalAdminAccess(userId: number): Promise<{
   isAdmin: boolean;
   adminName?: string;
   adminRole?: string;
+  branchId?: number;
 }> {
   const db = await getDb();
   if (!db) {
@@ -10310,7 +10312,7 @@ export async function checkPortalAdminAccess(userId: number): Promise<{
   }
 
   try {
-    // البحث في جدول المستخدمين
+    // البحث في جدول المستخدمين أولاً
     const user = await db
       .select({
         id: users.id,
@@ -10327,6 +10329,28 @@ export async function checkPortalAdminAccess(userId: number): Promise<{
         isAdmin: true,
         adminName: user[0].name || user[0].username || 'Admin',
         adminRole: user[0].role,
+      };
+    }
+
+    // إذا لم يوجد في users، نبحث في employees (للمشرفين الذين يسجلون من بوابة الموظفين)
+    const employee = await db
+      .select({
+        id: employees.id,
+        name: employees.name,
+        username: employees.username,
+        isSupervisor: employees.isSupervisor,
+        branchId: employees.branchId,
+      })
+      .from(employees)
+      .where(eq(employees.id, userId))
+      .limit(1);
+
+    if (employee.length > 0 && employee[0].isSupervisor) {
+      return {
+        isAdmin: true,
+        adminName: employee[0].name || employee[0].username || 'Supervisor',
+        adminRole: 'supervisor',
+        branchId: employee[0].branchId,
       };
     }
 
