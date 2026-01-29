@@ -10067,7 +10067,7 @@ export async function hasEmployeeSubmittedInfo(employeeId: number) {
   return result.length > 0 && result[0].infoSubmittedAt !== null;
 }
 
-// تسجيل معلومات الموظف (لمرة واحدة فقط من الموظف)
+// تسجيل أو تحديث معلومات الموظف (مسموح للموظف بتعديل بياناته)
 export async function submitEmployeeInfo(
   employeeId: number,
   data: {
@@ -10080,11 +10080,8 @@ export async function submitEmployeeInfo(
   const db = await getDb();
   if (!db) return { success: false, error: 'خطأ في الاتصال بقاعدة البيانات' };
   
-  // التحقق من أن الموظف لم يسجل معلوماته من قبل
+  // التحقق من أن الموظف سجل معلوماته من قبل
   const hasSubmitted = await hasEmployeeSubmittedInfo(employeeId);
-  if (hasSubmitted) {
-    return { success: false, error: 'تم تسجيل المعلومات مسبقاً. يرجى التواصل مع الإدارة للتعديل.' };
-  }
   
   await db.update(employees)
     .set({
@@ -10092,13 +10089,14 @@ export async function submitEmployeeInfo(
       iqamaExpiryDate: data.iqamaExpiryDate,
       healthCertExpiryDate: data.healthCertExpiryDate,
       contractExpiryDate: data.contractExpiryDate,
-      infoSubmittedAt: new Date(),
+      // إذا كانت أول مرة، سجل تاريخ التسجيل
+      ...(!hasSubmitted ? { infoSubmittedAt: new Date() } : {}),
       infoSubmittedBy: null, // null يعني الموظف نفسه
       updatedAt: new Date(),
     })
     .where(eq(employees.id, employeeId));
   
-  return { success: true };
+  return { success: true, isUpdate: hasSubmitted };
 }
 
 // تحديث معلومات الموظف من الأدمن فقط

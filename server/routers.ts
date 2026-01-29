@@ -8010,17 +8010,23 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       .input(z.object({
         employeeId: z.number(),
         iqamaNumber: z.string().optional(),
-        iqamaExpiryDate: z.date().optional(),
-        healthCertExpiryDate: z.date().optional(),
-        contractExpiryDate: z.date().optional(),
+        iqamaExpiryDate: z.union([z.date(), z.string()]).optional(),
+        healthCertExpiryDate: z.union([z.date(), z.string()]).optional(),
+        contractExpiryDate: z.union([z.date(), z.string()]).optional(),
       }))
       .mutation(async ({ input }) => {
-        const { employeeId, ...data } = input;
+        const { employeeId, iqamaExpiryDate, healthCertExpiryDate, contractExpiryDate, ...rest } = input;
+        const data = {
+          ...rest,
+          iqamaExpiryDate: iqamaExpiryDate ? new Date(iqamaExpiryDate) : undefined,
+          healthCertExpiryDate: healthCertExpiryDate ? new Date(healthCertExpiryDate) : undefined,
+          contractExpiryDate: contractExpiryDate ? new Date(contractExpiryDate) : undefined,
+        };
         const result = await db.submitEmployeeInfo(employeeId, data);
         if (!result.success) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في تسجيل المعلومات' });
         }
-        return { success: true, message: 'تم تسجيل المعلومات بنجاح' };
+        return { success: true, message: result.isUpdate ? 'تم تحديث المعلومات بنجاح' : 'تم تسجيل المعلومات بنجاح', isUpdate: result.isUpdate };
       }),
 
     // رفع صورة وثيقة

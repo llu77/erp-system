@@ -65,9 +65,13 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
   );
 
   // تسجيل المعلومات
+  // حالة وضع التعديل
+  const [isEditing, setIsEditing] = useState(false);
+  
   const submitMutation = trpc.employeePortal.submitInfo.useMutation({
-    onSuccess: () => {
-      toast.success('تم تسجيل المعلومات بنجاح');
+    onSuccess: (data) => {
+      toast.success(data.isUpdate ? 'تم تحديث المعلومات بنجاح' : 'تم تسجيل المعلومات بنجاح');
+      setIsEditing(false);
       refetch();
       onSuccess?.();
     },
@@ -352,8 +356,8 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
     );
   }
 
-  // إذا كان الموظف قد سجل معلوماته، عرضها للقراءة فقط
-  if (submissionStatus?.hasSubmitted && documentInfo) {
+  // إذا كان الموظف قد سجل معلوماته، عرضها مع إمكانية التعديل
+  if (submissionStatus?.hasSubmitted && documentInfo && !isEditing) {
     const iqamaStatus = getExpiryStatus(documentInfo.iqamaExpiryDate);
     const healthStatus = getExpiryStatus(documentInfo.healthCertExpiryDate);
     const contractStatus = getExpiryStatus(documentInfo.contractExpiryDate);
@@ -379,12 +383,21 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
             </div>
           </CardHeader>
           <CardContent className="p-6">
-            <Alert className="mb-6 bg-slate-700/50 border-slate-600">
-              <Lock className="h-4 w-4 text-slate-400" />
-              <AlertDescription className="text-slate-300">
-                تم تسجيل المعلومات ولا يمكن تعديلها. للتعديل يرجى التواصل مع الإدارة.
-              </AlertDescription>
-            </Alert>
+            <div className="flex items-center justify-between mb-6">
+              <Alert className="flex-1 bg-slate-700/50 border-slate-600">
+                <Info className="h-4 w-4 text-slate-400" />
+                <AlertDescription className="text-slate-300">
+                  يمكنك تعديل بياناتك بالضغط على زر التعديل.
+                </AlertDescription>
+              </Alert>
+              <Button
+                onClick={() => setIsEditing(true)}
+                className="mr-4 bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                <FileText className="h-4 w-4 ml-2" />
+                تعديل البيانات
+              </Button>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* رقم الإقامة */}
@@ -520,24 +533,40 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
     );
   }
 
-  // نموذج تسجيل المعلومات (لمرة واحدة فقط)
+  // نموذج تسجيل أو تعديل المعلومات
+  const isUpdateMode = submissionStatus?.hasSubmitted && isEditing;
+  
   return (
     <>
       <Card className="bg-slate-800/50 border-slate-700">
         <CardHeader className="border-b border-slate-700">
-          <CardTitle className="text-white text-lg flex items-center gap-2">
-            <FileText className="h-5 w-5 text-amber-500" />
-            تسجيل بيانات الإقامة والوثائق
-          </CardTitle>
-          <CardDescription className="text-slate-400">
-            يرجى إدخال بياناتك بدقة. هذه البيانات تُسجّل لمرة واحدة فقط.
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-white text-lg flex items-center gap-2">
+                <FileText className="h-5 w-5 text-amber-500" />
+                {isUpdateMode ? 'تعديل بيانات الإقامة والوثائق' : 'تسجيل بيانات الإقامة والوثائق'}
+              </CardTitle>
+              <CardDescription className="text-slate-400">
+                {isUpdateMode ? 'قم بتعديل بياناتك ثم اضغط حفظ.' : 'يرجى إدخال بياناتك بدقة.'}
+              </CardDescription>
+            </div>
+            {isUpdateMode && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditing(false)}
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              >
+                إلغاء
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-6">
-          <Alert className="mb-6 bg-amber-500/10 border-amber-500/30">
-            <AlertCircle className="h-4 w-4 text-amber-400" />
-            <AlertDescription className="text-amber-300">
-              <strong>تنبيه:</strong> بعد التسجيل لن تتمكن من تعديل هذه البيانات. للتعديل لاحقاً يرجى التواصل مع الإدارة.
+          <Alert className="mb-6 bg-blue-500/10 border-blue-500/30">
+            <Info className="h-4 w-4 text-blue-400" />
+            <AlertDescription className="text-blue-300">
+              {isUpdateMode ? 'قم بتعديل البيانات المطلوبة ثم اضغط حفظ التعديلات.' : 'سيتم إرسال تنبيهات تلقائية قبل انتهاء صلاحية الوثائق.'}
             </AlertDescription>
           </Alert>
 
@@ -643,7 +672,7 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4 ml-2" />
-                  تسجيل المعلومات
+                  {isUpdateMode ? 'حفظ التعديلات' : 'تسجيل المعلومات'}
                 </>
               )}
             </Button>
