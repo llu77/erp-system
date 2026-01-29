@@ -3849,3 +3849,34 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] تحسين header الصفحة على الموبايل (h-12, px-2, خط أصغر)
 - [x] تحسين main padding على الموبايل (p-2)
 - [x] تصغير SidebarTrigger على الموبايل
+
+
+## تحسين النماذج (Forms) للموبايل - 30 يناير 2026
+
+### 1. CSS العام للنماذج
+- [x] تحسين حقول الإدخال (input, select, textarea) للموبايل (font-size: 16px, min-height: 44px)
+- [x] تكبير مناطق اللمس للأزرار (min-height: 44px)
+- [x] تحسين Labels والـ placeholders للموبايل
+- [x] إضافة spacing مناسب بين الحقول
+- [x] تحسين Checkbox و Radio (20x20px)
+- [x] تحسين Switch (48x28px)
+- [x] تحسين DatePicker للموبايل
+- [x] تحسين Tabs للموبايل (scrollable)
+- [x] تحسين Toast/Notifications للموبايل
+- [x] إخفاء Tooltip على أجهزة اللمس
+
+### 2. مكونات النماذج
+- [x] تحسين Button component للموبايل (CSS)
+- [x] تحسين Input component للموبايل (CSS)
+- [x] تحسين Select component للموبايل (CSS)
+
+### 3. Dialogs و Modals
+- [x] تحسين Dialog component للموبايل (max-w-calc, p-4, rounded-xl)
+- [x] تحسين DialogFooter للموبايل (full-width buttons)
+- [x] تحسين Sheet component للموبايل (full-width, rounded-xl)
+- [x] تحسين SheetFooter للموبايل (full-width buttons)
+
+### 4. تخطيط النماذج
+- [x] تحويل grid إلى stack على الموبايل (grid-cols-1)
+- [x] تحسين form actions (أزرار الحفظ/الإلغاء) - flex-col-reverse
+- [x] إضافة فئات مساعدة (form-mobile-stack, actions-mobile-stack)
