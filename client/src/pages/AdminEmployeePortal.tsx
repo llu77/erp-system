@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
+import { EmployeeProfile, EmployeeInfoForm } from '@/components/portal';
 import { 
   Users, 
   FileText, 
@@ -346,6 +347,10 @@ export default function AdminEmployeePortal() {
             <TabsTrigger value="reports" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">التقارير</span>
+            </TabsTrigger>
+            <TabsTrigger value="myProfile" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white gap-2">
+              <UserCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">ملفي</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1094,6 +1099,27 @@ export default function AdminEmployeePortal() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* My Profile Tab - ملفي */}
+          <TabsContent value="myProfile" className="space-y-6">
+            {adminInfo && (
+              <div className="space-y-6">
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <UserCircle className="h-5 w-5 text-amber-500" />
+                      بياناتي الشخصية
+                    </CardTitle>
+                    <CardDescription className="text-slate-400">
+                      يمكنك تعديل بياناتك الشخصية ووثائقك من هنا
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+                <EmployeeProfile employeeId={adminInfo.id} />
+                <EmployeeInfoForm employeeId={adminInfo.id} />
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
