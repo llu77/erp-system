@@ -125,9 +125,15 @@ export default function CashFlowReport() {
   // تصدير PDF
   const exportPDF = trpc.cashFlow.exportPDF.useMutation({
     onSuccess: (data) => {
-      // فتح الملف في نافذة جديدة
-      window.open(data.url, '_blank');
-      toast.success('تم تصدير التقرير بنجاح');
+      // فتح الملف في نافذة جديدة للطباعة
+      const printWindow = window.open(data.url, '_blank', 'width=900,height=700');
+      if (printWindow) {
+        printWindow.focus();
+        toast.success('تم فتح التقرير للطباعة - اضغط Ctrl+P للطباعة');
+      } else {
+        // إذا تم حظر النوافذ المنبثقة، نفتح في نفس النافذة
+        window.location.href = data.url;
+      }
     },
     onError: (error) => {
       toast.error('فشل في تصدير التقرير: ' + error.message);

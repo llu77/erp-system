@@ -8614,12 +8614,52 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           branches: input.branchId ? undefined : branches,
         };
         
-        const pdfBuffer = await generateCashFlowReportPDF(pdfData);
+        // توليد HTML للطباعة
+        const htmlContent = await generateCashFlowReportPDF(pdfData);
         
-        // رفع PDF إلى S3
+        // رفع HTML إلى S3
         const { storagePut } = await import('./storage');
-        const fileName = `cash-flow-report-${input.year}-${String(input.month).padStart(2, '0')}-${Date.now()}.pdf`;
-        const { url } = await storagePut(`reports/${fileName}`, pdfBuffer, 'application/pdf');
+        const fileName = `cash-flow-report-${input.year}-${String(input.month).padStart(2, '0')}-${Date.now()}.html`;
+        const { url } = await storagePut(`reports/${fileName}`, htmlContent, 'text/html; charset=utf-8');
+        
+        return { url, fileName };
+      }),
+    
+    // تصدير تقرير الوثائق PDF
+    exportDocumentsReport: adminProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { generateDocumentReportHTML } = await import('./documentReportService');
+        
+        // جلب بيانات الوثائق
+        const documentsData = await db.getEmployeesWithExpiringDocuments();
+        
+        // تحديد اسم الفرع
+        let branchFilter: string | null = null;
+        if (input.branchId) {
+          const branches = await db.getBranches();
+          const branch = branches.find(b => b.id === input.branchId);
+          branchFilter = branch?.name || null;
+        }
+        
+        const reportData = {
+          generatedAt: new Date(),
+          generatedBy: ctx.user?.name || 'النظام',
+          branchFilter,
+          summary: documentsData.summary,
+          expired: documentsData.expired,
+          expiring: documentsData.expiring,
+        };
+        
+        // توليد HTML للطباعة
+        const htmlContent = generateDocumentReportHTML(reportData);
+        
+        // رفع HTML إلى S3
+        const { storagePut } = await import('./storage');
+        const fileName = `documents-report-${Date.now()}.html`;
+        const { url } = await storagePut(`reports/${fileName}`, htmlContent, 'text/html; charset=utf-8');
         
         return { url, fileName };
       }),

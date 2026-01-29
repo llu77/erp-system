@@ -2,9 +2,8 @@
  * خدمة توليد تقرير التدفق النقدي PDF
  * Symbol AI - نظام إدارة الأعمال
  * قالب احترافي للشركات مع شعار وختم وتوقيعات
+ * يستخدم HTML مباشرة للطباعة من المتصفح
  */
-
-import puppeteer from 'puppeteer';
 
 interface CashFlowPDFData {
   reportTitle: string;
@@ -84,7 +83,10 @@ const formatPercentage = (value: number): string => {
   return `${sign}${value.toFixed(1)}%`;
 };
 
-export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<Buffer> {
+/**
+ * توليد HTML للتقرير - يمكن طباعته مباشرة من المتصفح
+ */
+export function generateCashFlowReportHTML(data: CashFlowPDFData): string {
   const periodLabel = data.periodType === 'monthly' && data.month
     ? `${monthNames[data.month - 1]} ${data.year}`
     : data.periodType === 'quarterly' && data.quarter
@@ -98,7 +100,7 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
   const growthColor = data.kpis.growthRate >= 0 ? '#22c55e' : '#ef4444';
   const growthIcon = data.kpis.growthRate >= 0 ? '↑' : '↓';
 
-  const htmlContent = `
+  return `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -116,9 +118,11 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
     body {
       font-family: 'Tajawal', 'Segoe UI', sans-serif;
       direction: rtl;
-      background: #f8fafc;
-      color: #1e293b;
+      background: #ffffff;
+      color: #000000;
       line-height: 1.6;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     
     .page {
@@ -127,7 +131,6 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
       padding: 15mm;
       margin: 0 auto;
       background: white;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
     
     /* الهيدر الرسمي */
@@ -174,12 +177,12 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
     .report-meta {
       text-align: left;
       font-size: 11px;
-      color: #64748b;
+      color: #000000;
     }
     
     .report-meta .date {
       font-weight: 600;
-      color: #1a1a2e;
+      color: #000000;
     }
     
     /* عنوان التقرير */
@@ -189,9 +192,9 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
     }
     
     .report-title h2 {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 700;
-      color: #1a1a2e;
+      color: #000000;
       margin-bottom: 8px;
     }
     
@@ -209,117 +212,113 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
       display: block;
       margin-top: 10px;
       font-size: 14px;
-      color: #64748b;
+      color: #000000;
     }
     
     /* بطاقات الملخص */
     .summary-cards {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 15px;
-      margin-bottom: 30px;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 25px;
     }
     
     .summary-card {
       background: #f8fafc;
-      border-radius: 12px;
-      padding: 20px;
+      border-radius: 10px;
+      padding: 15px;
       text-align: center;
-      border: 1px solid #e2e8f0;
+      border: 2px solid #e2e8f0;
     }
     
     .summary-card.revenue {
       border-color: #22c55e;
-      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+      background: #f0fdf4;
     }
     
     .summary-card.expenses {
       border-color: #ef4444;
-      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+      background: #fef2f2;
     }
     
     .summary-card.vouchers {
       border-color: #f97316;
-      background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+      background: #fff7ed;
     }
     
     .summary-card.advances {
       border-color: #a855f7;
-      background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+      background: #faf5ff;
     }
     
     .summary-card.remaining {
       border-color: ${isPositive ? '#3b82f6' : '#ef4444'};
-      background: ${isPositive ? 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)' : 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'};
+      background: ${isPositive ? '#eff6ff' : '#fef2f2'};
     }
     
     .summary-card .label {
-      font-size: 12px;
-      color: #64748b;
-      margin-bottom: 8px;
+      font-size: 11px;
+      color: #000000;
+      margin-bottom: 6px;
+      font-weight: 600;
     }
     
     .summary-card .value {
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 700;
+      color: #000000;
     }
     
-    .summary-card.revenue .value { color: #22c55e; }
-    .summary-card.expenses .value { color: #ef4444; }
-    .summary-card.vouchers .value { color: #f97316; }
-    .summary-card.advances .value { color: #a855f7; }
-    .summary-card.remaining .value { color: ${isPositive ? '#3b82f6' : '#ef4444'}; }
+    .summary-card.revenue .value { color: #16a34a; }
+    .summary-card.expenses .value { color: #dc2626; }
+    .summary-card.vouchers .value { color: #ea580c; }
+    .summary-card.advances .value { color: #9333ea; }
+    .summary-card.remaining .value { color: ${isPositive ? '#2563eb' : '#dc2626'}; }
     
     .summary-card .sub {
-      font-size: 11px;
-      color: #94a3b8;
-      margin-top: 5px;
+      font-size: 9px;
+      color: #64748b;
+      margin-top: 4px;
     }
     
     /* مؤشرات الأداء */
     .kpi-section {
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      border-radius: 16px;
-      padding: 25px;
-      margin-bottom: 30px;
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 25px;
       color: white;
     }
     
     .kpi-section h3 {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 600;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .kpi-section h3::before {
-      content: '📊';
+      margin-bottom: 15px;
     }
     
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
+      gap: 15px;
     }
     
     .kpi-item {
       text-align: center;
-      padding: 15px;
+      padding: 12px;
       background: rgba(255,255,255,0.1);
-      border-radius: 12px;
+      border-radius: 8px;
     }
     
     .kpi-item .label {
-      font-size: 11px;
-      color: rgba(255,255,255,0.7);
-      margin-bottom: 8px;
+      font-size: 10px;
+      color: rgba(255,255,255,0.8);
+      margin-bottom: 6px;
     }
     
     .kpi-item .value {
-      font-size: 18px;
+      font-size: 14px;
       font-weight: 700;
+      color: white;
     }
     
     .kpi-item.growth .value {
@@ -328,36 +327,36 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
     
     /* جدول طرق الدفع */
     .payment-section {
-      margin-bottom: 30px;
+      margin-bottom: 25px;
     }
     
     .payment-section h3 {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 600;
-      color: #1a1a2e;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
+      color: #000000;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
       border-bottom: 2px solid #e2e8f0;
     }
     
     .payment-tables {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
+      gap: 15px;
     }
     
     .payment-table {
       background: #f8fafc;
-      border-radius: 12px;
+      border-radius: 10px;
       overflow: hidden;
       border: 1px solid #e2e8f0;
     }
     
     .payment-table h4 {
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      background: #1a1a2e;
       color: white;
-      padding: 12px 15px;
-      font-size: 14px;
+      padding: 10px 12px;
+      font-size: 12px;
       font-weight: 600;
     }
     
@@ -368,16 +367,16 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
     
     .payment-table th,
     .payment-table td {
-      padding: 10px 15px;
+      padding: 8px 12px;
       text-align: right;
-      font-size: 12px;
+      font-size: 11px;
       border-bottom: 1px solid #e2e8f0;
+      color: #000000;
     }
     
     .payment-table th {
       background: #f1f5f9;
       font-weight: 600;
-      color: #475569;
     }
     
     .payment-table tr:last-child td {
@@ -391,15 +390,15 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
     
     /* جدول الفروع */
     .branches-section {
-      margin-bottom: 30px;
+      margin-bottom: 25px;
     }
     
     .branches-section h3 {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 600;
-      color: #1a1a2e;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
+      color: #000000;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
       border-bottom: 2px solid #e2e8f0;
     }
     
@@ -407,25 +406,26 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
       width: 100%;
       border-collapse: collapse;
       background: white;
-      border-radius: 12px;
+      border-radius: 10px;
       overflow: hidden;
       border: 1px solid #e2e8f0;
     }
     
     .branches-table th {
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      background: #1a1a2e;
       color: white;
-      padding: 12px 15px;
+      padding: 10px 12px;
       text-align: right;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
     }
     
     .branches-table td {
-      padding: 12px 15px;
+      padding: 10px 12px;
       text-align: right;
-      font-size: 12px;
+      font-size: 11px;
       border-bottom: 1px solid #e2e8f0;
+      color: #000000;
     }
     
     .branches-table tr:last-child td {
@@ -436,46 +436,46 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
       background: #f8fafc;
     }
     
-    .positive { color: #22c55e; }
-    .negative { color: #ef4444; }
+    .positive { color: #16a34a !important; }
+    .negative { color: #dc2626 !important; }
     
     /* التوقيعات والختم */
     .signatures-section {
-      margin-top: 40px;
-      padding-top: 30px;
+      margin-top: 30px;
+      padding-top: 25px;
       border-top: 2px solid #e2e8f0;
     }
     
     .signatures-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 30px;
+      gap: 25px;
       text-align: center;
     }
     
     .signature-box {
-      padding: 20px;
+      padding: 15px;
     }
     
     .signature-box .title {
-      font-size: 12px;
+      font-size: 11px;
       color: #64748b;
-      margin-bottom: 40px;
+      margin-bottom: 35px;
     }
     
     .signature-box .line {
-      border-top: 1px solid #1a1a2e;
-      padding-top: 10px;
+      border-top: 1px solid #000000;
+      padding-top: 8px;
     }
     
     .signature-box .name {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
-      color: #1a1a2e;
+      color: #000000;
     }
     
     .signature-box .role {
-      font-size: 11px;
+      font-size: 10px;
       color: #64748b;
     }
     
@@ -487,8 +487,8 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
     }
     
     .stamp {
-      width: 100px;
-      height: 100px;
+      width: 90px;
+      height: 90px;
       border: 3px solid #a855f7;
       border-radius: 50%;
       display: flex;
@@ -497,34 +497,53 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
       justify-content: center;
       color: #a855f7;
       font-weight: 700;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     
     .stamp .company {
-      font-size: 10px;
+      font-size: 9px;
     }
     
     .stamp .symbol {
-      font-size: 18px;
+      font-size: 16px;
     }
     
     /* الفوتر */
     .footer {
-      margin-top: 30px;
-      padding-top: 20px;
+      margin-top: 25px;
+      padding-top: 15px;
       border-top: 1px solid #e2e8f0;
       text-align: center;
-      font-size: 10px;
-      color: #94a3b8;
+      font-size: 9px;
+      color: #64748b;
     }
     
     .footer .copyright {
-      margin-top: 5px;
+      margin-top: 4px;
     }
     
     @media print {
-      body { background: white; }
-      .page { box-shadow: none; }
+      body { 
+        background: white; 
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .page { 
+        box-shadow: none; 
+        padding: 10mm;
+      }
+      .summary-cards {
+        grid-template-columns: repeat(5, 1fr);
+      }
+      .kpi-section {
+        background: #1a1a2e !important;
+        -webkit-print-color-adjust: exact !important;
+      }
+      .payment-table h4,
+      .branches-table th {
+        background: #1a1a2e !important;
+        -webkit-print-color-adjust: exact !important;
+      }
     }
   </style>
 </head>
@@ -584,7 +603,7 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
     
     <!-- مؤشرات الأداء -->
     <div class="kpi-section">
-      <h3>مؤشرات الأداء الرئيسية (KPIs)</h3>
+      <h3>📊 مؤشرات الأداء الرئيسية (KPIs)</h3>
       <div class="kpi-grid">
         <div class="kpi-item growth">
           <div class="label">نسبة النمو عن الفترة السابقة</div>
@@ -663,13 +682,13 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
                   <tr>
                     <td>${paymentMethodNames[method] || method}</td>
                     <td>${d.count}</td>
-                    <td style="color: #f97316;">${formatCurrency(d.total)}</td>
+                    <td style="color: #ea580c;">${formatCurrency(d.total)}</td>
                   </tr>
                 `).join('')}
               <tr class="total-row">
                 <td>الإجمالي</td>
                 <td>${Object.values(data.vouchersByMethod).reduce((sum, d) => sum + d.count, 0)}</td>
-                <td style="color: #f97316;">${formatCurrency(data.summary.totalCashVouchers)}</td>
+                <td style="color: #ea580c;">${formatCurrency(data.summary.totalCashVouchers)}</td>
               </tr>
             </tbody>
           </table>
@@ -698,7 +717,7 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
               <td><strong>${branch.branchName}</strong></td>
               <td class="positive">${formatCurrency(branch.cashRevenue)}</td>
               <td class="negative">${formatCurrency(branch.cashExpenses)}</td>
-              <td style="color: #f97316;">${formatCurrency(branch.cashVouchers)}</td>
+              <td style="color: #ea580c;">${formatCurrency(branch.cashVouchers)}</td>
               <td class="${branch.remainingCash >= 0 ? 'positive' : 'negative'}"><strong>${formatCurrency(branch.remainingCash)}</strong></td>
               <td>${branch.retentionRate}%</td>
             </tr>
@@ -744,30 +763,21 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
       <p class="copyright">All rights reserved to Symbol AI © ${new Date().getFullYear()}</p>
     </div>
   </div>
+  
+  <script>
+    // طباعة تلقائية عند فتح الصفحة
+    window.onload = function() {
+      window.print();
+    };
+  </script>
 </body>
 </html>
 `;
-
-  // توليد PDF باستخدام Puppeteer
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
-
-  try {
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-    
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '0', right: '0', bottom: '0', left: '0' },
-    });
-
-    return Buffer.from(pdfBuffer);
-  } finally {
-    await browser.close();
-  }
 }
 
-export default { generateCashFlowReportPDF };
+// للتوافق مع الكود القديم - يُرجع HTML بدلاً من Buffer
+export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<string> {
+  return generateCashFlowReportHTML(data);
+}
+
+export default { generateCashFlowReportPDF, generateCashFlowReportHTML };

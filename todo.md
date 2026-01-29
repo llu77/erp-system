@@ -3589,3 +3589,18 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إضافة totalCashAdvances إلى interface
 - [x] إضافة بطاقة السلف في قالب PDF
 - [x] إضافة CSS لبطاقة السلف (لون بنفسجي)
+
+
+## إصلاح مشكلة طباعة PDF وتحسين قالب الوثائق (طلب جديد - 29 يناير 2026)
+
+### 1. إصلاح طباعة PDF في التدفق النقدي
+- [x] تغيير من Puppeteer إلى HTML مباشر للطباعة (cashFlowPdfService.ts)
+- [x] إصلاح خطأ "Failed to launch the browser process" - يفتح HTML في نافذة جديدة
+- [x] تحسين فتح النافذة للطباعة في CashFlowReport.tsx
+
+### 2. تحسين قالب تقرير الوثائق
+- [x] إصلاح النصوص العربية - إنشاء documentReportService.ts بقالب HTML بدلاً من jsPDF
+- [x] تحسين التصميم والألوان - قالب احترافي بألوان Symbol AI
+- [x] إضافة خط عربي واضح - خط Tajawal من Google Fonts
+- [x] إضافة API exportDocumentsReport في routers.ts
+- [x] تحديث DocumentsDashboard.tsx لاستخدام القالب الجديد
