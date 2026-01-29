@@ -6610,6 +6610,7 @@ ${discrepancyRows}
         branchName: z.string().optional(),
         description: z.string().optional(),
         notes: z.string().optional(),
+        paymentMethod: z.enum(['cash', 'bank_transfer', 'check', 'credit_card', 'other']).default('cash'),
         items: z.array(z.object({
           description: z.string().min(1),
           amount: z.number().positive(),
@@ -8424,6 +8425,87 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         return [];
       }),
   },
+
+  // ==================== التدفق النقدي ====================
+  cashFlow: router({
+    // الحصول على المصاريف مجمعة حسب طريقة الدفع
+    expensesByPaymentMethod: adminProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        const result = await db.getExpensesByPaymentMethod(
+          input.startDate,
+          input.endDate,
+          input.branchId
+        );
+        return result;
+      }),
+
+    // الحصول على سندات القبض مجمعة حسب طريقة الدفع
+    vouchersByPaymentMethod: adminProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+        branchId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        const result = await db.getVouchersByPaymentMethod(
+          input.startDate,
+          input.endDate,
+          input.branchId
+        );
+        return result;
+      }),
+
+    // الحصول على إيرادات الفرع النقدية
+    branchCashRevenues: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const result = await db.getBranchCashRevenues(
+          input.branchId,
+          input.startDate,
+          input.endDate
+        );
+        return result;
+      }),
+
+    // حساب التدفق النقدي للفرع
+    branchCashFlow: adminProcedure
+      .input(z.object({
+        branchId: z.number(),
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const result = await db.calculateBranchCashFlow(
+          input.branchId,
+          input.startDate,
+          input.endDate
+        );
+        return result;
+      }),
+
+    // تقرير التدفق النقدي الشهري لجميع الفروع
+    monthlyReport: adminProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number().min(1).max(12),
+      }))
+      .query(async ({ input }) => {
+        const result = await db.getMonthlyCashFlowReport(
+          input.year,
+          input.month
+        );
+        return result;
+      }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

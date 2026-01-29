@@ -1,0 +1,1 @@
+ALTER TABLE `receiptVouchers` ADD `paymentMethod` enum('cash','bank_transfer','check','credit_card','other') DEFAULT 'cash';

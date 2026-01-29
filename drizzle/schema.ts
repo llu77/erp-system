@@ -1719,6 +1719,15 @@ export const receiptVouchers = mysqlTable("receiptVouchers", {
   paidByName: varchar("paidByName", { length: 255 }),
   paidAt: timestamp("paidAt"),
   
+  // طريقة الدفع
+  paymentMethod: mysqlEnum("paymentMethod", [
+    "cash",          // نقدي
+    "bank_transfer", // تحويل بنكي
+    "check",         // شيك
+    "credit_card",   // بطاقة ائتمان
+    "other"          // أخرى
+  ]).default("cash"),
+  
   // معرفات التوقيع
   signedBy1: varchar("signedBy1", { length: 255 }), // سالم الوادعي
   signedBy2: varchar("signedBy2", { length: 255 }), // عمر المطيري

@@ -62,6 +62,7 @@ export default function ReceiptVoucher() {
     notes: '',
     branchId: user?.branchId || undefined,
     branchName: '',
+    paymentMethod: 'cash' as 'cash' | 'bank_transfer' | 'check' | 'credit_card' | 'other',
   });
 
   // تحديث اسم الفرع عند تغير بيانات المستخدم أو الفروع
@@ -115,6 +116,7 @@ export default function ReceiptVoucher() {
         branchName: formData.branchName,
         description: 'تسليم مبالغ كاش',
         notes: formData.notes,
+        paymentMethod: formData.paymentMethod,
         items: [
           {
             description: 'تسليم مبالغ كاش',
@@ -142,6 +144,7 @@ export default function ReceiptVoucher() {
           notes: '',
           branchId: userBranch?.id || user?.branchId || undefined,
           branchName: userBranch?.name || '',
+          paymentMethod: 'cash',
         });
       } else {
         toast.error(result.error || 'فشل في إنشاء السند');
@@ -420,6 +423,22 @@ export default function ReceiptVoucher() {
                   className="bg-gray-100"
                 />
                 <p className="text-xs text-gray-500 mt-1">يتم تحديده تلقائياً حسب المشرف</p>
+              </div>
+
+              <div>
+                <Label>طريقة الدفع *</Label>
+                <Select value={formData.paymentMethod} onValueChange={(value: 'cash' | 'bank_transfer' | 'check' | 'credit_card' | 'other') => setFormData(prev => ({ ...prev, paymentMethod: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر طريقة الدفع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">نقدي</SelectItem>
+                    <SelectItem value="bank_transfer">تحويل بنكي</SelectItem>
+                    <SelectItem value="check">شيك</SelectItem>
+                    <SelectItem value="credit_card">بطاقة ائتمان</SelectItem>
+                    <SelectItem value="other">أخرى</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

@@ -70,6 +70,7 @@ import MonthlyReports from "./pages/MonthlyReports";
 import AIDecisionCenter from "./pages/AIDecisionCenter";
 import AuditCompliance from "./pages/AuditCompliance";
 import ReportScheduleSettings from "./pages/ReportScheduleSettings";
+import CashFlowReport from "./pages/CashFlowReport";
 
 function Router() {
   return (
@@ -217,6 +218,9 @@ function Router() {
         <DashboardLayout>
           <Expenses />
         </DashboardLayout>
+      </Route>
+      <Route path="/cash-flow">
+        <CashFlowReport />
       </Route>
       {/* Settings */}
       <Route path="/settings">

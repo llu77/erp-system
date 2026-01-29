@@ -10661,8 +10661,8 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
 
   try {
     const conditions: SQL[] = [
-      gte(receiptVouchers.voucherDate, filters.startDate),
-      lte(receiptVouchers.voucherDate, filters.endDate),
+      gte(receiptVouchers.voucherDate, new Date(filters.startDate)),
+      lte(receiptVouchers.voucherDate, new Date(filters.endDate)),
     ];
 
     if (filters.status && filters.status !== 'all') {
@@ -10799,6 +10799,346 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
     };
   } catch (error) {
     console.error('Error getting vouchers for report:', error);
+    return null;
+  }
+}
+
+
+// ==================== دوال التدفق النقدي ====================
+
+/**
+ * الحصول على المصاريف مجمعة حسب طريقة الدفع
+ * @param branchId معرف الفرع (اختياري)
+ * @param startDate تاريخ البداية
+ * @param endDate تاريخ النهاية
+ */
+export async function getExpensesByPaymentMethod(
+  startDate: string,
+  endDate: string,
+  branchId?: number
+) {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const conditions = [
+      gte(expenses.expenseDate, new Date(startDate)),
+      lte(expenses.expenseDate, new Date(endDate)),
+      inArray(expenses.status, ['approved', 'paid']),
+    ];
+
+    if (branchId) {
+      conditions.push(eq(expenses.branchId, branchId));
+    }
+
+    const allExpenses = await db.select().from(expenses)
+      .where(and(...conditions))
+      .orderBy(desc(expenses.expenseDate));
+
+    // تجميع المصاريف حسب طريقة الدفع
+    const byPaymentMethod: Record<string, { count: number; total: number; expenses: typeof allExpenses }> = {
+      cash: { count: 0, total: 0, expenses: [] },
+      bank_transfer: { count: 0, total: 0, expenses: [] },
+      check: { count: 0, total: 0, expenses: [] },
+      credit_card: { count: 0, total: 0, expenses: [] },
+      other: { count: 0, total: 0, expenses: [] },
+    };
+
+    let grandTotal = 0;
+
+    for (const expense of allExpenses) {
+      const method = expense.paymentMethod || 'other';
+      const amount = parseFloat(expense.amount);
+      
+      if (byPaymentMethod[method]) {
+        byPaymentMethod[method].count++;
+        byPaymentMethod[method].total += amount;
+        byPaymentMethod[method].expenses.push(expense);
+      } else {
+        byPaymentMethod.other.count++;
+        byPaymentMethod.other.total += amount;
+        byPaymentMethod.other.expenses.push(expense);
+      }
+      
+      grandTotal += amount;
+    }
+
+    return {
+      byPaymentMethod,
+      grandTotal,
+      totalCount: allExpenses.length,
+    };
+  } catch (error) {
+    console.error('Error getting expenses by payment method:', error);
+    return null;
+  }
+}
+
+/**
+ * الحصول على سندات القبض مجمعة حسب طريقة الدفع
+ * @param branchId معرف الفرع (اختياري)
+ * @param startDate تاريخ البداية
+ * @param endDate تاريخ النهاية
+ */
+export async function getVouchersByPaymentMethod(
+  startDate: string,
+  endDate: string,
+  branchId?: number
+) {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const conditions = [
+      gte(receiptVouchers.voucherDate, new Date(startDate)),
+      lte(receiptVouchers.voucherDate, new Date(endDate)),
+      inArray(receiptVouchers.status, ['approved', 'paid']),
+    ];
+
+    if (branchId) {
+      conditions.push(eq(receiptVouchers.branchId, branchId));
+    }
+
+    const allVouchers = await db.select().from(receiptVouchers)
+      .where(and(...conditions))
+      .orderBy(desc(receiptVouchers.voucherDate));
+
+    // تجميع السندات حسب طريقة الدفع
+    const byPaymentMethod: Record<string, { count: number; total: number; vouchers: typeof allVouchers }> = {
+      cash: { count: 0, total: 0, vouchers: [] },
+      bank_transfer: { count: 0, total: 0, vouchers: [] },
+      check: { count: 0, total: 0, vouchers: [] },
+      credit_card: { count: 0, total: 0, vouchers: [] },
+      other: { count: 0, total: 0, vouchers: [] },
+    };
+
+    let grandTotal = 0;
+
+    for (const voucher of allVouchers) {
+      const method = voucher.paymentMethod || 'cash';
+      const amount = parseFloat(voucher.totalAmount);
+      
+      if (byPaymentMethod[method]) {
+        byPaymentMethod[method].count++;
+        byPaymentMethod[method].total += amount;
+        byPaymentMethod[method].vouchers.push(voucher);
+      } else {
+        byPaymentMethod.other.count++;
+        byPaymentMethod.other.total += amount;
+        byPaymentMethod.other.vouchers.push(voucher);
+      }
+      
+      grandTotal += amount;
+    }
+
+    return {
+      byPaymentMethod,
+      grandTotal,
+      totalCount: allVouchers.length,
+    };
+  } catch (error) {
+    console.error('Error getting vouchers by payment method:', error);
+    return null;
+  }
+}
+
+/**
+ * الحصول على إيرادات الفرع النقدية
+ * @param branchId معرف الفرع
+ * @param startDate تاريخ البداية
+ * @param endDate تاريخ النهاية
+ */
+export async function getBranchCashRevenues(
+  branchId: number,
+  startDate: string,
+  endDate: string
+) {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    const revenues = await db.select().from(dailyRevenues)
+      .where(and(
+        eq(dailyRevenues.branchId, branchId),
+        gte(dailyRevenues.date, new Date(startDate)),
+        lte(dailyRevenues.date, new Date(endDate))
+      ))
+      .orderBy(desc(dailyRevenues.date));
+
+    let totalCash = 0;
+    let totalNetwork = 0;
+    let totalBalance = 0;
+    let totalRevenue = 0;
+
+    for (const rev of revenues) {
+      totalCash += parseFloat(rev.cash);
+      totalNetwork += parseFloat(rev.network);
+      totalBalance += parseFloat(rev.balance);
+      totalRevenue += parseFloat(rev.total);
+    }
+
+    return {
+      revenues,
+      totals: {
+        cash: totalCash,
+        network: totalNetwork,
+        balance: totalBalance,
+        total: totalRevenue,
+      },
+    };
+  } catch (error) {
+    console.error('Error getting branch cash revenues:', error);
+    return null;
+  }
+}
+
+/**
+ * حساب التدفق النقدي للفرع
+ * يحسب: إيرادات الكاش - المصاريف النقدية - سندات القبض النقدية = الكاش المتبقي
+ * @param branchId معرف الفرع
+ * @param startDate تاريخ البداية
+ * @param endDate تاريخ النهاية
+ */
+export async function calculateBranchCashFlow(
+  branchId: number,
+  startDate: string,
+  endDate: string
+) {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    // 1. الحصول على إيرادات الكاش
+    const revenuesResult = await getBranchCashRevenues(branchId, startDate, endDate);
+    const totalCashRevenue = revenuesResult?.totals.cash || 0;
+
+    // 2. الحصول على المصاريف النقدية
+    const expensesResult = await getExpensesByPaymentMethod(startDate, endDate, branchId);
+    const cashExpenses = expensesResult?.byPaymentMethod.cash.total || 0;
+
+    // 3. الحصول على سندات القبض النقدية
+    const vouchersResult = await getVouchersByPaymentMethod(startDate, endDate, branchId);
+    const cashVouchers = vouchersResult?.byPaymentMethod.cash.total || 0;
+
+    // 4. حساب الكاش المتبقي
+    const remainingCash = totalCashRevenue - cashExpenses - cashVouchers;
+
+    return {
+      // الإيرادات
+      revenues: {
+        cash: totalCashRevenue,
+        network: revenuesResult?.totals.network || 0,
+        total: revenuesResult?.totals.total || 0,
+        details: revenuesResult?.revenues || [],
+      },
+      // المصاريف
+      expenses: {
+        cash: cashExpenses,
+        bankTransfer: expensesResult?.byPaymentMethod.bank_transfer.total || 0,
+        check: expensesResult?.byPaymentMethod.check.total || 0,
+        creditCard: expensesResult?.byPaymentMethod.credit_card.total || 0,
+        other: expensesResult?.byPaymentMethod.other.total || 0,
+        total: expensesResult?.grandTotal || 0,
+        byPaymentMethod: expensesResult?.byPaymentMethod || {},
+      },
+      // سندات القبض
+      vouchers: {
+        cash: cashVouchers,
+        bankTransfer: vouchersResult?.byPaymentMethod.bank_transfer.total || 0,
+        check: vouchersResult?.byPaymentMethod.check.total || 0,
+        creditCard: vouchersResult?.byPaymentMethod.credit_card.total || 0,
+        other: vouchersResult?.byPaymentMethod.other.total || 0,
+        total: vouchersResult?.grandTotal || 0,
+        byPaymentMethod: vouchersResult?.byPaymentMethod || {},
+      },
+      // الملخص
+      summary: {
+        totalCashRevenue,
+        totalCashExpenses: cashExpenses,
+        totalCashVouchers: cashVouchers,
+        remainingCash,
+        // نسبة الكاش المتبقي من الإيرادات
+        cashRetentionRate: totalCashRevenue > 0 
+          ? ((remainingCash / totalCashRevenue) * 100).toFixed(2) 
+          : '0.00',
+      },
+    };
+  } catch (error) {
+    console.error('Error calculating branch cash flow:', error);
+    return null;
+  }
+}
+
+/**
+ * تقرير التدفق النقدي الشهري لجميع الفروع
+ * @param year السنة
+ * @param month الشهر
+ */
+export async function getMonthlyCashFlowReport(year: number, month: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  try {
+    // حساب تاريخ البداية والنهاية للشهر
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+
+    // الحصول على جميع الفروع
+    const allBranches = await db.select().from(branches);
+
+    const branchReports: Array<{
+      branchId: number;
+      branchName: string;
+      cashFlow: Awaited<ReturnType<typeof calculateBranchCashFlow>>;
+    }> = [];
+
+    // حساب التدفق النقدي لكل فرع
+    for (const branch of allBranches) {
+      const cashFlow = await calculateBranchCashFlow(branch.id, startDateStr, endDateStr);
+      branchReports.push({
+        branchId: branch.id,
+        branchName: branch.name,
+        cashFlow,
+      });
+    }
+
+    // حساب الإجماليات
+    let totalCashRevenue = 0;
+    let totalCashExpenses = 0;
+    let totalCashVouchers = 0;
+    let totalRemainingCash = 0;
+
+    for (const report of branchReports) {
+      if (report.cashFlow) {
+        totalCashRevenue += report.cashFlow.summary.totalCashRevenue;
+        totalCashExpenses += report.cashFlow.summary.totalCashExpenses;
+        totalCashVouchers += report.cashFlow.summary.totalCashVouchers;
+        totalRemainingCash += report.cashFlow.summary.remainingCash;
+      }
+    }
+
+    return {
+      period: {
+        year,
+        month,
+        startDate: startDateStr,
+        endDate: endDateStr,
+      },
+      branches: branchReports,
+      totals: {
+        cashRevenue: totalCashRevenue,
+        cashExpenses: totalCashExpenses,
+        cashVouchers: totalCashVouchers,
+        remainingCash: totalRemainingCash,
+        cashRetentionRate: totalCashRevenue > 0 
+          ? ((totalRemainingCash / totalCashRevenue) * 100).toFixed(2) 
+          : '0.00',
+      },
+    };
+  } catch (error) {
+    console.error('Error getting monthly cash flow report:', error);
     return null;
   }
 }

@@ -35,6 +35,7 @@ export async function createReceiptVoucher(data: {
   branchName?: string;
   description?: string;
   notes?: string;
+  paymentMethod?: 'cash' | 'bank_transfer' | 'check' | 'credit_card' | 'other';
   items: Array<{
     description: string;
     amount: number;
@@ -66,6 +67,7 @@ export async function createReceiptVoucher(data: {
       description: data.description,
       notes: data.notes,
       totalAmount: totalAmount.toString(),
+      paymentMethod: data.paymentMethod || 'cash',
       status: 'draft',
       createdBy: data.createdBy,
       createdByName: data.createdByName,
