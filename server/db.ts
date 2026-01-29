@@ -10363,6 +10363,7 @@ export async function getEmployeesForPortalAdmin(
   iqamaImageUrl: string | null;
   healthCertImageUrl: string | null;
   contractImageUrl: string | null;
+  isSupervisor: boolean;
 }>> {
   const db = await getDb();
   if (!db) {
@@ -10390,6 +10391,7 @@ export async function getEmployeesForPortalAdmin(
         iqamaImageUrl: employees.iqamaImageUrl,
         healthCertImageUrl: employees.healthCertImageUrl,
         contractImageUrl: employees.contractImageUrl,
+        isSupervisor: employees.isSupervisor,
       })
       .from(employees)
       .where(eq(employees.isActive, true));

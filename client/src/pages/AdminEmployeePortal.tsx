@@ -274,6 +274,14 @@ export default function AdminEmployeePortal() {
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setLocation('/employee-portal')}
+                className="text-slate-400 hover:text-white hover:bg-slate-700"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </Button>
               <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-2 rounded-xl shadow-lg">
                 <Shield className="h-6 w-6 text-white" />
               </div>
@@ -940,6 +948,11 @@ export default function AdminEmployeePortal() {
                                 غير نشط
                               </Badge>
                             )}
+                            {employee.isSupervisor && (
+                              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
+                                مشرف
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1423,6 +1436,15 @@ export default function AdminEmployeePortal() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Symbol AI Footer */}
+      <div className="fixed bottom-4 left-4 z-40">
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/90 backdrop-blur-sm rounded-full border border-slate-700/50 shadow-lg">
+          <Sparkles className="h-4 w-4 text-amber-500" />
+          <span className="text-xs text-slate-400">Powered by</span>
+          <span className="text-xs font-bold text-amber-400">Symbol AI</span>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,0 +1,74 @@
+{
+  "query": "SELECT code, name, CASE WHEN photoUrl IS NOT NULL THEN 'YES' ELSE 'NO' END as has_photo, CASE WHEN iqamaImageUrl IS NOT NULL THEN 'YES' ELSE 'NO' END as has_iqama, CASE WHEN healthCertImageUrl IS NOT NULL THEN 'YES' ELSE 'NO' END as has_health, CASE WHEN contractImageUrl IS NOT NULL THEN 'YES' ELSE 'NO' END as has_contract FROM employees WHERE isActive = true ORDER BY code;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT code, name, CASE WHEN photoUrl IS NOT NULL THEN 'YES' ELSE 'NO' END as has_photo, CASE WHEN iqamaImageUrl IS NOT NULL THEN 'YES' ELSE 'NO' END as has_iqama, CASE WHEN healthCertImageUrl IS NOT NULL THEN 'YES' ELSE 'NO' END as has_health, CASE WHEN contractImageUrl IS NOT NULL THEN 'YES' ELSE 'NO' END as has_contract FROM employees WHERE isActive = true ORDER BY code;",
+  "rows": [
+    {
+      "code": "EMP-002",
+      "name": "علاء ناصر",
+      "has_photo": "YES",
+      "has_iqama": "YES",
+      "has_health": "YES",
+      "has_contract": "NO"
+    },
+    {
+      "code": "EMP-004",
+      "name": "عبدالحي جلال",
+      "has_photo": "YES",
+      "has_iqama": "NO",
+      "has_health": "NO",
+      "has_contract": "NO"
+    },
+    {
+      "code": "EMP-007",
+      "name": "السيد محمد",
+      "has_photo": "YES",
+      "has_iqama": "NO",
+      "has_health": "NO",
+      "has_contract": "NO"
+    },
+    {
+      "code": "EMP-012",
+      "name": "محمود عماره ",
+      "has_photo": "YES",
+      "has_iqama": "YES",
+      "has_health": "NO",
+      "has_contract": "NO"
+    },
+    {
+      "code": "EMP100",
+      "name": "محمد ناصر",
+      "has_photo": "NO",
+      "has_iqama": "YES",
+      "has_health": "YES",
+      "has_contract": "YES"
+    },
+    {
+      "code": "T03",
+      "name": "فارس محمد ",
+      "has_photo": "NO",
+      "has_iqama": "NO",
+      "has_health": "NO",
+      "has_contract": "NO"
+    },
+    {
+      "code": "T2",
+      "name": "عمرو",
+      "has_photo": "NO",
+      "has_iqama": "NO",
+      "has_health": "YES",
+      "has_contract": "YES"
+    },
+    {
+      "code": "T4",
+      "name": "محمد اسماعيل",
+      "has_photo": "NO",
+      "has_iqama": "NO",
+      "has_health": "NO",
+      "has_contract": "NO"
+    }
+  ],
+  "messages": [],
+  "stdout": "code\tname\thas_photo\thas_iqama\thas_health\thas_contract\nEMP-002\tعلاء ناصر\tYES\tYES\tYES\tNO\nEMP-004\tعبدالحي جلال\tYES\tNO\tNO\tNO\nEMP-007\tالسيد محمد\tYES\tNO\tNO\tNO\nEMP-012\tمحمود عماره \tYES\tYES\tNO\tNO\nEMP100\tمحمد ناصر\tNO\tYES\tYES\tYES\nT03\tفارس محمد \tNO\tNO\tNO\tNO\nT2\tعمرو\tNO\tNO\tYES\tYES\nT4\tمحمد اسماعيل\tNO\tNO\tNO\tNO\n",
+  "stderr": "",
+  "execution_time_ms": 1506
+}
