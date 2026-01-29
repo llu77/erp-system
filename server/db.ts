@@ -11030,8 +11030,12 @@ export async function calculateBranchCashFlow(
     const vouchersResult = await getVouchersByPaymentMethod(startDate, endDate, branchId);
     const cashVouchers = vouchersResult?.byPaymentMethod.cash.total || 0;
 
-    // 4. حساب الكاش المتبقي
-    const remainingCash = totalCashRevenue - cashExpenses - cashVouchers;
+    // 4. الحصول على السلف المعتمدة في نفس الفترة (مصاريف نقدية)
+    const advancesResult = await getApprovedAdvancesForCashFlow(startDate, endDate, branchId);
+    const cashAdvances = advancesResult?.total || 0;
+
+    // 5. حساب الكاش المتبقي (بعد خصم السلف)
+    const remainingCash = totalCashRevenue - cashExpenses - cashVouchers - cashAdvances;
 
     return {
       // الإيرادات
@@ -11061,11 +11065,18 @@ export async function calculateBranchCashFlow(
         total: vouchersResult?.grandTotal || 0,
         byPaymentMethod: vouchersResult?.byPaymentMethod || {},
       },
+      // السلف المعتمدة (مصاريف نقدية)
+      advances: {
+        cash: cashAdvances,
+        count: advancesResult?.count || 0,
+        details: advancesResult?.advances || [],
+      },
       // الملخص
       summary: {
         totalCashRevenue,
         totalCashExpenses: cashExpenses,
         totalCashVouchers: cashVouchers,
+        totalCashAdvances: cashAdvances,
         remainingCash,
         // نسبة الكاش المتبقي من الإيرادات
         cashRetentionRate: totalCashRevenue > 0 
@@ -11118,6 +11129,7 @@ export async function getMonthlyCashFlowReport(year: number, month: number) {
     let totalCashRevenue = 0;
     let totalCashExpenses = 0;
     let totalCashVouchers = 0;
+    let totalCashAdvances = 0;
     let totalRemainingCash = 0;
 
     for (const report of branchReports) {
@@ -11125,6 +11137,7 @@ export async function getMonthlyCashFlowReport(year: number, month: number) {
         totalCashRevenue += report.cashFlow.summary.totalCashRevenue;
         totalCashExpenses += report.cashFlow.summary.totalCashExpenses;
         totalCashVouchers += report.cashFlow.summary.totalCashVouchers;
+        totalCashAdvances += report.cashFlow.summary.totalCashAdvances || 0;
         totalRemainingCash += report.cashFlow.summary.remainingCash;
       }
     }
@@ -11141,6 +11154,7 @@ export async function getMonthlyCashFlowReport(year: number, month: number) {
         cashRevenue: totalCashRevenue,
         cashExpenses: totalCashExpenses,
         cashVouchers: totalCashVouchers,
+        cashAdvances: totalCashAdvances,
         remainingCash: totalRemainingCash,
         cashRetentionRate: totalCashRevenue > 0 
           ? ((totalRemainingCash / totalCashRevenue) * 100).toFixed(2) 
@@ -11150,5 +11164,73 @@ export async function getMonthlyCashFlowReport(year: number, month: number) {
   } catch (error) {
     console.error('Error getting monthly cash flow report:', error);
     return null;
+  }
+}
+
+
+/**
+ * جلب السلف المعتمدة في فترة معينة لحساب التدفق النقدي
+ * @param startDate تاريخ البداية
+ * @param endDate تاريخ النهاية
+ * @param branchId معرف الفرع (اختياري)
+ */
+export async function getApprovedAdvancesForCashFlow(
+  startDate: string,
+  endDate: string,
+  branchId?: number
+): Promise<{
+  total: number;
+  count: number;
+  advances: Array<{
+    id: number;
+    employeeId: number;
+    employeeName: string;
+    amount: number;
+    approvedAt: Date | null;
+    title: string | null;
+  }>;
+}> {
+  const db = await getDb();
+  if (!db) return { total: 0, count: 0, advances: [] };
+
+  try {
+    const conditions = [
+      eq(employeeRequests.requestType, 'advance'),
+      eq(employeeRequests.status, 'approved'),
+      gte(employeeRequests.reviewedAt!, new Date(startDate)),
+      lte(employeeRequests.reviewedAt!, new Date(endDate + 'T23:59:59')),
+    ];
+
+    if (branchId) {
+      conditions.push(eq(employeeRequests.branchId, branchId));
+    }
+
+    const results = await db.select({
+      id: employeeRequests.id,
+      employeeId: employeeRequests.employeeId,
+      employeeName: employeeRequests.employeeName,
+      amount: employeeRequests.advanceAmount,
+      approvedAt: employeeRequests.reviewedAt,
+      title: employeeRequests.title,
+    })
+      .from(employeeRequests)
+      .where(and(...conditions))
+      .orderBy(desc(employeeRequests.reviewedAt));
+
+    const advances = results.map(r => ({
+      ...r,
+      amount: r.amount ? parseFloat(r.amount) : 0,
+    }));
+
+    const total = advances.reduce((sum, adv) => sum + adv.amount, 0);
+
+    return {
+      total,
+      count: advances.length,
+      advances,
+    };
+  } catch (error) {
+    console.error('Error getting approved advances for cash flow:', error);
+    return { total: 0, count: 0, advances: [] };
   }
 }

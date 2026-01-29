@@ -23,6 +23,7 @@ interface CashFlowPDFData {
     totalCashRevenue: number;
     totalCashExpenses: number;
     totalCashVouchers: number;
+    totalCashAdvances: number;
     remainingCash: number;
     cashRetentionRate: string;
   };
@@ -242,6 +243,11 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
       background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
     }
     
+    .summary-card.advances {
+      border-color: #a855f7;
+      background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+    }
+    
     .summary-card.remaining {
       border-color: ${isPositive ? '#3b82f6' : '#ef4444'};
       background: ${isPositive ? 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)' : 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'};
@@ -261,6 +267,7 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
     .summary-card.revenue .value { color: #22c55e; }
     .summary-card.expenses .value { color: #ef4444; }
     .summary-card.vouchers .value { color: #f97316; }
+    .summary-card.advances .value { color: #a855f7; }
     .summary-card.remaining .value { color: ${isPositive ? '#3b82f6' : '#ef4444'}; }
     
     .summary-card .sub {
@@ -562,6 +569,11 @@ export async function generateCashFlowReportPDF(data: CashFlowPDFData): Promise<
         <div class="label">سندات القبض</div>
         <div class="value">${formatCurrency(data.summary.totalCashVouchers)}</div>
         <div class="sub">إجمالي السندات النقدية</div>
+      </div>
+      <div class="summary-card advances">
+        <div class="label">السلف النقدية</div>
+        <div class="value">${formatCurrency(data.summary.totalCashAdvances)}</div>
+        <div class="sub">إجمالي السلف المعتمدة</div>
       </div>
       <div class="summary-card remaining">
         <div class="label">الكاش المتبقي</div>

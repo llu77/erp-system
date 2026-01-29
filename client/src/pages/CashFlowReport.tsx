@@ -149,6 +149,7 @@ export default function CashFlowReport() {
         cashRevenue: branchCashFlow.summary.totalCashRevenue,
         cashExpenses: branchCashFlow.summary.totalCashExpenses,
         cashVouchers: branchCashFlow.summary.totalCashVouchers,
+        cashAdvances: branchCashFlow.summary.totalCashAdvances || 0,
         remainingCash: branchCashFlow.summary.remainingCash,
         cashRetentionRate: branchCashFlow.summary.cashRetentionRate,
       };
@@ -158,6 +159,7 @@ export default function CashFlowReport() {
         cashRevenue: monthlyReport.totals.cashRevenue,
         cashExpenses: monthlyReport.totals.cashExpenses,
         cashVouchers: monthlyReport.totals.cashVouchers,
+        cashAdvances: (monthlyReport.totals as any).cashAdvances || 0,
         remainingCash: monthlyReport.totals.remainingCash,
         cashRetentionRate: monthlyReport.totals.cashRetentionRate,
       };
@@ -166,6 +168,7 @@ export default function CashFlowReport() {
       cashRevenue: 0,
       cashExpenses: 0,
       cashVouchers: 0,
+      cashAdvances: 0,
       remainingCash: 0,
       cashRetentionRate: "0.00",
     };
@@ -352,7 +355,7 @@ export default function CashFlowReport() {
         ) : (
           <>
             {/* بطاقات الملخص */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               {/* إيرادات الكاش */}
               <Card className="border-green-500/20 bg-green-500/5">
                 <CardHeader className="pb-2">
@@ -407,6 +410,24 @@ export default function CashFlowReport() {
                 </CardContent>
               </Card>
 
+              {/* السلف النقدية */}
+              <Card className="border-purple-500/20 bg-purple-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Banknote className="h-4 w-4 text-purple-500" />
+                    السلف النقدية
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-purple-500">
+                    {formatCurrency(totals.cashAdvances)}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    إجمالي السلف المعتمدة في الشهر
+                  </p>
+                </CardContent>
+              </Card>
+
               {/* الكاش المتبقي */}
               <Card className={`border-2 ${totals.remainingCash >= 0 ? 'border-primary/50 bg-primary/5' : 'border-red-500/50 bg-red-500/10'}`}>
                 <CardHeader className="pb-2">
@@ -435,27 +456,32 @@ export default function CashFlowReport() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap items-center justify-center gap-4 text-lg">
-                  <div className="flex items-center gap-2 bg-green-500/10 px-4 py-2 rounded-lg">
+                <div className="flex flex-wrap items-center justify-center gap-3 text-base">
+                  <div className="flex items-center gap-2 bg-green-500/10 px-3 py-2 rounded-lg">
                     <span className="text-green-500 font-bold">{formatCurrency(totals.cashRevenue)}</span>
-                    <span className="text-muted-foreground text-sm">إيرادات</span>
+                    <span className="text-muted-foreground text-xs">إيرادات</span>
                   </div>
-                  <span className="text-2xl font-bold text-muted-foreground">-</span>
-                  <div className="flex items-center gap-2 bg-red-500/10 px-4 py-2 rounded-lg">
+                  <span className="text-xl font-bold text-muted-foreground">-</span>
+                  <div className="flex items-center gap-2 bg-red-500/10 px-3 py-2 rounded-lg">
                     <span className="text-red-500 font-bold">{formatCurrency(totals.cashExpenses)}</span>
-                    <span className="text-muted-foreground text-sm">مصاريف</span>
+                    <span className="text-muted-foreground text-xs">مصاريف</span>
                   </div>
-                  <span className="text-2xl font-bold text-muted-foreground">-</span>
-                  <div className="flex items-center gap-2 bg-orange-500/10 px-4 py-2 rounded-lg">
+                  <span className="text-xl font-bold text-muted-foreground">-</span>
+                  <div className="flex items-center gap-2 bg-orange-500/10 px-3 py-2 rounded-lg">
                     <span className="text-orange-500 font-bold">{formatCurrency(totals.cashVouchers)}</span>
-                    <span className="text-muted-foreground text-sm">سندات</span>
+                    <span className="text-muted-foreground text-xs">سندات</span>
                   </div>
-                  <span className="text-2xl font-bold text-muted-foreground">=</span>
-                  <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${totals.remainingCash >= 0 ? 'bg-primary/10' : 'bg-red-500/10'}`}>
+                  <span className="text-xl font-bold text-muted-foreground">-</span>
+                  <div className="flex items-center gap-2 bg-purple-500/10 px-3 py-2 rounded-lg">
+                    <span className="text-purple-500 font-bold">{formatCurrency(totals.cashAdvances)}</span>
+                    <span className="text-muted-foreground text-xs">سلف</span>
+                  </div>
+                  <span className="text-xl font-bold text-muted-foreground">=</span>
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${totals.remainingCash >= 0 ? 'bg-primary/10' : 'bg-red-500/10'}`}>
                     <span className={`font-bold ${totals.remainingCash >= 0 ? 'text-primary' : 'text-red-500'}`}>
                       {formatCurrency(totals.remainingCash)}
                     </span>
-                    <span className="text-muted-foreground text-sm">متبقي</span>
+                    <span className="text-muted-foreground text-xs">متبقي</span>
                   </div>
                 </div>
               </CardContent>

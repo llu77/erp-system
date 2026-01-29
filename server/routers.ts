@@ -8537,6 +8537,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
               cashRevenue: branch.cashFlow?.summary.totalCashRevenue || 0,
               cashExpenses: branch.cashFlow?.summary.totalCashExpenses || 0,
               cashVouchers: branch.cashFlow?.summary.totalCashVouchers || 0,
+              cashAdvances: branch.cashFlow?.summary.totalCashAdvances || 0,
               remainingCash: branch.cashFlow?.summary.remainingCash || 0,
               cashRetentionRate: branch.cashFlow?.summary.cashRetentionRate || "0",
             };
@@ -8595,6 +8596,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
             totalCashRevenue: summary.cashRevenue,
             totalCashExpenses: summary.cashExpenses,
             totalCashVouchers: summary.cashVouchers,
+            totalCashAdvances: summary.cashAdvances || 0,
             remainingCash: summary.remainingCash,
             cashRetentionRate: summary.cashRetentionRate,
           },
