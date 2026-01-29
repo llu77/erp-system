@@ -910,7 +910,18 @@ export default function AdminEmployeePortal() {
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start gap-4">
-                        <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-3 rounded-xl">
+                        {employee.photoUrl ? (
+                          <img 
+                            src={employee.photoUrl} 
+                            alt={employee.name}
+                            className="w-14 h-14 rounded-xl object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        <div className={`bg-gradient-to-br from-amber-500 to-orange-600 p-3 rounded-xl ${employee.photoUrl ? 'hidden' : ''}`}>
                           <UserCircle className="h-8 w-8 text-white" />
                         </div>
                         <div className="flex-1">
@@ -1211,7 +1222,18 @@ export default function AdminEmployeePortal() {
                 {/* المعلومات الأساسية */}
                 <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-600/10 rounded-lg border border-amber-500/30">
                   <div className="flex items-center gap-4">
-                    <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-xl">
+                    {employee.photoUrl ? (
+                      <img 
+                        src={employee.photoUrl} 
+                        alt={employee.name}
+                        className="w-20 h-20 rounded-xl object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                    ) : null}
+                    <div className={`bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-xl ${employee.photoUrl ? 'hidden' : ''}`}>
                       <UserCircle className="h-12 w-12 text-white" />
                     </div>
                     <div>
@@ -1287,28 +1309,84 @@ export default function AdminEmployeePortal() {
                     <IdCard className="h-4 w-4 text-purple-500" />
                     الوثائق
                   </h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-slate-400">رقم الإقامة:</span>
-                      <span className="text-white mr-2">{employee.iqamaNumber || 'غير محدد'}</span>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {/* الإقامة */}
+                    <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-600">
+                      <div className="flex items-center gap-2 mb-2">
+                        <IdCard className="h-4 w-4 text-blue-400" />
+                        <span className="text-sm font-medium text-white">الإقامة</span>
+                      </div>
+                      <div className="text-xs text-slate-400 mb-2">
+                        <div>الرقم: {employee.iqamaNumber || 'غير محدد'}</div>
+                        <div className={employee.iqamaExpiryDate && new Date(employee.iqamaExpiryDate) < new Date() ? 'text-red-400' : ''}>
+                          الانتهاء: {employee.iqamaExpiryDate ? new Date(employee.iqamaExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        </div>
+                      </div>
+                      {(employee as any).iqamaImageUrl ? (
+                        <a href={(employee as any).iqamaImageUrl} target="_blank" rel="noopener noreferrer">
+                          <img 
+                            src={(employee as any).iqamaImageUrl} 
+                            alt="صورة الإقامة"
+                            className="w-full h-24 object-cover rounded-lg border border-slate-600 hover:border-blue-500 transition-colors cursor-pointer"
+                          />
+                        </a>
+                      ) : (
+                        <div className="w-full h-24 bg-slate-900/50 rounded-lg border border-slate-600 flex items-center justify-center text-slate-500 text-xs">
+                          لا توجد صورة
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <span className="text-slate-400">انتهاء الإقامة:</span>
-                      <span className={`mr-2 ${employee.iqamaExpiryDate && new Date(employee.iqamaExpiryDate) < new Date() ? 'text-red-400' : 'text-white'}`}>
-                        {employee.iqamaExpiryDate ? new Date(employee.iqamaExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                      </span>
+                    
+                    {/* الشهادة الصحية */}
+                    <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-600">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Heart className="h-4 w-4 text-red-400" />
+                        <span className="text-sm font-medium text-white">الشهادة الصحية</span>
+                      </div>
+                      <div className="text-xs text-slate-400 mb-2">
+                        <div className={employee.healthCertExpiryDate && new Date(employee.healthCertExpiryDate) < new Date() ? 'text-red-400' : ''}>
+                          الانتهاء: {employee.healthCertExpiryDate ? new Date(employee.healthCertExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        </div>
+                      </div>
+                      {(employee as any).healthCertImageUrl ? (
+                        <a href={(employee as any).healthCertImageUrl} target="_blank" rel="noopener noreferrer">
+                          <img 
+                            src={(employee as any).healthCertImageUrl} 
+                            alt="صورة الشهادة الصحية"
+                            className="w-full h-24 object-cover rounded-lg border border-slate-600 hover:border-red-500 transition-colors cursor-pointer"
+                          />
+                        </a>
+                      ) : (
+                        <div className="w-full h-24 bg-slate-900/50 rounded-lg border border-slate-600 flex items-center justify-center text-slate-500 text-xs">
+                          لا توجد صورة
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <span className="text-slate-400">انتهاء الشهادة الصحية:</span>
-                      <span className={`mr-2 ${employee.healthCertExpiryDate && new Date(employee.healthCertExpiryDate) < new Date() ? 'text-red-400' : 'text-white'}`}>
-                        {employee.healthCertExpiryDate ? new Date(employee.healthCertExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">انتهاء العقد:</span>
-                      <span className={`mr-2 ${employee.contractExpiryDate && new Date(employee.contractExpiryDate) < new Date() ? 'text-red-400' : 'text-white'}`}>
-                        {employee.contractExpiryDate ? new Date(employee.contractExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
-                      </span>
+                    
+                    {/* عقد العمل */}
+                    <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-600">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileSignature className="h-4 w-4 text-emerald-400" />
+                        <span className="text-sm font-medium text-white">عقد العمل</span>
+                      </div>
+                      <div className="text-xs text-slate-400 mb-2">
+                        <div className={employee.contractExpiryDate && new Date(employee.contractExpiryDate) < new Date() ? 'text-red-400' : ''}>
+                          الانتهاء: {employee.contractExpiryDate ? new Date(employee.contractExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        </div>
+                      </div>
+                      {(employee as any).contractImageUrl ? (
+                        <a href={(employee as any).contractImageUrl} target="_blank" rel="noopener noreferrer">
+                          <img 
+                            src={(employee as any).contractImageUrl} 
+                            alt="صورة العقد"
+                            className="w-full h-24 object-cover rounded-lg border border-slate-600 hover:border-emerald-500 transition-colors cursor-pointer"
+                          />
+                        </a>
+                      ) : (
+                        <div className="w-full h-24 bg-slate-900/50 rounded-lg border border-slate-600 flex items-center justify-center text-slate-500 text-xs">
+                          لا توجد صورة
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

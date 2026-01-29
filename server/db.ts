@@ -10359,6 +10359,10 @@ export async function getEmployeesForPortalAdmin(
   contractExpiryDate: Date | null;
   hasPortalAccess: boolean;
   lastLogin: Date | null;
+  photoUrl: string | null;
+  iqamaImageUrl: string | null;
+  healthCertImageUrl: string | null;
+  contractImageUrl: string | null;
 }>> {
   const db = await getDb();
   if (!db) {
@@ -10382,6 +10386,10 @@ export async function getEmployeesForPortalAdmin(
         contractExpiryDate: employees.contractExpiryDate,
         hasPortalAccess: employees.hasPortalAccess,
         lastLogin: employees.lastLogin,
+        photoUrl: employees.photoUrl,
+        iqamaImageUrl: employees.iqamaImageUrl,
+        healthCertImageUrl: employees.healthCertImageUrl,
+        contractImageUrl: employees.contractImageUrl,
       })
       .from(employees)
       .where(eq(employees.isActive, true));

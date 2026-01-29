@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, name, code, photoUrl FROM employees WHERE name LIKE '%عبدالحي%' OR name LIKE '%جلال%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, name, code, photoUrl FROM employees WHERE name LIKE '%عبدالحي%' OR name LIKE '%جلال%';",
+  "rows": [
+    {
+      "id": "30004",
+      "name": "عبدالحي جلال",
+      "code": "EMP-004",
+      "photoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-004-1769549808208.jpeg"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tcode\tphotoUrl\n30004\tعبدالحي جلال\tEMP-004\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-004-1769549808208.jpeg\n",
+  "stderr": "",
+  "execution_time_ms": 1792
+}
