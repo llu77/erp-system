@@ -3740,3 +3740,35 @@ node scripts/scheduledTasks.mjs weekly-report
 ### 5. الاختبارات
 - [x] إنشاء portalNotifications.test.ts (26 اختبار)
 - [x] جميع الاختبارات ناجحة (790 اختبار)
+
+
+## إشعارات Push للمتصفح (Browser Push Notifications) - 30 يناير 2026
+
+### 1. Service Worker
+- [x] إنشاء sw-notifications.js للإشعارات
+- [x] تسجيل Service Worker تلقائياً عند التحميل
+- [x] دعم استقبال وعرض الإشعارات
+- [x] معالجة النقر على الإشعارات
+
+### 2. Frontend Hook
+- [x] إنشاء usePushNotifications hook
+- [x] طلب إذن المستخدم للإشعارات
+- [x] حفظ حالة الإذن (default/granted/denied/unsupported)
+- [x] دالة showNotification لإرسال الإشعارات
+
+### 3. دمج مع NotificationBell
+- [x] إضافة زر تفعيل الإشعارات مع Switch
+- [x] عرض حالة الإشعارات في الإعدادات
+- [x] إرسال Push تلقائي للإشعارات العاجلة (urgent/high)
+- [x] شريط تفعيل سريع للمستخدمين الجدد
+- [x] أيقونة BellRing عند تفعيل Push
+
+### 4. الميزات
+- [x] إشعارات عربية RTL
+- [x] أنماط اهتزاز مختلفة حسب الأولوية
+- [x] requireInteraction للإشعارات العاجلة
+- [x] إرسال Push فقط عندما لا يكون المستخدم في البوابة
+
+### 5. الاختبارات
+- [x] إنشاء pushNotifications.test.ts (26 اختبار)
+- [x] جميع الاختبارات ناجحة (811 اختبار إجمالي)
