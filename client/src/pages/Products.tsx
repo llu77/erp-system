@@ -13,6 +13,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  MobileCard,
+  MobileCardList,
+  useResponsiveView,
+} from "@/components/ui/mobile-card-view";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -64,6 +69,7 @@ const formatCurrency = (value: string | number) => {
 
 export default function ProductsPage() {
   const isMobile = useIsMobile();
+  const isMobileView = useResponsiveView(768);
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
@@ -201,18 +207,69 @@ export default function ProductsPage() {
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
+          ) : isMobileView ? (
+            /* Mobile Card View */
+            <MobileCardList
+              items={filteredProducts}
+              isLoading={isLoading}
+              emptyMessage="لا يوجد منتجات"
+              emptyIcon={<Package className="h-12 w-12" />}
+              renderCard={(product) => {
+                const isLowStock = product.quantity <= product.minQuantity;
+                return (
+                  <MobileCard
+                    key={product.id}
+                    fields={[
+                      { label: "اسم المنتج", value: product.name, isTitle: true },
+                      { label: "الرمز", value: product.sku, isSubtitle: true },
+                      { label: "سعر البيع", value: formatCurrency(product.sellingPrice), isPrice: true },
+                      { label: "سعر التكلفة", value: formatCurrency(product.costPrice) },
+                      { 
+                        label: "الكمية", 
+                        value: (
+                          <span className={isLowStock ? "text-red-600 font-medium" : ""}>
+                            {product.quantity} {product.unit}
+                            {isLowStock && <AlertTriangle className="h-3 w-3 inline mr-1 text-orange-500" />}
+                          </span>
+                        ),
+                        isHighlighted: true
+                      },
+                      { label: "الفئة", value: categories.find((c) => c.id === product.categoryId)?.name || "-" },
+                    ]}
+                    statusBadge={{
+                      label: product.isActive ? "نشط" : "غير نشط",
+                      variant: product.isActive ? "default" : "secondary",
+                    }}
+                    actions={[
+                      {
+                        label: "تعديل",
+                        icon: <Pencil className="h-4 w-4" />,
+                        onClick: () => handleEdit(product),
+                      },
+                      {
+                        label: "حذف",
+                        icon: <Trash2 className="h-4 w-4" />,
+                        onClick: () => setDeleteProductId(product.id),
+                        variant: "destructive",
+                      },
+                    ]}
+                  />
+                );
+              }}
+            />
           ) : (
+            /* Desktop Table View */
             <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>الرمز</TableHead>
                     <TableHead>اسم المنتج</TableHead>
-                    <TableHead>الفئة</TableHead>
-                    <TableHead>سعر التكلفة</TableHead>
+                    <TableHead className="hidden lg:table-cell">الفئة</TableHead>
+                    <TableHead className="hidden md:table-cell">سعر التكلفة</TableHead>
                     <TableHead>سعر البيع</TableHead>
                     <TableHead>الكمية</TableHead>
-                    <TableHead>الحالة</TableHead>
+                    <TableHead className="hidden sm:table-cell">الحالة</TableHead>
                     <TableHead className="w-[100px]">إجراءات</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -230,10 +287,10 @@ export default function ProductsPage() {
                         <TableRow key={product.id}>
                           <TableCell className="font-mono text-sm">{product.sku}</TableCell>
                           <TableCell className="font-medium">{product.name}</TableCell>
-                          <TableCell>
+                          <TableCell className="hidden lg:table-cell">
                             {categories.find((c) => c.id === product.categoryId)?.name || "-"}
                           </TableCell>
-                          <TableCell>{formatCurrency(product.costPrice)}</TableCell>
+                          <TableCell className="hidden md:table-cell">{formatCurrency(product.costPrice)}</TableCell>
                           <TableCell>{formatCurrency(product.sellingPrice)}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -245,7 +302,7 @@ export default function ProductsPage() {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="hidden sm:table-cell">
                             <Badge variant={product.isActive ? "default" : "secondary"}>
                               {product.isActive ? "نشط" : "غير نشط"}
                             </Badge>

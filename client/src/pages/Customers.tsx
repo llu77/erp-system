@@ -11,6 +11,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  MobileCard,
+  MobileCardList,
+  useResponsiveView,
+} from "@/components/ui/mobile-card-view";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -40,6 +45,7 @@ type CustomerFormData = {
 };
 
 export default function CustomersPage() {
+  const isMobileView = useResponsiveView(768);
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any>(null);
@@ -166,7 +172,62 @@ export default function CustomersPage() {
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
+          ) : isMobileView ? (
+            /* Mobile Card View */
+            <MobileCardList
+              items={filteredCustomers}
+              isLoading={isLoading}
+              emptyMessage="لا يوجد عملاء"
+              emptyIcon={<UserCircle className="h-12 w-12" />}
+              renderCard={(customer) => (
+                <MobileCard
+                  key={customer.id}
+                  fields={[
+                    { label: "الاسم", value: customer.name, isTitle: true },
+                    { label: "الرمز", value: customer.code, isSubtitle: true },
+                    { 
+                      label: "الهاتف", 
+                      value: customer.phone ? (
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-3 w-3" />
+                          {customer.phone}
+                        </span>
+                      ) : "-",
+                      isHighlighted: true
+                    },
+                    { 
+                      label: "البريد", 
+                      value: customer.email ? (
+                        <span className="flex items-center gap-1">
+                          <Mail className="h-3 w-3" />
+                          <span className="truncate max-w-[100px]">{customer.email}</span>
+                        </span>
+                      ) : "-"
+                    },
+                    { label: "المدينة", value: customer.city || "-" },
+                  ]}
+                  statusBadge={{
+                    label: customer.isActive ? "نشط" : "غير نشط",
+                    variant: customer.isActive ? "default" : "secondary",
+                  }}
+                  actions={[
+                    {
+                      label: "تعديل",
+                      icon: <Pencil className="h-4 w-4" />,
+                      onClick: () => handleEdit(customer),
+                    },
+                    {
+                      label: "حذف",
+                      icon: <Trash2 className="h-4 w-4" />,
+                      onClick: () => setDeleteCustomerId(customer.id),
+                      variant: "destructive",
+                    },
+                  ]}
+                />
+              )}
+            />
           ) : (
+            /* Desktop Table View */
             <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -174,8 +235,8 @@ export default function CustomersPage() {
                     <TableHead>الرمز</TableHead>
                     <TableHead>الاسم</TableHead>
                     <TableHead>الهاتف</TableHead>
-                    <TableHead>البريد</TableHead>
-                    <TableHead>المدينة</TableHead>
+                    <TableHead className="hidden md:table-cell">البريد</TableHead>
+                    <TableHead className="hidden lg:table-cell">المدينة</TableHead>
                     <TableHead>الحالة</TableHead>
                     <TableHead className="w-[100px]">إجراءات</TableHead>
                   </TableRow>
@@ -202,7 +263,7 @@ export default function CustomersPage() {
                             "-"
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           {customer.email ? (
                             <div className="flex items-center gap-1">
                               <Mail className="h-3 w-3 text-muted-foreground" />
@@ -212,7 +273,7 @@ export default function CustomersPage() {
                             "-"
                           )}
                         </TableCell>
-                        <TableCell>{customer.city || "-"}</TableCell>
+                        <TableCell className="hidden lg:table-cell">{customer.city || "-"}</TableCell>
                         <TableCell>
                           <Badge variant={customer.isActive ? "default" : "secondary"}>
                             {customer.isActive ? "نشط" : "غير نشط"}

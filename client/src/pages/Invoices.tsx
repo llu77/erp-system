@@ -11,6 +11,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  MobileCard,
+  MobileCardList,
+  useResponsiveView,
+} from "@/components/ui/mobile-card-view";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -78,6 +83,7 @@ const defaultCompanySettings = {
 
 export default function InvoicesPage() {
   const isMobile = useIsMobile();
+  const isMobileView = useResponsiveView(768);
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewingInvoice, setViewingInvoice] = useState<any>(null);
@@ -276,14 +282,62 @@ export default function InvoicesPage() {
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
+          ) : isMobileView ? (
+            /* Mobile Card View */
+            <MobileCardList
+              items={filteredInvoices}
+              isLoading={isLoading}
+              emptyMessage="لا يوجد فواتير"
+              emptyIcon={<FileText className="h-12 w-12" />}
+              renderCard={(invoice) => {
+                const status = statusLabels[invoice.status] || statusLabels.draft;
+                return (
+                  <MobileCard
+                    key={invoice.id}
+                    fields={[
+                      { label: "رقم الفاتورة", value: invoice.invoiceNumber, isTitle: true },
+                      { label: "العميل", value: invoice.customerName || "عميل نقدي", isSubtitle: true },
+                      { label: "الإجمالي", value: formatCurrency(invoice.total), isPrice: true },
+                      { 
+                        label: "التاريخ", 
+                        value: format(new Date(invoice.invoiceDate), "dd MMM yyyy", { locale: ar })
+                      },
+                    ]}
+                    statusBadge={{
+                      label: status.label,
+                      variant: status.variant,
+                    }}
+                    actions={[
+                      {
+                        label: "عرض التفاصيل",
+                        icon: <Eye className="h-4 w-4" />,
+                        onClick: () => setViewingInvoice(invoice),
+                      },
+                      {
+                        label: "طباعة",
+                        icon: <Printer className="h-4 w-4" />,
+                        onClick: () => handlePrint(invoice),
+                      },
+                      {
+                        label: "حذف",
+                        icon: <Trash2 className="h-4 w-4" />,
+                        onClick: () => setDeleteInvoiceId(invoice.id),
+                        variant: "destructive",
+                      },
+                    ]}
+                  />
+                );
+              }}
+            />
           ) : (
+            /* Desktop Table View */
             <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>رقم الفاتورة</TableHead>
                     <TableHead>العميل</TableHead>
-                    <TableHead>التاريخ</TableHead>
+                    <TableHead className="hidden sm:table-cell">التاريخ</TableHead>
                     <TableHead>الإجمالي</TableHead>
                     <TableHead>الحالة</TableHead>
                     <TableHead className="w-[120px]">إجراءات</TableHead>
@@ -303,7 +357,7 @@ export default function InvoicesPage() {
                         <TableRow key={invoice.id}>
                           <TableCell className="font-mono">{invoice.invoiceNumber}</TableCell>
                           <TableCell>{invoice.customerName || "عميل نقدي"}</TableCell>
-                          <TableCell>
+                          <TableCell className="hidden sm:table-cell">
                             {format(new Date(invoice.invoiceDate), "dd MMM yyyy", {
                               locale: ar,
                             })}
