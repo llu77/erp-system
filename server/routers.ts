@@ -27,6 +27,8 @@ import * as aiToolsHub from "./ai/aiToolsHub";
 import * as advancedRecommendations from "./ai/advancedRecommendationEngine";
 import * as aiCommandCenter from "./ai/aiCommandCenter";
 import * as smartPermissions from "./ai/smartPermissions";
+import * as aiRecommendationNotifier from "./ai/aiRecommendationNotifier";
+import * as aiRecommendationMonitor from "./scheduler/aiRecommendationMonitor";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -9188,6 +9190,129 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           input.reason,
           input.duration
         );
+      }),
+  }),
+
+  // ==================== إشعارات التوصيات الذكية ====================
+  aiNotifications: router({
+    // إرسال إشعار لتوصية معينة
+    sendForRecommendation: adminProcedure
+      .input(z.object({
+        recommendationId: z.string(),
+        channels: z.array(z.enum(['in_app', 'email', 'owner', 'push'])).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const notifier = aiRecommendationNotifier.createNotifier();
+        // الحصول على التوصية من محرك التوصيات
+        const context = advancedRecommendations.createRecommendationContext(0, 'system');
+        const engine = new advancedRecommendations.RecommendationEngine(context);
+        const recommendations = await engine.generateAllRecommendations();
+        const recommendation = recommendations.find(r => r.id === input.recommendationId);
+        
+        if (!recommendation) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'التوصية غير موجودة' });
+        }
+        
+        return await notifier.notifyForRecommendation(recommendation, {
+          channels: input.channels as aiRecommendationNotifier.NotificationChannel[] | undefined,
+        });
+      }),
+
+    // إرسال الملخص اليومي
+    sendDailySummary: adminProcedure
+      .mutation(async () => {
+        const notifier = aiRecommendationNotifier.createNotifier();
+        return await notifier.sendDailySummary();
+      }),
+
+    // تشغيل المراقبة والتنبيه
+    runMonitoring: adminProcedure
+      .mutation(async () => {
+        return await aiRecommendationNotifier.runMonitoringCycle();
+      }),
+
+    // الحصول على سجل الإشعارات
+    getLogs: adminProcedure
+      .input(z.object({
+        recommendationId: z.string().optional(),
+      }).optional())
+      .query(({ input }) => {
+        const notifier = aiRecommendationNotifier.createNotifier();
+        return notifier.getNotificationLogs(input?.recommendationId);
+      }),
+  }),
+
+  // ==================== مراقبة التوصيات ====================
+  aiMonitor: router({
+    // بدء المراقبة التلقائية
+    start: adminProcedure
+      .input(z.object({
+        intervalMinutes: z.number().min(5).max(1440).optional(),
+        priorityThreshold: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+      }).optional())
+      .mutation(({ input }) => {
+        aiRecommendationMonitor.startMonitoring(input);
+        return { success: true, message: 'تم بدء المراقبة التلقائية' };
+      }),
+
+    // إيقاف المراقبة
+    stop: adminProcedure
+      .mutation(() => {
+        aiRecommendationMonitor.stopMonitoring();
+        return { success: true, message: 'تم إيقاف المراقبة' };
+      }),
+
+    // تشغيل دورة يدوية
+    runCycle: adminProcedure
+      .mutation(async () => {
+        return await aiRecommendationMonitor.runManualCycle();
+      }),
+
+    // الحصول على الإحصائيات
+    getStats: adminProcedure
+      .query(() => {
+        return aiRecommendationMonitor.getMonitoringStats();
+      }),
+
+    // الحصول على السجل
+    getHistory: adminProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(100).optional(),
+      }).optional())
+      .query(({ input }) => {
+        const monitor = aiRecommendationMonitor.getMonitor();
+        return monitor.getHistory(input?.limit);
+      }),
+
+    // الحصول على التكوين
+    getConfig: adminProcedure
+      .query(() => {
+        const monitor = aiRecommendationMonitor.getMonitor();
+        return monitor.getConfig();
+      }),
+
+    // تحديث التكوين
+    updateConfig: adminProcedure
+      .input(z.object({
+        enabled: z.boolean().optional(),
+        intervalMinutes: z.number().min(5).max(1440).optional(),
+        priorityThreshold: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+        maxAlertsPerCycle: z.number().min(1).max(50).optional(),
+        quietHoursStart: z.number().min(0).max(23).optional(),
+        quietHoursEnd: z.number().min(0).max(23).optional(),
+        dailySummaryHour: z.number().min(0).max(23).optional(),
+      }))
+      .mutation(({ input }) => {
+        const monitor = aiRecommendationMonitor.getMonitor();
+        monitor.updateConfig(input);
+        return { success: true, config: monitor.getConfig() };
+      }),
+
+    // التحقق من حالة التشغيل
+    isActive: adminProcedure
+      .query(() => {
+        const monitor = aiRecommendationMonitor.getMonitor();
+        return { active: monitor.isActive() };
       }),
   }),
 });

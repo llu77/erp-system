@@ -73,6 +73,7 @@ import ReportScheduleSettings from "./pages/ReportScheduleSettings";
 import CashFlowReport from "./pages/CashFlowReport";
 import ReportAssistant from "./components/ReportAssistant";
 import AICommandCenter from "./pages/AICommandCenter";
+import AIMonitorSettings from "./pages/AIMonitorSettings";
 
 function Router() {
   return (
@@ -406,6 +407,11 @@ function Router() {
         <DashboardLayout>
           <AICommandCenter />
         </DashboardLayout>
+      </Route>
+
+      {/* إعدادات المراقبة الذكية */}
+      <Route path="/ai-monitor-settings">
+        <AIMonitorSettings />
       </Route>
       
       <Route path="/404" component={NotFound} />

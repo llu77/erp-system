@@ -66,6 +66,7 @@ import {
   FileWarning,
   Bot,
   Sparkles,
+  Bell,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -124,6 +125,7 @@ const menuStructure: MenuItem[] = [
       { icon: Shield, label: "التدقيق والامتثال", path: "/audit-compliance", roles: ["admin", "manager"] },
       { icon: Bot, label: "مساعد التقارير الذكي", path: "/report-assistant", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Sparkles, label: "مركز التحكم AI", path: "/ai-command-center", roles: ["admin", "manager"] },
+      { icon: Bell, label: "إعدادات المراقبة", path: "/ai-monitor-settings", roles: ["admin"] },
     ]
   },
   
