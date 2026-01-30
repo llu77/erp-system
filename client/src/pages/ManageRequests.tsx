@@ -125,61 +125,66 @@ export default function ManageRequests() {
     <div className="p-6 space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">إدارة طلبات الموظفين</h1>
-          <p className="text-muted-foreground">مراجعة والموافقة على طلبات الموظفين</p>
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
+            <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.25) 100%)' }}>
+              <FileText className="h-6 w-6 text-blue-500" />
+            </div>
+            إدارة طلبات الموظفين
+          </h1>
+          <p className="text-muted-foreground mt-1">مراجعة والموافقة على طلبات الموظفين</p>
         </div>
       </div>
 
       {/* إحصائيات */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="kpi-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/20">
-                <FileText className="h-5 w-5 text-blue-400" />
+              <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.25) 100%)' }}>
+                <FileText className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats?.total || 0}</p>
-                <p className="text-sm text-muted-foreground">إجمالي الطلبات</p>
+                <p className="kpi-value">{stats?.total || 0}</p>
+                <p className="kpi-label">إجمالي الطلبات</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="kpi-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-yellow-500/20">
-                <Clock className="h-5 w-5 text-yellow-400" />
+              <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15) 0%, rgba(234, 179, 8, 0.25) 100%)' }}>
+                <Clock className="h-5 w-5 text-yellow-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats?.pending || 0}</p>
-                <p className="text-sm text-muted-foreground">قيد الانتظار</p>
+                <p className="kpi-value">{stats?.pending || 0}</p>
+                <p className="kpi-label">قيد الانتظار</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="kpi-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-500/20">
-                <CheckCircle className="h-5 w-5 text-green-400" />
+              <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.25) 100%)' }}>
+                <CheckCircle className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats?.approved || 0}</p>
-                <p className="text-sm text-muted-foreground">موافق عليها</p>
+                <p className="kpi-value">{stats?.approved || 0}</p>
+                <p className="kpi-label">موافق عليها</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="kpi-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-red-500/20">
-                <XCircle className="h-5 w-5 text-red-400" />
+              <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.25) 100%)' }}>
+                <XCircle className="h-5 w-5 text-red-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats?.rejected || 0}</p>
-                <p className="text-sm text-muted-foreground">مرفوضة</p>
+                <p className="kpi-value">{stats?.rejected || 0}</p>
+                <p className="kpi-label">مرفوضة</p>
               </div>
             </div>
           </CardContent>
@@ -187,7 +192,7 @@ export default function ManageRequests() {
       </div>
 
       {/* الفلاتر */}
-      <Card>
+      <Card className="card-professional">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4">
             <div className="flex-1 min-w-[200px]">

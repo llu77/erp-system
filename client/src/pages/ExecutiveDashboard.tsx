@@ -486,8 +486,13 @@ export default function ExecutiveDashboard() {
       {/* العنوان والتحكم */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold">لوحة التحكم التنفيذية</h1>
-          <p className="text-muted-foreground">نظرة شاملة على أداء الأعمال - {getSelectedBranchName()}</p>
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
+            <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(168, 85, 247, 0.25) 100%)' }}>
+              <BarChart3 className="h-6 w-6 text-purple-500" />
+            </div>
+            لوحة التحكم التنفيذية
+          </h1>
+          <p className="text-muted-foreground mt-1">نظرة شاملة على أداء الأعمال - {getSelectedBranchName()}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* اختيار الفرع */}
@@ -589,7 +594,7 @@ export default function ExecutiveDashboard() {
       {/* مؤشرات الأداء الرئيسية - تصميم محسن */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* إجمالي الإيرادات */}
-        <Card className="stat-card-enhanced shadow-glow bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-0">
+        <Card className="kpi-card bg-gradient-to-br from-emerald-500/10 to-emerald-600/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">إجمالي الإيرادات</CardTitle>
             <DollarSign className="h-4 w-4 text-emerald-600" />
@@ -617,7 +622,7 @@ export default function ExecutiveDashboard() {
         </Card>
 
         {/* صافي الربح */}
-        <Card className={`stat-card-enhanced shadow-glow border-0 bg-gradient-to-br ${(kpis?.netProfit || 0) >= 0 ? 'from-blue-500/10 to-blue-600/5' : 'from-red-500/10 to-red-600/5'}`}>
+        <Card className={`kpi-card bg-gradient-to-br ${(kpis?.netProfit || 0) >= 0 ? 'from-blue-500/10 to-blue-600/5' : 'from-red-500/10 to-red-600/5'}`}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">صافي الربح</CardTitle>
             {(kpis?.netProfit || 0) >= 0 ? <TrendingUp className="h-4 w-4 text-blue-600" /> : <TrendingDown className="h-4 w-4 text-red-600" />}
@@ -642,7 +647,7 @@ export default function ExecutiveDashboard() {
         </Card>
 
         {/* إجمالي الالتزامات (مصاريف + رواتب) */}
-        <Card className="stat-card-enhanced shadow-glow border-0 bg-gradient-to-br from-amber-500/10 to-amber-600/5">
+        <Card className="kpi-card bg-gradient-to-br from-amber-500/10 to-amber-600/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">إجمالي الالتزامات</CardTitle>
             <Wallet className="h-4 w-4 text-amber-600" />
@@ -676,7 +681,7 @@ export default function ExecutiveDashboard() {
         </Card>
 
         {/* هامش الربح */}
-        <Card className="stat-card-enhanced shadow-glow border-0 bg-gradient-to-br from-purple-500/10 to-purple-600/5">
+        <Card className="kpi-card bg-gradient-to-br from-purple-500/10 to-purple-600/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">هامش الربح</CardTitle>
             <Percent className="h-4 w-4 text-purple-600" />

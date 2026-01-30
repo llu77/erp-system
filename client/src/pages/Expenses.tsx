@@ -830,8 +830,13 @@ export default function Expenses() {
         {/* العنوان والإجراءات */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold">المصاريف</h1>
-            <p className="text-muted-foreground">إدارة وتتبع مصاريف الشركة</p>
+            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
+              <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.25) 100%)' }}>
+                <Receipt className="h-6 w-6 text-red-500" />
+              </div>
+              المصاريف
+            </h1>
+            <p className="text-muted-foreground mt-1">إدارة وتتبع مصاريف الشركة</p>
           </div>
           {canAdd && (
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -1027,67 +1032,67 @@ export default function Expenses() {
 
         {/* الإحصائيات */}
         <div className={`grid gap-3 sm:gap-4 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'}`}>
-          <Card>
+          <Card className="kpi-card">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <Receipt className="h-5 w-5 text-red-600" />
+                <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.25) 100%)' }}>
+                  <Receipt className="h-5 w-5 text-red-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">إجمالي المصاريف</p>
-                  <p className="text-2xl font-bold">{stats?.total || 0}</p>
+                  <p className="kpi-label">إجمالي المصاريف</p>
+                  <p className="kpi-value">{stats?.total || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="kpi-card">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Clock className="h-5 w-5 text-yellow-600" />
+                <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15) 0%, rgba(234, 179, 8, 0.25) 100%)' }}>
+                  <Clock className="h-5 w-5 text-yellow-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">قيد المراجعة</p>
-                  <p className="text-2xl font-bold">{stats?.pending || 0}</p>
+                  <p className="kpi-label">قيد المراجعة</p>
+                  <p className="kpi-value">{stats?.pending || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="kpi-card">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
+                <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.25) 100%)' }}>
+                  <CheckCircle className="h-5 w-5 text-green-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">معتمدة</p>
-                  <p className="text-2xl font-bold">{stats?.approved || 0}</p>
+                  <p className="kpi-label">معتمدة</p>
+                  <p className="kpi-value">{stats?.approved || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="kpi-card">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-blue-600" />
+                <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.25) 100%)' }}>
+                  <DollarSign className="h-5 w-5 text-blue-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">مدفوعة</p>
-                  <p className="text-2xl font-bold">{stats?.paid || 0}</p>
+                  <p className="kpi-label">مدفوعة</p>
+                  <p className="kpi-value">{stats?.paid || 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="kpi-card">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <TrendingDown className="h-5 w-5 text-purple-600" />
+                <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(168, 85, 247, 0.25) 100%)' }}>
+                  <TrendingDown className="h-5 w-5 text-purple-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">إجمالي المبالغ</p>
-                  <p className="text-lg font-bold">{formatAmount(stats?.totalAmount || 0)} ر.س</p>
+                  <p className="kpi-label">إجمالي المبالغ</p>
+                  <p className="text-lg font-bold text-purple-600">{formatAmount(stats?.totalAmount || 0)} ر.س</p>
                 </div>
               </div>
             </CardContent>
@@ -1095,7 +1100,7 @@ export default function Expenses() {
         </div>
 
         {/* الفلاتر */}
-        <Card>
+        <Card className="card-professional">
           <CardContent className="p-4">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
@@ -1172,10 +1177,12 @@ export default function Expenses() {
         </Card>
 
         {/* جدول المصاريف */}
-        <Card>
+        <Card className="card-professional">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Receipt className="h-5 w-5" />
+              <div className="p-2 rounded-lg bg-red-500/10">
+                <Receipt className="h-5 w-5 text-red-500" />
+              </div>
               قائمة المصاريف
             </CardTitle>
           </CardHeader>

@@ -297,19 +297,23 @@ export default function Revenues() {
         {/* العنوان */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <DollarSign className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
+              <div className="kpi-icon">
+                <DollarSign className="h-6 w-6" />
+              </div>
               إدخال الإيرادات اليومية
             </h1>
-            <p className="text-muted-foreground">إدخال إيرادات الفرع والموظفين اليومية</p>
+            <p className="text-muted-foreground mt-1">إدخال إيرادات الفرع والموظفين اليومية</p>
           </div>
         </div>
 
         {/* اختيار الفرع والتاريخ */}
-        <Card>
+        <Card className="card-professional">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Calendar className="h-5 w-5 text-primary" />
+              </div>
               معلومات اليوم
             </CardTitle>
           </CardHeader>
@@ -350,9 +354,14 @@ export default function Revenues() {
         </Card>
 
         {/* إيرادات الفرع */}
-        <Card>
+        <Card className="card-professional">
           <CardHeader>
-            <CardTitle>إيرادات الفرع</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-green-500/10">
+                <TrendingUp className="h-5 w-5 text-green-500" />
+              </div>
+              إيرادات الفرع
+            </CardTitle>
             <CardDescription>إجمالي إيرادات الفرع لهذا اليوم</CardDescription>
           </CardHeader>
           <CardContent>
@@ -405,7 +414,7 @@ export default function Revenues() {
               </div>
               <div>
                 <Label>الإجمالي</Label>
-                <div className="mt-2 p-2 bg-primary/10 rounded-md text-center font-bold text-lg text-primary">
+                <div className="mt-2 p-3 bg-gradient-to-r from-primary/15 to-primary/5 rounded-xl text-center font-bold text-xl text-primary border border-primary/20 shadow-sm">
                   {calculateBranchTotal()} ر.س
                 </div>
               </div>
@@ -551,12 +560,14 @@ export default function Revenues() {
         </Card>
 
         {/* إيرادات الموظفين */}
-        <Card>
+        <Card className="card-professional">
           <CardHeader>
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
+                  <div className="p-2 rounded-lg bg-blue-500/10">
+                    <Users className="h-5 w-5 text-blue-500" />
+                  </div>
                   إيرادات الموظفين
                 </CardTitle>
                 <CardDescription>إيرادات كل موظف لحساب البونص تلقائياً</CardDescription>
@@ -618,8 +629,10 @@ export default function Revenues() {
                             className="w-28"
                           />
                         </TableCell>
-                        <TableCell className="font-bold text-green-600">
-                          {er.total} ر.س
+                        <TableCell>
+                          <span className="font-bold text-green-600 bg-green-500/10 px-2 py-1 rounded-lg">
+                            {er.total} ر.س
+                          </span>
                         </TableCell>
                         <TableCell>
                           <Button

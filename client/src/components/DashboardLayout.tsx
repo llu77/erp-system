@@ -292,12 +292,20 @@ function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = flatMenuItems.find((item) => item.path === location);
   const isMobile = useIsMobile();
+
+  // دالة للتنقل مع إغلاق القائمة على الموبايل
+  const navigateTo = (path: string) => {
+    setLocation(path);
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
   const [hasShownDiscrepancyToast, setHasShownDiscrepancyToast] = useState(false);
 
   // استعلام فروقات البونص (للأدمن فقط)
@@ -448,24 +456,34 @@ function DashboardLayoutContent({
           side="right"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center border-b">
-            <div className="flex items-center gap-3 px-2 transition-all w-full">
+          <SidebarHeader className="h-20 justify-center border-b bg-gradient-to-l from-primary/5 to-transparent">
+            <div className="flex items-center gap-3 px-3 transition-all w-full">
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="h-9 w-9 flex items-center justify-center hover:bg-accent rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0 hover:scale-105"
                 aria-label="تبديل القائمة"
               >
-                <PanelRight className="h-4 w-4 text-muted-foreground" />
+                <PanelRight className="h-5 w-5 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <img src="/symbol-ai-logo.png" alt="Symbol AI" className="h-8 w-8 object-contain shrink-0" />
-                  <span className="font-bold tracking-tight truncate text-primary">
-                    Symbol AI
-                  </span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="relative">
+                    <img src="/symbol-ai-logo.png" alt="Symbol AI" className="h-12 w-12 object-contain shrink-0 drop-shadow-lg" />
+                    <div className="absolute inset-0 bg-primary/10 rounded-full blur-xl -z-10"></div>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-lg tracking-tight text-primary">
+                      Symbol AI
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-medium tracking-wider">
+                      نظام إدارة متكامل
+                    </span>
+                  </div>
                 </div>
               ) : (
-                <img src="/symbol-ai-logo.png" alt="Symbol AI" className="h-6 w-6 object-contain" />
+                <div className="relative">
+                  <img src="/symbol-ai-logo.png" alt="Symbol AI" className="h-10 w-10 object-contain drop-shadow-md" />
+                </div>
               )}
             </div>
           </SidebarHeader>
@@ -480,7 +498,7 @@ function DashboardLayoutContent({
                     <SidebarMenuItem key={item.path}>
                       <SidebarMenuButton
                         isActive={isActive}
-                        onClick={() => setLocation(item.path!)}
+                        onClick={() => navigateTo(item.path!)}
                         tooltip={item.label}
                         className={`h-10 transition-all font-normal sidebar-item-hover ${isActive ? "sidebar-item-active" : ""}`}
                       >
@@ -532,7 +550,7 @@ function DashboardLayoutContent({
                             return (
                               <SidebarMenuSubItem key={child.path}>
                                 <SidebarMenuSubButton
-                                  onClick={() => setLocation(child.path!)}
+                                  onClick={() => navigateTo(child.path!)}
                                   isActive={isChildActive}
                                   className={`h-9 transition-all ${isChildActive ? "bg-primary/10 text-primary font-medium" : ""}`}
                                 >
