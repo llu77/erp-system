@@ -22,6 +22,7 @@ import * as auditService from "./audit/auditService";
 import * as executiveDashboard from "./executive/executiveDashboardService";
 import * as aiDecisionEngine from "./ai/aiDecisionEngine";
 import * as portalNotificationService from "./services/portalNotificationService";
+import * as reportAssistant from "./ai/reportAssistantService";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -8772,6 +8773,167 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           input.branchId,
           input.branchName
         );
+      }),
+  }),
+
+  // ==================== مساعد التقارير الذكي ====================
+  reportAssistant: router({
+    // تحليل سؤال المستخدم
+    analyzeQuestion: protectedProcedure
+      .input(z.object({
+        question: z.string().min(1, "السؤال مطلوب"),
+        conversationHistory: z.array(z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+          timestamp: z.date().or(z.string().transform(s => new Date(s))),
+        })).optional().default([]),
+      }))
+      .mutation(async ({ input }) => {
+        const history = input.conversationHistory.map(msg => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+          timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+        }));
+        return await reportAssistant.analyzeQuestion(input.question, history);
+      }),
+
+    // توليد تقرير بناءً على التحليل
+    generateReport: protectedProcedure
+      .input(z.object({
+        analysis: z.object({
+          originalQuestion: z.string(),
+          reportType: z.enum([
+            'sales_summary', 'sales_by_product', 'sales_by_customer', 'sales_by_employee',
+            'sales_by_branch', 'inventory_status', 'low_stock', 'expenses_summary',
+            'expenses_by_category', 'profit_loss', 'customer_analysis', 'employee_performance',
+            'purchase_orders', 'comparison', 'custom'
+          ]),
+          chartType: z.enum(['bar', 'line', 'pie', 'doughnut', 'area', 'table', 'kpi']),
+          dateRange: z.object({
+            start: z.date().or(z.string().transform(s => new Date(s))),
+            end: z.date().or(z.string().transform(s => new Date(s))),
+            label: z.string(),
+          }),
+          filters: z.object({
+            branchId: z.number().optional(),
+            employeeId: z.number().optional(),
+            customerId: z.number().optional(),
+            categoryId: z.number().optional(),
+            productId: z.number().optional(),
+          }).optional().default({}),
+          groupBy: z.string().optional(),
+          orderBy: z.string().optional(),
+          limit: z.number().optional(),
+          comparison: z.object({
+            enabled: z.boolean(),
+            previousPeriod: z.object({
+              start: z.date().or(z.string().transform(s => new Date(s))),
+              end: z.date().or(z.string().transform(s => new Date(s))),
+              label: z.string(),
+            }),
+          }).optional(),
+          confidence: z.number(),
+          interpretation: z.string(),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        const analysis = {
+          ...input.analysis,
+          dateRange: {
+            start: input.analysis.dateRange.start instanceof Date 
+              ? input.analysis.dateRange.start 
+              : new Date(input.analysis.dateRange.start),
+            end: input.analysis.dateRange.end instanceof Date 
+              ? input.analysis.dateRange.end 
+              : new Date(input.analysis.dateRange.end),
+            label: input.analysis.dateRange.label,
+          },
+          comparison: input.analysis.comparison ? {
+            enabled: input.analysis.comparison.enabled,
+            previousPeriod: {
+              start: input.analysis.comparison.previousPeriod.start instanceof Date
+                ? input.analysis.comparison.previousPeriod.start
+                : new Date(input.analysis.comparison.previousPeriod.start),
+              end: input.analysis.comparison.previousPeriod.end instanceof Date
+                ? input.analysis.comparison.previousPeriod.end
+                : new Date(input.analysis.comparison.previousPeriod.end),
+              label: input.analysis.comparison.previousPeriod.label,
+            },
+          } : undefined,
+        };
+        return await reportAssistant.generateReport(analysis);
+      }),
+
+    // توليد رد نصي
+    generateResponse: protectedProcedure
+      .input(z.object({
+        question: z.string(),
+        reportData: z.object({
+          title: z.string(),
+          subtitle: z.string().optional(),
+          type: z.string(),
+          chartType: z.string(),
+          data: z.array(z.any()),
+          summary: z.object({
+            total: z.number().optional(),
+            count: z.number().optional(),
+            average: z.number().optional(),
+            change: z.number().optional(),
+            changePercent: z.number().optional(),
+          }),
+          insights: z.array(z.string()),
+          recommendations: z.array(z.string()),
+          generatedAt: z.date().or(z.string().transform(s => new Date(s))),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        const reportData = {
+          ...input.reportData,
+          type: input.reportData.type as reportAssistant.ReportType,
+          chartType: input.reportData.chartType as reportAssistant.ChartType,
+          generatedAt: input.reportData.generatedAt instanceof Date 
+            ? input.reportData.generatedAt 
+            : new Date(input.reportData.generatedAt),
+        };
+        return await reportAssistant.generateResponse(input.question, reportData);
+      }),
+
+    // الحصول على الأسئلة المقترحة
+    getSuggestedQuestions: protectedProcedure
+      .query(() => {
+        return reportAssistant.getSuggestedQuestions();
+      }),
+
+    // معالجة سؤال كامل (تحليل + توليد تقرير + رد)
+    processQuestion: protectedProcedure
+      .input(z.object({
+        question: z.string().min(1, "السؤال مطلوب"),
+        conversationHistory: z.array(z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+          timestamp: z.date().or(z.string().transform(s => new Date(s))),
+        })).optional().default([]),
+      }))
+      .mutation(async ({ input }) => {
+        // تحليل السؤال
+        const history = input.conversationHistory.map(msg => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+          timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+        }));
+        const analysis = await reportAssistant.analyzeQuestion(input.question, history);
+        
+        // توليد التقرير
+        const reportData = await reportAssistant.generateReport(analysis);
+        
+        // توليد الرد النصي
+        const response = await reportAssistant.generateResponse(input.question, reportData);
+        
+        return {
+          analysis,
+          reportData,
+          response,
+        };
       }),
   }),
 });

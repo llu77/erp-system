@@ -71,6 +71,7 @@ import AIDecisionCenter from "./pages/AIDecisionCenter";
 import AuditCompliance from "./pages/AuditCompliance";
 import ReportScheduleSettings from "./pages/ReportScheduleSettings";
 import CashFlowReport from "./pages/CashFlowReport";
+import ReportAssistant from "./components/ReportAssistant";
 
 function Router() {
   return (
@@ -391,6 +392,14 @@ function Router() {
           <SmartAlerts />
         </DashboardLayout>
       </Route>
+      
+      {/* مساعد التقارير الذكي */}
+      <Route path="/report-assistant">
+        <DashboardLayout>
+          <ReportAssistant />
+        </DashboardLayout>
+      </Route>
+      
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

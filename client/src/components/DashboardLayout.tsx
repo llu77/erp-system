@@ -64,6 +64,8 @@ import {
   Trash2,
   Key,
   FileWarning,
+  Bot,
+  Sparkles,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -120,6 +122,7 @@ const menuStructure: MenuItem[] = [
       { icon: Brain, label: "تحليلات AI", path: "/ai-analytics", roles: ["admin", "manager"] },
       { icon: Brain, label: "مركز الذكاء الاصطناعي", path: "/ai-decision-center", roles: ["admin", "manager"] },
       { icon: Shield, label: "التدقيق والامتثال", path: "/audit-compliance", roles: ["admin", "manager"] },
+      { icon: Bot, label: "مساعد التقارير الذكي", path: "/report-assistant", roles: ["admin", "manager", "supervisor", "viewer"] },
     ]
   },
   
