@@ -72,6 +72,7 @@ import AuditCompliance from "./pages/AuditCompliance";
 import ReportScheduleSettings from "./pages/ReportScheduleSettings";
 import CashFlowReport from "./pages/CashFlowReport";
 import ReportAssistant from "./components/ReportAssistant";
+import AICommandCenter from "./pages/AICommandCenter";
 
 function Router() {
   return (
@@ -397,6 +398,13 @@ function Router() {
       <Route path="/report-assistant">
         <DashboardLayout>
           <ReportAssistant />
+        </DashboardLayout>
+      </Route>
+      
+      {/* مركز التحكم بالذكاء الاصطناعي */}
+      <Route path="/ai-command-center">
+        <DashboardLayout>
+          <AICommandCenter />
         </DashboardLayout>
       </Route>
       

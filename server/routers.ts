@@ -23,6 +23,10 @@ import * as executiveDashboard from "./executive/executiveDashboardService";
 import * as aiDecisionEngine from "./ai/aiDecisionEngine";
 import * as portalNotificationService from "./services/portalNotificationService";
 import * as reportAssistant from "./ai/reportAssistantService";
+import * as aiToolsHub from "./ai/aiToolsHub";
+import * as advancedRecommendations from "./ai/advancedRecommendationEngine";
+import * as aiCommandCenter from "./ai/aiCommandCenter";
+import * as smartPermissions from "./ai/smartPermissions";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -8934,6 +8938,256 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           reportData,
           response,
         };
+      }),
+  }),
+
+  // ==================== مركز أدوات الذكاء الاصطناعي ====================
+  aiTools: router({
+    // الحصول على الأدوات المتاحة
+    getAvailableTools: protectedProcedure
+      .query(({ ctx }) => {
+        const allTools = aiToolsHub.getAvailableTools();
+        return allTools.filter(tool => 
+          tool.requiredRole.includes(ctx.user.role) || ctx.user.role === 'admin'
+        );
+      }),
+
+    // تنفيذ أداة ذكاء اصطناعي
+    executeTool: managerProcedure
+      .input(z.object({
+        tool: z.enum(['sales_intelligence', 'customer_behavior', 'demand_forecast', 'fraud_detection']),
+        options: z.object({
+          startDate: z.date().or(z.string().transform(s => new Date(s))),
+          endDate: z.date().or(z.string().transform(s => new Date(s))),
+          branchId: z.number().optional(),
+          includeAIInsights: z.boolean().optional().default(true),
+          sensitivityLevel: z.enum(['low', 'medium', 'high']).optional(),
+          forecastPeriods: z.number().optional(),
+          granularity: z.enum(['daily', 'weekly', 'monthly']).optional(),
+        }),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const toolContext: aiToolsHub.AIToolContext = {
+          userId: ctx.user.id,
+          userRole: ctx.user.role,
+          branchId: ctx.user.branchId || undefined,
+          timestamp: new Date(),
+        };
+
+        return await aiToolsHub.executeAITool({
+          tool: input.tool,
+          context: toolContext,
+          options: {
+            ...input.options,
+            startDate: input.options.startDate instanceof Date ? input.options.startDate : new Date(input.options.startDate),
+            endDate: input.options.endDate instanceof Date ? input.options.endDate : new Date(input.options.endDate),
+          },
+        });
+      }),
+
+    // تحليل المبيعات الذكي
+    analyzeSales: managerProcedure
+      .input(z.object({
+        startDate: z.date().or(z.string().transform(s => new Date(s))),
+        endDate: z.date().or(z.string().transform(s => new Date(s))),
+        branchId: z.number().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const toolContext: aiToolsHub.AIToolContext = {
+          userId: ctx.user.id,
+          userRole: ctx.user.role,
+          branchId: ctx.user.branchId || undefined,
+          timestamp: new Date(),
+        };
+
+        return await aiToolsHub.analyzeSalesIntelligence(toolContext, {
+          startDate: input.startDate instanceof Date ? input.startDate : new Date(input.startDate),
+          endDate: input.endDate instanceof Date ? input.endDate : new Date(input.endDate),
+          branchId: input.branchId,
+          includeAIInsights: true,
+        });
+      }),
+
+    // تحليل سلوك العملاء
+    analyzeCustomers: managerProcedure
+      .input(z.object({
+        startDate: z.date().or(z.string().transform(s => new Date(s))),
+        endDate: z.date().or(z.string().transform(s => new Date(s))),
+        includeChurnPrediction: z.boolean().optional().default(true),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const toolContext: aiToolsHub.AIToolContext = {
+          userId: ctx.user.id,
+          userRole: ctx.user.role,
+          branchId: ctx.user.branchId || undefined,
+          timestamp: new Date(),
+        };
+
+        return await aiToolsHub.analyzeCustomerBehavior(toolContext, {
+          startDate: input.startDate instanceof Date ? input.startDate : new Date(input.startDate),
+          endDate: input.endDate instanceof Date ? input.endDate : new Date(input.endDate),
+          includeChurnPrediction: input.includeChurnPrediction,
+        });
+      }),
+
+    // التنبؤ بالطلب
+    forecastDemand: managerProcedure
+      .input(z.object({
+        forecastPeriods: z.number().min(1).max(30).default(7),
+        granularity: z.enum(['daily', 'weekly', 'monthly']).default('daily'),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const toolContext: aiToolsHub.AIToolContext = {
+          userId: ctx.user.id,
+          userRole: ctx.user.role,
+          branchId: ctx.user.branchId || undefined,
+          timestamp: new Date(),
+        };
+
+        return await aiToolsHub.forecastDemand(toolContext, input);
+      }),
+
+    // كشف الاحتيال
+    detectFraud: adminProcedure
+      .input(z.object({
+        startDate: z.date().or(z.string().transform(s => new Date(s))),
+        endDate: z.date().or(z.string().transform(s => new Date(s))),
+        sensitivityLevel: z.enum(['low', 'medium', 'high']).default('medium'),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const toolContext: aiToolsHub.AIToolContext = {
+          userId: ctx.user.id,
+          userRole: ctx.user.role,
+          branchId: ctx.user.branchId || undefined,
+          timestamp: new Date(),
+        };
+
+        return await aiToolsHub.detectFraud(toolContext, {
+          startDate: input.startDate instanceof Date ? input.startDate : new Date(input.startDate),
+          endDate: input.endDate instanceof Date ? input.endDate : new Date(input.endDate),
+          sensitivityLevel: input.sensitivityLevel,
+        });
+      }),
+  }),
+
+  // ==================== محرك التوصيات المتقدم ====================
+  recommendations: router({
+    // الحصول على جميع التوصيات
+    getAll: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await advancedRecommendations.generateRecommendations(
+          ctx.user.id,
+          ctx.user.role,
+          ctx.user.branchId || undefined
+        );
+      }),
+
+    // الحصول على توصيات لصفحة محددة
+    getForPage: protectedProcedure
+      .input(z.object({
+        page: z.string(),
+      }))
+      .query(async ({ input, ctx }) => {
+        const context = advancedRecommendations.createRecommendationContext(
+          ctx.user.id,
+          ctx.user.role,
+          ctx.user.branchId || undefined
+        );
+        const engine = new advancedRecommendations.RecommendationEngine(context);
+        const allRecs = await engine.generateAllRecommendations();
+        return engine.getRecommendationsForPage(input.page);
+      }),
+  }),
+
+  // ==================== مركز التحكم بالذكاء الاصطناعي ====================
+  aiCommand: router({
+    // معالجة أمر من المستخدم
+    process: protectedProcedure
+      .input(z.object({
+        command: z.string().min(1, "الأمر مطلوب"),
+        sessionId: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await aiCommandCenter.processAICommand(
+          ctx.user.id,
+          ctx.user.role,
+          input.command,
+          ctx.user.branchId || undefined,
+          input.sessionId
+        );
+      }),
+
+    // الحصول على المساعدة
+    getHelp: protectedProcedure
+      .query(() => {
+        return {
+          commands: [
+            { category: 'استعلامات', examples: ['كم المبيعات اليوم؟', 'ما هو المخزون الحالي؟'] },
+            { category: 'تقارير', examples: ['أنشئ تقرير مبيعات شهري', 'تقرير المصروفات'] },
+            { category: 'تحليل', examples: ['حلل أداء الفرع', 'حلل سلوك العملاء'] },
+            { category: 'تنبؤات', examples: ['توقع المبيعات', 'ما المنتجات التي ستنفد؟'] },
+            { category: 'توصيات', examples: ['ماذا تنصح؟', 'أعطني توصيات'] },
+          ],
+          tips: [
+            'يمكنك تحديد الفترة: "اليوم"، "الأسبوع"، "الشهر"',
+            'اسأل بشكل طبيعي وسأفهم طلبك',
+          ],
+        };
+      }),
+  }),
+
+  // ==================== الصلاحيات الذكية ====================
+  smartPermissions: router({
+    // التحقق من صلاحية
+    check: protectedProcedure
+      .input(z.object({
+        action: z.string(),
+        resource: z.string(),
+        resourceId: z.number().optional(),
+      }))
+      .query(async ({ input, ctx }) => {
+        const permissionContext: smartPermissions.PermissionContext = {
+          userId: ctx.user.id,
+          userRole: ctx.user.role,
+          branchId: ctx.user.branchId || undefined,
+          action: input.action,
+          resource: input.resource,
+          resourceId: input.resourceId,
+          timestamp: new Date(),
+        };
+
+        return await smartPermissions.checkPermission(permissionContext);
+      }),
+
+    // تدقيق استخدام الصلاحيات
+    audit: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        startDate: z.date().or(z.string().transform(s => new Date(s))),
+        endDate: z.date().or(z.string().transform(s => new Date(s))),
+      }))
+      .query(async ({ input }) => {
+        return await smartPermissions.auditPermissionUsage(
+          input.userId,
+          input.startDate instanceof Date ? input.startDate : new Date(input.startDate),
+          input.endDate instanceof Date ? input.endDate : new Date(input.endDate)
+        );
+      }),
+
+    // طلب تصعيد صلاحيات
+    requestEscalation: protectedProcedure
+      .input(z.object({
+        permission: z.string(),
+        reason: z.string(),
+        duration: z.number().min(5).max(480), // 5 دقائق - 8 ساعات
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await smartPermissions.requestPermissionEscalation(
+          ctx.user.id,
+          input.permission,
+          input.reason,
+          input.duration
+        );
       }),
   }),
 });

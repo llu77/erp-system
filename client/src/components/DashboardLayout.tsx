@@ -123,6 +123,7 @@ const menuStructure: MenuItem[] = [
       { icon: Brain, label: "مركز الذكاء الاصطناعي", path: "/ai-decision-center", roles: ["admin", "manager"] },
       { icon: Shield, label: "التدقيق والامتثال", path: "/audit-compliance", roles: ["admin", "manager"] },
       { icon: Bot, label: "مساعد التقارير الذكي", path: "/report-assistant", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: Sparkles, label: "مركز التحكم AI", path: "/ai-command-center", roles: ["admin", "manager"] },
     ]
   },
   
