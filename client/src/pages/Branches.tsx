@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useIsMobile } from "@/hooks/useMobile";
+import { MobileCard, MobileCardList, Pencil as PencilIcon, Trash2 as Trash2Icon } from "@/components/ui/mobile-card-view";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -43,6 +45,7 @@ const initialFormData: BranchFormData = {
 
 export default function Branches() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [showDialog, setShowDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -220,73 +223,111 @@ export default function Branches() {
                 <Skeleton className="h-12 w-full" />
               </div>
             ) : filteredBranches && filteredBranches.length > 0 ? (
-              <div className="table-professional">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-right">الكود</TableHead>
-                      <TableHead className="text-right">الاسم</TableHead>
-                      <TableHead className="text-right">العنوان</TableHead>
-                      <TableHead className="text-right">الهاتف</TableHead>
-                      <TableHead className="text-right">الحالة</TableHead>
-                      <TableHead className="text-right w-24">الإجراءات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredBranches.map((branch) => (
-                      <TableRow key={branch.id}>
-                        <TableCell className="font-mono">{branch.code}</TableCell>
-                        <TableCell className="font-medium">{branch.nameAr}</TableCell>
-                        <TableCell>
-                          {branch.address ? (
-                            <span className="flex items-center gap-1 text-muted-foreground">
-                              <MapPin className="h-3 w-3" />
-                              {branch.address}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {branch.phone ? (
-                            <span className="flex items-center gap-1 text-muted-foreground">
-                              <Phone className="h-3 w-3" />
-                              {branch.phone}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={branch.isActive ? "default" : "secondary"}>
-                            {branch.isActive ? "نشط" : "غير نشط"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(branch)}
-                              className="h-8 w-8"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(branch.id)}
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+              isMobile ? (
+                /* عرض البطاقات على الموبايل */
+                <MobileCardList
+                  items={filteredBranches}
+                  emptyMessage="لا توجد فروع"
+                  emptyIcon={<Building2 className="h-12 w-12" />}
+                  renderCard={(branch) => (
+                    <MobileCard
+                      key={branch.id}
+                      fields={[
+                        { label: "الاسم", value: branch.nameAr, isTitle: true },
+                        { label: "الكود", value: branch.code, isSubtitle: true },
+                        { label: "العنوان", value: branch.address || "-" },
+                        { label: "الهاتف", value: branch.phone || "-" },
+                      ]}
+                      statusBadge={{
+                        label: branch.isActive ? "نشط" : "غير نشط",
+                        variant: branch.isActive ? "default" : "secondary"
+                      }}
+                      actions={[
+                        {
+                          label: "تعديل",
+                          icon: <PencilIcon className="h-4 w-4" />,
+                          onClick: () => handleEdit(branch)
+                        },
+                        {
+                          label: "حذف",
+                          icon: <Trash2Icon className="h-4 w-4" />,
+                          onClick: () => handleDelete(branch.id),
+                          variant: "destructive"
+                        }
+                      ]}
+                    />
+                  )}
+                />
+              ) : (
+                /* عرض الجدول على الشاشات الكبيرة */
+                <div className="table-professional">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">الكود</TableHead>
+                        <TableHead className="text-right">الاسم</TableHead>
+                        <TableHead className="text-right">العنوان</TableHead>
+                        <TableHead className="text-right">الهاتف</TableHead>
+                        <TableHead className="text-right">الحالة</TableHead>
+                        <TableHead className="text-right w-24">الإجراءات</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredBranches.map((branch) => (
+                        <TableRow key={branch.id}>
+                          <TableCell className="font-mono">{branch.code}</TableCell>
+                          <TableCell className="font-medium">{branch.nameAr}</TableCell>
+                          <TableCell>
+                            {branch.address ? (
+                              <span className="flex items-center gap-1 text-muted-foreground">
+                                <MapPin className="h-3 w-3" />
+                                {branch.address}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {branch.phone ? (
+                              <span className="flex items-center gap-1 text-muted-foreground">
+                                <Phone className="h-3 w-3" />
+                                {branch.phone}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={branch.isActive ? "default" : "secondary"}>
+                              {branch.isActive ? "نشط" : "غير نشط"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(branch)}
+                                className="h-8 w-8"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(branch.id)}
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )
             ) : (
               <div className="text-center py-12">
                 <Building2 className="h-16 w-16 mx-auto mb-4 text-muted-foreground/50" />

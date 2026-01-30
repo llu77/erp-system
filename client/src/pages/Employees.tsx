@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useIsMobile } from "@/hooks/useMobile";
+import { MobileCard, MobileCardList, useResponsiveView, Pencil as PencilIcon, Trash2 as Trash2Icon } from "@/components/ui/mobile-card-view";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -298,69 +299,40 @@ export default function Employees() {
             ) : filteredEmployees && filteredEmployees.length > 0 ? (
               isMobile ? (
                 /* عرض البطاقات على الموبايل */
-                <div className="space-y-3">
-                  {filteredEmployees.map((employee) => (
-                    <Card key={employee.id} className="border-r-4 border-r-primary">
-                      <CardContent className="p-3">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <UserCircle className="h-8 w-8 text-muted-foreground" />
-                            <div>
-                              <p className="font-medium">{employee.name}</p>
-                              <p className="text-xs text-muted-foreground font-mono">{employee.code}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Badge variant={employee.isActive ? "default" : "secondary"} className="text-xs">
-                              {employee.isActive ? "نشط" : "غير نشط"}
-                            </Badge>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                          <div>
-                            <p className="text-xs text-muted-foreground">الفرع</p>
-                            <p className="font-medium flex items-center gap-1">
-                              <Building2 className="h-3 w-3" />
-                              {getBranchName(employee.branchId)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">المنصب</p>
-                            <p className="font-medium">{employee.position || "-"}</p>
-                          </div>
-                          {employee.phone && (
-                            <div className="col-span-2">
-                              <p className="text-xs text-muted-foreground">التواصل</p>
-                              <p className="font-medium flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                {employee.phone}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-end gap-2 border-t pt-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(employee)}
-                          >
-                            <Pencil className="h-4 w-4 ml-1" />
-                            تعديل
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(employee.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 ml-1" />
-                            حذف
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                <MobileCardList
+                  items={filteredEmployees}
+                  emptyMessage="لا يوجد موظفين"
+                  emptyIcon={<Users className="h-12 w-12" />}
+                  renderCard={(employee) => (
+                    <MobileCard
+                      key={employee.id}
+                      fields={[
+                        { label: "الاسم", value: employee.name, isTitle: true },
+                        { label: "الكود", value: employee.code, isSubtitle: true },
+                        { label: "الفرع", value: getBranchName(employee.branchId) },
+                        { label: "المنصب", value: employee.position || "-" },
+                        { label: "الهاتف", value: employee.phone || "-" },
+                      ]}
+                      statusBadge={{
+                        label: employee.isActive ? "نشط" : "غير نشط",
+                        variant: employee.isActive ? "default" : "secondary"
+                      }}
+                      actions={[
+                        {
+                          label: "تعديل",
+                          icon: <PencilIcon className="h-4 w-4" />,
+                          onClick: () => handleEdit(employee)
+                        },
+                        {
+                          label: "حذف",
+                          icon: <Trash2Icon className="h-4 w-4" />,
+                          onClick: () => handleDelete(employee.id),
+                          variant: "destructive"
+                        }
+                      ]}
+                    />
+                  )}
+                />
               ) : (
                 /* عرض الجدول على الشاشات الكبيرة */
                 <div className="table-professional">

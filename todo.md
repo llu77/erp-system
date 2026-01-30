@@ -3957,3 +3957,16 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] تحسين الجدول بتصميم table-professional
 - [x] إضافة Badge لعدد الفروع النشطة
 - [x] تحسين زر الإضافة بتدرج gradient وshadow
+
+
+## إضافة MobileCardView لصفحات الموظفين والفروع - 30 يناير 2026
+
+### 1. صفحة الموظفين (Employees.tsx)
+- [x] إضافة import للـ MobileCard, MobileCardList, PencilIcon, Trash2Icon
+- [x] تعريف حقول البطاقة (الاسم، الكود، الفرع، المنصب، الهاتف)
+- [x] استبدال الجدول بعرض متجاوب مع statusBadge و actions
+
+### 2. صفحة الفروع (Branches.tsx)
+- [x] إضافة import للـ MobileCard, MobileCardList, PencilIcon, Trash2Icon
+- [x] تعريف حقول البطاقة (الاسم، الكود، العنوان، الهاتف)
+- [x] استبدال الجدول بعرض متجاوب مع statusBadge و actions
