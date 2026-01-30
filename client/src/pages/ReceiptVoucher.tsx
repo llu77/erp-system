@@ -107,7 +107,8 @@ export default function ReceiptVoucher() {
 
       const result = await createVoucherMutation.mutateAsync({
         voucherDate: new Date(formData.voucherDate),
-        dueDate: formData.dueDateFrom ? new Date(formData.dueDateFrom) : undefined,
+        dueDateFrom: formData.dueDateFrom ? new Date(formData.dueDateFrom) : undefined,
+        dueDateTo: formData.dueDateTo ? new Date(formData.dueDateTo) : undefined,
         payeeName: recipientLabel,
         payeeAddress: formData.notes,
         payeePhone: formData.payeePhone,
@@ -532,21 +533,21 @@ export default function ReceiptVoucher() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm mt-4">
                   <div>
-                    <p className="text-gray-600 text-xs mb-1">التاريخ</p>
+                    <p className="text-gray-600 text-xs mb-1">تاريخ السند</p>
                     <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                      {new Date(getVoucherQuery.data.voucherDate).toLocaleDateString('ar-SA')}
+                      {new Date(getVoucherQuery.data.voucherDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-xs mb-1">الاستحقاق (من)</p>
+                    <p className="text-gray-600 text-xs mb-1">من تاريخ</p>
                     <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                      {getVoucherQuery.data.dueDate ? new Date(getVoucherQuery.data.dueDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                      {getVoucherQuery.data.dueDateFrom ? new Date(getVoucherQuery.data.dueDateFrom).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'غير محدد'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-xs mb-1">الاستحقاق (إلى)</p>
+                    <p className="text-gray-600 text-xs mb-1">إلى تاريخ</p>
                     <p className="font-semibold text-gray-900 text-xs sm:text-sm">
-                      {getVoucherQuery.data.dueDate ? new Date(getVoucherQuery.data.dueDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                      {getVoucherQuery.data.dueDateTo ? new Date(getVoucherQuery.data.dueDateTo).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'غير محدد'}
                     </p>
                   </div>
                   <div className="text-left">

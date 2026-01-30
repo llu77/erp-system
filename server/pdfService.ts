@@ -45,7 +45,8 @@ const formatCurrency = (amount: number): string => {
 export async function generateSingleReceiptVoucherPDF(voucher: {
   voucherId: string;
   voucherDate: Date | string;
-  dueDate?: Date | string | null;
+  dueDateFrom?: Date | string | null;
+  dueDateTo?: Date | string | null;
   payeeName: string;
   payeePhone?: string | null;
   payeeEmail?: string | null;
@@ -61,10 +62,14 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
     notes?: string | null;
   }>;
 }): Promise<Buffer> {
+  // تنسيق التاريخ بالميلادي (DD/MM/YYYY)
   const formatDate = (date: Date | string | null | undefined): string => {
     if (!date) return 'غير محدد';
     const d = new Date(date);
-    return d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
   };
 
   const formatCurrencyLocal = (amount: number | string): string => {
@@ -477,8 +482,12 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
         <div class="info-value">${formatDate(voucher.voucherDate)}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">تاريخ الاستحقاق</div>
-        <div class="info-value">${formatDate(voucher.dueDate)}</div>
+        <div class="info-label">من تاريخ</div>
+        <div class="info-value">${formatDate(voucher.dueDateFrom)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">إلى تاريخ</div>
+        <div class="info-value">${formatDate(voucher.dueDateTo)}</div>
       </div>
       <div class="info-item">
         <div class="info-label">الفرع</div>

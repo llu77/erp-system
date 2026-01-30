@@ -1685,7 +1685,9 @@ export const receiptVouchers = mysqlTable("receiptVouchers", {
   
   // بيانات المستند
   voucherDate: date("voucherDate").notNull(),
-  dueDate: date("dueDate"),
+  dueDateFrom: date("dueDateFrom"),
+  dueDateTo: date("dueDateTo"),
+  dueDate: date("dueDate"), // للتوافق العكسي
   
   // بيانات المدفوع له
   payeeName: varchar("payeeName", { length: 255 }).notNull(),

@@ -6609,7 +6609,9 @@ ${discrepancyRows}
     create: supervisorInputProcedure
       .input(z.object({
         voucherDate: z.date(),
-        dueDate: z.date().optional(),
+        dueDateFrom: z.date().optional(),
+        dueDateTo: z.date().optional(),
+        dueDate: z.date().optional(), // للتوافق العكسي
         payeeName: z.string().min(1),
         payeeAddress: z.string().optional(),
         payeePhone: z.string().optional(),
@@ -6725,7 +6727,8 @@ ${discrepancyRows}
         const pdfBuffer = await generateSingleReceiptVoucherPDF({
           voucherId: voucher.voucherId,
           voucherDate: voucher.voucherDate,
-          dueDate: voucher.dueDate,
+          dueDateFrom: voucher.dueDateFrom,
+          dueDateTo: voucher.dueDateTo,
           payeeName: voucher.payeeName,
           payeePhone: voucher.payeePhone,
           payeeEmail: voucher.payeeEmail,
