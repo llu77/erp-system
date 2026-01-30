@@ -267,7 +267,6 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
           ref={inputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           onChange={(e) => handleFileChange(e, docType)}
           className="hidden"
           disabled={disabled || isUploading}
@@ -337,7 +336,7 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
               <div className="flex flex-col items-center gap-2">
                 <Upload className="h-8 w-8" />
                 <span className="text-sm">اضغط لرفع صورة {label}</span>
-                <span className="text-xs text-slate-500">أو التقط صورة من الكاميرا</span>
+                <span className="text-xs text-slate-500">من الاستديو أو الكاميرا</span>
               </div>
             )}
           </Button>
