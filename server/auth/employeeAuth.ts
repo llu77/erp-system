@@ -1,6 +1,6 @@
 import { getDb } from '../db';
 import { employees, branches, users } from '../../drizzle/schema';
-import { eq, and, like, or } from 'drizzle-orm';
+import { eq, and, like, or, sql } from 'drizzle-orm';
 import { hashPassword, verifyPassword } from './localAuth';
 
 // إنشاء اسم مستخدم من اسم الموظف
@@ -163,11 +163,12 @@ export async function employeeLogin(username: string, password: string): Promise
     }
 
     // إذا لم يُوجد في جدول الموظفين، ابحث في جدول المستخدمين (للمشرفين والأدمن)
+    // استخدام LOWER للمقارنة بدون حساسية لحالة الأحرف
     const user = await db
       .select()
       .from(users)
       .where(and(
-        eq(users.username, username),
+        sql`LOWER(${users.username}) = ${username.toLowerCase()}`,
         eq(users.isActive, true)
       ))
       .limit(1);

@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { users } from "../../drizzle/schema";
 import * as crypto from "crypto";
@@ -43,12 +43,13 @@ export async function localLogin(username: string, password: string) {
   }
 
   try {
+    // استخدام LOWER للمقارنة بدون حساسية لحالة الأحرف
     const result = await db
       .select()
       .from(users)
       .where(
         and(
-          eq(users.username, username),
+          sql`LOWER(${users.username}) = ${username.toLowerCase()}`,
           eq(users.isActive, true)
         )
       )
