@@ -224,21 +224,23 @@ export default function Employees() {
       <div className="space-y-6">
         {/* العنوان */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Users className="h-6 w-6 text-primary" />
-              إدارة الموظفين
-            </h1>
-            <p className="text-muted-foreground">إضافة وتعديل وحذف الموظفين</p>
+          <div className="flex items-center gap-4">
+            <div className="kpi-icon bg-gradient-to-br from-blue-500 to-blue-600">
+              <Users className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">إدارة الموظفين</h1>
+              <p className="text-muted-foreground text-sm">إضافة وتعديل وحذف الموظفين</p>
+            </div>
           </div>
-          <Button onClick={openAddDialog} className="gap-2">
+          <Button onClick={openAddDialog} className="gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg">
             <Plus className="h-4 w-4" />
             إضافة موظف
           </Button>
         </div>
 
         {/* البحث والفلترة */}
-        <Card>
+        <Card className="card-professional">
           <CardContent className="p-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="relative flex-1">
@@ -269,12 +271,22 @@ export default function Employees() {
         </Card>
 
         {/* جدول الموظفين */}
-        <Card>
+        <Card className="card-professional">
           <CardHeader>
-            <CardTitle>قائمة الموظفين</CardTitle>
-            <CardDescription>
-              {filteredEmployees?.length || 0} موظف
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <UserCircle className="h-5 w-5 text-blue-500" />
+                  قائمة الموظفين
+                </CardTitle>
+                <CardDescription>
+                  {filteredEmployees?.length || 0} موظف
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                {employees?.filter(e => e.isActive).length || 0} نشط
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -351,7 +363,7 @@ export default function Employees() {
                 </div>
               ) : (
                 /* عرض الجدول على الشاشات الكبيرة */
-                <div className="border rounded-lg overflow-hidden">
+                <div className="table-professional">
                   <Table>
                     <TableHeader>
                       <TableRow>

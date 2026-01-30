@@ -164,21 +164,23 @@ export default function Branches() {
       <div className="space-y-6">
         {/* العنوان */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Building2 className="h-6 w-6 text-primary" />
-              إدارة الفروع
-            </h1>
-            <p className="text-muted-foreground">إضافة وتعديل وحذف الفروع</p>
+          <div className="flex items-center gap-4">
+            <div className="kpi-icon bg-gradient-to-br from-purple-500 to-purple-600">
+              <Building2 className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">إدارة الفروع</h1>
+              <p className="text-muted-foreground text-sm">إضافة وتعديل وحذف الفروع</p>
+            </div>
           </div>
-          <Button onClick={openAddDialog} className="gap-2">
+          <Button onClick={openAddDialog} className="gap-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 shadow-lg">
             <Plus className="h-4 w-4" />
             إضافة فرع
           </Button>
         </div>
 
         {/* البحث */}
-        <Card>
+        <Card className="card-professional">
           <CardContent className="p-4">
             <div className="relative">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -193,12 +195,22 @@ export default function Branches() {
         </Card>
 
         {/* جدول الفروع */}
-        <Card>
+        <Card className="card-professional">
           <CardHeader>
-            <CardTitle>قائمة الفروع</CardTitle>
-            <CardDescription>
-              {filteredBranches?.length || 0} فرع
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-purple-500" />
+                  قائمة الفروع
+                </CardTitle>
+                <CardDescription>
+                  {filteredBranches?.length || 0} فرع
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/20">
+                {branches?.filter(b => b.isActive).length || 0} نشط
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -208,7 +220,7 @@ export default function Branches() {
                 <Skeleton className="h-12 w-full" />
               </div>
             ) : filteredBranches && filteredBranches.length > 0 ? (
-              <div className="border rounded-lg overflow-hidden">
+              <div className="table-professional">
                 <Table>
                   <TableHeader>
                     <TableRow>
