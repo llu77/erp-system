@@ -671,7 +671,7 @@ export default function Revenues() {
               ) : (
                 <div className="space-y-4">
                   {/* عرض الصور المرفوعة باستخدام المكون المحسن */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {balanceImages.map((img, idx) => (
                       <ImageThumbnail
                         key={idx}
@@ -683,7 +683,7 @@ export default function Revenues() {
                         }}
                         onRemove={() => removeImage(idx)}
                         ocrStatus="success"
-                        className="h-44"
+                        className="h-64 sm:h-56"
                       />
                     ))}
                   </div>

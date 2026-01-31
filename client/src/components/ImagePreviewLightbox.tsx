@@ -467,7 +467,7 @@ export function ImageThumbnail({
       onClick={onClick}
     >
       {/* الصورة */}
-      <div className="relative w-full h-40 bg-muted">
+      <div className="relative w-full h-full min-h-[160px] bg-muted">
         {imageError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
             <ImageOff className="h-8 w-8 mb-2" />
