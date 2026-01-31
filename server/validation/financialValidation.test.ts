@@ -159,10 +159,18 @@ describe('Financial Validation Service', () => {
       expect(result.errors[0].code).toBe('DATE_INVALID');
     });
 
-    it('should reject future dates by default', () => {
+    it('should allow future dates by default (new behavior)', () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 10);
       const result = validateDate(futureDate);
+      // السلوك الجديد: السماح بالتواريخ المستقبلية افتراضياً
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject future dates when allowFuture is false', () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 10);
+      const result = validateDate(futureDate, { allowFuture: false });
       expect(result.success).toBe(false);
       expect(result.errors[0].code).toBe('DATE_FUTURE');
     });

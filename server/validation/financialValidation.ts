@@ -220,7 +220,8 @@ export function validateDate(
   options: DateValidationOptions = {}
 ): ValidationResult<Date> {
   const {
-    allowFuture = false,
+    // السماح بالتواريخ المستقبلية افتراضياً (مع قيد عدم التكرار لنفس التاريخ)
+    allowFuture = true,
     allowPast = true,
     maxDaysInPast = VALIDATION_LIMITS.MAX_DAYS_IN_PAST,
     maxDaysInFuture = VALIDATION_LIMITS.MAX_DAYS_IN_FUTURE,

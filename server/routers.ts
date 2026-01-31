@@ -1910,11 +1910,12 @@ export const appRouter = router({
           financialValidation.throwValidationError(networkValidation.errors);
         }
 
-        // التحقق من صحة التاريخ
+        // التحقق من صحة التاريخ (السماح بأي تاريخ - القيد الوحيد هو عدم تكرار الإيراد لنفس التاريخ)
         const dateValidation = financialValidation.validateDate(input.date, {
           fieldName: 'تاريخ الإيراد',
-          allowFuture: false,
-          maxDaysInPast: 30, // السماح بإدخال إيرادات حتى 30 يوم في الماضي
+          allowFuture: true, // السماح بالتواريخ المستقبلية
+          maxDaysInPast: 365, // السماح بإدخال إيرادات حتى سنة في الماضي
+          maxDaysInFuture: 365, // السماح بإدخال إيرادات حتى سنة في المستقبل
         });
         if (!dateValidation.success) {
           financialValidation.throwValidationError(dateValidation.errors);
