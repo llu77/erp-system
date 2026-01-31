@@ -1110,6 +1110,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                     <TableHead className="text-right">شبكة</TableHead>
                     <TableHead className="text-right">رصيد</TableHead>
                     <TableHead className="text-right">فواتير المدفوع</TableHead>
+                    <TableHead className="text-right">ولاء</TableHead>
                     <TableHead className="text-right">الإجمالي</TableHead>
                     <TableHead className="text-right">الموازنة</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
@@ -1159,6 +1160,44 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                                       </div>
                                     )}
                                   </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-purple-500">
+                          {parseFloat((revenue as any).loyalty || "0") > 0 ? (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="gap-1 h-8 px-2 text-purple-500 hover:text-purple-600">
+                                  {parseFloat((revenue as any).loyalty || "0").toLocaleString()}
+                                  {(revenue as any).loyaltyInvoiceImage && (
+                                    <ImageIcon className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle className="text-purple-500">ولاء - {format(new Date(revenue.date), "d MMMM yyyy", { locale: ar })}</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div className="p-4 bg-purple-500/10 rounded-lg">
+                                    <div className="text-2xl font-bold text-purple-600">
+                                      {parseFloat((revenue as any).loyalty || "0").toLocaleString()} ر.س
+                                    </div>
+                                  </div>
+                                  {(revenue as any).loyaltyInvoiceImage && (
+                                    <div className="border rounded-lg overflow-hidden">
+                                      <p className="text-sm font-medium p-2 bg-muted">فاتورة الولاء</p>
+                                      <img
+                                        src={(revenue as any).loyaltyInvoiceImage.url}
+                                        alt="فاتورة الولاء"
+                                        className="w-full h-auto max-h-[60vh] object-contain"
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                               </DialogContent>
                             </Dialog>
