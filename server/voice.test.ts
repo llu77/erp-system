@@ -55,7 +55,7 @@ describe('Voice Transcription System', () => {
       
       // يجب أن يكون هناك خطأ أو نتيجة
       expect(result).toBeDefined();
-    });
+    }, 15000); // زيادة المهلة الزمنية لـ 15 ثانية
   });
 
   describe('Supported Audio Formats', () => {

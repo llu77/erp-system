@@ -75,16 +75,16 @@ export interface OCRWarning {
 }
 
 // ==================== الثوابت ====================
-const AMOUNT_TOLERANCE_PERCENTAGE = 0.02; // 2% tolerance for OCR errors
-const MIN_CONFIDENCE_FOR_VALIDATION = "medium";
-const DATE_TOLERANCE_DAYS = 1; // السماح بفرق يوم واحد في التاريخ
+export const AMOUNT_TOLERANCE_PERCENTAGE = 0.02; // 2% tolerance for OCR errors
+export const MIN_CONFIDENCE_FOR_VALIDATION = "medium";
+export const DATE_TOLERANCE_DAYS = 1; // السماح بفرق يوم واحد في التاريخ
 
 // ==================== دوال مساعدة ====================
 
 /**
  * تنظيف النص المستخرج وتحويله إلى رقم
  */
-function parseExtractedAmount(text: string | null | undefined): number | null {
+export function parseExtractedAmount(text: string | null | undefined): number | null {
   if (!text) return null;
 
   // إزالة الرموز غير الرقمية ما عدا النقطة والفاصلة
@@ -109,7 +109,7 @@ function parseExtractedAmount(text: string | null | undefined): number | null {
 /**
  * تحويل التاريخ إلى تنسيق موحد YYYY-MM-DD
  */
-function normalizeDate(dateStr: string | null | undefined): string | null {
+export function normalizeDate(dateStr: string | null | undefined): string | null {
   if (!dateStr) return null;
 
   try {
@@ -145,7 +145,7 @@ function normalizeDate(dateStr: string | null | undefined): string | null {
 /**
  * التحقق من تطابق التاريخين مع هامش مسموح
  */
-function datesMatch(
+export function datesMatch(
   extractedDate: string | null,
   expectedDate: string,
   toleranceDays: number = DATE_TOLERANCE_DAYS
@@ -168,7 +168,7 @@ function datesMatch(
 /**
  * التحقق من تطابق المبلغين مع هامش خطأ
  */
-function amountsMatch(
+export function amountsMatch(
   extracted: number,
   expected: number,
   tolerancePercent: number = AMOUNT_TOLERANCE_PERCENTAGE
@@ -182,7 +182,7 @@ function amountsMatch(
 /**
  * تحديد مستوى الثقة بناءً على استجابة LLM
  */
-function determineConfidence(
+export function determineConfidence(
   llmConfidence: string | undefined,
   extractedAmount: number | null
 ): "high" | "medium" | "low" | "none" {
@@ -200,7 +200,7 @@ function determineConfidence(
 /**
  * استخراج تاريخ الرفع من uploadedAt
  */
-function getUploadDate(uploadedAt: string): string {
+export function getUploadDate(uploadedAt: string): string {
   try {
     const date = new Date(uploadedAt);
     return date.toISOString().split("T")[0];
@@ -400,7 +400,7 @@ export async function extractAmountFromImage(
 /**
  * توليد الإشعارات بناءً على نتيجة التحقق
  */
-function generateWarnings(
+export function generateWarnings(
   extractionResult: OCRExtractionResult,
   isAmountMatched: boolean,
   isDateMatched: boolean,
