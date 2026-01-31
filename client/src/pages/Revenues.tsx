@@ -909,12 +909,13 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
       network: acc.network + parseFloat(rev.network || "0"),
       balance: acc.balance + parseFloat(rev.balance || "0"),
       paidInvoices: acc.paidInvoices + parseFloat(rev.paidInvoices || "0"),
+      loyalty: acc.loyalty + parseFloat((rev as any).loyalty || "0"),
       total: acc.total + parseFloat(rev.total || "0"),
       matched: acc.matched + (rev.isMatched ? 1 : 0),
       unmatched: acc.unmatched + (rev.isMatched ? 0 : 1),
     }),
-    { cash: 0, network: 0, balance: 0, paidInvoices: 0, total: 0, matched: 0, unmatched: 0 }
-  ) || { cash: 0, network: 0, balance: 0, paidInvoices: 0, total: 0, matched: 0, unmatched: 0 };
+    { cash: 0, network: 0, balance: 0, paidInvoices: 0, loyalty: 0, total: 0, matched: 0, unmatched: 0 }
+  ) || { cash: 0, network: 0, balance: 0, paidInvoices: 0, loyalty: 0, total: 0, matched: 0, unmatched: 0 };
 
   // دالة تصدير PDF
   const handleExportPDF = async (

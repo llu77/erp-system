@@ -1906,8 +1906,9 @@ export const appRouter = router({
         const cashAmount = parseFloat(input.cash);
         const paidInvoicesAmount = parseFloat(input.paidInvoices || '0');
         const calculatedBalance = networkAmount;
-        // الإجمالي = الكاش + الشبكة + فواتير المدفوع
-        const calculatedTotal = cashAmount + networkAmount + paidInvoicesAmount;
+        const loyaltyAmount = parseFloat(input.loyalty || '0');
+        // الإجمالي = الكاش + الشبكة + فواتير المدفوع + الولاء
+        const calculatedTotal = cashAmount + networkAmount + paidInvoicesAmount + loyaltyAmount;
 
         // 3. المطابقة التلقائية: التحقق من أن مجموع إيرادات الموظفين = (النقدي + الشبكة)
         let totalEmployeeCash = 0;
