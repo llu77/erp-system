@@ -422,6 +422,45 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
       opacity: 0.8;
     }
     
+    /* ختم الاعتماد */
+    .approval-stamp {
+      position: absolute;
+      top: -15px;
+      right: -15px;
+      width: 80px;
+      height: 80px;
+      border: 4px solid #16a34a;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(22, 163, 74, 0.1);
+      transform: rotate(-15deg);
+      box-shadow: 0 2px 8px rgba(22, 163, 74, 0.3);
+    }
+    
+    .approval-stamp-inner {
+      text-align: center;
+    }
+    
+    .approval-text {
+      font-size: 18px;
+      font-weight: 800;
+      color: #16a34a;
+      letter-spacing: 2px;
+    }
+    
+    .approval-date {
+      font-size: 9px;
+      color: #16a34a;
+      margin-top: 2px;
+    }
+    
+    .stamp-box {
+      position: relative;
+    }
+    
     /* ذيل السند */
     .footer {
       background: #f5f5f5;
@@ -580,6 +619,14 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
             <div class="stamp-text">الإدارة المالية</div>
           </div>
         </div>
+        ${voucher.status === 'approved' ? `
+        <div class="approval-stamp">
+          <div class="approval-stamp-inner">
+            <div class="approval-text">معتمد</div>
+            <div class="approval-date">${formatDate(new Date())}</div>
+          </div>
+        </div>
+        ` : ''}
       </div>
       
       <div class="signature-box">

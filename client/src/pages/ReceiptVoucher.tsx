@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
-import { Plus, Printer, Save, Eye, Mail, Trash2, Download, FileText } from 'lucide-react';
+import { Plus, Printer, Save, Eye, Mail, Trash2, Download, FileText, CheckCircle, Shield } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useAuth } from '@/_core/hooks/useAuth';
@@ -80,6 +80,7 @@ export default function ReceiptVoucher() {
   const createVoucherMutation = trpc.receiptVoucher.create.useMutation();
   const sendEmailMutation = trpc.receiptVoucher.sendEmail.useMutation();
   const deleteVoucherMutation = trpc.receiptVoucher.delete.useMutation();
+  const updateStatusMutation = trpc.receiptVoucher.updateStatus.useMutation();
   const generatePDFMutation = trpc.receiptVoucher.generatePDF.useMutation();
   const getVouchersQuery = trpc.receiptVoucher.getAll.useQuery({ limit: 50, offset: 0 });
   const getVoucherQuery = trpc.receiptVoucher.get.useQuery(
@@ -241,6 +242,20 @@ export default function ReceiptVoucher() {
     setShowPreviewDialog(true);
   };
 
+  // اعتماد السند
+  const handleApproveVoucher = async (voucherId: string) => {
+    try {
+      await updateStatusMutation.mutateAsync({
+        voucherId,
+        status: 'approved',
+      });
+      toast.success('تم اعتماد السند بنجاح');
+      getVouchersQuery.refetch();
+    } catch (error: any) {
+      toast.error(error?.message || 'فشل في اعتماد السند');
+    }
+  };
+
   // حذف السند (للأدمن فقط)
   const handleDeleteVoucher = async () => {
     if (!voucherToDelete) return;
@@ -331,9 +346,22 @@ export default function ReceiptVoucher() {
                               size="sm"
                               variant="outline"
                               onClick={() => handlePreview(voucher)}
+                              title="معاينة"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
+                            {user?.role === 'admin' && voucher.status === 'draft' && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => handleApproveVoucher(voucher.voucherId)}
+                                disabled={updateStatusMutation.isPending}
+                                title="اعتماد السند"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </Button>
+                            )}
                             {user?.role === 'admin' && (
                               <Button
                                 size="sm"

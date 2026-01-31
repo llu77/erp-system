@@ -1,0 +1,1 @@
+ALTER TABLE `dailyRevenues` ADD `paidInvoicesCustomer` varchar(100);

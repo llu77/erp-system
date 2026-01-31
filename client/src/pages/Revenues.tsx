@@ -66,7 +66,15 @@ export default function Revenues() {
     network: "",
     paidInvoices: "",
     paidInvoicesNote: "",
+    paidInvoicesCustomer: "", // اسم العميل لفواتير المدفوع
   });
+
+  // قائمة العملاء لفواتير المدفوع
+  const PAID_INVOICE_CUSTOMERS = [
+    { id: 'omar', name: 'عمر المطيري' },
+    { id: 'salem', name: 'سالم الوادعي' },
+    { id: 'saud', name: 'سعود الحريسي' },
+  ];
   const [employeeRevenues, setEmployeeRevenues] = useState<EmployeeRevenueInput[]>([]);
   const [balanceImages, setBalanceImages] = useState<Array<{ url: string; key: string; preview: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -165,7 +173,7 @@ export default function Revenues() {
     onSuccess: () => {
       toast.success("تم حفظ الإيرادات بنجاح وتحديث البونص تلقائياً");
       // إعادة تعيين النموذج
-      setBranchRevenue({ cash: "", network: "", paidInvoices: "", paidInvoicesNote: "" });
+      setBranchRevenue({ cash: "", network: "", paidInvoices: "", paidInvoicesNote: "", paidInvoicesCustomer: "" });
       setEmployeeRevenues([]);
       setUnmatchReason("");
       setBalanceImages([]);
@@ -245,6 +253,18 @@ export default function Revenues() {
       return;
     }
 
+    // التحقق من اسم العميل عند إدخال فواتير مدفوع
+    if (branchRevenue.paidInvoices && parseFloat(branchRevenue.paidInvoices) > 0) {
+      if (!branchRevenue.paidInvoicesCustomer) {
+        toast.error("يرجى اختيار اسم العميل لفواتير المدفوع");
+        return;
+      }
+      if (!branchRevenue.paidInvoicesNote.trim()) {
+        toast.error("يرجى كتابة سبب فواتير المدفوع");
+        return;
+      }
+    }
+
     // التحقق من المطابقة التلقائية
     const isAutoMatched = autoMatchStatus;
     
@@ -262,6 +282,7 @@ export default function Revenues() {
       balance: branchRevenue.network || "0", // الرصيد = الشبكة تلقائياً (سيتم حسابه في الخادم)
       paidInvoices: branchRevenue.paidInvoices || "0", // فواتير المدفوع
       paidInvoicesNote: branchRevenue.paidInvoicesNote || "", // سبب فواتير المدفوع
+      paidInvoicesCustomer: branchRevenue.paidInvoicesCustomer || "", // اسم العميل
       total: calculateBranchTotal(),
       isMatched: isAutoMatched,
       unmatchReason: isAutoMatched ? undefined : unmatchReason,
@@ -398,17 +419,37 @@ export default function Revenues() {
                   placeholder="0.00"
                   className="mt-2"
                 />
-                {/* خانة الملاحظة تظهر عند إدخال مبلغ */}
+                {/* خانة الملاحظة واسم العميل تظهر عند إدخال مبلغ */}
                 {branchRevenue.paidInvoices && parseFloat(branchRevenue.paidInvoices) > 0 && (
-                  <div className="mt-2">
-                    <Label className="text-xs text-muted-foreground">سبب فواتير المدفوع</Label>
-                    <Input
-                      type="text"
-                      value={branchRevenue.paidInvoicesNote}
-                      onChange={(e) => setBranchRevenue({ ...branchRevenue, paidInvoicesNote: e.target.value })}
-                      placeholder="اكتب سبب فواتير المدفوع..."
-                      className="mt-1"
-                    />
+                  <div className="mt-3 space-y-3 p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
+                    <div>
+                      <Label className="text-xs font-medium text-orange-600">اسم العميل *</Label>
+                      <Select
+                        value={branchRevenue.paidInvoicesCustomer}
+                        onValueChange={(value) => setBranchRevenue({ ...branchRevenue, paidInvoicesCustomer: value })}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="اختر اسم العميل" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PAID_INVOICE_CUSTOMERS.map((customer) => (
+                            <SelectItem key={customer.id} value={customer.name}>
+                              {customer.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-orange-600">سبب فواتير المدفوع *</Label>
+                      <Input
+                        type="text"
+                        value={branchRevenue.paidInvoicesNote}
+                        onChange={(e) => setBranchRevenue({ ...branchRevenue, paidInvoicesNote: e.target.value })}
+                        placeholder="اكتب سبب فواتير المدفوع..."
+                        className="mt-1"
+                      />
+                    </div>
                   </div>
                 )}
               </div>

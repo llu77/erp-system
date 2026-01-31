@@ -329,6 +329,7 @@ export const dailyRevenues = mysqlTable("dailyRevenues", {
   balance: decimal("balance", { precision: 15, scale: 2 }).default("0.00").notNull(),
   paidInvoices: decimal("paidInvoices", { precision: 15, scale: 2 }).default("0.00"), // فواتير المدفوع (اختياري)
   paidInvoicesNote: text("paidInvoicesNote"), // سبب فواتير المدفوع
+  paidInvoicesCustomer: varchar("paidInvoicesCustomer", { length: 100 }), // اسم العميل لفواتير المدفوع
   total: decimal("total", { precision: 15, scale: 2 }).default("0.00").notNull(),
   isMatched: boolean("isMatched").default(true).notNull(),
   unmatchReason: text("unmatchReason"),

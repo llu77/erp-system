@@ -1860,6 +1860,7 @@ export const appRouter = router({
         balance: z.string(),
         paidInvoices: z.string().optional(),
         paidInvoicesNote: z.string().optional(),
+        paidInvoicesCustomer: z.string().optional(), // اسم العميل لفواتير المدفوع
         total: z.string(),
         isMatched: z.boolean(),
         unmatchReason: z.string().optional(),
@@ -1954,6 +1955,7 @@ export const appRouter = router({
           balance: calculatedBalance.toString(), // الرصيد = الشبكة تلقائياً
           paidInvoices: paidInvoicesAmount.toString(), // فواتير المدفوع
           paidInvoicesNote: input.paidInvoicesNote || null, // سبب فواتير المدفوع
+          paidInvoicesCustomer: input.paidInvoicesCustomer || null, // اسم العميل
           total: calculatedTotal.toString(), // الإجمالي = الكاش + الشبكة + فواتير المدفوع
           isMatched, // المطابقة التلقائية
           unmatchReason: unmatchReason || null,
