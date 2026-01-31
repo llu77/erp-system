@@ -2048,34 +2048,109 @@ export const appRouter = router({
 
             // التحقق من نجاح قراءة الصورة
             if (!imageVerificationResult.success) {
+              // تحليل السبب المحتمل للفشل
+              let detailedMessage = '❗ فشل قراءة صورة الموازنة\n\n';
+              
+              // التحقق من التحذيرات الموجودة
+              if (imageVerificationResult.warnings && imageVerificationResult.warnings.length > 0) {
+                detailedMessage += '🔍 المشاكل المكتشفة:\n';
+                imageVerificationResult.warnings.forEach((warning, index) => {
+                  detailedMessage += `${index + 1}. ${warning.message}\n`;
+                  if (warning.suggestion) {
+                    detailedMessage += `   💡 ${warning.suggestion}\n`;
+                  }
+                });
+              } else {
+                // رسائل افتراضية بناءً على الحالة
+                if (imageVerificationResult.confidence === 'none') {
+                  detailedMessage += '📷 الصورة غير واضحة أو لا تحتوي على إيصال POS\n';
+                  detailedMessage += '💡 تأكد من:\n';
+                  detailedMessage += '   - الصورة ليست مقلوبة أو مائلة\n';
+                  detailedMessage += '   - الإيصال كامل وغير مقطوع\n';
+                  detailedMessage += '   - الإضاءة جيدة وبدون انعكاس\n';
+                  detailedMessage += '   - الصورة ليست ضبابية أو مهتزة\n';
+                } else if (!imageVerificationResult.sections || imageVerificationResult.sections.length === 0) {
+                  detailedMessage += '📊 لم نتمكن من تحديد أقسام الدفع (mada, VISA, MasterCard, إلخ)\n';
+                  detailedMessage += '💡 تأكد من أن الصورة لإيصال الموازنة اليومية وليس إيصال عادي\n';
+                } else {
+                  detailedMessage += imageVerificationResult.message || 'الصورة غير واضحة';
+                }
+              }
+              
               throw new TRPCError({
                 code: 'BAD_REQUEST',
-                message: `❗ فشل قراءة صورة الموازنة: ${imageVerificationResult.message || 'الصورة غير واضحة أو لا تحتوي على إيصال POS صالح'}. يرجى رفع صورة أوضح.`
+                message: detailedMessage
               });
             }
 
             // التحقق من مستوى الثقة - يجب أن تكون متوسطة على الأقل
             if (!balanceImageOCR.isConfidenceSufficient(imageVerificationResult.confidence)) {
               const warning = balanceImageOCR.getConfidenceWarning(imageVerificationResult.confidence);
+              let qualityMessage = '⚠️ جودة الصورة غير كافية للقراءة الدقيقة\n\n';
+              qualityMessage += `📊 مستوى الثقة: ${imageVerificationResult.confidence === 'low' ? 'منخفض' : 'غير محدد'}\n`;
+              qualityMessage += `📝 ${warning}\n\n`;
+              qualityMessage += '💡 نصائح لتحسين جودة الصورة:\n';
+              qualityMessage += '   1. تأكد من الإضاءة الجيدة (ضوء طبيعي أو إضاءة مباشرة)\n';
+              qualityMessage += '   2. ثبّت الجوال أثناء التصوير لتجنب الاهتزاز\n';
+              qualityMessage += '   3. اقترب من الإيصال للحصول على تفاصيل أوضح\n';
+              qualityMessage += '   4. تجنب الانعكاسات والظلال على الإيصال\n';
+              
               throw new TRPCError({
                 code: 'BAD_REQUEST',
-                message: `❗ جودة الصورة غير كافية: ${warning}. يرجى رفع صورة أوضح بإضاءة جيدة وبدون اهتزاز.`
+                message: qualityMessage
               });
             }
               
             // التحقق من تطابق المبلغ (إلزامي)
             if (!imageVerificationResult.isMatched) {
+              let amountMessage = '❌ عدم تطابق المبلغ\n\n';
+              amountMessage += '💰 تفاصيل المبالغ:\n';
+              amountMessage += `   • المبلغ المدخل: ${networkAmount.toFixed(2)} ر.س\n`;
+              amountMessage += `   • المبلغ المستخرج من الإيصال: ${imageVerificationResult.extractedAmount?.toFixed(2) || 'غير محدد'} ر.س\n`;
+              amountMessage += `   • الفرق: ${imageVerificationResult.difference?.toFixed(2) || '0'} ر.س\n\n`;
+              
+              // عرض تفاصيل الأقسام إن وجدت
+              if (imageVerificationResult.sections && imageVerificationResult.sections.length > 0) {
+                amountMessage += '📊 تفاصيل الأقسام المستخرجة:\n';
+                imageVerificationResult.sections.forEach(section => {
+                  if (section.terminalTotal > 0) {
+                    amountMessage += `   • ${section.name}: ${section.terminalTotal.toFixed(2)} ر.س (${section.count} معاملة)\n`;
+                  }
+                });
+                amountMessage += '\n';
+              }
+              
+              amountMessage += '💡 الحلول الممكنة:\n';
+              amountMessage += '   1. تأكد من إدخال مبلغ الشبكة الصحيح\n';
+              amountMessage += '   2. تأكد من رفع إيصال اليوم الصحيح\n';
+              amountMessage += '   3. إذا كان الإيصال صحيحاً، راجع المبلغ المدخل\n';
+              
               throw new TRPCError({
                 code: 'BAD_REQUEST',
-                message: `❗ عدم تطابق المبلغ: المبلغ المستخرج من الإيصال ${imageVerificationResult.extractedAmount?.toFixed(2) || 'غير محدد'} ر.س، المبلغ المدخل ${networkAmount.toFixed(2)} ر.س (فرق: ${imageVerificationResult.difference?.toFixed(2) || '0'} ر.س). تأكد من إدخال المبلغ الصحيح أو رفع الإيصال الصحيح.`
+                message: amountMessage
               });
             }
               
             // التحقق من تطابق التاريخ (إلزامي)
             if (!imageVerificationResult.isDateMatched) {
+              let dateMessage = '📅 عدم تطابق التاريخ\n\n';
+              dateMessage += '🗓️ تفاصيل التواريخ:\n';
+              dateMessage += `   • تاريخ الإيراد المدخل: ${expectedUploadDate}\n`;
+              dateMessage += `   • تاريخ الإيصال: ${imageVerificationResult.extractedDate || 'غير محدد'}\n\n`;
+              
+              if (!imageVerificationResult.extractedDate) {
+                dateMessage += '⚠️ لم نتمكن من قراءة التاريخ من الإيصال\n';
+                dateMessage += '💡 تأكد من أن التاريخ ظاهر بوضوح في أعلى الإيصال وغير مقطوع\n';
+              } else {
+                dateMessage += '💡 الحلول الممكنة:\n';
+                dateMessage += '   1. تأكد من رفع إيصال اليوم الصحيح\n';
+                dateMessage += '   2. إذا كان الإيصال صحيحاً، عدّل تاريخ الإيراد ليتطابق\n';
+                dateMessage += '   3. النظام يسمح بفرق يوم واحد فقط\n';
+              }
+              
               throw new TRPCError({
                 code: 'BAD_REQUEST',
-                message: `❗ عدم تطابق التاريخ: تاريخ الإيصال ${imageVerificationResult.extractedDate || 'غير محدد'}، تاريخ الإيراد المدخل ${expectedUploadDate}. تأكد من رفع إيصال اليوم الصحيح.`
+                message: dateMessage
               });
             }
               

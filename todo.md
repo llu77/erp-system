@@ -4354,3 +4354,9 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] جعل رسائل الخطأ في المنتصف (position: top-center)
 - [x] تحسين وضوح الصورة المرفوعة (زيادة الارتفاع إلى h-64)
 - [x] تحسين تصميم رسائل الخطأ (richColors + closeButton + expand)
+
+
+## تحسين جودة الصور ورسائل خطأ OCR (طلب جديد)
+- [x] إنشاء خدمة ضغط وتحسين الصور قبل الرفع (imageCompression.ts)
+- [x] تحسين رسائل خطأ OCR المفصلة (ocrErrorMessages.ts + routers.ts)
+- [x] اختبار التحسينات (1021 اختبار ناجح)

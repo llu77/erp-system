@@ -38,6 +38,8 @@ import { Badge } from "@/components/ui/badge";
 import { ImagePreviewLightbox, ImageThumbnail } from "@/components/ImagePreviewLightbox";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ar } from "date-fns/locale";
+import { processImageForUpload, validateImageForUpload } from "@/utils/imageCompression";
+import { analyzeOCRResult, formatErrorList, getDetailedError, type DetailedOCRError } from "../../../shared/ocrErrorMessages";
 import { 
   PDF_BASE_STYLES, 
   getPDFHeader, 
@@ -124,39 +126,76 @@ export default function Revenues() {
     },
   });
 
-  // معالجة اختيار الصورة
+  // معالجة اختيار الصورة مع ضغط وتحسين تلقائي
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // التحقق من نوع الملف
-    if (!file.type.startsWith('image/')) {
-      toast.error("يرجى اختيار ملف صورة");
+    // التحقق من صحة الصورة
+    const validation = validateImageForUpload(file);
+    if (!validation.valid) {
+      toast.error(validation.error || "يرجى اختيار ملف صورة صالح");
       return;
     }
 
-    // التحقق من حجم الملف (5MB كحد أقصى)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("حجم الصورة يجب أن يكون أقل من 5 ميجابايت");
-      return;
+    // عرض التحذيرات إن وجدت
+    if (validation.warnings && validation.warnings.length > 0) {
+      validation.warnings.forEach(warning => {
+        toast.info(warning, { duration: 3000 });
+      });
     }
 
     setIsUploading(true);
 
-    // إنشاء معاينة محلية
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const base64Data = event.target?.result as string;
-      setCurrentUploadPreview(base64Data);
+    try {
+      // ضغط وتحسين الصورة تلقائياً
+      toast.info("جاري ضغط وتحسين الصورة...", { duration: 2000 });
       
-      // رفع الصورة
-      uploadImageMutation.mutate({
-        base64Data,
-        fileName: file.name,
-        contentType: file.type,
+      const result = await processImageForUpload(file, {
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 0.85,
+        maxSizeKB: 500,
+        enhanceForOCR: true,
+        outputFormat: 'jpeg'
       });
-    };
-    reader.readAsDataURL(file);
+
+      if (!result.success) {
+        toast.error(result.error || "فشل معالجة الصورة");
+        setIsUploading(false);
+        return;
+      }
+
+      // عرض معلومات الضغط
+      if (result.compressionRatio > 0) {
+        const originalKB = Math.round(result.originalSize / 1024);
+        const compressedKB = Math.round(result.compressedSize / 1024);
+        toast.success(
+          `تم ضغط الصورة: ${originalKB}KB → ${compressedKB}KB (توفير ${result.compressionRatio}%)`,
+          { duration: 3000 }
+        );
+      }
+
+      // عرض التحسينات المطبقة
+      if (result.enhancements && result.enhancements.length > 0) {
+        toast.info(
+          `التحسينات: ${result.enhancements.join(', ')}`,
+          { duration: 3000 }
+        );
+      }
+
+      setCurrentUploadPreview(result.base64Data);
+      
+      // رفع الصورة المحسّنة
+      uploadImageMutation.mutate({
+        base64Data: result.base64Data,
+        fileName: result.fileName,
+        contentType: result.contentType,
+      });
+    } catch (error: any) {
+      toast.error(error.message || "فشل معالجة الصورة");
+      setIsUploading(false);
+    }
   };
 
   // حذف صورة
