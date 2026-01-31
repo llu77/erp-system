@@ -2025,8 +2025,17 @@ export const appRouter = router({
         // ==================== التحقق من صورة الموازنة باستخدام OCR ====================
         let imageVerificationResult: balanceImageOCR.BalanceVerificationResult | null = null;
         
-        // التحقق فقط إذا كان هناك مبلغ شبكة وصور موازنة
-        if (networkAmount > 0 && input.balanceImages && input.balanceImages.length > 0) {
+        // ==================== التحقق الإلزامي من صورة الموازنة ====================
+        // التحقق فقط إذا كان هناك مبلغ شبكة
+        if (networkAmount > 0) {
+          // التحقق من وجود صور الموازنة (إلزامي)
+          if (!input.balanceImages || input.balanceImages.length === 0) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: '❗ صورة الموازنة إلزامية: يجب رفع صورة إيصال نقاط البيع (POS) للتحقق من مبلغ الشبكة'
+            });
+          }
+
           try {
             // تحديد تاريخ الرفع المتوقع (تاريخ الإيراد المدخل)
             const expectedUploadDate = new Date(input.date).toISOString().split('T')[0];
@@ -2037,49 +2046,60 @@ export const appRouter = router({
               expectedUploadDate // تمرير تاريخ الرفع المتوقع
             );
 
-            // التحقق من مستوى الثقة
-            if (imageVerificationResult.success && balanceImageOCR.isConfidenceSufficient(imageVerificationResult.confidence)) {
-              
-              // التحقق من تطابق المبلغ
-              if (!imageVerificationResult.isMatched) {
-                throw new TRPCError({
-                  code: 'BAD_REQUEST',
-                  message: `❗ عدم تطابق المبلغ: المبلغ المستخرج من الإيصال ${imageVerificationResult.extractedAmount?.toFixed(2) || 'غير محدد'} ر.س، المبلغ المدخل ${networkAmount.toFixed(2)} ر.س (فرق: ${imageVerificationResult.difference?.toFixed(2) || '0'} ر.س)`
-                });
-              }
-              
-              // التحقق من تطابق التاريخ
-              if (!imageVerificationResult.isDateMatched) {
-                throw new TRPCError({
-                  code: 'BAD_REQUEST',
-                  message: `❗ عدم تطابق التاريخ: تاريخ الإيصال ${imageVerificationResult.extractedDate || 'غير محدد'}، تاريخ الإيراد المدخل ${expectedUploadDate}`
-                });
-              }
-              
-              // تسجيل نجاح التحقق
-              logger.info('✅ تم التحقق من صورة الموازنة بنجاح', {
-                extractedAmount: imageVerificationResult.extractedAmount,
-                expectedAmount: networkAmount,
-                extractedDate: imageVerificationResult.extractedDate,
-                expectedDate: expectedUploadDate,
-                sections: imageVerificationResult.sections
-              });
-              
-            } else if (imageVerificationResult.success) {
-              // إذا كانت الثقة منخفضة، نسجل تحذير فقط
-              const warning = balanceImageOCR.getConfidenceWarning(imageVerificationResult.confidence);
-              logger.warn('تحذير التحقق من صورة الموازنة', { 
-                warning,
-                result: imageVerificationResult 
+            // التحقق من نجاح قراءة الصورة
+            if (!imageVerificationResult.success) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: `❗ فشل قراءة صورة الموازنة: ${imageVerificationResult.message || 'الصورة غير واضحة أو لا تحتوي على إيصال POS صالح'}. يرجى رفع صورة أوضح.`
               });
             }
+
+            // التحقق من مستوى الثقة - يجب أن تكون متوسطة على الأقل
+            if (!balanceImageOCR.isConfidenceSufficient(imageVerificationResult.confidence)) {
+              const warning = balanceImageOCR.getConfidenceWarning(imageVerificationResult.confidence);
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: `❗ جودة الصورة غير كافية: ${warning}. يرجى رفع صورة أوضح بإضاءة جيدة وبدون اهتزاز.`
+              });
+            }
+              
+            // التحقق من تطابق المبلغ (إلزامي)
+            if (!imageVerificationResult.isMatched) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: `❗ عدم تطابق المبلغ: المبلغ المستخرج من الإيصال ${imageVerificationResult.extractedAmount?.toFixed(2) || 'غير محدد'} ر.س، المبلغ المدخل ${networkAmount.toFixed(2)} ر.س (فرق: ${imageVerificationResult.difference?.toFixed(2) || '0'} ر.س). تأكد من إدخال المبلغ الصحيح أو رفع الإيصال الصحيح.`
+              });
+            }
+              
+            // التحقق من تطابق التاريخ (إلزامي)
+            if (!imageVerificationResult.isDateMatched) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: `❗ عدم تطابق التاريخ: تاريخ الإيصال ${imageVerificationResult.extractedDate || 'غير محدد'}، تاريخ الإيراد المدخل ${expectedUploadDate}. تأكد من رفع إيصال اليوم الصحيح.`
+              });
+            }
+              
+            // تسجيل نجاح التحقق
+            logger.info('✅ تم التحقق من صورة الموازنة بنجاح', {
+              extractedAmount: imageVerificationResult.extractedAmount,
+              expectedAmount: networkAmount,
+              extractedDate: imageVerificationResult.extractedDate,
+              expectedDate: expectedUploadDate,
+              sections: imageVerificationResult.sections,
+              confidence: imageVerificationResult.confidence
+            });
+              
           } catch (ocrError: any) {
             // إذا كان الخطأ من TRPCError (عدم تطابق)، نعيد رميه
             if (ocrError instanceof TRPCError) {
               throw ocrError;
             }
-            // غير ذلك، نسجل الخطأ ونستمر (لا نمنع الإدخال بسبب خطأ تقني)
+            // أي خطأ تقني آخر يجب أن يمنع الإدخال أيضاً
             logger.error('خطأ في التحقق من صورة الموازنة', ocrError);
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: '❗ حدث خطأ أثناء التحقق من صورة الموازنة. يرجى المحاولة مرة أخرى أو التواصل مع الدعم الفني.'
+            });
           }
         }
         // ==================== نهاية التحقق من صورة الموازنة ====================
