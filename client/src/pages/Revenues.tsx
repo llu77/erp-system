@@ -67,7 +67,10 @@ export default function Revenues() {
     paidInvoices: "",
     paidInvoicesNote: "",
     paidInvoicesCustomer: "", // اسم العميل لفواتير المدفوع
+    loyalty: "", // مبلغ الولاء
   });
+  const [loyaltyInvoiceImage, setLoyaltyInvoiceImage] = useState<{ url: string; key: string; preview: string } | null>(null);
+  const [isUploadingLoyalty, setIsUploadingLoyalty] = useState(false);
 
   // قائمة العملاء لفواتير المدفوع
   const PAID_INVOICE_CUSTOMERS = [
@@ -173,10 +176,11 @@ export default function Revenues() {
     onSuccess: () => {
       toast.success("تم حفظ الإيرادات بنجاح وتحديث البونص تلقائياً");
       // إعادة تعيين النموذج
-      setBranchRevenue({ cash: "", network: "", paidInvoices: "", paidInvoicesNote: "", paidInvoicesCustomer: "" });
+      setBranchRevenue({ cash: "", network: "", paidInvoices: "", paidInvoicesNote: "", paidInvoicesCustomer: "", loyalty: "" });
       setEmployeeRevenues([]);
       setUnmatchReason("");
       setBalanceImages([]);
+      setLoyaltyInvoiceImage(null);
     },
     onError: (error) => {
       toast.error(error.message || "فشل حفظ الإيرادات");
@@ -265,6 +269,14 @@ export default function Revenues() {
       }
     }
 
+    // التحقق من فاتورة الولاء عند إدخال مبلغ ولاء
+    if (branchRevenue.loyalty && parseFloat(branchRevenue.loyalty) > 0) {
+      if (!loyaltyInvoiceImage) {
+        toast.error("يرجى رفع فاتورة الولاء");
+        return;
+      }
+    }
+
     // التحقق من المطابقة التلقائية
     const isAutoMatched = autoMatchStatus;
     
@@ -283,6 +295,12 @@ export default function Revenues() {
       paidInvoices: branchRevenue.paidInvoices || "0", // فواتير المدفوع
       paidInvoicesNote: branchRevenue.paidInvoicesNote || "", // سبب فواتير المدفوع
       paidInvoicesCustomer: branchRevenue.paidInvoicesCustomer || "", // اسم العميل
+      loyalty: branchRevenue.loyalty || "0", // مبلغ الولاء
+      loyaltyInvoiceImage: loyaltyInvoiceImage ? {
+        url: loyaltyInvoiceImage.url,
+        key: loyaltyInvoiceImage.key,
+        uploadedAt: new Date().toISOString(),
+      } : null,
       total: calculateBranchTotal(),
       isMatched: isAutoMatched,
       unmatchReason: isAutoMatched ? undefined : unmatchReason,
@@ -453,6 +471,100 @@ export default function Revenues() {
                   </div>
                 )}
               </div>
+              
+              {/* حقل الولاء */}
+              <div>
+                <Label>ولاء <span className="text-xs text-muted-foreground">(اختياري)</span></Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={branchRevenue.loyalty}
+                  onChange={(e) => setBranchRevenue({ ...branchRevenue, loyalty: e.target.value })}
+                  placeholder="0.00"
+                  className="mt-2"
+                />
+                {/* رفع فاتورة الولاء عند إدخال مبلغ */}
+                {branchRevenue.loyalty && parseFloat(branchRevenue.loyalty) > 0 && (
+                  <div className="mt-3 p-3 bg-purple-500/5 rounded-lg border border-purple-500/20">
+                    <Label className="text-xs font-medium text-purple-600 flex items-center gap-1">
+                      <Upload className="h-3 w-3" />
+                      فاتورة الولاء *
+                    </Label>
+                    {!loyaltyInvoiceImage ? (
+                      <div className="mt-2 border-2 border-dashed border-purple-300 rounded-lg p-4 text-center hover:border-purple-500 transition-colors">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (!file.type.startsWith('image/')) {
+                              toast.error("يرجى اختيار صورة");
+                              return;
+                            }
+                            if (file.size > 5 * 1024 * 1024) {
+                              toast.error("حجم الصورة يجب أن يكون أقل من 5 ميجابايت");
+                              return;
+                            }
+                            setIsUploadingLoyalty(true);
+                            const reader = new FileReader();
+                            reader.onload = async () => {
+                              const base64Data = reader.result as string;
+                              try {
+                                const result = await uploadImageMutation.mutateAsync({
+                                  base64Data,
+                                  fileName: `loyalty-${Date.now()}-${file.name}`,
+                                  contentType: file.type,
+                                });
+                                setLoyaltyInvoiceImage({ url: result.url, key: result.key, preview: base64Data });
+                                toast.success("تم رفع فاتورة الولاء بنجاح");
+                              } catch (error) {
+                                toast.error("فشل رفع فاتورة الولاء");
+                              } finally {
+                                setIsUploadingLoyalty(false);
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                          className="hidden"
+                          id="loyalty-invoice-input"
+                          disabled={isUploadingLoyalty}
+                        />
+                        <label htmlFor="loyalty-invoice-input" className="cursor-pointer block">
+                          {isUploadingLoyalty ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                              <span className="text-xs text-purple-600">جاري رفع الفاتورة...</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-1">
+                              <Upload className="h-6 w-6 text-purple-500" />
+                              <span className="text-xs text-purple-600">اضغط لرفع فاتورة الولاء</span>
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    ) : (
+                      <div className="mt-2 relative border rounded-lg overflow-hidden">
+                        <img
+                          src={loyaltyInvoiceImage.preview || loyaltyInvoiceImage.url}
+                          alt="فاتورة الولاء"
+                          className="w-full h-32 object-contain bg-muted"
+                        />
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          className="absolute top-2 left-2 h-6 w-6"
+                          onClick={() => setLoyaltyInvoiceImage(null)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
               <div>
                 <Label>الإجمالي</Label>
                 <div className="mt-2 p-3 bg-gradient-to-r from-primary/15 to-primary/5 rounded-xl text-center font-bold text-xl text-primary border border-primary/20 shadow-sm">

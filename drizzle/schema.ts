@@ -330,6 +330,8 @@ export const dailyRevenues = mysqlTable("dailyRevenues", {
   paidInvoices: decimal("paidInvoices", { precision: 15, scale: 2 }).default("0.00"), // فواتير المدفوع (اختياري)
   paidInvoicesNote: text("paidInvoicesNote"), // سبب فواتير المدفوع
   paidInvoicesCustomer: varchar("paidInvoicesCustomer", { length: 100 }), // اسم العميل لفواتير المدفوع
+  loyalty: decimal("loyalty", { precision: 15, scale: 2 }).default("0.00"), // مبلغ الولاء
+  loyaltyInvoiceImage: json("loyaltyInvoiceImage").$type<{ url: string; key: string; uploadedAt: string } | null>(), // صورة فاتورة الولاء
   total: decimal("total", { precision: 15, scale: 2 }).default("0.00").notNull(),
   isMatched: boolean("isMatched").default(true).notNull(),
   unmatchReason: text("unmatchReason"),

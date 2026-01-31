@@ -1861,6 +1861,12 @@ export const appRouter = router({
         paidInvoices: z.string().optional(),
         paidInvoicesNote: z.string().optional(),
         paidInvoicesCustomer: z.string().optional(), // اسم العميل لفواتير المدفوع
+        loyalty: z.string().optional(), // مبلغ الولاء
+        loyaltyInvoiceImage: z.object({
+          url: z.string(),
+          key: z.string(),
+          uploadedAt: z.string(),
+        }).nullable().optional(), // صورة فاتورة الولاء
         total: z.string(),
         isMatched: z.boolean(),
         unmatchReason: z.string().optional(),
@@ -1956,6 +1962,8 @@ export const appRouter = router({
           paidInvoices: paidInvoicesAmount.toString(), // فواتير المدفوع
           paidInvoicesNote: input.paidInvoicesNote || null, // سبب فواتير المدفوع
           paidInvoicesCustomer: input.paidInvoicesCustomer || null, // اسم العميل
+          loyalty: input.loyalty || '0', // مبلغ الولاء
+          loyaltyInvoiceImage: input.loyaltyInvoiceImage || null, // صورة فاتورة الولاء
           total: calculatedTotal.toString(), // الإجمالي = الكاش + الشبكة + فواتير المدفوع
           isMatched, // المطابقة التلقائية
           unmatchReason: unmatchReason || null,
