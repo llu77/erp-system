@@ -4274,3 +4274,11 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إضافة نظام إشعارات شامل (7 أنواع: no_date, unclear_image, low_confidence, partial_read, date_mismatch, amount_mismatch, no_sections)
 - [x] مكون ImageThumbnail لعرض الصور المصغرة مع حالة OCR
 - [x] كتابة اختبارات vitest شاملة لنظام الإشعارات (55 اختبار ناجح)
+
+
+## تحسين سندات القبض (طلب جديد)
+- [x] تحليل الكود الحالي لسندات القبض والتقارير
+- [x] تحسين واجهة إدخال الفترة من/إلى (DateRangePicker محسن مع فترات مسبقة)
+- [x] تحسين تصميم طباعة سندات القبض (تكبير التوقيعات والختم)
+- [x] إضافة نظام إشعارات للمستلم (Email احترافي + SMS)
+- [x] كتابة اختبارات vitest للميزات الجديدة (21 اختبار ناجح)
