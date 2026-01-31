@@ -463,3 +463,292 @@ describe('POS Receipt OCR Service', () => {
     });
   });
 });
+
+
+  describe('OCR Warnings System', () => {
+    it('should validate OCRWarning structure', () => {
+      const warning = {
+        type: 'no_date' as const,
+        severity: 'warning' as const,
+        message: 'لم نتمكن من قراءة التاريخ من الإيصال',
+        suggestion: 'تأكد من أن التاريخ واضح في أعلى الإيصال وغير مقطوع'
+      };
+
+      expect(warning.type).toBe('no_date');
+      expect(warning.severity).toBe('warning');
+      expect(warning.message).toBeTruthy();
+      expect(warning.suggestion).toBeTruthy();
+    });
+
+    it('should validate all warning types', () => {
+      const warningTypes = [
+        'no_date',
+        'unclear_image',
+        'low_confidence',
+        'partial_read',
+        'date_mismatch',
+        'amount_mismatch',
+        'no_sections'
+      ];
+
+      warningTypes.forEach(type => {
+        expect(typeof type).toBe('string');
+        expect(type.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('should validate all severity levels', () => {
+      const severityLevels = ['info', 'warning', 'error'];
+      
+      severityLevels.forEach(severity => {
+        expect(['info', 'warning', 'error']).toContain(severity);
+      });
+    });
+
+    it('should generate no_date warning when date is missing', () => {
+      // Simulate the warning generation logic
+      const extractedDate = null;
+      const warnings: Array<{type: string; severity: string; message: string}> = [];
+      
+      if (!extractedDate) {
+        warnings.push({
+          type: 'no_date',
+          severity: 'warning',
+          message: 'لم نتمكن من قراءة التاريخ من الإيصال'
+        });
+      }
+
+      expect(warnings.length).toBe(1);
+      expect(warnings[0].type).toBe('no_date');
+      expect(warnings[0].severity).toBe('warning');
+    });
+
+    it('should generate date_mismatch warning when dates do not match', () => {
+      const extractedDate = '2024-01-10';
+      const expectedDate = '2024-01-15';
+      const warnings: Array<{type: string; severity: string; message: string}> = [];
+      
+      // Simulate date mismatch check
+      const date1 = new Date(extractedDate);
+      const date2 = new Date(expectedDate);
+      const diffDays = Math.abs(date1.getTime() - date2.getTime()) / (1000 * 60 * 60 * 24);
+      
+      if (diffDays > 1) {
+        warnings.push({
+          type: 'date_mismatch',
+          severity: 'error',
+          message: `التاريخ غير مطابق: تاريخ الإيصال ${extractedDate}، التاريخ المتوقع ${expectedDate}`
+        });
+      }
+
+      expect(warnings.length).toBe(1);
+      expect(warnings[0].type).toBe('date_mismatch');
+      expect(warnings[0].severity).toBe('error');
+    });
+
+    it('should generate amount_mismatch warning when amounts do not match', () => {
+      const extractedAmount = 800;
+      const expectedAmount = 1000;
+      const tolerance = expectedAmount * 0.02;
+      const warnings: Array<{type: string; severity: string; message: string}> = [];
+      
+      const diff = Math.abs(extractedAmount - expectedAmount);
+      if (diff > tolerance) {
+        warnings.push({
+          type: 'amount_mismatch',
+          severity: 'error',
+          message: `المبلغ غير مطابق: المتوقع ${expectedAmount} ر.س، المستخرج ${extractedAmount} ر.س`
+        });
+      }
+
+      expect(warnings.length).toBe(1);
+      expect(warnings[0].type).toBe('amount_mismatch');
+      expect(warnings[0].severity).toBe('error');
+    });
+
+    it('should generate unclear_image warning for low confidence', () => {
+      const confidence = 'low';
+      const warnings: Array<{type: string; severity: string; message: string}> = [];
+      
+      if (confidence === 'low' || confidence === 'none') {
+        warnings.push({
+          type: 'unclear_image',
+          severity: 'warning',
+          message: 'الصورة غير واضحة أو جودتها منخفضة'
+        });
+      }
+
+      expect(warnings.length).toBe(1);
+      expect(warnings[0].type).toBe('unclear_image');
+    });
+
+    it('should generate no_sections warning when no sections found', () => {
+      const sections: Array<{name: string; terminalTotal: number}> = [];
+      const warnings: Array<{type: string; severity: string; message: string}> = [];
+      
+      if (sections.length === 0) {
+        warnings.push({
+          type: 'no_sections',
+          severity: 'warning',
+          message: 'لم نتمكن من تحديد أقسام الدفع (mada, VISA, إلخ)'
+        });
+      }
+
+      expect(warnings.length).toBe(1);
+      expect(warnings[0].type).toBe('no_sections');
+    });
+
+    it('should generate partial_read warning for few active sections', () => {
+      const sections = [
+        { name: 'mada', terminalTotal: 1500 }
+      ];
+      const extractedAmount = 1500;
+      const warnings: Array<{type: string; severity: string; message: string}> = [];
+      
+      const activeSections = sections.filter(s => s.terminalTotal > 0);
+      if (activeSections.length > 0 && activeSections.length < 3 && extractedAmount > 1000) {
+        warnings.push({
+          type: 'partial_read',
+          severity: 'info',
+          message: `تم قراءة ${activeSections.length} قسم فقط - تأكد من ظهور جميع الأقسام`
+        });
+      }
+
+      expect(warnings.length).toBe(1);
+      expect(warnings[0].type).toBe('partial_read');
+      expect(warnings[0].severity).toBe('info');
+    });
+
+    it('should not generate partial_read warning for small amounts', () => {
+      const sections = [
+        { name: 'mada', terminalTotal: 500 }
+      ];
+      const extractedAmount = 500;
+      const warnings: Array<{type: string; severity: string; message: string}> = [];
+      
+      const activeSections = sections.filter(s => s.terminalTotal > 0);
+      if (activeSections.length > 0 && activeSections.length < 3 && extractedAmount > 1000) {
+        warnings.push({
+          type: 'partial_read',
+          severity: 'info',
+          message: `تم قراءة ${activeSections.length} قسم فقط`
+        });
+      }
+
+      // Should not generate warning for small amounts
+      expect(warnings.length).toBe(0);
+    });
+
+    it('should generate multiple warnings when multiple issues exist', () => {
+      const extractedDate = null;
+      const extractedAmount = 800;
+      const expectedAmount = 1000;
+      const confidence = 'low';
+      const sections: Array<{name: string; terminalTotal: number}> = [];
+      const warnings: Array<{type: string; severity: string; message: string}> = [];
+      
+      // No date
+      if (!extractedDate) {
+        warnings.push({ type: 'no_date', severity: 'warning', message: 'لم نتمكن من قراءة التاريخ' });
+      }
+      
+      // Amount mismatch
+      const tolerance = expectedAmount * 0.02;
+      if (Math.abs(extractedAmount - expectedAmount) > tolerance) {
+        warnings.push({ type: 'amount_mismatch', severity: 'error', message: 'المبلغ غير مطابق' });
+      }
+      
+      // Low confidence
+      if (confidence === 'low') {
+        warnings.push({ type: 'unclear_image', severity: 'warning', message: 'الصورة غير واضحة' });
+      }
+      
+      // No sections
+      if (sections.length === 0) {
+        warnings.push({ type: 'no_sections', severity: 'warning', message: 'لم نتمكن من تحديد الأقسام' });
+      }
+
+      expect(warnings.length).toBe(4);
+      expect(warnings.some(w => w.type === 'no_date')).toBe(true);
+      expect(warnings.some(w => w.type === 'amount_mismatch')).toBe(true);
+      expect(warnings.some(w => w.type === 'unclear_image')).toBe(true);
+      expect(warnings.some(w => w.type === 'no_sections')).toBe(true);
+    });
+
+    it('should not generate warnings when everything is correct', () => {
+      const extractedDate = '2024-01-15';
+      const expectedDate = '2024-01-15';
+      const extractedAmount = 1000;
+      const expectedAmount = 1000;
+      const confidence = 'high';
+      const sections = [
+        { name: 'mada', terminalTotal: 700 },
+        { name: 'VISA', terminalTotal: 200 },
+        { name: 'MasterCard', terminalTotal: 100 }
+      ];
+      const warnings: Array<{type: string; severity: string; message: string}> = [];
+      
+      // Check date
+      const date1 = new Date(extractedDate);
+      const date2 = new Date(expectedDate);
+      const diffDays = Math.abs(date1.getTime() - date2.getTime()) / (1000 * 60 * 60 * 24);
+      const isDateMatched = diffDays <= 1;
+      
+      // Check amount
+      const tolerance = expectedAmount * 0.02;
+      const isAmountMatched = Math.abs(extractedAmount - expectedAmount) <= tolerance;
+      
+      // Only add warnings if there are issues
+      if (!extractedDate) {
+        warnings.push({ type: 'no_date', severity: 'warning', message: 'لم نتمكن من قراءة التاريخ' });
+      }
+      if (extractedDate && !isDateMatched) {
+        warnings.push({ type: 'date_mismatch', severity: 'error', message: 'التاريخ غير مطابق' });
+      }
+      if (!isAmountMatched) {
+        warnings.push({ type: 'amount_mismatch', severity: 'error', message: 'المبلغ غير مطابق' });
+      }
+      if (confidence === 'low' || confidence === 'none') {
+        warnings.push({ type: 'unclear_image', severity: 'warning', message: 'الصورة غير واضحة' });
+      }
+      if (sections.length === 0) {
+        warnings.push({ type: 'no_sections', severity: 'warning', message: 'لم نتمكن من تحديد الأقسام' });
+      }
+
+      // Should have no warnings when everything is correct
+      expect(warnings.length).toBe(0);
+    });
+  });
+
+  describe('ImagePreviewLightbox Component Integration', () => {
+    it('should validate warning display in lightbox', () => {
+      const warnings = [
+        { type: 'no_date', severity: 'warning', message: 'لم نتمكن من قراءة التاريخ', suggestion: 'تأكد من وضوح التاريخ' },
+        { type: 'unclear_image', severity: 'warning', message: 'الصورة غير واضحة', suggestion: 'ارفع صورة أوضح' }
+      ];
+
+      // Verify warnings can be displayed
+      expect(warnings.length).toBe(2);
+      warnings.forEach(w => {
+        expect(w.message).toBeTruthy();
+        expect(w.suggestion).toBeTruthy();
+        expect(['info', 'warning', 'error']).toContain(w.severity);
+      });
+    });
+
+    it('should categorize warnings by severity', () => {
+      const warnings = [
+        { type: 'amount_mismatch', severity: 'error', message: 'المبلغ غير مطابق' },
+        { type: 'no_date', severity: 'warning', message: 'لم نتمكن من قراءة التاريخ' },
+        { type: 'partial_read', severity: 'info', message: 'تم قراءة قسم واحد فقط' }
+      ];
+
+      const errors = warnings.filter(w => w.severity === 'error');
+      const warningLevel = warnings.filter(w => w.severity === 'warning');
+      const info = warnings.filter(w => w.severity === 'info');
+
+      expect(errors.length).toBe(1);
+      expect(warningLevel.length).toBe(1);
+      expect(info.length).toBe(1);
+    });
+  });

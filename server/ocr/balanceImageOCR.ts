@@ -53,6 +53,25 @@ export interface BalanceVerificationResult {
     rawText: string | null;
     processingTime: number;
   };
+  // إشعارات للمستخدم
+  warnings: OCRWarning[];
+}
+
+// أنواع الإشعارات
+export type OCRWarningType = 
+  | "no_date" 
+  | "unclear_image" 
+  | "low_confidence" 
+  | "partial_read" 
+  | "date_mismatch" 
+  | "amount_mismatch"
+  | "no_sections";
+
+export interface OCRWarning {
+  type: OCRWarningType;
+  severity: "info" | "warning" | "error";
+  message: string;
+  suggestion?: string;
 }
 
 // ==================== الثوابت ====================
@@ -379,6 +398,95 @@ export async function extractAmountFromImage(
 }
 
 /**
+ * توليد الإشعارات بناءً على نتيجة التحقق
+ */
+function generateWarnings(
+  extractionResult: OCRExtractionResult,
+  isAmountMatched: boolean,
+  isDateMatched: boolean,
+  extractedDate: string | null,
+  expectedDate: string,
+  extractedAmount: number | null,
+  expectedAmount: number
+): OCRWarning[] {
+  const warnings: OCRWarning[] = [];
+
+  // تحذير عدم وجود تاريخ
+  if (!extractedDate) {
+    warnings.push({
+      type: "no_date",
+      severity: "warning",
+      message: "لم نتمكن من قراءة التاريخ من الإيصال",
+      suggestion: "تأكد من أن التاريخ واضح في أعلى الإيصال وغير مقطوع"
+    });
+  }
+
+  // تحذير عدم تطابق التاريخ
+  if (extractedDate && !isDateMatched) {
+    warnings.push({
+      type: "date_mismatch",
+      severity: "error",
+      message: `التاريخ غير مطابق: تاريخ الإيصال ${extractedDate}، التاريخ المتوقع ${expectedDate}`,
+      suggestion: "تأكد من رفع إيصال اليوم الصحيح"
+    });
+  }
+
+  // تحذير عدم تطابق المبلغ
+  if (extractedAmount !== null && !isAmountMatched) {
+    const diff = Math.abs(extractedAmount - expectedAmount);
+    warnings.push({
+      type: "amount_mismatch",
+      severity: "error",
+      message: `المبلغ غير مطابق: المتوقع ${expectedAmount.toFixed(2)} ر.س، المستخرج ${extractedAmount.toFixed(2)} ر.س (فرق: ${diff.toFixed(2)} ر.س)`,
+      suggestion: "تأكد من إدخال مبلغ الشبكة الصحيح"
+    });
+  }
+
+  // تحذير الصورة غير الواضحة (ثقة منخفضة)
+  if (extractionResult.confidence === "low" || extractionResult.confidence === "none") {
+    warnings.push({
+      type: "unclear_image",
+      severity: "warning",
+      message: "الصورة غير واضحة أو جودتها منخفضة",
+      suggestion: "يرجى رفع صورة أوضح بإضاءة جيدة وبدون اهتزاز"
+    });
+  }
+
+  // تحذير الثقة المنخفضة
+  if (extractionResult.confidence === "low") {
+    warnings.push({
+      type: "low_confidence",
+      severity: "info",
+      message: "دقة القراءة منخفضة - قد تكون النتائج غير دقيقة",
+      suggestion: "يرجى التحقق يدوياً من المبالغ"
+    });
+  }
+
+  // تحذير عدم وجود أقسام
+  if (extractionResult.sections.length === 0) {
+    warnings.push({
+      type: "no_sections",
+      severity: "warning",
+      message: "لم نتمكن من تحديد أقسام الدفع (mada, VISA, إلخ)",
+      suggestion: "تأكد من أن الإيصال كامل ويظهر جميع الأقسام"
+    });
+  }
+
+  // تحذير القراءة الجزئية
+  const activeSections = extractionResult.sections.filter(s => s.terminalTotal > 0);
+  if (activeSections.length > 0 && activeSections.length < 3 && extractedAmount && extractedAmount > 1000) {
+    warnings.push({
+      type: "partial_read",
+      severity: "info",
+      message: `تم قراءة ${activeSections.length} قسم فقط - تأكد من ظهور جميع الأقسام`,
+      suggestion: "إذا كان هناك أقسام أخرى، تأكد من ظهورها في الصورة"
+    });
+  }
+
+  return warnings;
+}
+
+/**
  * التحقق من تطابق مبلغ الشبكة وتاريخ الرفع مع صورة الموازنة
  */
 export async function verifyBalanceImage(
@@ -400,7 +508,8 @@ export async function verifyBalanceImage(
       extractedDate: null,
       expectedDate: uploadDate || new Date().toISOString().split("T")[0],
       confidence: "none",
-      message: "لم يتم رفع صورة الموازنة"
+      message: "لم يتم رفع صورة الموازنة",
+      warnings: []
     };
   }
 
@@ -419,7 +528,8 @@ export async function verifyBalanceImage(
       extractedDate: expectedDate,
       expectedDate,
       confidence: "high",
-      message: "لا يوجد مبلغ شبكة للتحقق منه"
+      message: "لا يوجد مبلغ شبكة للتحقق منه",
+      warnings: []
     };
   }
 
@@ -429,6 +539,13 @@ export async function verifyBalanceImage(
     const extractionResult = await extractAmountFromImage(primaryImage.url);
 
     if (!extractionResult.success || extractionResult.grandTotal === null) {
+      const warnings: OCRWarning[] = [{
+        type: "unclear_image",
+        severity: "error",
+        message: extractionResult.error || "لم نتمكن من قراءة المبالغ من صورة الموازنة",
+        suggestion: "يرجى رفع صورة أوضح بإضاءة جيدة وبدون اهتزاز"
+      }];
+      
       return {
         success: false,
         isMatched: false,
@@ -444,7 +561,8 @@ export async function verifyBalanceImage(
         details: {
           rawText: extractionResult.rawText,
           processingTime: Date.now() - startTime
-        }
+        },
+        warnings
       };
     }
 
@@ -453,6 +571,17 @@ export async function verifyBalanceImage(
     const difference = Math.abs(extractedAmount - expectedNetworkAmount);
     const isAmountMatched = amountsMatch(extractedAmount, expectedNetworkAmount);
     const isDateMatched = datesMatch(extractedDate, expectedDate);
+
+    // توليد الإشعارات
+    const warnings = generateWarnings(
+      extractionResult,
+      isAmountMatched,
+      isDateMatched,
+      extractedDate,
+      expectedDate,
+      extractedAmount,
+      expectedNetworkAmount
+    );
 
     // تحديد الرسالة بناءً على النتيجة
     const messages: string[] = [];
@@ -488,7 +617,6 @@ export async function verifyBalanceImage(
     }
 
     const finalMessage = messages.join("\n");
-    const isFullyMatched = isAmountMatched && isDateMatched;
 
     logger.info("نتيجة التحقق من صورة الموازنة", {
       isAmountMatched,
@@ -498,7 +626,8 @@ export async function verifyBalanceImage(
       extractedDate,
       expectedDate,
       difference,
-      confidence: extractionResult.confidence
+      confidence: extractionResult.confidence,
+      warningsCount: warnings.length
     });
 
     return {
@@ -516,7 +645,8 @@ export async function verifyBalanceImage(
       details: {
         rawText: extractionResult.rawText,
         processingTime: Date.now() - startTime
-      }
+      },
+      warnings
     };
 
   } catch (error: any) {
@@ -531,7 +661,13 @@ export async function verifyBalanceImage(
       extractedDate: null,
       expectedDate,
       confidence: "none",
-      message: `خطأ في التحقق: ${error.message || "خطأ غير معروف"}`
+      message: `خطأ في التحقق: ${error.message || "خطأ غير معروف"}`,
+      warnings: [{
+        type: "unclear_image",
+        severity: "error",
+        message: `خطأ في التحقق: ${error.message || "خطأ غير معروف"}`,
+        suggestion: "يرجى المحاولة مرة أخرى أو رفع صورة مختلفة"
+      }]
     };
   }
 }

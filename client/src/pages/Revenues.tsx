@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { ImagePreviewLightbox, ImageThumbnail } from "@/components/ImagePreviewLightbox";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ar } from "date-fns/locale";
 import { 
@@ -81,6 +82,10 @@ export default function Revenues() {
   const [employeeRevenues, setEmployeeRevenues] = useState<EmployeeRevenueInput[]>([]);
   const [balanceImages, setBalanceImages] = useState<Array<{ url: string; key: string; preview: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
+  // حالة معاينة الصورة في Lightbox
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImageIndex, setLightboxImageIndex] = useState(0);
+  const [ocrWarnings, setOcrWarnings] = useState<string[]>([]);
 
   // حساب المطابقة التلقائية
   const calculateAutoMatch = () => {
@@ -665,51 +670,35 @@ export default function Revenues() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* عرض الصور المرفوعة */}
+                  {/* عرض الصور المرفوعة باستخدام المكون المحسن */}
                   <div className="grid grid-cols-2 gap-4">
                     {balanceImages.map((img, idx) => (
-                      <div key={idx} className="relative border rounded-lg overflow-hidden group">
-                        <img
-                          src={img.preview || img.url}
-                          alt={`صورة الموازنة ${idx + 1}`}
-                          className="w-full h-40 object-contain bg-muted"
-                        />
-                        <div className="absolute top-2 left-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button size="icon" variant="secondary" className="h-8 w-8">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-4xl">
-                              <DialogHeader>
-                                <DialogTitle>صورة الموازنة {idx + 1}</DialogTitle>
-                              </DialogHeader>
-                              <img
-                                src={img.preview || img.url}
-                                alt={`صورة الموازنة ${idx + 1}`}
-                                className="w-full h-auto max-h-[70vh] object-contain"
-                              />
-                            </DialogContent>
-                          </Dialog>
-                          <Button
-                            size="icon"
-                            variant="destructive"
-                            className="h-8 w-8"
-                            onClick={() => removeImage(idx)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="absolute bottom-2 right-2">
-                          <Badge variant="secondary" className="bg-green-500/20 text-green-400">
-                            <CheckCircle className="h-3 w-3 ml-1" />
-                            تم الرفع
-                          </Badge>
-                        </div>
-                      </div>
+                      <ImageThumbnail
+                        key={idx}
+                        src={img.preview || img.url}
+                        alt={`صورة الموازنة ${idx + 1}`}
+                        onClick={() => {
+                          setLightboxImageIndex(idx);
+                          setLightboxOpen(true);
+                        }}
+                        onRemove={() => removeImage(idx)}
+                        ocrStatus="success"
+                        className="h-44"
+                      />
                     ))}
                   </div>
+                  
+                  {/* Lightbox لمعاينة الصورة بالتكبير */}
+                  {balanceImages.length > 0 && (
+                    <ImagePreviewLightbox
+                      src={balanceImages[lightboxImageIndex]?.preview || balanceImages[lightboxImageIndex]?.url || ''}
+                      alt={`صورة الموازنة ${lightboxImageIndex + 1}`}
+                      title={`صورة الموازنة ${lightboxImageIndex + 1}`}
+                      isOpen={lightboxOpen}
+                      onClose={() => setLightboxOpen(false)}
+                      warnings={ocrWarnings}
+                    />
+                  )}
                   <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
                     <input
                       type="file"

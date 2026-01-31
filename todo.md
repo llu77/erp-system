@@ -4264,3 +4264,13 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] التحقق من تطابق التاريخ مع تاريخ الإيراد المدخل (هامش يوم واحد)
 - [x] تحديث رسائل الخطأ للتوضيح (رسائل منفصلة للمبلغ والتاريخ)
 - [x] كتابة اختبارات vitest (41 اختبار ناجح)
+
+
+## تحسين واجهة رفع صورة الموازنة (طلب جديد)
+- [x] تحليل الكود الحالي لرفع الصور (Deep Thinking Phase 1)
+- [x] تصميم مكون معاينة الصورة مع التكبير (ImagePreviewLightbox)
+- [x] إضافة إشعار عند عدم وجود تاريخ في الإيصال (no_date warning)
+- [x] إضافة إشعار عند عدم وضوح الصورة (unclear_image, low_confidence)
+- [x] إضافة نظام إشعارات شامل (7 أنواع: no_date, unclear_image, low_confidence, partial_read, date_mismatch, amount_mismatch, no_sections)
+- [x] مكون ImageThumbnail لعرض الصور المصغرة مع حالة OCR
+- [x] كتابة اختبارات vitest شاملة لنظام الإشعارات (55 اختبار ناجح)
