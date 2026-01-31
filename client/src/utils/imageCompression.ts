@@ -87,9 +87,9 @@ function calculateDimensions(
 
 /**
  * تحسين الصورة للقراءة OCR
- * - زيادة التباين
- * - تحسين الحدة
- * - تحويل للأبيض والأسود إذا لزم الأمر
+ * - زيادة التباين والإضاءة
+ * - تحسين الحدة والوضوح
+ * - تطبيق تصحيح الألوان التلقائي
  */
 function enhanceImageForOCR(
   ctx: CanvasRenderingContext2D,
@@ -104,83 +104,94 @@ function enhanceImageForOCR(
 
     // تحليل الصورة لتحديد ما إذا كانت تحتاج تحسين
     let totalBrightness = 0;
-    let totalContrast = 0;
+    let minBrightness = 255;
+    let maxBrightness = 0;
     const pixelCount = data.length / 4;
 
     for (let i = 0; i < data.length; i += 4) {
       const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
       totalBrightness += brightness;
+      minBrightness = Math.min(minBrightness, brightness);
+      maxBrightness = Math.max(maxBrightness, brightness);
     }
 
     const avgBrightness = totalBrightness / pixelCount;
+    const dynamicRange = maxBrightness - minBrightness;
 
-    // حساب التباين
-    for (let i = 0; i < data.length; i += 4) {
-      const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      totalContrast += Math.abs(brightness - avgBrightness);
-    }
-
-    const avgContrast = totalContrast / pixelCount;
-
-    // تحسين التباين إذا كان منخفضاً
-    if (avgContrast < 50) {
-      const contrastFactor = 1.3; // زيادة التباين بنسبة 30%
+    // === تحسين الإضاءة المتقدم ===
+    // إذا كانت الصورة داكنة جداً (متوسط السطوع < 120)
+    if (avgBrightness < 120) {
+      // حساب معامل التصحيح التلقائي
+      const targetBrightness = 140;
+      const brightnessFactor = Math.min(1.5, targetBrightness / avgBrightness);
       
       for (let i = 0; i < data.length; i += 4) {
-        // تطبيق تحسين التباين
-        data[i] = clamp(((data[i] - 128) * contrastFactor) + 128);     // R
-        data[i + 1] = clamp(((data[i + 1] - 128) * contrastFactor) + 128); // G
-        data[i + 2] = clamp(((data[i + 2] - 128) * contrastFactor) + 128); // B
+        // تطبيق تصحيح gamma للحصول على إضاءة طبيعية
+        data[i] = clamp(Math.pow(data[i] / 255, 0.85) * 255 * brightnessFactor);     // R
+        data[i + 1] = clamp(Math.pow(data[i + 1] / 255, 0.85) * 255 * brightnessFactor); // G
+        data[i + 2] = clamp(Math.pow(data[i + 2] / 255, 0.85) * 255 * brightnessFactor); // B
+      }
+      
+      enhancements.push('تحسين الإضاءة');
+    }
+    // إذا كانت الصورة ساطعة جداً (متوسط السطوع > 200)
+    else if (avgBrightness > 200) {
+      const darkFactor = 0.9;
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = clamp(data[i] * darkFactor);
+        data[i + 1] = clamp(data[i + 1] * darkFactor);
+        data[i + 2] = clamp(data[i + 2] * darkFactor);
+      }
+      enhancements.push('تعديل السطوع الزائد');
+    }
+
+    // === تحسين التباين التلقائي (Auto Contrast) ===
+    // إذا كان النطاق الديناميكي منخفضاً
+    if (dynamicRange < 150) {
+      // تمديد النطاق ليشمل 0-255
+      const scale = 255 / Math.max(dynamicRange, 1);
+      
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = clamp((data[i] - minBrightness) * scale);
+        data[i + 1] = clamp((data[i + 1] - minBrightness) * scale);
+        data[i + 2] = clamp((data[i + 2] - minBrightness) * scale);
       }
       
       enhancements.push('تحسين التباين');
     }
 
-    // تحسين السطوع إذا كانت الصورة داكنة جداً
-    if (avgBrightness < 100) {
-      const brightnessFactor = 1.2;
-      
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = clamp(data[i] * brightnessFactor);     // R
-        data[i + 1] = clamp(data[i + 1] * brightnessFactor); // G
-        data[i + 2] = clamp(data[i + 2] * brightnessFactor); // B
-      }
-      
-      enhancements.push('تحسين السطوع');
-    }
-
-    // تحسين الحدة (Sharpening) باستخدام unsharp mask بسيط
-    // نطبق فقط إذا كانت الصورة ضبابية
-    if (avgContrast < 40) {
-      // نسخ البيانات الأصلية
-      const original = new Uint8ClampedArray(data);
-      
-      // تطبيق unsharp mask بسيط
-      const sharpenAmount = 0.3;
-      
-      for (let y = 1; y < height - 1; y++) {
-        for (let x = 1; x < width - 1; x++) {
-          const idx = (y * width + x) * 4;
+    // === تحسين الحدة المتقدم (Unsharp Mask) ===
+    // نطبق دائماً لتحسين وضوح النص
+    const original = new Uint8ClampedArray(data);
+    const sharpenAmount = 0.4; // زيادة الحدة
+    
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = (y * width + x) * 4;
+        
+        for (let c = 0; c < 3; c++) {
+          // حساب المتوسط المحيط (3x3 kernel)
+          const neighbors = 
+            original[idx - width * 4 - 4 + c] + // أعلى يسار
+            original[idx - width * 4 + c] +     // أعلى
+            original[idx - width * 4 + 4 + c] + // أعلى يمين
+            original[idx - 4 + c] +             // يسار
+            original[idx + 4 + c] +             // يمين
+            original[idx + width * 4 - 4 + c] + // أسفل يسار
+            original[idx + width * 4 + c] +     // أسفل
+            original[idx + width * 4 + 4 + c];  // أسفل يمين
           
-          for (let c = 0; c < 3; c++) {
-            // حساب المتوسط المحيط
-            const neighbors = 
-              original[idx - width * 4 + c] + // أعلى
-              original[idx + width * 4 + c] + // أسفل
-              original[idx - 4 + c] +         // يسار
-              original[idx + 4 + c];          // يمين
-            
-            const avg = neighbors / 4;
-            const diff = original[idx + c] - avg;
-            
-            data[idx + c] = clamp(original[idx + c] + diff * sharpenAmount);
-          }
+          const avg = neighbors / 8;
+          const diff = original[idx + c] - avg;
+          
+          data[idx + c] = clamp(original[idx + c] + diff * sharpenAmount);
         }
       }
-      
-      enhancements.push('تحسين الحدة');
     }
+    
+    enhancements.push('تحسين الحدة');
 
+    // === تطبيق التغييرات ===
     ctx.putImageData(imageData, 0, 0);
     
   } catch (error) {

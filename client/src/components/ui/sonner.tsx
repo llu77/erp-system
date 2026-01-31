@@ -20,7 +20,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       expand={true}
       richColors={true}
       closeButton={true}
-      duration={5000}
+      duration={4000}
+      visibleToasts={3}
       className="toaster group"
       style={
         {

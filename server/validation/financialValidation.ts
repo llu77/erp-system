@@ -268,14 +268,16 @@ export function validateDate(
   }
 
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // إضافة هامش 24 ساعة للتعامل مع اختلافات المناطق الزمنية
+  const todayWithBuffer = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  todayWithBuffer.setHours(23, 59, 59, 999); // نهاية اليوم الحالي
   const inputDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-  // التحقق من التواريخ المستقبلية
-  if (!allowFuture && inputDate > today) {
+  // التحقق من التواريخ المستقبلية (السماح بتاريخ اليوم الحالي)
+  if (!allowFuture && inputDate > todayWithBuffer) {
     errors.push({
       code: "DATE_FUTURE",
-      message: `${fieldName} لا يمكن أن يكون في المستقبل`,
+      message: `${fieldName} لا يمكن أن يكون في المستقبل (التاريخ المدخل: ${inputDate.toLocaleDateString('ar-SA')})`,
       field: fieldName,
       value,
     });
@@ -283,6 +285,7 @@ export function validateDate(
   }
 
   // التحقق من التواريخ القديمة جداً
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (allowPast && maxDaysInPast > 0) {
     const minDate = new Date(today);
     minDate.setDate(minDate.getDate() - maxDaysInPast);

@@ -296,27 +296,39 @@ describe('amountsMatch', () => {
     });
   });
 
-  describe('Large Amounts', () => {
-    it('should scale tolerance with amount', () => {
-      // 100000 * 0.02 = 2000 tolerance
-      expect(amountsMatch(101500, 100000)).toBe(true);
-      expect(amountsMatch(103000, 100000)).toBe(false);
+  describe('Large Amounts (Graduated Tolerance)', () => {
+    it('should use 1% tolerance for amounts > 10000', () => {
+      // 100000 * 0.01 = 1000 tolerance (النظام المتدرج الجديد)
+      expect(amountsMatch(100500, 100000)).toBe(true);  // داخل 1%
+      expect(amountsMatch(101000, 100000)).toBe(true);  // على الحد
+      expect(amountsMatch(101500, 100000)).toBe(false); // خارج 1%
     });
   });
 
-  describe('Small Amounts', () => {
-    it('should handle small amounts', () => {
-      // 100 * 0.02 = 2 tolerance
-      expect(amountsMatch(101, 100)).toBe(true);
-      expect(amountsMatch(103, 100)).toBe(false);
+  describe('Small Amounts (Graduated Tolerance)', () => {
+    it('should use 3% tolerance for amounts < 500', () => {
+      // 100 * 0.03 = 3 tolerance (النظام المتدرج الجديد)
+      expect(amountsMatch(101, 100)).toBe(true);  // داخل 3%
+      expect(amountsMatch(103, 100)).toBe(true);  // على الحد
+      expect(amountsMatch(104, 100)).toBe(false); // خارج 3%
+    });
+  });
+
+  describe('Medium Amounts (Graduated Tolerance)', () => {
+    it('should use 2.5% tolerance for amounts 500-2000', () => {
+      // 1000 * 0.025 = 25 tolerance
+      expect(amountsMatch(1020, 1000)).toBe(true);  // داخل 2.5%
+      expect(amountsMatch(1025, 1000)).toBe(true);  // على الحد
+      expect(amountsMatch(1030, 1000)).toBe(false); // خارج 2.5%
     });
   });
 
   describe('Decimal Amounts', () => {
-    it('should handle decimal amounts', () => {
-      // 1500.50 * 0.02 = 30.01 tolerance
-      expect(amountsMatch(1520.50, 1500.50)).toBe(true);
-      expect(amountsMatch(1540.50, 1500.50)).toBe(false);
+    it('should handle decimal amounts with graduated tolerance', () => {
+      // 1500.50 * 0.025 = 37.51 tolerance (لأن 1500.50 في نطاق 500-2000)
+      expect(amountsMatch(1520.50, 1500.50)).toBe(true);  // داخل 2.5%
+      expect(amountsMatch(1538.00, 1500.50)).toBe(true);  // على الحد تقريباً
+      expect(amountsMatch(1545.50, 1500.50)).toBe(false); // خارج 2.5%
     });
   });
 });

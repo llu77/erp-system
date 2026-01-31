@@ -75,7 +75,18 @@ export interface OCRWarning {
 }
 
 // ==================== الثوابت ====================
-export const AMOUNT_TOLERANCE_PERCENTAGE = 0.02; // 2% tolerance for OCR errors
+// نظام التسامح المتدرج (Graduated Tolerance System)
+// المبالغ الصغيرة تحتاج هامش أكبر لأن الفرق الصغير يكون نسبة كبيرة
+export const TOLERANCE_TIERS = [
+  { maxAmount: 500, tolerance: 0.03 },    // 3% للمبالغ أقل من 500
+  { maxAmount: 2000, tolerance: 0.025 },  // 2.5% للمبالغ 500-2000
+  { maxAmount: 5000, tolerance: 0.02 },   // 2% للمبالغ 2000-5000
+  { maxAmount: 10000, tolerance: 0.015 }, // 1.5% للمبالغ 5000-10000
+  { maxAmount: Infinity, tolerance: 0.01 } // 1% للمبالغ أكثر من 10000
+];
+
+// القيمة الافتراضية للتوافق العكسي
+export const AMOUNT_TOLERANCE_PERCENTAGE = 0.02; // 2% tolerance for OCR errors (default)
 export const MIN_CONFIDENCE_FOR_VALIDATION = "medium";
 export const DATE_TOLERANCE_DAYS = 1; // السماح بفرق يوم واحد في التاريخ
 
@@ -166,17 +177,59 @@ export function datesMatch(
 }
 
 /**
- * التحقق من تطابق المبلغين مع هامش خطأ
+ * حساب نسبة التسامح المتدرجة بناءً على المبلغ
+ */
+export function calculateGraduatedTolerance(amount: number): number {
+  for (const tier of TOLERANCE_TIERS) {
+    if (amount <= tier.maxAmount) {
+      return tier.tolerance;
+    }
+  }
+  return 0.01; // 1% افتراضي
+}
+
+/**
+ * التحقق من تطابق المبلغين مع هامش خطأ متدرج
+ * يستخدم نظام التسامح المتدرج حسب حجم المبلغ:
+ * - أقل من 500: 3%
+ * - 500-2000: 2.5%
+ * - 2000-5000: 2%
+ * - 5000-10000: 1.5%
+ * - أكثر من 10000: 1%
  */
 export function amountsMatch(
   extracted: number,
   expected: number,
-  tolerancePercent: number = AMOUNT_TOLERANCE_PERCENTAGE
+  tolerancePercent?: number
 ): boolean {
   if (expected === 0) return extracted === 0;
   
-  const tolerance = expected * tolerancePercent;
-  return Math.abs(extracted - expected) <= tolerance;
+  // استخدام التسامح المتدرج إذا لم يتم تحديد نسبة مخصصة
+  const tolerance = tolerancePercent ?? calculateGraduatedTolerance(expected);
+  const allowedDifference = expected * tolerance;
+  
+  return Math.abs(extracted - expected) <= allowedDifference;
+}
+
+/**
+ * الحصول على تفاصيل التسامح للعرض للمستخدم
+ */
+export function getToleranceDetails(amount: number): {
+  percentage: number;
+  allowedDifference: number;
+  tier: string;
+} {
+  const percentage = calculateGraduatedTolerance(amount);
+  const allowedDifference = amount * percentage;
+  
+  let tier: string;
+  if (amount <= 500) tier = 'مبلغ صغير (أقل من 500)';
+  else if (amount <= 2000) tier = 'مبلغ متوسط (500-2000)';
+  else if (amount <= 5000) tier = 'مبلغ كبير (2000-5000)';
+  else if (amount <= 10000) tier = 'مبلغ ضخم (5000-10000)';
+  else tier = 'مبلغ كبير جداً (أكثر من 10000)';
+  
+  return { percentage, allowedDifference, tier };
 }
 
 /**

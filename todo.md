@@ -4379,3 +4379,14 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] مقارنة مع النظام الحالي (11 معيار)
 - [x] إعداد تقرير التوصيات (PROPOSED_OCR_SYSTEM_ANALYSIS.md)
 - [x] تسليم النتائج للمستخدم
+
+
+## تنفيذ التحسينات المطلوبة (طلب جديد - 1 فبراير 2026)
+
+### المتطلبات
+- [x] إصلاح خطأ التاريخ "تاريخ الإيراد لا يمكن أن يكون في المستقبل" (financialValidation.ts)
+- [x] جعل الإشعار يختفي تلقائياً بعد 4 ثواني (sonner.tsx)
+- [x] تحسين إضاءة ودقة الصورة لقبولها في OCR (imageCompression.ts - gamma correction + auto contrast + 3x3 sharpening)
+- [x] تنفيذ نظام التسامح المتدرج (TOLERANCE_TIERS + calculateGraduatedTolerance + getToleranceDetails)
+- [x] اختبار التحسينات (1164 اختبار ناجح - 100%)
+- [x] تسليم النتائج للمستخدم
