@@ -4199,3 +4199,16 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] عرض تفصيل الإجمالي مع tooltip (كاش + شبكة + مدفوع + ولاء)
 - [x] تضمين عمود الولاء في تقرير PDF الشهري
 - [x] إضافة إجمالي الولاء في صف الإجماليات بجدول الشهر
+
+
+## إصلاح خطأ قاعدة البيانات - dailyRevenues (Deep Thinking Framework) - مكتمل
+
+### المشكلة
+- الاستعلام يفشل لأن الأعمدة المطلوبة غير موجودة في قاعدة البيانات الفعلية
+- الأعمدة المفقودة: loyalty, loyaltyInvoiceImage, paidInvoicesCustomer
+
+### المهام
+- [x] تحليل الخطأ وتحديد الأعمدة المفقودة بدقة
+- [x] مقارنة schema.ts مع قاعدة البيانات الفعلية
+- [x] إضافة الأعمدة المفقودة (paidInvoicesCustomer, loyalty, loyaltyInvoiceImage)
+- [x] التحقق من نجاح الإصلاح
