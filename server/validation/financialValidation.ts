@@ -588,10 +588,11 @@ export async function validateDailyRevenueInput(
     errors.push(...branchValidation.errors);
   }
 
-  // التحقق من التاريخ
+  // التحقق من التاريخ (السماح بأي تاريخ - القيد الوحيد هو عدم تكرار الإيراد لنفس التاريخ)
   const dateValidation = validateDate(input.date, {
-    allowFuture: false,
-    maxDaysInPast: 30, // السماح بإدخال إيرادات حتى 30 يوم في الماضي
+    allowFuture: true, // السماح بالتواريخ المستقبلية
+    maxDaysInPast: 365, // السماح بإدخال إيرادات حتى سنة في الماضي
+    maxDaysInFuture: 365, // السماح بإدخال إيرادات حتى سنة في المستقبل
     fieldName: "تاريخ الإيراد",
   });
   if (!dateValidation.success) {
