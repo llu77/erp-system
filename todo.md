@@ -4177,3 +4177,10 @@ node scripts/scheduledTasks.mjs weekly-report
 ### المتطلبات
 - [x] تحديث حساب الإجمالي في الخادم: الإجمالي = كاش + شبكة + فواتير مدفوع + ولاء
 - [x] تحديث حساب الإجمالي في الواجهة
+
+
+## إصلاح خطأ قاعدة البيانات - loyaltyInvoiceImage (مكتمل)
+
+### المشكلة
+- [x] خطأ: عمود loyaltyInvoiceImage غير موجود في جدول dailyRevenues
+- [x] تطبيق migration لإضافة العمود المفقود (loyalty + loyaltyInvoiceImage)
