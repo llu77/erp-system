@@ -388,7 +388,19 @@ export async function getCustomerInvoices(customerId: number) {
 export async function getAllPurchaseOrders() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.createdAt));
+  
+  // جلب أوامر الشراء مع اسم الفرع
+  const orders = await db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.createdAt));
+  
+  // جلب أسماء الفروع
+  const branchesData = await db.select().from(branches);
+  const branchMap = new Map(branchesData.map(b => [b.id, b.nameAr]));
+  
+  // إضافة اسم الفرع لكل أمر شراء
+  return orders.map(order => ({
+    ...order,
+    branchName: order.branchId ? branchMap.get(order.branchId) || 'غير محدد' : 'غير محدد'
+  }));
 }
 
 export async function getPurchaseOrderById(id: number) {

@@ -30,6 +30,7 @@ import * as smartPermissions from "./ai/smartPermissions";
 import * as aiRecommendationNotifier from "./ai/aiRecommendationNotifier";
 import * as aiRecommendationMonitor from "./scheduler/aiRecommendationMonitor";
 import * as financialValidation from "./validation/financialValidation";
+import * as balanceImageOCR from "./ocr/balanceImageOCR";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -2020,6 +2021,46 @@ export const appRouter = router({
           }
           unmatchReason = input.unmatchReason;
         }
+
+        // ==================== التحقق من صورة الموازنة باستخدام OCR ====================
+        let imageVerificationResult: balanceImageOCR.BalanceVerificationResult | null = null;
+        
+        // التحقق فقط إذا كان هناك مبلغ شبكة وصور موازنة
+        if (networkAmount > 0 && input.balanceImages && input.balanceImages.length > 0) {
+          try {
+            imageVerificationResult = await balanceImageOCR.verifyBalanceImage(
+              input.balanceImages,
+              networkAmount
+            );
+
+            // إذا كان التحقق ناجحاً ولكن المبلغ غير مطابق
+            if (imageVerificationResult.success && !imageVerificationResult.isMatched) {
+              // التحقق من مستوى الثقة
+              if (balanceImageOCR.isConfidenceSufficient(imageVerificationResult.confidence)) {
+                // إذا كانت الثقة كافية والمبلغ غير مطابق، نرفض الإدخال
+                throw new TRPCError({
+                  code: 'BAD_REQUEST',
+                  message: `عدم تطابق صورة الموازنة: ${imageVerificationResult.message}. المبلغ المستخرج من الصورة: ${imageVerificationResult.extractedAmount?.toFixed(2) || 'غير محدد'} ر.س، المبلغ المدخل: ${networkAmount.toFixed(2)} ر.س`
+                });
+              } else {
+                // إذا كانت الثقة منخفضة، نسجل تحذير فقط
+                const warning = balanceImageOCR.getConfidenceWarning(imageVerificationResult.confidence);
+                logger.warn('تحذير التحقق من صورة الموازنة', { 
+                  warning,
+                  result: imageVerificationResult 
+                });
+              }
+            }
+          } catch (ocrError: any) {
+            // إذا كان الخطأ من TRPCError (عدم تطابق)، نعيد رميه
+            if (ocrError instanceof TRPCError) {
+              throw ocrError;
+            }
+            // غير ذلك، نسجل الخطأ ونستمر (لا نمنع الإدخال بسبب خطأ تقني)
+            logger.error('خطأ في التحقق من صورة الموازنة', ocrError);
+          }
+        }
+        // ==================== نهاية التحقق من صورة الموازنة ====================
 
         // الحصول على أو إنشاء سجل شهري
         let monthlyRecord = await db.getMonthlyRecord(input.branchId, year, month);
