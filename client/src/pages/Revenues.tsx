@@ -568,8 +568,34 @@ export default function Revenues() {
               
               <div>
                 <Label>الإجمالي</Label>
-                <div className="mt-2 p-3 bg-gradient-to-r from-primary/15 to-primary/5 rounded-xl text-center font-bold text-xl text-primary border border-primary/20 shadow-sm">
+                <div className="mt-2 p-3 bg-gradient-to-r from-primary/15 to-primary/5 rounded-xl text-center font-bold text-xl text-primary border border-primary/20 shadow-sm relative group cursor-help">
                   {calculateBranchTotal()} ر.س
+                  {/* Tooltip تفصيل الإجمالي */}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-4 py-3 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 shadow-xl">
+                    <div className="text-xs font-normal space-y-1 text-right">
+                      <div className="flex justify-between gap-4">
+                        <span className="text-green-400">{parseFloat(branchRevenue.cash || "0").toFixed(2)}</span>
+                        <span>كاش:</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-blue-400">{parseFloat(branchRevenue.network || "0").toFixed(2)}</span>
+                        <span>شبكة:</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-orange-400">{parseFloat(branchRevenue.paidInvoices || "0").toFixed(2)}</span>
+                        <span>مدفوع:</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-purple-400">{parseFloat(branchRevenue.loyalty || "0").toFixed(2)}</span>
+                        <span>ولاء:</span>
+                      </div>
+                      <div className="border-t border-gray-600 pt-1 mt-1 flex justify-between gap-4 font-bold">
+                        <span className="text-primary">{calculateBranchTotal()}</span>
+                        <span>الإجمالي:</span>
+                      </div>
+                    </div>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900"></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -921,7 +947,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
   // دالة تصدير PDF
   const handleExportPDF = async (
     revenues: typeof monthlyRevenues,
-    totals: { cash: number; network: number; balance: number; paidInvoices: number; total: number; matched: number; unmatched: number },
+    totals: { cash: number; network: number; balance: number; paidInvoices: number; loyalty: number; total: number; matched: number; unmatched: number },
     monthName: string,
     monthStart: Date,
     monthEnd: Date
@@ -956,6 +982,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
     { label: 'إجمالي الشبكة', value: formatCurrency(totals.network) },
     { label: 'إجمالي الرصيد', value: formatCurrency(totals.balance) },
     { label: 'فواتير المدفوع', value: formatCurrency(totals.paidInvoices) },
+    { label: 'إجمالي الولاء', value: formatCurrency(totals.loyalty) },
     { label: 'أيام متطابقة', value: totals.matched },
     { label: 'أيام غير متطابقة', value: totals.unmatched },
   ])}
@@ -969,6 +996,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
         <th>شبكة</th>
         <th>رصيد</th>
         <th>فواتير المدفوع</th>
+        <th>ولاء</th>
         <th>الإجمالي</th>
         <th>الحالة</th>
       </tr>
@@ -977,6 +1005,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
       ${revenues.map(rev => {
         const revDate = new Date(rev.date);
         const paidInvoicesAmount = parseFloat(rev.paidInvoices || "0");
+        const loyaltyAmount = parseFloat((rev as any).loyalty || "0");
         return `
           <tr>
             <td>${format(revDate, "d/M/yyyy")}</td>
@@ -985,6 +1014,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
             <td class="text-primary">${parseFloat(rev.network || "0").toLocaleString()}</td>
             <td>${parseFloat(rev.balance || "0").toLocaleString()}</td>
             <td class="text-orange">${paidInvoicesAmount > 0 ? paidInvoicesAmount.toLocaleString() : '-'}</td>
+            <td class="text-purple" style="color: #9333ea;">${loyaltyAmount > 0 ? loyaltyAmount.toLocaleString() : '-'}</td>
             <td class="font-bold">${formatCurrency(rev.total || "0")}</td>
             <td class="${rev.isMatched ? 'status-matched' : 'status-unmatched'}">
               ${rev.isMatched ? '✓ متطابق' : '✗ غير متطابق'}
@@ -998,6 +1028,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
         <td style="border: none;">${totals.network.toLocaleString()}</td>
         <td style="border: none;">${totals.balance.toLocaleString()}</td>
         <td style="border: none;">${totals.paidInvoices.toLocaleString()}</td>
+        <td style="border: none;">${totals.loyalty.toLocaleString()}</td>
         <td style="border: none;">${formatCurrency(totals.total)}</td>
         <td style="border: none;">${revenues.length} يوم</td>
       </tr>
@@ -1074,7 +1105,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
         ) : monthlyRevenues && monthlyRevenues.length > 0 ? (
           <>
             {/* ملخص الشهر */}
-            <div className={`grid gap-3 mb-6 p-4 bg-muted/30 rounded-lg ${isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-6'}`}>
+            <div className={`grid gap-3 mb-6 p-4 bg-muted/30 rounded-lg ${isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-7'}`}>
               <div className="text-center">
                 <div className="text-lg font-semibold text-green-600">{totals.cash.toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">إجمالي النقدي</div>
@@ -1090,6 +1121,10 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
               <div className="text-center">
                 <div className="text-lg font-semibold text-orange-500">{totals.paidInvoices.toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">فواتير المدفوع</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-violet-500">{totals.loyalty.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">إجمالي الولاء</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-green-500">{totals.matched}</div>
