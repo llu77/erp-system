@@ -29,6 +29,7 @@ import * as aiCommandCenter from "./ai/aiCommandCenter";
 import * as smartPermissions from "./ai/smartPermissions";
 import * as aiRecommendationNotifier from "./ai/aiRecommendationNotifier";
 import * as aiRecommendationMonitor from "./scheduler/aiRecommendationMonitor";
+import * as financialValidation from "./validation/financialValidation";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -1888,6 +1889,94 @@ export const appRouter = router({
         if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null && ctx.user.branchId !== input.branchId) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك إدخال إيرادات لفرع آخر' });
         }
+
+        // ==================== التحقق من صحة البيانات المالية ====================
+        // التحقق من صحة مبلغ الكاش
+        const cashValidation = financialValidation.validateAmount(input.cash, {
+          fieldName: 'الكاش',
+          allowZero: true,
+        });
+        if (!cashValidation.success) {
+          financialValidation.throwValidationError(cashValidation.errors);
+        }
+
+        // التحقق من صحة مبلغ الشبكة
+        const networkValidation = financialValidation.validateAmount(input.network, {
+          fieldName: 'الشبكة',
+          allowZero: true,
+        });
+        if (!networkValidation.success) {
+          financialValidation.throwValidationError(networkValidation.errors);
+        }
+
+        // التحقق من صحة التاريخ
+        const dateValidation = financialValidation.validateDate(input.date, {
+          fieldName: 'تاريخ الإيراد',
+          allowFuture: false,
+          maxDaysInPast: 30, // السماح بإدخال إيرادات حتى 30 يوم في الماضي
+        });
+        if (!dateValidation.success) {
+          financialValidation.throwValidationError(dateValidation.errors);
+        }
+
+        // التحقق من صحة فواتير المدفوع (إذا موجودة)
+        if (input.paidInvoices && input.paidInvoices !== '0' && input.paidInvoices !== '') {
+          const paidInvoicesValidation = financialValidation.validateAmount(input.paidInvoices, {
+            fieldName: 'فواتير المدفوع',
+            allowZero: false,
+          });
+          if (!paidInvoicesValidation.success) {
+            financialValidation.throwValidationError(paidInvoicesValidation.errors);
+          }
+
+          // التحقق من وجود اسم العميل عند إدخال فواتير مدفوع
+          if (!input.paidInvoicesCustomer || input.paidInvoicesCustomer.trim() === '') {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'يجب اختيار اسم العميل عند إدخال فواتير مدفوع',
+            });
+          }
+        }
+
+        // التحقق من صحة الولاء (إذا موجود)
+        if (input.loyalty && input.loyalty !== '0' && input.loyalty !== '') {
+          const loyaltyValidation = financialValidation.validateAmount(input.loyalty, {
+            fieldName: 'الولاء',
+            allowZero: false,
+          });
+          if (!loyaltyValidation.success) {
+            financialValidation.throwValidationError(loyaltyValidation.errors);
+          }
+
+          // التحقق من وجود صورة فاتورة الولاء عند إدخال مبلغ ولاء
+          if (!input.loyaltyInvoiceImage || !input.loyaltyInvoiceImage.url) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'يجب رفع صورة فاتورة الولاء عند إدخال مبلغ ولاء',
+            });
+          }
+        }
+
+        // التحقق من صحة إيرادات الموظفين
+        for (const empRev of input.employeeRevenues) {
+          const empCashValidation = financialValidation.validateAmount(empRev.cash, {
+            fieldName: `كاش الموظف ${empRev.employeeId}`,
+            allowZero: true,
+          });
+          if (!empCashValidation.success) {
+            financialValidation.throwValidationError(empCashValidation.errors);
+          }
+
+          const empNetworkValidation = financialValidation.validateAmount(empRev.network, {
+            fieldName: `شبكة الموظف ${empRev.employeeId}`,
+            allowZero: true,
+          });
+          if (!empNetworkValidation.success) {
+            financialValidation.throwValidationError(empNetworkValidation.errors);
+          }
+        }
+        // ==================== نهاية التحقق ====================
+
         const date = new Date(input.date);
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
@@ -3779,6 +3868,51 @@ ${discrepancyRows}
         if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null && input.branchId && ctx.user.branchId !== input.branchId) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك إدخال مصاريف لفرع آخر' });
         }
+
+        // ==================== التحقق من صحة البيانات المالية ====================
+        // التحقق من صحة مبلغ المصروف
+        const amountValidation = financialValidation.validateAmount(input.amount, {
+          fieldName: 'مبلغ المصروف',
+          allowZero: false,
+        });
+        if (!amountValidation.success) {
+          financialValidation.throwValidationError(amountValidation.errors);
+        }
+
+        // التحقق من صحة تاريخ المصروف
+        const dateValidation = financialValidation.validateDate(input.expenseDate, {
+          fieldName: 'تاريخ المصروف',
+          allowFuture: false,
+          maxDaysInPast: 90, // السماح بإدخال مصروفات حتى 90 يوم في الماضي
+        });
+        if (!dateValidation.success) {
+          financialValidation.throwValidationError(dateValidation.errors);
+        }
+
+        // التحقق من صحة العنوان
+        const titleValidation = financialValidation.validateText(input.title, {
+          required: true,
+          minLength: 3,
+          maxLength: 200,
+          fieldName: 'عنوان المصروف',
+        });
+        if (!titleValidation.success) {
+          financialValidation.throwValidationError(titleValidation.errors);
+        }
+
+        // التحقق من صحة الوصف (إذا موجود)
+        if (input.description) {
+          const descValidation = financialValidation.validateText(input.description, {
+            required: false,
+            maxLength: 1000,
+            fieldName: 'وصف المصروف',
+          });
+          if (!descValidation.success) {
+            financialValidation.throwValidationError(descValidation.errors);
+          }
+        }
+        // ==================== نهاية التحقق ====================
+
         const expenseNumber = await db.generateExpenseNumber();
         
         await db.createExpense({
