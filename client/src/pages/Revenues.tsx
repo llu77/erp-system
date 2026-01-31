@@ -225,13 +225,14 @@ export default function Revenues() {
     setEmployeeRevenues(employeeRevenues.filter((_, i) => i !== index));
   };
 
-  // حساب إجمالي الفرع (الكاش + الشبكة + فواتير المدفوع، الرصيد غير محسوب)
+  // حساب إجمالي الفرع (الكاش + الشبكة + فواتير المدفوع + الولاء، الرصيد غير محسوب)
   const calculateBranchTotal = () => {
     const cash = parseFloat(branchRevenue.cash) || 0;
     const network = parseFloat(branchRevenue.network) || 0;
     const paidInvoices = parseFloat(branchRevenue.paidInvoices) || 0;
+    const loyalty = parseFloat(branchRevenue.loyalty) || 0;
     // الرصيد غير محسوب في الإجمالي
-    return (cash + network + paidInvoices).toFixed(2);
+    return (cash + network + paidInvoices + loyalty).toFixed(2);
   };
 
   // حساب إجمالي الموظفين

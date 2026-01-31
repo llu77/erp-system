@@ -4184,3 +4184,10 @@ node scripts/scheduledTasks.mjs weekly-report
 ### المشكلة
 - [x] خطأ: عمود loyaltyInvoiceImage غير موجود في جدول dailyRevenues
 - [x] تطبيق migration لإضافة العمود المفقود (loyalty + loyaltyInvoiceImage)
+
+
+## إصلاح حساب الإجمالي في واجهة الإيرادات (مكتمل)
+
+### المشكلة
+- [x] الإجمالي المعروض لا يشمل الولاء وفواتير المدفوع
+- [x] يجب أن يكون: الإجمالي = كاش + شبكة + فواتير مدفوع + ولاء
