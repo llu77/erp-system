@@ -31,8 +31,10 @@ import {
   Image,
   X,
   Eye,
-  ImageIcon
+  ImageIcon,
+  Camera
 } from "lucide-react";
+import { CameraCapture } from "@/components/CameraCapture";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ImagePreviewLightbox, ImageThumbnail } from "@/components/ImagePreviewLightbox";
@@ -88,6 +90,8 @@ export default function Revenues() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImageIndex, setLightboxImageIndex] = useState(0);
   const [ocrWarnings, setOcrWarnings] = useState<string[]>([]);
+  // حالة الكاميرا
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   // حساب المطابقة التلقائية
   const calculateAutoMatch = () => {
@@ -180,6 +184,59 @@ export default function Revenues() {
       if (result.enhancements && result.enhancements.length > 0) {
         toast.info(
           `التحسينات: ${result.enhancements.join(', ')}`,
+          { duration: 3000 }
+        );
+      }
+
+      setCurrentUploadPreview(result.base64Data);
+      
+      // رفع الصورة المحسّنة
+      uploadImageMutation.mutate({
+        base64Data: result.base64Data,
+        fileName: result.fileName,
+        contentType: result.contentType,
+      });
+    } catch (error: any) {
+      toast.error(error.message || "فشل معالجة الصورة");
+      setIsUploading(false);
+    }
+  };
+
+  // معالجة الصورة الملتقطة من الكاميرا
+  const handleCameraCapture = async (imageData: string) => {
+    setIsUploading(true);
+    setIsCameraOpen(false);
+
+    try {
+      // تحويل base64 إلى Blob للمعالجة
+      const response = await fetch(imageData);
+      const blob = await response.blob();
+      const file = new File([blob], `camera-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+
+      // ضغط وتحسين الصورة تلقائياً
+      toast.info("جاري ضغط وتحسين الصورة...", { duration: 2000 });
+      
+      const result = await processImageForUpload(file, {
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 0.85,
+        maxSizeKB: 500,
+        enhanceForOCR: true,
+        outputFormat: 'jpeg'
+      });
+
+      if (!result.success) {
+        toast.error(result.error || "فشل معالجة الصورة");
+        setIsUploading(false);
+        return;
+      }
+
+      // عرض معلومات الضغط
+      if (result.compressionRatio > 0) {
+        const originalKB = Math.round(result.originalSize / 1024);
+        const compressedKB = Math.round(result.compressedSize / 1024);
+        toast.success(
+          `تم ضغط الصورة: ${originalKB}KB → ${compressedKB}KB (توفير ${result.compressionRatio}%)`,
           { duration: 3000 }
         );
       }
@@ -683,29 +740,52 @@ export default function Revenues() {
               </Label>
               
               {balanceImages.length === 0 ? (
-                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageSelect}
-                    className="hidden"
-                    id="balance-image-input"
-                    disabled={isUploading}
-                  />
-                  <label htmlFor="balance-image-input" className="cursor-pointer block">
-                    {isUploading ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        <span className="text-sm text-muted-foreground">جاري رفع الصورة...</span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <Upload className="h-8 w-8 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">اضغط لرفع صورة الموازنة</span>
-                        <span className="text-xs text-muted-foreground/70">الحد الأقصى 5 ميجابايت لكل صورة</span>
-                      </div>
-                    )}
-                  </label>
+                <div className="space-y-3">
+                  {/* خيارات رفع الصورة */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* زر التقاط من الكاميرا */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-24 flex flex-col items-center justify-center gap-2 border-2 border-dashed hover:border-primary/50 hover:bg-primary/5"
+                      onClick={() => setIsCameraOpen(true)}
+                      disabled={isUploading}
+                    >
+                      <Camera className="h-8 w-8 text-primary" />
+                      <span className="text-sm font-medium">التقاط من الكاميرا</span>
+                    </Button>
+                    
+                    {/* زر رفع من الجهاز */}
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                        id="balance-image-input"
+                        disabled={isUploading}
+                      />
+                      <label 
+                        htmlFor="balance-image-input" 
+                        className="h-24 flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-md hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-colors"
+                      >
+                        {isUploading ? (
+                          <>
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            <span className="text-sm text-muted-foreground">جاري الرفع...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-8 w-8 text-muted-foreground" />
+                            <span className="text-sm font-medium">رفع من الجهاز</span>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+                  <p className="text-xs text-center text-muted-foreground/70">
+                    التقط صورة إيصال POS مباشرة أو ارفع صورة من جهازك
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -738,31 +818,58 @@ export default function Revenues() {
                       warnings={ocrWarnings}
                     />
                   )}
-                  <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageSelect}
-                      className="hidden"
-                      id="balance-image-additional-input"
+                  {/* أزرار إضافة صورة إضافية */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* زر التقاط إضافي من الكاميرا */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-12 flex items-center justify-center gap-2 border-dashed"
+                      onClick={() => setIsCameraOpen(true)}
                       disabled={isUploading}
-                    />
-                    <label htmlFor="balance-image-additional-input" className="cursor-pointer block">
-                      {isUploading ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                          <span className="text-sm text-muted-foreground">جاري رفع الصورة...</span>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center gap-2">
-                          <Plus className="h-6 w-6 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">رفع صورة إضافية</span>
-                        </div>
-                      )}
-                    </label>
+                    >
+                      <Camera className="h-4 w-4" />
+                      <span className="text-xs">التقاط إضافي</span>
+                    </Button>
+                    
+                    {/* زر رفع إضافي من الجهاز */}
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                        id="balance-image-additional-input"
+                        disabled={isUploading}
+                      />
+                      <label 
+                        htmlFor="balance-image-additional-input" 
+                        className="h-12 flex items-center justify-center gap-2 border border-dashed rounded-md hover:border-primary/50 cursor-pointer transition-colors"
+                      >
+                        {isUploading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                            <span className="text-xs text-muted-foreground">جاري الرفع...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs">رفع إضافي</span>
+                          </>
+                        )}
+                      </label>
+                    </div>
                   </div>
                 </div>
               )}
+              
+              {/* مكون الكاميرا */}
+              <CameraCapture
+                isOpen={isCameraOpen}
+                onClose={() => setIsCameraOpen(false)}
+                onCapture={handleCameraCapture}
+              />
             </div>
           </CardContent>
         </Card>
