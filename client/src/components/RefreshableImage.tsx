@@ -1,6 +1,10 @@
 /**
- * مكون صورة قابلة للتجديد - محسّن للأداء
- * يجدد الرابط مسبقاً عند التحميل لتجنب التأخير
+ * مكون صورة قابلة للتجديد - محسّن للأداء v2.0
+ * 
+ * التحسينات:
+ * 1. localStorage cache بدلاً من Map (يبقى بعد إعادة تحميل الصفحة)
+ * 2. Image preloading بعد تجديد الرابط
+ * 3. تجديد متوازي للروابط المتعددة
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -17,14 +21,89 @@ interface RefreshableImageProps {
   containerClassName?: string;
   onLoad?: () => void;
   onError?: () => void;
-  // تجديد الرابط مسبقاً عند التحميل (افتراضي: true)
   prefetchUrl?: boolean;
 }
 
-// Cache للروابط المجددة لتجنب الطلبات المتكررة
-const urlCache = new Map<string, { url: string; timestamp: number }>();
-const CACHE_TTL = 55 * 60 * 1000; // 55 دقيقة (أقل من صلاحية S3 URL)
+// ==================== Cache System ====================
+const CACHE_KEY_PREFIX = "img_url_cache_";
+const CACHE_TTL = 55 * 60 * 1000; // 55 دقيقة
 
+interface CacheEntry {
+  url: string;
+  timestamp: number;
+}
+
+// Memory cache للوصول السريع
+const memoryCache = new Map<string, CacheEntry>();
+
+function getCachedUrl(s3Key: string): string | null {
+  // التحقق من memory cache أولاً (أسرع)
+  const memCached = memoryCache.get(s3Key);
+  if (memCached && Date.now() - memCached.timestamp < CACHE_TTL) {
+    return memCached.url;
+  }
+
+  // التحقق من localStorage
+  try {
+    const stored = localStorage.getItem(CACHE_KEY_PREFIX + s3Key);
+    if (stored) {
+      const entry: CacheEntry = JSON.parse(stored);
+      if (Date.now() - entry.timestamp < CACHE_TTL) {
+        // تحديث memory cache
+        memoryCache.set(s3Key, entry);
+        return entry.url;
+      }
+      // حذف الـ cache المنتهي
+      localStorage.removeItem(CACHE_KEY_PREFIX + s3Key);
+    }
+  } catch (e) {
+    // تجاهل أخطاء localStorage
+  }
+
+  return null;
+}
+
+function setCachedUrl(s3Key: string, url: string): void {
+  const entry: CacheEntry = { url, timestamp: Date.now() };
+  
+  // حفظ في memory cache
+  memoryCache.set(s3Key, entry);
+  
+  // حفظ في localStorage
+  try {
+    localStorage.setItem(CACHE_KEY_PREFIX + s3Key, JSON.stringify(entry));
+  } catch (e) {
+    // تجاهل أخطاء localStorage (ممتلئ)
+  }
+}
+
+function clearCachedUrl(s3Key: string): void {
+  memoryCache.delete(s3Key);
+  try {
+    localStorage.removeItem(CACHE_KEY_PREFIX + s3Key);
+  } catch (e) {
+    // تجاهل
+  }
+}
+
+// ==================== Image Preloader ====================
+const preloadedImages = new Set<string>();
+
+function preloadImage(url: string): Promise<void> {
+  if (preloadedImages.has(url)) return Promise.resolve();
+  
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      preloadedImages.add(url);
+      resolve();
+    };
+    img.onerror = () => resolve(); // لا نفشل إذا فشل التحميل المسبق
+    img.src = url;
+  });
+}
+
+// ==================== Main Component ====================
 export function RefreshableImage({
   src,
   s3Key,
@@ -39,47 +118,50 @@ export function RefreshableImage({
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const isMounted = useRef(true);
+  const retryCount = useRef(0);
 
   const refreshMutation = trpc.revenues.refreshImageUrl.useMutation();
 
-  // التحقق من الـ cache أو تجديد الرابط
-  const getValidUrl = useCallback(async (): Promise<string> => {
-    // التحقق من الـ cache أولاً
-    const cached = urlCache.get(s3Key);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return cached.url;
-    }
-
-    // تجديد الرابط إذا كان prefetchUrl مفعّل
-    if (prefetchUrl && s3Key) {
-      try {
-        const result = await refreshMutation.mutateAsync({ key: s3Key });
-        if (result.success && result.url) {
-          // حفظ في الـ cache
-          urlCache.set(s3Key, { url: result.url, timestamp: Date.now() });
-          return result.url;
-        }
-      } catch (error) {
-        console.error("فشل تجديد رابط الصورة:", error);
-      }
-    }
-
-    // استخدام الرابط الأصلي كـ fallback
-    return src;
-  }, [s3Key, src, prefetchUrl, refreshMutation]);
-
-  // تحميل الصورة عند mount أو تغيير المصدر
+  // تحميل الصورة مع cache
   useEffect(() => {
     isMounted.current = true;
+    retryCount.current = 0;
     setIsLoading(true);
     setHasError(false);
-    setCurrentSrc(null);
 
-    getValidUrl().then((url) => {
-      if (isMounted.current) {
-        setCurrentSrc(url);
+    const loadImage = async () => {
+      // 1. التحقق من الـ cache
+      const cachedUrl = getCachedUrl(s3Key);
+      if (cachedUrl) {
+        if (isMounted.current) {
+          setCurrentSrc(cachedUrl);
+        }
+        return;
       }
-    });
+
+      // 2. تجديد الرابط إذا لم يكن في الـ cache
+      if (prefetchUrl && s3Key) {
+        try {
+          const result = await refreshMutation.mutateAsync({ key: s3Key });
+          if (result.success && result.url && isMounted.current) {
+            setCachedUrl(s3Key, result.url);
+            // Preload الصورة
+            preloadImage(result.url);
+            setCurrentSrc(result.url);
+            return;
+          }
+        } catch (error) {
+          console.error("فشل تجديد رابط الصورة:", error);
+        }
+      }
+
+      // 3. استخدام الرابط الأصلي كـ fallback
+      if (isMounted.current) {
+        setCurrentSrc(src);
+      }
+    };
+
+    loadImage();
 
     return () => {
       isMounted.current = false;
@@ -93,14 +175,15 @@ export function RefreshableImage({
   }, [onLoad]);
 
   const handleError = useCallback(async () => {
-    // محاولة تجديد الرابط مرة أخرى
-    if (s3Key) {
+    // محاولة واحدة فقط لتجديد الرابط
+    if (retryCount.current < 1 && s3Key) {
+      retryCount.current++;
+      clearCachedUrl(s3Key);
+      
       try {
-        // إزالة من الـ cache لإجبار التجديد
-        urlCache.delete(s3Key);
         const result = await refreshMutation.mutateAsync({ key: s3Key });
         if (result.success && result.url) {
-          urlCache.set(s3Key, { url: result.url, timestamp: Date.now() });
+          setCachedUrl(s3Key, result.url);
           setCurrentSrc(result.url);
           return;
         }
@@ -117,15 +200,14 @@ export function RefreshableImage({
   const handleRetry = useCallback(async () => {
     setIsLoading(true);
     setHasError(false);
-    
-    // إزالة من الـ cache
-    urlCache.delete(s3Key);
+    retryCount.current = 0;
+    clearCachedUrl(s3Key);
     
     if (s3Key) {
       try {
         const result = await refreshMutation.mutateAsync({ key: s3Key });
         if (result.success && result.url) {
-          urlCache.set(s3Key, { url: result.url, timestamp: Date.now() });
+          setCachedUrl(s3Key, result.url);
           setCurrentSrc(result.url);
           return;
         }
@@ -134,7 +216,6 @@ export function RefreshableImage({
       }
     }
     
-    // إعادة تحميل الصورة الأصلية
     setCurrentSrc(src + "?t=" + Date.now());
   }, [s3Key, src, refreshMutation]);
 
@@ -182,33 +263,35 @@ export function RefreshableImage({
           )}
           onLoad={handleLoad}
           onError={handleError}
+          loading="lazy"
         />
       )}
     </div>
   );
 }
 
-// دالة مساعدة لتجديد روابط متعددة مسبقاً (للاستخدام قبل فتح modal)
+// ==================== Batch Prefetch Hook ====================
 export function usePrefetchImages() {
   const refreshMutation = trpc.revenues.refreshImageUrls.useMutation();
   
   const prefetch = useCallback(async (keys: string[]) => {
-    // تصفية المفاتيح الموجودة في الـ cache
-    const keysToRefresh = keys.filter(key => {
-      const cached = urlCache.get(key);
-      return !cached || Date.now() - cached.timestamp >= CACHE_TTL;
-    });
+    // تصفية المفاتيح غير الموجودة في الـ cache
+    const keysToRefresh = keys.filter(key => !getCachedUrl(key));
     
     if (keysToRefresh.length === 0) return;
     
     try {
       const result = await refreshMutation.mutateAsync({ keys: keysToRefresh });
       if (result.success && result.results) {
-        result.results.forEach(({ key, url, success }) => {
+        // تجديد متوازي + preload
+        const preloadPromises = result.results.map(async ({ key, url, success }) => {
           if (success && url) {
-            urlCache.set(key, { url, timestamp: Date.now() });
+            setCachedUrl(key, url);
+            await preloadImage(url);
           }
         });
+        
+        await Promise.all(preloadPromises);
       }
     } catch (error) {
       console.error("فشل تجديد روابط الصور:", error);
