@@ -411,6 +411,8 @@ export async function extractWithRetry(
   const startTime = Date.now();
 
   // الإعدادات الافتراضية
+  // ملاحظة: تم تعطيل معالجة الصور افتراضياً لأن الاختبارات أظهرت أن OCR بدون معالجة أدق
+  // المعالجة تُستخدم كـ fallback عند فشل القراءة الأولى
   const defaultConfig: RetryConfig = {
     maxRetries: 3,
     prompts: [
@@ -420,7 +422,7 @@ export async function extractWithRetry(
       TOTAL_ONLY_PROMPT
     ],
     combineResults: true,
-    preprocessImage: true
+    preprocessImage: false // تم تعطيلها افتراضياً - تُستخدم كـ fallback
   };
 
   const finalConfig = { ...defaultConfig, ...config };
@@ -454,6 +456,8 @@ export async function extractWithRetry(
     }
 
     // تنفيذ المحاولات
+    let usedPreprocessingFallback = false;
+    
     for (let i = 0; i < Math.min(finalConfig.maxRetries, finalConfig.prompts.length); i++) {
       const prompt = finalConfig.prompts[i];
       logger.info(`محاولة ${i + 1}: ${prompt.name}`);
@@ -477,6 +481,22 @@ export async function extractWithRetry(
            (!bestAttempt.result.success || 
             (attempt.result.grandTotal || 0) > (bestAttempt.result.grandTotal || 0)))) {
         bestAttempt = attempt;
+      }
+      
+      // Smart Fallback: إذا فشلت المحاولة الأولى ولم نستخدم المعالجة، نجربها
+      if (i === 0 && !attempt.result.success && !finalConfig.preprocessImage && !usedPreprocessingFallback) {
+        logger.info("تفعيل Smart Fallback: معالجة الصورة بعد فشل المحاولة الأولى");
+        try {
+          preprocessingResult = await smartPreprocess(imageUrl);
+          base64Image = preprocessingResult.base64Image;
+          usedPreprocessingFallback = true;
+          logger.info("تم تطبيق معالجة الصورة كـ fallback", {
+            originalSize: preprocessingResult.originalSize,
+            processedSize: preprocessingResult.processedSize
+          });
+        } catch (preprocessError: any) {
+          logger.warn("فشل Smart Fallback", { error: preprocessError.message });
+        }
       }
     }
 
