@@ -379,6 +379,11 @@ async function fetchImageAsBase64(imageUrl: string, s3Key?: string): Promise<str
     }
     
     // جلب الصورة من الرابط HTTP/HTTPS
+    logger.info("بدء تحميل الصورة", {
+      hasS3Key: !!s3Key,
+      urlPreview: imageUrl.substring(0, 80)
+    });
+    
     let response = await fetch(imageUrl, {
       headers: {
         'Accept': 'image/*'
@@ -386,16 +391,28 @@ async function fetchImageAsBase64(imageUrl: string, s3Key?: string): Promise<str
     });
     
     // إذا فشل التحميل بخطأ 403 (انتهاء صلاحية الرابط)، نحاول الحصول على رابط جديد
-    if (!response.ok && response.status === 403) {
-      logger.warn("رابط S3 منتهي الصلاحية (403)، محاولة الحصول على رابط جديد");
+    if (!response.ok && (response.status === 403 || response.status === 401)) {
+      logger.warn(`رابط S3 منتهي الصلاحية (${response.status})، محاولة الحصول على رابط جديد`, {
+        status: response.status,
+        providedKey: s3Key || 'none'
+      });
       
       // محاولة استخراج مفتاح S3 من الرابط أو استخدام المفتاح المُمرر
       const key = s3Key || extractS3KeyFromUrl(imageUrl);
+      
+      logger.info("مفتاح S3 المستخدم للحصول على رابط جديد", {
+        key: key || 'NOT_FOUND',
+        source: s3Key ? 'provided' : 'extracted'
+      });
       
       if (key) {
         try {
           logger.info("الحصول على رابط جديد من S3", { key });
           const { url: freshUrl } = await storageGet(key);
+          
+          logger.info("تم الحصول على رابط جديد", { 
+            freshUrlPreview: freshUrl.substring(0, 80) 
+          });
           
           // محاولة التحميل بالرابط الجديد
           response = await fetch(freshUrl, {
@@ -405,15 +422,32 @@ async function fetchImageAsBase64(imageUrl: string, s3Key?: string): Promise<str
           });
           
           if (response.ok) {
-            logger.info("تم الحصول على الصورة بنجاح بالرابط الجديد");
+            logger.info("✅ تم الحصول على الصورة بنجاح بالرابط الجديد");
+          } else {
+            logger.error("❌ فشل التحميل بالرابط الجديد أيضاً", {
+              status: response.status,
+              statusText: response.statusText
+            });
           }
         } catch (storageError: any) {
-          logger.error("فشل الحصول على رابط جديد من S3", { error: storageError.message });
+          logger.error("فشل الحصول على رابط جديد من S3", { 
+            error: storageError.message,
+            key 
+          });
         }
+      } else {
+        logger.error("❌ لا يوجد مفتاح S3 للحصول على رابط جديد", {
+          originalUrl: imageUrl.substring(0, 100)
+        });
       }
     }
     
     if (!response.ok) {
+      logger.error("فشل تحميل الصورة نهائياً", {
+        status: response.status,
+        statusText: response.statusText,
+        hasKey: !!s3Key
+      });
       throw new Error(`فشل تحميل الصورة: HTTP ${response.status}`);
     }
     
@@ -459,15 +493,65 @@ async function fetchImageAsBase64(imageUrl: string, s3Key?: string): Promise<str
 
 /**
  * استخراج مفتاح S3 من رابط URL
- * يدعم روابط CloudFront و S3 المباشرة
+ * يدعم روابط CloudFront و S3 المباشرة و Manus Storage
+ * 
+ * الروابط المدعومة:
+ * - CloudFront: https://xxx.cloudfront.net/revenues/image.jpg
+ * - S3 Direct: https://bucket.s3.region.amazonaws.com/key.jpg
+ * - Manus Storage: https://storage.manus.im/v1/xxx/revenues/image.jpg
  */
 function extractS3KeyFromUrl(url: string): string | null {
   try {
     const urlObj = new URL(url);
     const pathname = urlObj.pathname;
+    const hostname = urlObj.hostname;
     
-    // إزالة الـ / الأولى وأي query params
+    logger.info("محاولة استخراج مفتاح S3", { 
+      hostname, 
+      pathname: pathname.substring(0, 100),
+      hasQueryParams: urlObj.search.length > 0
+    });
+    
+    // إزالة الـ / الأولى
     let key = pathname.startsWith('/') ? pathname.substring(1) : pathname;
+    
+    // CloudFront URLs
+    if (hostname.includes('cloudfront.net')) {
+      // المسار هو المفتاح مباشرة
+      if (key && /\.(jpg|jpeg|png|gif|webp)$/i.test(key)) {
+        logger.info("تم استخراج مفتاح S3 من CloudFront", { key });
+        return key;
+      }
+    }
+    
+    // S3 Direct URLs
+    if (hostname.includes('s3.') || hostname.includes('amazonaws.com')) {
+      // قد يكون المفتاح مشفراً
+      const decodedKey = decodeURIComponent(key);
+      if (decodedKey && /\.(jpg|jpeg|png|gif|webp)$/i.test(decodedKey)) {
+        logger.info("تم استخراج مفتاح S3 من S3 Direct", { key: decodedKey });
+        return decodedKey;
+      }
+    }
+    
+    // Manus Storage URLs
+    if (hostname.includes('manus') || hostname.includes('storage')) {
+      // البحث عن مسار الصورة في الـ pathname
+      // مثال: /v1/storage/xxx/revenues/image.jpg
+      const imagePathMatch = pathname.match(/\/(revenues\/[^?]+\.(jpg|jpeg|png|gif|webp))/i);
+      if (imagePathMatch) {
+        logger.info("تم استخراج مفتاح S3 من Manus Storage", { key: imagePathMatch[1] });
+        return imagePathMatch[1];
+      }
+    }
+    
+    // محاولة عامة: البحث عن أي مسار ينتهي بامتداد صورة
+    const generalMatch = pathname.match(/\/([^?]+\.(jpg|jpeg|png|gif|webp))/i);
+    if (generalMatch) {
+      const extractedKey = generalMatch[1];
+      logger.info("تم استخراج مفتاح S3 (محاولة عامة)", { key: extractedKey });
+      return extractedKey;
+    }
     
     // التحقق من أن المفتاح يبدو صالحاً (يحتوي على امتداد صورة)
     if (key && /\.(jpg|jpeg|png|gif|webp)$/i.test(key)) {
@@ -475,8 +559,12 @@ function extractS3KeyFromUrl(url: string): string | null {
       return key;
     }
     
+    logger.warn("لم يتم العثور على مفتاح S3 صالح في الرابط", { 
+      url: url.substring(0, 100) 
+    });
     return null;
-  } catch {
+  } catch (error: any) {
+    logger.error("خطأ في استخراج مفتاح S3", { error: error.message });
     return null;
   }
 }
