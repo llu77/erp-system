@@ -13,6 +13,7 @@ import { invokeLLM, type Message } from "../_core/llm";
 import { createLogger } from "../utils/logger";
 import type { OCRExtractionResult, POSSection } from "./balanceImageOCR";
 import { parseExtractedAmount, normalizeDate, determineConfidence } from "./balanceImageOCR";
+import { smartPreprocess, type PreprocessingResult } from "./imagePreprocessing";
 
 const logger = createLogger("OCRRetryStrategy");
 
@@ -21,6 +22,8 @@ export interface RetryConfig {
   maxRetries: number;
   prompts: PromptVariant[];
   combineResults: boolean;
+  /** تفعيل معالجة الصور مسبقاً (افتراضي: true) */
+  preprocessImage?: boolean;
 }
 
 export interface PromptVariant {
@@ -416,17 +419,39 @@ export async function extractWithRetry(
       NUMBERS_FOCUS_PROMPT,
       TOTAL_ONLY_PROMPT
     ],
-    combineResults: true
+    combineResults: true,
+    preprocessImage: true
   };
 
   const finalConfig = { ...defaultConfig, ...config };
   const attempts: AttemptResult[] = [];
   let bestAttempt: AttemptResult | null = null;
+  let preprocessingResult: PreprocessingResult | null = null;
 
   try {
-    // تحويل الصورة إلى base64
     logger.info("بدء استخراج OCR مع إعادة المحاولة", { imageUrl: imageUrl.substring(0, 50) });
-    const base64Image = await imageToBase64(imageUrl);
+    
+    let base64Image: string;
+    
+    // معالجة الصورة مسبقاً إذا كان مفعلاً
+    if (finalConfig.preprocessImage) {
+      try {
+        logger.info("بدء معالجة الصورة مسبقاً");
+        preprocessingResult = await smartPreprocess(imageUrl);
+        base64Image = preprocessingResult.base64Image;
+        logger.info("اكتملت معالجة الصورة", {
+          originalSize: preprocessingResult.originalSize,
+          processedSize: preprocessingResult.processedSize,
+          enhancements: preprocessingResult.appliedEnhancements,
+          processingTime: preprocessingResult.processingTime
+        });
+      } catch (preprocessError: any) {
+        logger.warn("فشل معالجة الصورة، استخدام الصورة الأصلية", { error: preprocessError.message });
+        base64Image = await imageToBase64(imageUrl);
+      }
+    } else {
+      base64Image = await imageToBase64(imageUrl);
+    }
 
     // تنفيذ المحاولات
     for (let i = 0; i < Math.min(finalConfig.maxRetries, finalConfig.prompts.length); i++) {

@@ -4571,3 +4571,16 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] تحسين معالجة الأخطاء والرسائل العربية
 - [x] إضافة fallback للقراءة الجزئية وحساب الوسيط
 - [x] اختبارات vitest (215 اختبار ناجح)
+
+
+## معالجة الصور مسبقاً (Image Preprocessing) - 1 Feb 2026 ✅
+
+### المهام المنجزة:
+- [x] إنشاء خدمة imagePreprocessing.ts
+- [x] تحسين التباين (Contrast Enhancement)
+- [x] تحسين السطوع (Brightness Adjustment)
+- [x] تحويل إلى Grayscale للإيصالات الحرارية
+- [x] إزالة الضوضاء (Noise Reduction)
+- [x] دمج المعالجة مع ocrRetryStrategy.ts
+- [x] اختبارات vitest للمعالجة (24 اختبار ناجح)
+- [x] جميع الاختبارات ناجحة (1215/1215)
