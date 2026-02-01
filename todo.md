@@ -4267,3 +4267,17 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] تحسين حالة التحميل أثناء التجديد المسبق
 - [x] إنشاء مكون BalanceImagesDialog منفصل
 - [x] اختبارات vitest (11 اختبار جديد)
+
+## إصلاح مشكلة التحميل المستمر للصور في modal (طلب جديد - Deep Thinking)
+- [x] Phase 1: تحليل سبب بقاء الصور في حالة "جاري التحميل"
+- [x] Phase 2: تصميم حل معماري للمشكلة
+- [x] Phase 3: تنفيذ الإصلاح
+- [x] Phase 4: اختبار شامل والتسليم
+
+### التحسينات المنفذة:
+- [x] إضافة minHeight و aspectRatio للـ container
+- [x] إضافة timeout للتجديد (10 ثواني) لمنع التعليق
+- [x] تحسين حالات التحميل مع skeleton
+- [x] إضافة مؤشر حالة التجديد (success/partial/error)
+- [x] إضافة وضع Gallery مع تنقل بالأسهم
+- [x] 967 اختبار ناجح
