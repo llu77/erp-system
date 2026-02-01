@@ -220,8 +220,7 @@ export function validateDate(
   options: DateValidationOptions = {}
 ): ValidationResult<Date> {
   const {
-    // السماح بالتواريخ المستقبلية افتراضياً (مع قيد عدم التكرار لنفس التاريخ)
-    allowFuture = true,
+    allowFuture = false,
     allowPast = true,
     maxDaysInPast = VALIDATION_LIMITS.MAX_DAYS_IN_PAST,
     maxDaysInFuture = VALIDATION_LIMITS.MAX_DAYS_IN_FUTURE,
@@ -269,16 +268,14 @@ export function validateDate(
   }
 
   const now = new Date();
-  // إضافة هامش 24 ساعة للتعامل مع اختلافات المناطق الزمنية
-  const todayWithBuffer = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  todayWithBuffer.setHours(23, 59, 59, 999); // نهاية اليوم الحالي
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const inputDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-  // التحقق من التواريخ المستقبلية (السماح بتاريخ اليوم الحالي)
-  if (!allowFuture && inputDate > todayWithBuffer) {
+  // التحقق من التواريخ المستقبلية
+  if (!allowFuture && inputDate > today) {
     errors.push({
       code: "DATE_FUTURE",
-      message: `${fieldName} لا يمكن أن يكون في المستقبل (التاريخ المدخل: ${inputDate.toLocaleDateString('ar-SA')})`,
+      message: `${fieldName} لا يمكن أن يكون في المستقبل`,
       field: fieldName,
       value,
     });
@@ -286,7 +283,6 @@ export function validateDate(
   }
 
   // التحقق من التواريخ القديمة جداً
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (allowPast && maxDaysInPast > 0) {
     const minDate = new Date(today);
     minDate.setDate(minDate.getDate() - maxDaysInPast);
@@ -588,11 +584,10 @@ export async function validateDailyRevenueInput(
     errors.push(...branchValidation.errors);
   }
 
-  // التحقق من التاريخ (السماح بأي تاريخ - القيد الوحيد هو عدم تكرار الإيراد لنفس التاريخ)
+  // التحقق من التاريخ
   const dateValidation = validateDate(input.date, {
-    allowFuture: true, // السماح بالتواريخ المستقبلية
-    maxDaysInPast: 365, // السماح بإدخال إيرادات حتى سنة في الماضي
-    maxDaysInFuture: 365, // السماح بإدخال إيرادات حتى سنة في المستقبل
+    allowFuture: false,
+    maxDaysInPast: 30, // السماح بإدخال إيرادات حتى 30 يوم في الماضي
     fieldName: "تاريخ الإيراد",
   });
   if (!dateValidation.success) {

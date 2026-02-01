@@ -31,18 +31,12 @@ import {
   Image,
   X,
   Eye,
-  ImageIcon,
-  Camera
+  ImageIcon
 } from "lucide-react";
-import { CameraCapture } from "@/components/CameraCapture";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { ImagePreviewLightbox, ImageThumbnail } from "@/components/ImagePreviewLightbox";
-import { RefreshableImage, usePrefetchImages } from "@/components/RefreshableImage";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ar } from "date-fns/locale";
-import { processImageForUpload, validateImageForUpload } from "@/utils/imageCompression";
-import { analyzeOCRResult, formatErrorList, getDetailedError, type DetailedOCRError } from "../../../shared/ocrErrorMessages";
 import { 
   PDF_BASE_STYLES, 
   getPDFHeader, 
@@ -87,12 +81,6 @@ export default function Revenues() {
   const [employeeRevenues, setEmployeeRevenues] = useState<EmployeeRevenueInput[]>([]);
   const [balanceImages, setBalanceImages] = useState<Array<{ url: string; key: string; preview: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
-  // حالة معاينة الصورة في Lightbox
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxImageIndex, setLightboxImageIndex] = useState(0);
-  const [ocrWarnings, setOcrWarnings] = useState<string[]>([]);
-  // حالة الكاميرا
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   // حساب المطابقة التلقائية
   const calculateAutoMatch = () => {
@@ -119,149 +107,51 @@ export default function Revenues() {
   const [currentUploadPreview, setCurrentUploadPreview] = useState<string>('');
   const uploadImageMutation = trpc.revenues.uploadBalanceImage.useMutation({
     onSuccess: (data) => {
-      // إخفاء إشعار التحليل
-      toast.dismiss('uploading-image');
       setBalanceImages(prev => [...prev, { url: data.url, key: data.key, preview: currentUploadPreview }]);
       toast.success("تم رفع صورة الموازنة بنجاح");
       setIsUploading(false);
       setCurrentUploadPreview('');
     },
     onError: (error) => {
-      // إخفاء إشعار التحليل
-      toast.dismiss('uploading-image');
       toast.error(error.message || "فشل رفع الصورة");
       setIsUploading(false);
       setCurrentUploadPreview('');
     },
   });
 
-  // معالجة اختيار الصورة مع ضغط وتحسين تلقائي
+  // معالجة اختيار الصورة
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // التحقق من صحة الصورة
-    const validation = validateImageForUpload(file);
-    if (!validation.valid) {
-      toast.error(validation.error || "يرجى اختيار ملف صورة صالح");
+    // التحقق من نوع الملف
+    if (!file.type.startsWith('image/')) {
+      toast.error("يرجى اختيار ملف صورة");
       return;
     }
 
-    // عرض التحذيرات إن وجدت
-    if (validation.warnings && validation.warnings.length > 0) {
-      validation.warnings.forEach(warning => {
-        toast.info(warning, { duration: 3000 });
-      });
+    // التحقق من حجم الملف (5MB كحد أقصى)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("حجم الصورة يجب أن يكون أقل من 5 ميجابايت");
+      return;
     }
 
     setIsUploading(true);
 
-    try {
-      // ضغط وتحسين الصورة تلقائياً
-      toast.info("جاري رفع الصورة...", { duration: 3000, id: 'uploading-image' });
+    // إنشاء معاينة محلية
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64Data = event.target?.result as string;
+      setCurrentUploadPreview(base64Data);
       
-      // ضغط الصورة لتسريع الرفع والتحميل
-      const result = await processImageForUpload(file, {
-        maxWidth: 1280,          // أبعاد أصغر لتسريع التحميل
-        maxHeight: 1280,
-        quality: 0.75,           // جودة متوسطة (توازن بين الحجم والوضوح)
-        maxSizeKB: 400,          // حجم أصغر لرفع أسرع
-        enhanceForOCR: false,    // ❌ تعطيل التحسينات
-        useAdvancedProcessing: false, // ❌ تعطيل المعالجة المتقدمة
-        outputFormat: 'jpeg'
-      });
-
-      if (!result.success) {
-        toast.error(result.error || "فشل معالجة الصورة");
-        setIsUploading(false);
-        return;
-      }
-
-      // عرض معلومات الضغط
-      if (result.compressionRatio > 0) {
-        const originalKB = Math.round(result.originalSize / 1024);
-        const compressedKB = Math.round(result.compressedSize / 1024);
-        toast.success(
-          `تم ضغط الصورة: ${originalKB}KB → ${compressedKB}KB (توفير ${result.compressionRatio}%)`,
-          { duration: 3000 }
-        );
-      }
-
-      // عرض التحسينات المطبقة
-      if (result.enhancements && result.enhancements.length > 0) {
-        toast.info(
-          `التحسينات: ${result.enhancements.join(', ')}`,
-          { duration: 3000 }
-        );
-      }
-
-      setCurrentUploadPreview(result.base64Data);
-      
-      // رفع الصورة المحسّنة
+      // رفع الصورة
       uploadImageMutation.mutate({
-        base64Data: result.base64Data,
-        fileName: result.fileName,
-        contentType: result.contentType,
+        base64Data,
+        fileName: file.name,
+        contentType: file.type,
       });
-    } catch (error: any) {
-      toast.error(error.message || "فشل معالجة الصورة");
-      setIsUploading(false);
-    }
-  };
-
-  // معالجة الصورة الملتقطة من الكاميرا
-  const handleCameraCapture = async (imageData: string) => {
-    setIsUploading(true);
-    setIsCameraOpen(false);
-
-    try {
-      // تحويل base64 إلى Blob للمعالجة
-      const response = await fetch(imageData);
-      const blob = await response.blob();
-      const file = new File([blob], `camera-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
-
-      // ضغط وتحسين الصورة تلقائياً
-      toast.info("جاري رفع الصورة...", { duration: 2000 });
-      
-      // ضغط الصورة لتسريع الرفع والتحميل
-      const result = await processImageForUpload(file, {
-        maxWidth: 1280,          // أبعاد أصغر لتسريع التحميل
-        maxHeight: 1280,
-        quality: 0.75,           // جودة متوسطة (توازن بين الحجم والوضوح)
-        maxSizeKB: 400,          // حجم أصغر لرفع أسرع
-        enhanceForOCR: false,    // ❌ تعطيل التحسينات
-        useAdvancedProcessing: false, // ❌ تعطيل المعالجة المتقدمة
-        outputFormat: 'jpeg'
-      });
-
-      if (!result.success) {
-        toast.error(result.error || "فشل معالجة الصورة");
-        setIsUploading(false);
-        return;
-      }
-
-      // عرض معلومات الضغط
-      if (result.compressionRatio > 0) {
-        const originalKB = Math.round(result.originalSize / 1024);
-        const compressedKB = Math.round(result.compressedSize / 1024);
-        toast.success(
-          `تم ضغط الصورة: ${originalKB}KB → ${compressedKB}KB (توفير ${result.compressionRatio}%)`,
-          { duration: 3000 }
-        );
-      }
-
-      setCurrentUploadPreview(result.base64Data);
-      
-      // رفع الصورة المحسّنة
-      uploadImageMutation.mutate({
-        base64Data: result.base64Data,
-        fileName: result.fileName,
-        contentType: result.contentType,
-      });
-    } catch (error: any) {
-      toast.error(error.message || "فشل معالجة الصورة");
-      setIsUploading(false);
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
   // حذف صورة
@@ -749,136 +639,102 @@ export default function Revenues() {
               </Label>
               
               {balanceImages.length === 0 ? (
-                <div className="space-y-3">
-                  {/* خيارات رفع الصورة */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* زر التقاط من الكاميرا */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-24 flex flex-col items-center justify-center gap-2 border-2 border-dashed hover:border-primary/50 hover:bg-primary/5"
-                      onClick={() => setIsCameraOpen(true)}
-                      disabled={isUploading}
-                    >
-                      <Camera className="h-8 w-8 text-primary" />
-                      <span className="text-sm font-medium">التقاط من الكاميرا</span>
-                    </Button>
-                    
-                    {/* زر رفع من الجهاز */}
-                    <div className="relative">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageSelect}
-                        className="hidden"
-                        id="balance-image-input"
-                        disabled={isUploading}
-                      />
-                      <label 
-                        htmlFor="balance-image-input" 
-                        className="h-24 flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-md hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-colors"
-                      >
-                        {isUploading ? (
-                          <>
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            <span className="text-sm text-muted-foreground">جاري الرفع...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="h-8 w-8 text-muted-foreground" />
-                            <span className="text-sm font-medium">رفع من الجهاز</span>
-                          </>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-                  <p className="text-xs text-center text-muted-foreground/70">
-                    التقط صورة إيصال POS مباشرة أو ارفع صورة من جهازك
-                  </p>
+                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                    id="balance-image-input"
+                    disabled={isUploading}
+                  />
+                  <label htmlFor="balance-image-input" className="cursor-pointer block">
+                    {isUploading ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">جاري رفع الصورة...</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="h-8 w-8 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">اضغط لرفع صورة الموازنة</span>
+                        <span className="text-xs text-muted-foreground/70">الحد الأقصى 5 ميجابايت لكل صورة</span>
+                      </div>
+                    )}
+                  </label>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* عرض الصور المرفوعة باستخدام المكون المحسن */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* عرض الصور المرفوعة */}
+                  <div className="grid grid-cols-2 gap-4">
                     {balanceImages.map((img, idx) => (
-                      <ImageThumbnail
-                        key={idx}
-                        src={img.preview || img.url}
-                        alt={`صورة الموازنة ${idx + 1}`}
-                        onClick={() => {
-                          setLightboxImageIndex(idx);
-                          setLightboxOpen(true);
-                        }}
-                        onRemove={() => removeImage(idx)}
-                        ocrStatus="success"
-                        className="h-64 sm:h-56"
-                      />
+                      <div key={idx} className="relative border rounded-lg overflow-hidden group">
+                        <img
+                          src={img.preview || img.url}
+                          alt={`صورة الموازنة ${idx + 1}`}
+                          className="w-full h-40 object-contain bg-muted"
+                        />
+                        <div className="absolute top-2 left-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button size="icon" variant="secondary" className="h-8 w-8">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl">
+                              <DialogHeader>
+                                <DialogTitle>صورة الموازنة {idx + 1}</DialogTitle>
+                              </DialogHeader>
+                              <img
+                                src={img.preview || img.url}
+                                alt={`صورة الموازنة ${idx + 1}`}
+                                className="w-full h-auto max-h-[70vh] object-contain"
+                              />
+                            </DialogContent>
+                          </Dialog>
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            className="h-8 w-8"
+                            onClick={() => removeImage(idx)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="absolute bottom-2 right-2">
+                          <Badge variant="secondary" className="bg-green-500/20 text-green-400">
+                            <CheckCircle className="h-3 w-3 ml-1" />
+                            تم الرفع
+                          </Badge>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                  
-                  {/* Lightbox لمعاينة الصورة بالتكبير */}
-                  {balanceImages.length > 0 && (
-                    <ImagePreviewLightbox
-                      src={balanceImages[lightboxImageIndex]?.preview || balanceImages[lightboxImageIndex]?.url || ''}
-                      alt={`صورة الموازنة ${lightboxImageIndex + 1}`}
-                      title={`صورة الموازنة ${lightboxImageIndex + 1}`}
-                      isOpen={lightboxOpen}
-                      onClose={() => setLightboxOpen(false)}
-                      warnings={ocrWarnings}
-                    />
-                  )}
-                  {/* أزرار إضافة صورة إضافية */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* زر التقاط إضافي من الكاميرا */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-12 flex items-center justify-center gap-2 border-dashed"
-                      onClick={() => setIsCameraOpen(true)}
+                  <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                      id="balance-image-additional-input"
                       disabled={isUploading}
-                    >
-                      <Camera className="h-4 w-4" />
-                      <span className="text-xs">التقاط إضافي</span>
-                    </Button>
-                    
-                    {/* زر رفع إضافي من الجهاز */}
-                    <div className="relative">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageSelect}
-                        className="hidden"
-                        id="balance-image-additional-input"
-                        disabled={isUploading}
-                      />
-                      <label 
-                        htmlFor="balance-image-additional-input" 
-                        className="h-12 flex items-center justify-center gap-2 border border-dashed rounded-md hover:border-primary/50 cursor-pointer transition-colors"
-                      >
-                        {isUploading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                            <span className="text-xs text-muted-foreground">جاري الرفع...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-xs">رفع إضافي</span>
-                          </>
-                        )}
-                      </label>
-                    </div>
+                    />
+                    <label htmlFor="balance-image-additional-input" className="cursor-pointer block">
+                      {isUploading ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                          <span className="text-sm text-muted-foreground">جاري رفع الصورة...</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <Plus className="h-6 w-6 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">رفع صورة إضافية</span>
+                        </div>
+                      )}
+                    </label>
                   </div>
                 </div>
               )}
-              
-              {/* مكون الكاميرا */}
-              <CameraCapture
-                isOpen={isCameraOpen}
-                onClose={() => setIsCameraOpen(false)}
-                onCapture={handleCameraCapture}
-              />
             </div>
           </CardContent>
         </Card>
@@ -1391,10 +1247,30 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                         </TableCell>
                         <TableCell>
                           {revenue.balanceImages && revenue.balanceImages.length > 0 ? (
-                            <BalanceImagesDialog 
-                              images={revenue.balanceImages} 
-                              date={revenue.date} 
-                            />
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="gap-1 h-8 px-2">
+                                  <ImageIcon className="h-4 w-4 text-primary" />
+                                  <span className="text-xs">عرض ({revenue.balanceImages.length})</span>
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-4xl">
+                                <DialogHeader>
+                                  <DialogTitle>صور الموازنة - {format(new Date(revenue.date), "d MMMM yyyy", { locale: ar })}</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  {revenue.balanceImages.map((img, idx) => (
+                                    <div key={idx} className="border rounded-lg overflow-hidden">
+                                      <img
+                                        src={img.url}
+                                        alt={`صورة الموازنة ${idx + 1}`}
+                                        className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </DialogContent>
+                            </Dialog>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>
                           )}
@@ -1503,62 +1379,5 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
         </DialogContent>
       </Dialog>
     </Card>
-  );
-}
-
-// مكون منفصل لعرض صور الموازنة مع تجديد الروابط مسبقاً
-// يجدد الروابط عند فتح الـ modal لتحسين الأداء
-function BalanceImagesDialog({ 
-  images, 
-  date 
-}: { 
-  images: Array<{ url: string; key: string }>; 
-  date: string | Date;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const { prefetch, isPending } = usePrefetchImages();
-  
-  // تجديد الروابط عند فتح الـ modal
-  const handleOpenChange = async (open: boolean) => {
-    if (open) {
-      // تجديد جميع الروابط مسبقاً
-      const keys = images.map(img => img.key);
-      await prefetch(keys);
-    }
-    setIsOpen(open);
-  };
-  
-  return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1 h-8 px-2">
-          {isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          ) : (
-            <ImageIcon className="h-4 w-4 text-primary" />
-          )}
-          <span className="text-xs">عرض ({images.length})</span>
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>صور الموازنة - {format(new Date(date), "d MMMM yyyy", { locale: ar })}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          {images.map((img, idx) => (
-            <div key={idx} className="border rounded-lg overflow-hidden">
-              <RefreshableImage
-                src={img.url}
-                s3Key={img.key}
-                alt={`صورة الموازنة ${idx + 1}`}
-                className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
-                containerClassName="min-h-[200px]"
-                prefetchUrl={false} // الروابط مجددة مسبقاً
-              />
-            </div>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }

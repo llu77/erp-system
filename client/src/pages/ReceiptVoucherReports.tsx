@@ -6,28 +6,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
-import { format, parseISO, isWithinInterval, isValid, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO, isWithinInterval, isValid } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { Download, FileText, Loader2, CalendarDays, TrendingUp, Receipt, Calculator } from 'lucide-react';
+import { Download, FileText, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { DateRangePicker } from '@/components/DateRangePicker';
+
+type PeriodType = 'day' | 'week' | 'month';
 
 // دالة مساعدة لتحويل التاريخ بشكل آمن
 function safeParseDate(dateValue: any): Date | null {
   if (!dateValue) return null;
   
   try {
+    // إذا كان التاريخ كائن Date
     if (dateValue instanceof Date) {
       return isValid(dateValue) ? dateValue : null;
     }
     
     const dateStr = dateValue.toString();
     
+    // محاولة تحليل التاريخ بعدة طرق
     if (dateStr.includes('T') || dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
       const parsed = parseISO(dateStr);
       return isValid(parsed) ? parsed : null;
     }
     
+    // محاولة تحليل التاريخ كـ Date عادي
     const parsed = new Date(dateStr);
     return isValid(parsed) ? parsed : null;
   } catch (e) {
@@ -49,11 +53,8 @@ function safeFormatDate(dateValue: any, formatStr: string = 'yyyy-MM-dd'): strin
 }
 
 export default function ReceiptVoucherReports() {
-  // استخدام DateRangePicker بدلاً من نوع الفترة والتاريخ المنفصلين
-  const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
-    from: startOfMonth(new Date()),
-    to: endOfMonth(new Date())
-  });
+  const [periodType, setPeriodType] = useState<PeriodType>('month');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -62,14 +63,29 @@ export default function ReceiptVoucherReports() {
   const { data: branches = [] } = trpc.branches.list.useQuery();
   const generatePDFMutation = trpc.receiptVoucher.generateReportPDF.useMutation();
 
+  // حساب نطاق التاريخ بناءً على نوع الفترة
+  const dateRange = useMemo(() => {
+    const date = parseISO(selectedDate);
+    switch (periodType) {
+      case 'day':
+        return { start: date, end: date };
+      case 'week':
+        return { start: startOfWeek(date, { locale: ar }), end: endOfWeek(date, { locale: ar }) };
+      case 'month':
+        return { start: startOfMonth(date), end: endOfMonth(date) };
+    }
+  }, [selectedDate, periodType]);
+
   // تصفية السندات حسب الفترة والبحث والفرع
   const filteredReceipts = useMemo(() => {
     return receipts.filter(receipt => {
+      // معالجة تنسيقات التاريخ المختلفة
       const receiptDate = safeParseDate(receipt.voucherDate);
       
       // إذا كان التاريخ غير صالح، نعرض السند (لا نستبعده)
       if (!receiptDate) {
         console.warn('تاريخ غير صالح للسند:', receipt.voucherId, receipt.voucherDate);
+        // نعرض السند إذا كان التاريخ غير صالح لكي لا نخفي بيانات مهمة
         const matchesSearch = searchTerm === '' || 
           receipt.voucherId.toLowerCase().includes(searchTerm.toLowerCase()) ||
           receipt.payeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -80,16 +96,7 @@ export default function ReceiptVoucherReports() {
         return matchesSearch && matchesBranch;
       }
       
-      // التحقق من النطاق الزمني
-      let inRange = true;
-      if (dateRange.from && dateRange.to) {
-        inRange = isWithinInterval(receiptDate, { start: dateRange.from, end: dateRange.to });
-      } else if (dateRange.from) {
-        inRange = receiptDate >= dateRange.from;
-      } else if (dateRange.to) {
-        inRange = receiptDate <= dateRange.to;
-      }
-      
+      const inRange = isWithinInterval(receiptDate, dateRange);
       const matchesSearch = searchTerm === '' || 
         receipt.voucherId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         receipt.payeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -106,20 +113,12 @@ export default function ReceiptVoucherReports() {
     const totalAmount = filteredReceipts.reduce((sum, r) => sum + (parseFloat(r.totalAmount as any) || 0), 0);
     const count = filteredReceipts.length;
 
-    // حساب عدد الأيام في الفترة
-    let daysInPeriod = 1;
-    if (dateRange.from && dateRange.to) {
-      daysInPeriod = Math.max(1, Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-    }
-
     return {
       count,
       totalAmount,
       averageAmount: count > 0 ? totalAmount / count : 0,
-      dailyAverage: totalAmount / daysInPeriod,
-      daysInPeriod
     };
-  }, [filteredReceipts, dateRange]);
+  }, [filteredReceipts]);
 
   // تصدير إلى Excel
   const exportToExcel = () => {
@@ -150,20 +149,16 @@ export default function ReceiptVoucherReports() {
 
   // تصدير إلى PDF احترافي
   const exportToPDF = async () => {
-    if (!dateRange.from || !dateRange.to) {
-      toast.error('يرجى تحديد الفترة الزمنية');
-      return;
-    }
-
     setIsGeneratingPDF(true);
     
     try {
-      const startDateStr = format(dateRange.from, 'yyyy-MM-dd');
-      const endDateStr = format(dateRange.to, 'yyyy-MM-dd');
+      const periodLabel = periodType === 'day' ? 'يومي' : periodType === 'week' ? 'أسبوعي' : 'شهري';
+      const startDateStr = format(dateRange.start, 'yyyy-MM-dd');
+      const endDateStr = format(dateRange.end, 'yyyy-MM-dd');
       
       const result = await generatePDFMutation.mutateAsync({
         title: 'تقرير سندات القبض',
-        periodType: 'مخصص',
+        periodType: periodLabel,
         startDate: startDateStr,
         endDate: endDateStr,
         branchName: selectedBranch === 'all' ? 'جميع الفروع' : selectedBranch,
@@ -210,17 +205,6 @@ export default function ReceiptVoucherReports() {
     }
   };
 
-  // تنسيق عرض الفترة
-  const periodDisplay = useMemo(() => {
-    if (!dateRange.from && !dateRange.to) return 'جميع الفترات';
-    if (dateRange.from && dateRange.to) {
-      return `${format(dateRange.from, 'dd/MM/yyyy', { locale: ar })} - ${format(dateRange.to, 'dd/MM/yyyy', { locale: ar })}`;
-    }
-    if (dateRange.from) return `من ${format(dateRange.from, 'dd/MM/yyyy', { locale: ar })}`;
-    if (dateRange.to) return `حتى ${format(dateRange.to, 'dd/MM/yyyy', { locale: ar })}`;
-    return '';
-  }, [dateRange]);
-
   return (
     <div className="space-y-6">
       {/* رأس الصفحة */}
@@ -232,30 +216,38 @@ export default function ReceiptVoucherReports() {
       {/* الفلاتر */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CalendarDays className="w-5 h-5" />
-            الفلاتر والبحث
-          </CardTitle>
-          <CardDescription>
-            حدد الفترة الزمنية والفرع للبحث في السندات
-          </CardDescription>
+          <CardTitle>الفلاتر والبحث</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* اختيار الفترة */}
-            <div className="md:col-span-1">
-              <label className="text-sm font-medium mb-2 block">الفترة الزمنية</label>
-              <DateRangePicker
-                value={dateRange}
-                onChange={setDateRange}
-                placeholder="اختر الفترة"
-                presets={true}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {/* نوع الفترة */}
+            <div>
+              <label className="text-sm font-medium">نوع الفترة</label>
+              <Select value={periodType} onValueChange={(v) => setPeriodType(v as PeriodType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">يومي</SelectItem>
+                  <SelectItem value="week">أسبوعي</SelectItem>
+                  <SelectItem value="month">شهري</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* التاريخ */}
+            <div>
+              <label className="text-sm font-medium">التاريخ</label>
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
               />
             </div>
 
             {/* الفرع */}
             <div>
-              <label className="text-sm font-medium mb-2 block">الفرع</label>
+              <label className="text-sm font-medium">الفرع</label>
               <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                 <SelectTrigger>
                   <SelectValue placeholder="جميع الفروع" />
@@ -272,8 +264,8 @@ export default function ReceiptVoucherReports() {
             </div>
 
             {/* البحث */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">البحث</label>
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium">البحث</label>
               <Input
                 placeholder="ابحث عن رقم السند أو المدفوع له..."
                 value={searchTerm}
@@ -286,57 +278,33 @@ export default function ReceiptVoucherReports() {
 
       {/* الإحصائيات */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
+        <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-blue-600 dark:text-blue-400 flex items-center gap-2">
-              <Receipt className="w-4 h-4" />
-              عدد السندات
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">عدد السندات</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{statistics.count}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              سند في الفترة المحددة ({statistics.daysInPeriod} يوم)
-            </p>
+            <div className="text-2xl font-bold">{statistics.count}</div>
+            <p className="text-xs text-gray-500 mt-1">سند في الفترة المحددة</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
+        <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" />
-              إجمالي المبالغ
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">إجمالي المبالغ</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{statistics.totalAmount.toLocaleString('ar-SA', { minimumFractionDigits: 2 })}</div>
-            <p className="text-xs text-muted-foreground mt-1">ريال سعودي</p>
+            <div className="text-2xl font-bold">{statistics.totalAmount.toFixed(2)}</div>
+            <p className="text-xs text-gray-500 mt-1">ريال سعودي</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
+        <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-purple-600 dark:text-purple-400 flex items-center gap-2">
-              <Calculator className="w-4 h-4" />
-              متوسط السند
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">المتوسط</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{statistics.averageAmount.toLocaleString('ar-SA', { minimumFractionDigits: 2 })}</div>
-            <p className="text-xs text-muted-foreground mt-1">ريال سعودي</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-orange-500/10 to-orange-600/5 border-orange-500/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-orange-600 dark:text-orange-400 flex items-center gap-2">
-              <CalendarDays className="w-4 h-4" />
-              المتوسط اليومي
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{statistics.dailyAverage.toLocaleString('ar-SA', { minimumFractionDigits: 2 })}</div>
-            <p className="text-xs text-muted-foreground mt-1">ريال سعودي / يوم</p>
+            <div className="text-2xl font-bold">{statistics.averageAmount.toFixed(2)}</div>
+            <p className="text-xs text-gray-500 mt-1">ريال سعودي</p>
           </CardContent>
         </Card>
       </div>
@@ -351,7 +319,7 @@ export default function ReceiptVoucherReports() {
           onClick={exportToPDF} 
           variant="default" 
           className="gap-2 bg-red-600 hover:bg-red-700"
-          disabled={isGeneratingPDF || !dateRange.from || !dateRange.to}
+          disabled={isGeneratingPDF}
         >
           {isGeneratingPDF ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -368,64 +336,39 @@ export default function ReceiptVoucherReports() {
           <CardTitle>قائمة السندات</CardTitle>
           <CardDescription>
             {filteredReceipts.length} سند في الفترة المحددة
-            {dateRange.from && dateRange.to && (
-              <span className="mr-2 text-primary">
-                ({periodDisplay})
-              </span>
-            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
-              <p className="mt-2 text-muted-foreground">جاري التحميل...</p>
-            </div>
+            <div className="text-center py-8">جاري التحميل...</div>
           ) : filteredReceipts.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Receipt className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>لا توجد سندات في الفترة المحددة</p>
-            </div>
+            <div className="text-center py-8 text-gray-500">لا توجد سندات في الفترة المحددة</div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-right">#</TableHead>
-                    <TableHead className="text-right">رقم السند</TableHead>
-                    <TableHead className="text-right">التاريخ</TableHead>
-                    <TableHead className="text-right">المدفوع له</TableHead>
-                    <TableHead className="text-right">المبلغ الكلي</TableHead>
-                    <TableHead className="text-right">المشرف</TableHead>
-                    <TableHead className="text-right">الحالة</TableHead>
+                    <TableHead>رقم السند</TableHead>
+                    <TableHead>التاريخ</TableHead>
+                    <TableHead>المدفوع له</TableHead>
+                    <TableHead>المبلغ الكلي</TableHead>
+                    <TableHead>المشرف</TableHead>
+                    <TableHead>الحالة</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredReceipts.map((receipt, index) => (
+                  {filteredReceipts.map((receipt) => (
                     <TableRow key={receipt.id}>
-                      <TableCell className="text-muted-foreground">{index + 1}</TableCell>
-                      <TableCell className="font-medium font-mono">{receipt.voucherId}</TableCell>
+                      <TableCell className="font-medium">{receipt.voucherId}</TableCell>
                       <TableCell>
                         {safeFormatDate(receipt.voucherDate)}
                       </TableCell>
                       <TableCell>{receipt.payeeName}</TableCell>
-                      <TableCell className="font-semibold">
-                        {parseFloat(receipt.totalAmount as any)?.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س
-                      </TableCell>
+                      <TableCell>{parseFloat(receipt.totalAmount as any)?.toFixed(2)} ر.س</TableCell>
                       <TableCell>{receipt.createdByName}</TableCell>
                       <TableCell>
-                        <Badge 
-                          variant="outline"
-                          className={
-                            receipt.status === 'approved' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
-                            receipt.status === 'paid' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' :
-                            receipt.status === 'cancelled' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
-                            'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
-                          }
-                        >
-                          {receipt.status === 'draft' ? 'مسودة' : 
-                           receipt.status === 'approved' ? 'معتمد' : 
-                           receipt.status === 'paid' ? 'مدفوع' : 'ملغي'}
+                        <Badge variant="outline">
+                          {receipt.status === 'draft' ? 'مسودة' : receipt.status === 'approved' ? 'معتمد' : receipt.status === 'paid' ? 'مدفوع' : 'ملغي'}
                         </Badge>
                       </TableCell>
                     </TableRow>

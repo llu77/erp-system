@@ -30,8 +30,6 @@ import * as smartPermissions from "./ai/smartPermissions";
 import * as aiRecommendationNotifier from "./ai/aiRecommendationNotifier";
 import * as aiRecommendationMonitor from "./scheduler/aiRecommendationMonitor";
 import * as financialValidation from "./validation/financialValidation";
-import * as balanceImageOCR from "./ocr/balanceImageOCR";
-import * as discrepancyAlertService from "./notifications/discrepancyAlertService";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -1829,45 +1827,6 @@ export const appRouter = router({
   }),
   // ==================== إدارة الإيرادات ====================
   revenues: router({
-    // تجديد رابط صورة منتهية الصلاحية
-    refreshImageUrl: protectedProcedure
-      .input(z.object({
-        key: z.string(),
-      }))
-      .mutation(async ({ input }) => {
-        const { storageGet } = await import('./storage');
-        try {
-          const { url } = await storageGet(input.key);
-          return { success: true, url };
-        } catch (error) {
-          logger.error('فشل تجديد رابط الصورة', { key: input.key, error });
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل تجديد رابط الصورة' });
-        }
-      }),
-
-    // تجديد روابط متعددة مرة واحدة (batch refresh) - لتحسين الأداء
-    refreshImageUrls: protectedProcedure
-      .input(z.object({
-        keys: z.array(z.string()),
-      }))
-      .mutation(async ({ input }) => {
-        const { storageGet } = await import('./storage');
-        const results: { key: string; url: string | null; success: boolean }[] = [];
-        
-        // تجديد جميع الروابط بالتوازي
-        await Promise.all(input.keys.map(async (key) => {
-          try {
-            const { url } = await storageGet(key);
-            results.push({ key, url, success: true });
-          } catch (error) {
-            logger.error('فشل تجديد رابط الصورة', { key, error });
-            results.push({ key, url: null, success: false });
-          }
-        }));
-        
-        return { success: true, results };
-      }),
-
     // رفع صورة الموازنة إلى S3
     uploadBalanceImage: supervisorInputProcedure
       .input(z.object({
@@ -1950,12 +1909,11 @@ export const appRouter = router({
           financialValidation.throwValidationError(networkValidation.errors);
         }
 
-        // التحقق من صحة التاريخ (السماح بأي تاريخ - القيد الوحيد هو عدم تكرار الإيراد لنفس التاريخ)
+        // التحقق من صحة التاريخ
         const dateValidation = financialValidation.validateDate(input.date, {
           fieldName: 'تاريخ الإيراد',
-          allowFuture: true, // السماح بالتواريخ المستقبلية
-          maxDaysInPast: 365, // السماح بإدخال إيرادات حتى سنة في الماضي
-          maxDaysInFuture: 365, // السماح بإدخال إيرادات حتى سنة في المستقبل
+          allowFuture: false,
+          maxDaysInPast: 30, // السماح بإدخال إيرادات حتى 30 يوم في الماضي
         });
         if (!dateValidation.success) {
           financialValidation.throwValidationError(dateValidation.errors);
@@ -2062,16 +2020,6 @@ export const appRouter = router({
           }
           unmatchReason = input.unmatchReason;
         }
-
-        // ==================== رفع صورة الموازنة (بدون تحليل OCR) ====================
-        // الصورة تُرفع مباشرة بدون إرسالها إلى Claude
-        if (input.balanceImages && input.balanceImages.length > 0) {
-          logger.info('📷 تم رفع صورة الموازنة', {
-            branchId: input.branchId,
-            imagesCount: input.balanceImages.length
-          });
-        }
-        // ==================== نهاية رفع صورة الموازنة ====================
 
         // الحصول على أو إنشاء سجل شهري
         let monthlyRecord = await db.getMonthlyRecord(input.branchId, year, month);

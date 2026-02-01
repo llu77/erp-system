@@ -312,73 +312,71 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
       line-height: 1.8;
     }
     
-    /* التوقيعات - محسّنة */
+    /* التوقيعات */
     .signatures-section {
-      padding: 50px 40px;
+      padding: 40px 30px;
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      background: linear-gradient(to bottom, #fafafa, #f5f5f5);
-      border-top: 2px solid #e0e0e0;
+      align-items: center;
+      background: #fafafa;
+      border-top: 1px solid #e0e0e0;
     }
     
     .signature-box {
       text-align: center;
-      width: 250px;
-      padding: 25px;
+      width: 220px;
+      padding: 20px;
     }
     
     .signature-image-container {
-      height: 120px;
-      margin-bottom: 20px;
+      height: 80px;
+      margin-bottom: 15px;
       display: flex;
       align-items: flex-end;
       justify-content: center;
     }
     
     .signature-image {
-      max-height: 100px;
-      max-width: 200px;
+      max-height: 70px;
+      max-width: 150px;
       object-fit: contain;
     }
     
     .signature-handwriting {
       font-family: 'Brush Script MT', 'Segoe Script', cursive;
-      font-size: 36px;
+      font-size: 28px;
       color: #1a4a7a;
       font-style: italic;
-      margin-bottom: 8px;
+      margin-bottom: 5px;
     }
     
     .signature-line {
-      border-top: 3px solid #333;
-      padding-top: 20px;
-      margin-top: 15px;
+      border-top: 2px solid #333;
+      padding-top: 15px;
+      margin-top: 10px;
     }
     
     .signature-name {
-      font-weight: 800;
-      font-size: 22px;
-      color: #1a1a1a;
-      margin-bottom: 8px;
-      letter-spacing: 0.5px;
+      font-weight: 700;
+      font-size: 18px;
+      color: #1a4a7a;
+      margin-bottom: 5px;
     }
     
     .signature-title {
-      font-size: 16px;
-      color: #555;
-      font-weight: 500;
+      font-size: 14px;
+      color: #666;
     }
     
     .stamp-box {
       text-align: center;
-      padding: 15px;
+      padding: 10px;
     }
     
     .stamp {
-      width: 180px;
-      height: 180px;
-      border: 5px solid #1a4a7a;
+      width: 140px;
+      height: 140px;
+      border: 4px solid #1a4a7a;
       border-radius: 50%;
       display: flex;
       flex-direction: column;
@@ -386,19 +384,18 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
       justify-content: center;
       font-weight: 700;
       color: #1a4a7a;
-      background: rgba(26, 74, 122, 0.05);
+      background: rgba(26, 74, 122, 0.03);
       position: relative;
-      box-shadow: 0 4px 15px rgba(26, 74, 122, 0.15);
     }
     
     .stamp::before {
       content: '';
       position: absolute;
-      top: 10px;
-      left: 10px;
-      right: 10px;
-      bottom: 10px;
-      border: 3px solid #1a4a7a;
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      border: 2px solid #1a4a7a;
       border-radius: 50%;
     }
     
@@ -408,22 +405,21 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
     }
     
     .stamp-logo {
-      font-size: 26px;
+      font-size: 20px;
       font-weight: 800;
-      margin-bottom: 8px;
-      letter-spacing: 1.5px;
+      margin-bottom: 5px;
+      letter-spacing: 1px;
     }
     
     .stamp-arabic {
-      font-size: 24px;
+      font-size: 18px;
       font-weight: 700;
-      margin-bottom: 5px;
+      margin-bottom: 3px;
     }
     
     .stamp-text {
-      font-size: 14px;
-      opacity: 0.9;
-      font-weight: 600;
+      font-size: 11px;
+      opacity: 0.8;
     }
     
     /* ختم الاعتماد */
@@ -600,19 +596,18 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
     </div>
     ` : ''}
     
-    <!-- التوقيعات - محسّنة -->
+    <!-- التوقيعات -->
     <div class="signatures-section">
       <div class="signature-box">
         <div class="signature-image-container">
-          <svg width="180" height="90" viewBox="0 0 180 90" style="opacity: 0.9;">
-            <path d="M15,60 Q35,15 70,50 T120,40 Q150,30 170,50" stroke="#1a4a7a" stroke-width="3" fill="none" stroke-linecap="round"/>
-            <path d="M25,70 Q50,60 85,65 T130,60" stroke="#1a4a7a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-            <path d="M40,78 Q60,75 80,78" stroke="#1a4a7a" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <svg width="120" height="50" viewBox="0 0 120 50" style="opacity: 0.85;">
+            <path d="M10,35 Q20,10 40,30 T70,25 Q90,20 110,30" stroke="#1a4a7a" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <path d="M15,40 Q30,35 50,38" stroke="#1a4a7a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
           </svg>
         </div>
         <div class="signature-line">
           <div class="signature-name">سالم الوادعي</div>
-          <div class="signature-title">المشرف العام</div>
+          <div class="signature-title">مدير المالية</div>
         </div>
       </div>
       
@@ -636,15 +631,14 @@ export async function generateSingleReceiptVoucherPDF(voucher: {
       
       <div class="signature-box">
         <div class="signature-image-container">
-          <svg width="180" height="90" viewBox="0 0 180 90" style="opacity: 0.9;">
-            <path d="M20,50 Q50,10 90,40 T140,35 Q160,30 175,45" stroke="#1a4a7a" stroke-width="3" fill="none" stroke-linecap="round"/>
-            <path d="M30,65 Q60,70 100,60 T150,68" stroke="#1a4a7a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-            <path d="M50,78 Q80,82 110,78" stroke="#1a4a7a" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <svg width="120" height="50" viewBox="0 0 120 50" style="opacity: 0.85;">
+            <path d="M15,30 Q35,5 55,25 T85,20 Q100,18 110,25" stroke="#1a4a7a" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <path d="M20,38 Q40,42 60,36 T90,40" stroke="#1a4a7a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
           </svg>
         </div>
         <div class="signature-line">
           <div class="signature-name">عمر المطيري</div>
-          <div class="signature-title">المدير العام</div>
+          <div class="signature-title">المراجع المالي</div>
         </div>
       </div>
     </div>
