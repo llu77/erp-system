@@ -86,10 +86,10 @@ function calculateDimensions(
 }
 
 /**
- * تحسين الصورة للقراءة OCR
- * - زيادة التباين والإضاءة
- * - تحسين الحدة والوضوح
- * - تطبيق تصحيح الألوان التلقائي
+ * تحسين الصورة للقراءة OCR - إصدار متقدم
+ * - تصحيح الإضاءة التكيفي (CLAHE - Contrast Limited Adaptive Histogram Equalization)
+ * - إزالة الاهتزاز (Deconvolution Sharpening)
+ * - تحسين التباين والوضوح
  */
 function enhanceImageForOCR(
   ctx: CanvasRenderingContext2D,
@@ -102,96 +102,198 @@ function enhanceImageForOCR(
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
 
-    // تحليل الصورة لتحديد ما إذا كانت تحتاج تحسين
+    // ==================== تحليل الصورة ====================
     let totalBrightness = 0;
     let minBrightness = 255;
     let maxBrightness = 0;
     const pixelCount = data.length / 4;
+    
+    // حساب الهيستوجرام للسطوع
+    const histogram = new Array(256).fill(0);
 
     for (let i = 0; i < data.length; i += 4) {
-      const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      const brightness = Math.round((data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114));
       totalBrightness += brightness;
       minBrightness = Math.min(minBrightness, brightness);
       maxBrightness = Math.max(maxBrightness, brightness);
+      histogram[brightness]++;
     }
 
     const avgBrightness = totalBrightness / pixelCount;
     const dynamicRange = maxBrightness - minBrightness;
-
-    // === تحسين الإضاءة المتقدم ===
-    // إذا كانت الصورة داكنة جداً (متوسط السطوع < 120)
-    if (avgBrightness < 120) {
-      // حساب معامل التصحيح التلقائي
-      const targetBrightness = 140;
-      const brightnessFactor = Math.min(1.5, targetBrightness / avgBrightness);
-      
-      for (let i = 0; i < data.length; i += 4) {
-        // تطبيق تصحيح gamma للحصول على إضاءة طبيعية
-        data[i] = clamp(Math.pow(data[i] / 255, 0.85) * 255 * brightnessFactor);     // R
-        data[i + 1] = clamp(Math.pow(data[i + 1] / 255, 0.85) * 255 * brightnessFactor); // G
-        data[i + 2] = clamp(Math.pow(data[i + 2] / 255, 0.85) * 255 * brightnessFactor); // B
-      }
-      
-      enhancements.push('تحسين الإضاءة');
-    }
-    // إذا كانت الصورة ساطعة جداً (متوسط السطوع > 200)
-    else if (avgBrightness > 200) {
-      const darkFactor = 0.9;
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = clamp(data[i] * darkFactor);
-        data[i + 1] = clamp(data[i + 1] * darkFactor);
-        data[i + 2] = clamp(data[i + 2] * darkFactor);
-      }
-      enhancements.push('تعديل السطوع الزائد');
-    }
-
-    // === تحسين التباين التلقائي (Auto Contrast) ===
-    // إذا كان النطاق الديناميكي منخفضاً
-    if (dynamicRange < 150) {
-      // تمديد النطاق ليشمل 0-255
-      const scale = 255 / Math.max(dynamicRange, 1);
-      
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = clamp((data[i] - minBrightness) * scale);
-        data[i + 1] = clamp((data[i + 1] - minBrightness) * scale);
-        data[i + 2] = clamp((data[i + 2] - minBrightness) * scale);
-      }
-      
-      enhancements.push('تحسين التباين');
-    }
-
-    // === تحسين الحدة المتقدم (Unsharp Mask) ===
-    // نطبق دائماً لتحسين وضوح النص
-    const original = new Uint8ClampedArray(data);
-    const sharpenAmount = 0.4; // زيادة الحدة
     
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        const idx = (y * width + x) * 4;
+    // حساب التباين (الانحراف المعياري)
+    let varianceSum = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const brightness = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+      varianceSum += Math.pow(brightness - avgBrightness, 2);
+    }
+    const stdDev = Math.sqrt(varianceSum / pixelCount);
+    
+    // كشف الاهتزاز (الصور المهتزة لها تباين منخفض في الحواف)
+    const isBlurry = stdDev < 40;
+
+    // ==================== المرحلة 1: تصحيح الإضاءة التكيفي (CLAHE مبسط) ====================
+    // تقسيم الصورة إلى مناطق وتطبيق تصحيح محلي
+    const tileSize = 64; // حجم المنطقة
+    const tilesX = Math.ceil(width / tileSize);
+    const tilesY = Math.ceil(height / tileSize);
+    
+    // حساب متوسط السطوع لكل منطقة
+    const tileBrightness: number[][] = [];
+    for (let ty = 0; ty < tilesY; ty++) {
+      tileBrightness[ty] = [];
+      for (let tx = 0; tx < tilesX; tx++) {
+        let sum = 0;
+        let count = 0;
+        const startX = tx * tileSize;
+        const startY = ty * tileSize;
+        const endX = Math.min(startX + tileSize, width);
+        const endY = Math.min(startY + tileSize, height);
         
-        for (let c = 0; c < 3; c++) {
-          // حساب المتوسط المحيط (3x3 kernel)
-          const neighbors = 
-            original[idx - width * 4 - 4 + c] + // أعلى يسار
-            original[idx - width * 4 + c] +     // أعلى
-            original[idx - width * 4 + 4 + c] + // أعلى يمين
-            original[idx - 4 + c] +             // يسار
-            original[idx + 4 + c] +             // يمين
-            original[idx + width * 4 - 4 + c] + // أسفل يسار
-            original[idx + width * 4 + c] +     // أسفل
-            original[idx + width * 4 + 4 + c];  // أسفل يمين
+        for (let y = startY; y < endY; y++) {
+          for (let x = startX; x < endX; x++) {
+            const idx = (y * width + x) * 4;
+            sum += (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114);
+            count++;
+          }
+        }
+        tileBrightness[ty][tx] = count > 0 ? sum / count : 128;
+      }
+    }
+    
+    // تطبيق تصحيح الإضاءة المحلي
+    const targetBrightness = 140;
+    let brightnessAdjusted = false;
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        const tx = Math.min(Math.floor(x / tileSize), tilesX - 1);
+        const ty = Math.min(Math.floor(y / tileSize), tilesY - 1);
+        
+        // حساب معامل التصحيح بناءً على المنطقة
+        const localBrightness = tileBrightness[ty][tx];
+        
+        // تصحيح فقط إذا كانت المنطقة داكنة أو ساطعة جداً
+        if (localBrightness < 100 || localBrightness > 200) {
+          const factor = localBrightness < 100 
+            ? Math.min(1.8, targetBrightness / Math.max(localBrightness, 1))
+            : Math.max(0.7, targetBrightness / localBrightness);
           
-          const avg = neighbors / 8;
-          const diff = original[idx + c] - avg;
+          // تطبيق Gamma Correction مع التصحيح
+          const gamma = localBrightness < 100 ? 0.75 : 1.1;
           
-          data[idx + c] = clamp(original[idx + c] + diff * sharpenAmount);
+          data[idx] = clamp(Math.pow(data[idx] / 255, gamma) * 255 * factor);
+          data[idx + 1] = clamp(Math.pow(data[idx + 1] / 255, gamma) * 255 * factor);
+          data[idx + 2] = clamp(Math.pow(data[idx + 2] / 255, gamma) * 255 * factor);
+          brightnessAdjusted = true;
         }
       }
     }
     
-    enhancements.push('تحسين الحدة');
+    if (brightnessAdjusted) {
+      enhancements.push('تصحيح الإضاءة التكيفي');
+    }
 
-    // === تطبيق التغييرات ===
+    // ==================== المرحلة 2: تحسين التباين (Histogram Stretching) ====================
+    if (dynamicRange < 180) {
+      // إعادة حساب الحدود بعد تصحيح الإضاءة
+      let newMin = 255, newMax = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        newMin = Math.min(newMin, brightness);
+        newMax = Math.max(newMax, brightness);
+      }
+      
+      const newRange = newMax - newMin;
+      if (newRange > 10 && newRange < 230) {
+        const scale = 240 / newRange;
+        const offset = 8 - newMin * scale;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = clamp(data[i] * scale + offset);
+          data[i + 1] = clamp(data[i + 1] * scale + offset);
+          data[i + 2] = clamp(data[i + 2] * scale + offset);
+        }
+        
+        enhancements.push('تحسين التباين');
+      }
+    }
+
+    // ==================== المرحلة 3: إزالة الاهتزاز (Deconvolution Sharpening) ====================
+    // نستخدم Laplacian of Gaussian (LoG) للكشف عن الحواف وتقويتها
+    const original = new Uint8ClampedArray(data);
+    
+    // معامل الحدة - أقوى للصور المهتزة
+    const sharpenStrength = isBlurry ? 0.7 : 0.5;
+    
+    // 5x5 Laplacian kernel لإزالة الاهتزاز بشكل أفضل
+    const kernel5x5 = [
+      [0, 0, -1, 0, 0],
+      [0, -1, -2, -1, 0],
+      [-1, -2, 16, -2, -1],
+      [0, -1, -2, -1, 0],
+      [0, 0, -1, 0, 0]
+    ];
+    
+    for (let y = 2; y < height - 2; y++) {
+      for (let x = 2; x < width - 2; x++) {
+        const idx = (y * width + x) * 4;
+        
+        for (let c = 0; c < 3; c++) {
+          let sum = 0;
+          let kernelSum = 0;
+          
+          // تطبيق 5x5 kernel
+          for (let ky = -2; ky <= 2; ky++) {
+            for (let kx = -2; kx <= 2; kx++) {
+              const nIdx = ((y + ky) * width + (x + kx)) * 4;
+              const weight = kernel5x5[ky + 2][kx + 2];
+              sum += original[nIdx + c] * weight;
+              kernelSum += weight;
+            }
+          }
+          
+          // تطبيع القيمة
+          const normalized = kernelSum !== 0 ? sum / kernelSum : sum / 16;
+          const sharpened = original[idx + c] + (normalized - original[idx + c]) * sharpenStrength;
+          
+          data[idx + c] = clamp(sharpened);
+        }
+      }
+    }
+    
+    if (isBlurry) {
+      enhancements.push('إزالة الاهتزاز');
+    } else {
+      enhancements.push('تحسين الحدة');
+    }
+
+    // ==================== المرحلة 4: تحسين النص (Text Enhancement) ====================
+    // زيادة التباين بين النص والخلفية
+    for (let i = 0; i < data.length; i += 4) {
+      const brightness = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+      
+      // تقوية الألوان الداكنة (النص) والفاتحة (الخلفية)
+      if (brightness < 80) {
+        // تعتيم النص
+        const factor = 0.85;
+        data[i] = clamp(data[i] * factor);
+        data[i + 1] = clamp(data[i + 1] * factor);
+        data[i + 2] = clamp(data[i + 2] * factor);
+      } else if (brightness > 180) {
+        // تفتيح الخلفية
+        const factor = 1.1;
+        data[i] = clamp(data[i] * factor);
+        data[i + 1] = clamp(data[i + 1] * factor);
+        data[i + 2] = clamp(data[i + 2] * factor);
+      }
+    }
+    
+    enhancements.push('تحسين وضوح النص');
+
+    // ==================== تطبيق التغييرات ====================
     ctx.putImageData(imageData, 0, 0);
     
   } catch (error) {
