@@ -5,6 +5,12 @@
  * تستخدم LLM Vision لاستخراج:
  * 1. مجاميع المبالغ من الأقسام المختلفة (mada, VISA, MasterCard, etc.)
  * 2. التاريخ من الإيصال للتحقق من تطابقه مع تاريخ الرفع
+ * 
+ * التحسينات (1 فبراير 2026):
+ * - دعم base64 data URL للصور
+ * - تصحيح تلقائي للتاريخ (أخطاء OCR الشائعة)
+ * - prompt محسّن مع السنة الحالية كمرجع
+ * - إزالة response_format لتجنب أخطاء undefined
  */
 
 import { invokeLLM, type Message } from "../_core/llm";
@@ -90,90 +96,165 @@ export const AMOUNT_TOLERANCE_PERCENTAGE = 0.02; // 2% tolerance for OCR errors 
 export const MIN_CONFIDENCE_FOR_VALIDATION = "medium";
 export const DATE_TOLERANCE_DAYS = 1; // السماح بفرق يوم واحد في التاريخ
 
+// السنة الحالية للتصحيح التلقائي
+const CURRENT_YEAR = new Date().getFullYear();
+
 // ==================== دوال مساعدة ====================
 
 /**
  * تنظيف النص المستخرج وتحويله إلى رقم
+ * يدعم الأرقام العربية (٠-٩) والغربية (0-9)
  */
 export function parseExtractedAmount(text: string | null | undefined): number | null {
   if (!text) return null;
-
-  // إزالة الرموز غير الرقمية ما عدا النقطة والفاصلة
-  let cleaned = text
-    .toString()
-    .replace(/[^\d.,٠-٩]/g, "") // إزالة كل شيء ما عدا الأرقام والفواصل
-    .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString()) // تحويل الأرقام العربية
-    .replace(/,/g, "") // إزالة الفواصل
-    .trim();
-
-  // التعامل مع الأرقام العشرية
-  const parts = cleaned.split(".");
-  if (parts.length > 2) {
-    // إذا كان هناك أكثر من نقطة، نأخذ الأخيرة كفاصل عشري
-    cleaned = parts.slice(0, -1).join("") + "." + parts[parts.length - 1];
+  
+  let str = text.toString();
+  
+  // تحويل الأرقام العربية إلى غربية
+  const arabicNumerals: Record<string, string> = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '٫': '.' // الفاصلة العربية
+  };
+  
+  for (const [arabic, western] of Object.entries(arabicNumerals)) {
+    str = str.split(arabic).join(western);
   }
-
-  const num = parseFloat(cleaned);
-  return Number.isNaN(num) ? null : num;
+  
+  // معالجة التنسيق الأوروبي (1.500,00 → 1500.00)
+  // إذا كان هناك نقطة كفاصل آلاف وفاصلة كعشرية
+  if (str.includes(',') && str.includes('.')) {
+    // التنسيق الأوروبي: 1.500,00
+    if (str.lastIndexOf('.') < str.lastIndexOf(',')) {
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      // التنسيق الأمريكي: 1,500.00
+      str = str.replace(/,/g, '');
+    }
+  } else if (str.includes(',')) {
+    // فاصلة فقط - قد تكون عشرية أو آلاف
+    const parts = str.split(',');
+    if (parts.length === 2 && parts[1].length <= 2) {
+      // فاصلة عشرية
+      str = str.replace(',', '.');
+    } else {
+      // فاصلة آلاف
+      str = str.replace(/,/g, '');
+    }
+  }
+  
+  // معالجة النقاط المتعددة (1.500.00 → 1500.00)
+  const dots = str.match(/\./g);
+  if (dots && dots.length > 1) {
+    // النقطة الأخيرة هي العشرية، الباقي فواصل آلاف
+    const lastDotIndex = str.lastIndexOf('.');
+    const beforeDot = str.substring(0, lastDotIndex).replace(/\./g, '');
+    const afterDot = str.substring(lastDotIndex);
+    str = beforeDot + afterDot;
+  }
+  
+  // إزالة كل شيء ما عدا الأرقام والنقطة
+  const cleaned = str.replace(/[^\d.]/g, "");
+  if (!cleaned) return null;
+  
+  const parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? null : parsed;
 }
 
 /**
- * تحويل التاريخ إلى تنسيق موحد YYYY-MM-DD
+ * تصحيح أخطاء OCR الشائعة في التاريخ
+ * مثل: 2016 → 2026، 2O26 → 2026
+ */
+export function correctDateOCRErrors(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  
+  let corrected = dateStr;
+  
+  // تصحيح الحروف التي تشبه الأرقام
+  corrected = corrected
+    .replace(/O/gi, '0')  // O → 0
+    .replace(/l/g, '1')   // l → 1
+    .replace(/I/g, '1')   // I → 1
+    .replace(/S/g, '5')   // S → 5
+    .replace(/B/g, '8');  // B → 8
+  
+  // تصحيح السنة إذا كانت قريبة من السنة الحالية
+  // مثل: 2016 → 2026 (خطأ شائع في قراءة 0 كـ 1)
+  const yearPatterns = [
+    { wrong: '2016', correct: '2026' },
+    { wrong: '2015', correct: '2025' },
+    { wrong: '2017', correct: '2027' },
+    { wrong: '2006', correct: '2026' },
+    { wrong: '2O26', correct: '2026' },
+    { wrong: '20Z6', correct: '2026' },
+  ];
+  
+  for (const pattern of yearPatterns) {
+    if (corrected.includes(pattern.wrong)) {
+      corrected = corrected.replace(pattern.wrong, pattern.correct);
+      logger.info(`تصحيح التاريخ: ${pattern.wrong} → ${pattern.correct}`);
+    }
+  }
+  
+  // التحقق من أن السنة منطقية (بين 2020 و 2030)
+  const yearMatch = corrected.match(/20\d{2}/);
+  if (yearMatch) {
+    const year = parseInt(yearMatch[0]);
+    if (year < 2020 || year > 2030) {
+      // محاولة تصحيح السنة إلى السنة الحالية
+      corrected = corrected.replace(yearMatch[0], CURRENT_YEAR.toString());
+      logger.info(`تصحيح السنة غير المنطقية: ${yearMatch[0]} → ${CURRENT_YEAR}`);
+    }
+  }
+  
+  return corrected;
+}
+
+/**
+ * تطبيع التاريخ إلى تنسيق YYYY-MM-DD
  */
 export function normalizeDate(dateStr: string | null | undefined): string | null {
   if (!dateStr) return null;
+  
+  // تصحيح أخطاء OCR أولاً
+  const correctedDate = correctDateOCRErrors(dateStr);
+  if (!correctedDate) return null;
+  
+  // محاولة تحليل التنسيقات المختلفة
+  const formats = [
+    // DD/MM/YYYY or DD-MM-YYYY
+    /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/,
+    // YYYY/MM/DD or YYYY-MM-DD
+    /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/,
+    // DD.MM.YYYY
+    /(\d{1,2})\.(\d{1,2})\.(\d{4})/
+  ];
 
-  try {
-    // محاولة تحليل التاريخ بتنسيقات مختلفة
-    const cleaned = dateStr.trim();
-    
-    // تنسيق DD/MM/YYYY أو DD-MM-YYYY
-    const dmyMatch = cleaned.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-    if (dmyMatch) {
-      const [, day, month, year] = dmyMatch;
-      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  for (const format of formats) {
+    const match = correctedDate.match(format);
+    if (match) {
+      let year: number, month: number, day: number;
+      
+      if (match[1].length === 4) {
+        // YYYY-MM-DD format
+        year = parseInt(match[1]);
+        month = parseInt(match[2]);
+        day = parseInt(match[3]);
+      } else {
+        // DD-MM-YYYY format
+        day = parseInt(match[1]);
+        month = parseInt(match[2]);
+        year = parseInt(match[3]);
+      }
+      
+      // التحقق من صحة التاريخ
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+      }
     }
-
-    // تنسيق YYYY/MM/DD أو YYYY-MM-DD
-    const ymdMatch = cleaned.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-    if (ymdMatch) {
-      const [, year, month, day] = ymdMatch;
-      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-    }
-
-    // محاولة تحليل كـ Date
-    const date = new Date(cleaned);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().split("T")[0];
-    }
-
-    return null;
-  } catch {
-    return null;
   }
-}
-
-/**
- * التحقق من تطابق التاريخين مع هامش مسموح
- */
-export function datesMatch(
-  extractedDate: string | null,
-  expectedDate: string,
-  toleranceDays: number = DATE_TOLERANCE_DAYS
-): boolean {
-  if (!extractedDate) return false;
-
-  try {
-    const extracted = new Date(extractedDate);
-    const expected = new Date(expectedDate);
-    
-    const diffTime = Math.abs(extracted.getTime() - expected.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return diffDays <= toleranceDays;
-  } catch {
-    return false;
-  }
+  
+  return null;
 }
 
 /**
@@ -185,17 +266,11 @@ export function calculateGraduatedTolerance(amount: number): number {
       return tier.tolerance;
     }
   }
-  return 0.01; // 1% افتراضي
+  return TOLERANCE_TIERS[TOLERANCE_TIERS.length - 1].tolerance;
 }
 
 /**
- * التحقق من تطابق المبلغين مع هامش خطأ متدرج
- * يستخدم نظام التسامح المتدرج حسب حجم المبلغ:
- * - أقل من 500: 3%
- * - 500-2000: 2.5%
- * - 2000-5000: 2%
- * - 5000-10000: 1.5%
- * - أكثر من 10000: 1%
+ * التحقق من تطابق المبالغ مع التسامح المتدرج
  */
 export function amountsMatch(
   extracted: number,
@@ -262,6 +337,88 @@ export function getUploadDate(uploadedAt: string): string {
   }
 }
 
+/**
+ * تحويل رابط الصورة إلى base64 data URL
+ * هذا يحل مشكلة "NO IMAGE AVAILABLE" مع روابط S3
+ * 
+ * يدعم:
+ * - روابط S3/HTTP (يتم جلبها وتحويلها)
+ * - ملفات محلية (يتم قراءتها مباشرة)
+ * - روابط base64 (يتم إعادتها كما هي)
+ */
+async function fetchImageAsBase64(imageUrl: string): Promise<string> {
+  const fs = await import('fs');
+  
+  try {
+    // إذا كان الرابط بالفعل base64، نعيده كما هو
+    if (imageUrl.startsWith('data:')) {
+      return imageUrl;
+    }
+    
+    // إذا كان ملف محلي
+    if (imageUrl.startsWith('/') || imageUrl.startsWith('file://')) {
+      const filePath = imageUrl.replace('file://', '');
+      const buffer = fs.readFileSync(filePath);
+      const base64 = buffer.toString('base64');
+      // تحديد نوع الصورة من الامتداد
+      const ext = filePath.split('.').pop()?.toLowerCase() || 'jpeg';
+      const mimeTypes: Record<string, string> = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp'
+      };
+      const contentType = mimeTypes[ext] || 'image/jpeg';
+      return `data:${contentType};base64,${base64}`;
+    }
+    
+    // جلب الصورة من الرابط HTTP/HTTPS
+    // ملاحظة: قد يفشل مع بعض روابط S3 بسبب CORS أو الصلاحيات
+    // في هذه الحالة، يجب تمرير الصورة كـ base64 من الـ frontend
+    const response = await fetch(imageUrl, {
+      headers: {
+        'Accept': 'image/*'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString('base64');
+    
+    // تحديد نوع الصورة
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    
+    return `data:${contentType};base64,${base64}`;
+  } catch (error) {
+    logger.error("خطأ في تحويل الصورة إلى base64", error);
+    // إعادة الرابط الأصلي كـ fallback (قد لا يعمل مع LLM)
+    logger.warn("سيتم استخدام الرابط الأصلي - قد لا يعمل مع بعض الصور");
+    return imageUrl;
+  }
+}
+
+/**
+ * استخراج JSON من نص قد يحتوي على markdown
+ */
+function extractJsonFromResponse(content: string): any {
+  // محاولة إزالة markdown code blocks
+  let jsonStr = content.trim();
+  
+  // إزالة ```json ... ```
+  const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonMatch) {
+    jsonStr = jsonMatch[1].trim();
+  }
+  
+  // محاولة التحليل
+  return JSON.parse(jsonStr);
+}
+
 // ==================== الدوال الرئيسية ====================
 
 /**
@@ -277,62 +434,50 @@ export async function extractAmountFromImage(
       imageUrl: imageUrl.substring(0, 50) + "..." 
     });
 
+    // تحويل الصورة إلى base64 لتجنب مشكلة "NO IMAGE AVAILABLE"
+    const base64ImageUrl = await fetchImageAsBase64(imageUrl);
+    logger.info("تم تحويل الصورة إلى base64", {
+      originalLength: imageUrl.length,
+      base64Length: base64ImageUrl.length
+    });
+
     const messages: Message[] = [
-      {
-        role: "system",
-        content: `أنت خبير في قراءة واستخراج البيانات من صور إيصالات نقاط البيع (POS Terminal Receipts).
-
-هذا إيصال موازنة يومية من جهاز نقاط البيع يحتوي على عدة أقسام:
-1. **mada** - بطاقات مدى المحلية
-2. **VISA** - بطاقات فيزا
-3. **MasterCard** - بطاقات ماستركارد
-4. **DISCOVER** - بطاقات ديسكفر
-5. **Maestro** - بطاقات مايسترو
-6. **GCCNET** - شبكة الخليج
-7. **JN ONPAY** - خدمة الدفع
-
-كل قسم يحتوي على:
-- **mada HOST / POS TERMINAL**: مجموع المعاملات
-- **TOTALS**: المجموع الكلي للقسم
-
-مهمتك:
-1. استخراج التاريخ من أعلى الإيصال
-2. استخراج مجموع TOTALS من كل قسم (mada, VISA, MasterCard, etc.)
-3. حساب المجموع الكلي لجميع الأقسام
-
-أجب بتنسيق JSON فقط:
-{
-  "date": "التاريخ بتنسيق YYYY-MM-DD أو DD/MM/YYYY",
-  "sections": [
-    {
-      "name": "اسم القسم (mada, VISA, MasterCard, etc.)",
-      "hostTotal": "مجموع HOST",
-      "terminalTotal": "مجموع POS TERMINAL",
-      "count": "عدد المعاملات"
-    }
-  ],
-  "grandTotal": "المجموع الكلي لجميع الأقسام",
-  "confidence": "high/medium/low",
-  "rawText": "ملخص ما قرأته من الإيصال"
-}
-
-ملاحظات مهمة:
-- ابحث عن TOTALS في كل قسم
-- المبالغ بالريال السعودي (SAR)
-- إذا كان القسم يحتوي على "NO TRANSACTIONS" فالمجموع = 0
-- المجموع الكلي = مجموع جميع TOTALS من جميع الأقسام`
-      },
       {
         role: "user",
         content: [
           {
             type: "text",
-            text: "استخرج التاريخ والمبالغ من صورة إيصال نقاط البيع التالية. تأكد من جمع كل الأقسام (mada, VISA, MasterCard, etc.):"
+            text: `أنت خبير في قراءة إيصالات نقاط البيع (POS Terminal Receipts).
+
+هذه صورة إيصال موازنة يومية. السنة الحالية هي ${CURRENT_YEAR}.
+
+استخرج البيانات التالية:
+1. التاريخ من أعلى الإيصال (بتنسيق YYYY-MM-DD)
+2. مجموع TOTALS لكل قسم (mada, VISA, MasterCard, DISCOVER, Maestro, GCCNET, UNIONPAY)
+3. المجموع الكلي لجميع الأقسام
+
+ملاحظات مهمة:
+- ابحث عن "TOTALS" في كل قسم - هذا هو المجموع المطلوب
+- إذا كان القسم يحتوي على "NO TRANSACTIONS" فالمجموع = 0
+- المبالغ بالريال السعودي (SAR)
+- السنة في التاريخ يجب أن تكون ${CURRENT_YEAR} أو قريبة منها
+
+أجب بتنسيق JSON فقط (بدون أي نص إضافي):
+{
+  "date": "YYYY-MM-DD",
+  "sections": [
+    {"name": "mada", "total": 0, "count": 0},
+    {"name": "VISA", "total": 0, "count": 0}
+  ],
+  "grandTotal": 0,
+  "confidence": "high/medium/low",
+  "rawText": "ملخص قصير لما قرأته"
+}`
           },
           {
             type: "image_url",
             image_url: {
-              url: imageUrl,
+              url: base64ImageUrl,
               detail: "high"
             }
           }
@@ -342,77 +487,34 @@ export async function extractAmountFromImage(
 
     const response = await invokeLLM({
       messages,
-      temperature: 0.1, // درجة حرارة منخفضة للدقة
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "pos_ocr_result",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              date: { 
-                type: ["string", "null"],
-                description: "التاريخ المستخرج"
-              },
-              sections: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    name: { type: "string" },
-                    hostTotal: { type: ["number", "string", "null"] },
-                    terminalTotal: { type: ["number", "string", "null"] },
-                    count: { type: ["number", "string", "null"] }
-                  },
-                  required: ["name", "hostTotal", "terminalTotal", "count"],
-                  additionalProperties: false
-                },
-                description: "أقسام الإيصال"
-              },
-              grandTotal: { 
-                type: ["number", "string", "null"],
-                description: "المجموع الكلي"
-              },
-              confidence: { 
-                type: "string",
-                enum: ["high", "medium", "low", "none"],
-                description: "مستوى الثقة"
-              },
-              rawText: { 
-                type: ["string", "null"],
-                description: "ملخص المقروء"
-              }
-            },
-            required: ["date", "sections", "grandTotal", "confidence", "rawText"],
-            additionalProperties: false
-          }
-        }
-      }
+      temperature: 0.1 // درجة حرارة منخفضة للدقة
     });
 
-    const content = response.choices[0]?.message?.content;
+    const content = response.choices?.[0]?.message?.content;
     if (!content || typeof content !== "string") {
       throw new Error("لم يتم استلام استجابة من LLM");
     }
 
-    const parsed = JSON.parse(content);
+    logger.info("استجابة LLM الخام", { content: content.substring(0, 200) });
+
+    const parsed = extractJsonFromResponse(content);
     
     // معالجة الأقسام
     const sections: POSSection[] = (parsed.sections || []).map((s: any) => ({
       name: s.name || "unknown",
-      hostTotal: parseExtractedAmount(s.hostTotal?.toString()) || 0,
-      terminalTotal: parseExtractedAmount(s.terminalTotal?.toString()) || 0,
+      hostTotal: parseExtractedAmount(s.total?.toString()) || parseExtractedAmount(s.hostTotal?.toString()) || 0,
+      terminalTotal: parseExtractedAmount(s.total?.toString()) || parseExtractedAmount(s.terminalTotal?.toString()) || 0,
       count: parseInt(s.count?.toString() || "0") || 0
     }));
 
     // حساب المجموع الكلي من الأقسام
-    const calculatedTotal = sections.reduce((sum, s) => sum + s.terminalTotal, 0);
+    const calculatedTotal = sections.reduce((sum, s) => sum + Math.max(s.hostTotal, s.terminalTotal), 0);
     const extractedGrandTotal = parseExtractedAmount(parsed.grandTotal?.toString());
     
     // استخدام المجموع المحسوب إذا كان أكبر من المستخرج (للتأكد من عدم فقدان أي قسم)
     const grandTotal = Math.max(calculatedTotal, extractedGrandTotal || 0);
 
+    // تطبيع التاريخ مع تصحيح أخطاء OCR
     const extractedDate = normalizeDate(parsed.date);
     const confidence = determineConfidence(parsed.confidence, grandTotal);
 
@@ -498,20 +600,10 @@ export function generateWarnings(
   // تحذير الصورة غير الواضحة (ثقة منخفضة)
   if (extractionResult.confidence === "low" || extractionResult.confidence === "none") {
     warnings.push({
-      type: "unclear_image",
-      severity: "warning",
-      message: "الصورة غير واضحة أو جودتها منخفضة",
-      suggestion: "يرجى رفع صورة أوضح بإضاءة جيدة وبدون اهتزاز"
-    });
-  }
-
-  // تحذير الثقة المنخفضة
-  if (extractionResult.confidence === "low") {
-    warnings.push({
       type: "low_confidence",
-      severity: "info",
-      message: "دقة القراءة منخفضة - قد تكون النتائج غير دقيقة",
-      suggestion: "يرجى التحقق يدوياً من المبالغ"
+      severity: "warning",
+      message: "جودة الصورة منخفضة أو غير واضحة",
+      suggestion: "يرجى رفع صورة أوضح بإضاءة جيدة وبدون اهتزاز"
     });
   }
 
@@ -520,19 +612,28 @@ export function generateWarnings(
     warnings.push({
       type: "no_sections",
       severity: "warning",
-      message: "لم نتمكن من تحديد أقسام الدفع (mada, VISA, إلخ)",
-      suggestion: "تأكد من أن الإيصال كامل ويظهر جميع الأقسام"
+      message: "لم نتمكن من قراءة أقسام الإيصال (mada, VISA, etc.)",
+      suggestion: "تأكد من أن الإيصال يظهر بالكامل في الصورة"
     });
   }
 
-  // تحذير القراءة الجزئية
-  const activeSections = extractionResult.sections.filter(s => s.terminalTotal > 0);
-  if (activeSections.length > 0 && activeSections.length < 3 && extractedAmount && extractedAmount > 1000) {
+  // تحذير القراءة الجزئية (بعض الأقسام فقط)
+  if (extractionResult.sections.length > 0 && extractionResult.sections.length < 3) {
     warnings.push({
       type: "partial_read",
       severity: "info",
-      message: `تم قراءة ${activeSections.length} قسم فقط - تأكد من ظهور جميع الأقسام`,
-      suggestion: "إذا كان هناك أقسام أخرى، تأكد من ظهورها في الصورة"
+      message: `تم قراءة ${extractionResult.sections.length} قسم فقط من الإيصال`,
+      suggestion: "تأكد من أن جميع أقسام الإيصال واضحة في الصورة"
+    });
+  }
+
+  // تحذير الصورة غير الواضحة (ثقة منخفضة + لا توجد أقسام)
+  if ((extractionResult.confidence === "low" || extractionResult.confidence === "none") && extractionResult.sections.length === 0) {
+    warnings.push({
+      type: "unclear_image",
+      severity: "error",
+      message: "الصورة غير واضحة ولم نتمكن من قراءتها",
+      suggestion: "يرجى رفع صورة أوضح بإضاءة جيدة وبدون اهتزاز"
     });
   }
 
@@ -540,36 +641,56 @@ export function generateWarnings(
 }
 
 /**
- * التحقق من تطابق مبلغ الشبكة وتاريخ الرفع مع صورة الموازنة
+ * التحقق من تطابق التواريخ مع السماح بفرق يوم واحد
+ * @param extractedDate التاريخ المستخرج
+ * @param expectedDate التاريخ المتوقع
+ * @param toleranceDays عدد أيام التسامح (افتراضي: DATE_TOLERANCE_DAYS)
+ */
+export function datesMatch(
+  extractedDate: string | null,
+  expectedDate: string,
+  toleranceDays: number = DATE_TOLERANCE_DAYS
+): boolean {
+  if (!extractedDate) return false;
+  
+  try {
+    const extracted = new Date(extractedDate);
+    const expected = new Date(expectedDate);
+    
+    // التحقق من صحة التواريخ
+    if (isNaN(extracted.getTime()) || isNaN(expected.getTime())) {
+      return false;
+    }
+    
+    // حساب الفرق بالأيام
+    const diffTime = Math.abs(extracted.getTime() - expected.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    // إذا كان التسامح 0، يجب أن يكون الفرق 0 تماماً
+    if (toleranceDays === 0) {
+      return diffTime === 0;
+    }
+    
+    return diffDays <= toleranceDays;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * التحقق من صورة الموازنة ومطابقتها مع المبلغ المتوقع
  */
 export async function verifyBalanceImage(
-  balanceImages: BalanceImage[],
+  balanceImages: BalanceImage | BalanceImage[],
   expectedNetworkAmount: number,
-  uploadDate?: string
+  expectedDate: string
 ): Promise<BalanceVerificationResult> {
   const startTime = Date.now();
-
-  // التحقق من وجود صور
-  if (!balanceImages || balanceImages.length === 0) {
-    return {
-      success: false,
-      isMatched: false,
-      isDateMatched: false,
-      extractedAmount: null,
-      expectedAmount: expectedNetworkAmount,
-      difference: null,
-      extractedDate: null,
-      expectedDate: uploadDate || new Date().toISOString().split("T")[0],
-      confidence: "none",
-      message: "لم يتم رفع صورة الموازنة",
-      warnings: []
-    };
-  }
-
-  // تحديد تاريخ الرفع المتوقع
-  const expectedDate = uploadDate || getUploadDate(balanceImages[0].uploadedAt);
-
-  // إذا كان المبلغ المتوقع صفر، لا حاجة للتحقق من المبلغ
+  
+  // تحويل إلى مصفوفة إذا كان كائن واحد
+  const images = Array.isArray(balanceImages) ? balanceImages : [balanceImages];
+  
+  // إذا لم يكن هناك مبلغ شبكة، لا داعي للتحقق
   if (expectedNetworkAmount === 0) {
     return {
       success: true,
@@ -588,7 +709,11 @@ export async function verifyBalanceImage(
 
   try {
     // استخراج البيانات من أول صورة (الصورة الرئيسية)
-    const primaryImage = balanceImages[0];
+    const primaryImage = images[0];
+    if (!primaryImage || !primaryImage.url) {
+      throw new Error("لم يتم توفير صورة صالحة");
+    }
+    
     const extractionResult = await extractAmountFromImage(primaryImage.url);
 
     if (!extractionResult.success || extractionResult.grandTotal === null) {
@@ -649,42 +774,20 @@ export async function verifyBalanceImage(
     } else {
       messages.push(`❌ المبلغ غير مطابق: المتوقع ${expectedNetworkAmount.toFixed(2)} ر.س، المستخرج ${extractedAmount.toFixed(2)} ر.س (فرق: ${difference.toFixed(2)} ر.س)`);
     }
-
+    
     // رسالة التاريخ
     if (isDateMatched) {
-      messages.push(`✅ التاريخ مطابق: ${extractedDate}`);
+      messages.push("✅ التاريخ مطابق");
     } else if (extractedDate) {
-      messages.push(`❌ التاريخ غير مطابق: تاريخ الإيصال ${extractedDate}، تاريخ الرفع المتوقع ${expectedDate}`);
+      messages.push(`❌ التاريخ غير مطابق: تاريخ الإيصال ${extractedDate}، التاريخ المتوقع ${expectedDate}`);
     } else {
-      messages.push(`⚠️ لم نتمكن من قراءة التاريخ من الإيصال`);
+      messages.push("⚠️ لم نتمكن من قراءة التاريخ");
     }
 
-    // إضافة تفاصيل الأقسام
-    if (extractionResult.sections.length > 0) {
-      messages.push("\n📊 تفاصيل الأقسام:");
-      extractionResult.sections.forEach(s => {
-        if (s.terminalTotal > 0) {
-          messages.push(`  - ${s.name}: ${s.terminalTotal.toFixed(2)} ر.س (${s.count} معاملة)`);
-        }
-      });
-    }
-
-    const finalMessage = messages.join("\n");
-
-    logger.info("نتيجة التحقق من صورة الموازنة", {
-      isAmountMatched,
-      isDateMatched,
-      extractedAmount,
-      expectedNetworkAmount,
-      extractedDate,
-      expectedDate,
-      difference,
-      confidence: extractionResult.confidence,
-      warningsCount: warnings.length
-    });
-
+    const processingTime = Date.now() - startTime;
+    
     return {
-      success: true,
+      success: isAmountMatched && isDateMatched,
       isMatched: isAmountMatched,
       isDateMatched,
       extractedAmount,
@@ -693,17 +796,18 @@ export async function verifyBalanceImage(
       extractedDate,
       expectedDate,
       confidence: extractionResult.confidence,
-      message: finalMessage,
+      message: messages.join(" | "),
       sections: extractionResult.sections,
       details: {
         rawText: extractionResult.rawText,
-        processingTime: Date.now() - startTime
+        processingTime
       },
       warnings
     };
 
   } catch (error: any) {
     logger.error("خطأ في التحقق من صورة الموازنة", error);
+    
     return {
       success: false,
       isMatched: false,
@@ -714,27 +818,25 @@ export async function verifyBalanceImage(
       extractedDate: null,
       expectedDate,
       confidence: "none",
-      message: `خطأ في التحقق: ${error.message || "خطأ غير معروف"}`,
+      message: `خطأ في التحقق: ${error.message}`,
       warnings: [{
         type: "unclear_image",
         severity: "error",
-        message: `خطأ في التحقق: ${error.message || "خطأ غير معروف"}`,
+        message: `خطأ في التحقق: ${error.message}`,
         suggestion: "يرجى المحاولة مرة أخرى أو رفع صورة مختلفة"
       }]
     };
   }
 }
 
+
 /**
- * التحقق من أن مستوى الثقة كافٍ للتحقق
+ * التحقق من كفاية مستوى الثقة
  */
 export function isConfidenceSufficient(
   confidence: "high" | "medium" | "low" | "none"
 ): boolean {
-  const levels = ["none", "low", "medium", "high"];
-  const minLevel = levels.indexOf(MIN_CONFIDENCE_FOR_VALIDATION);
-  const currentLevel = levels.indexOf(confidence);
-  return currentLevel >= minLevel;
+  return confidence === "high" || confidence === "medium";
 }
 
 /**
@@ -744,19 +846,21 @@ export function getConfidenceWarning(
   confidence: "high" | "medium" | "low" | "none"
 ): string | null {
   switch (confidence) {
-    case "none":
-      return "لم نتمكن من قراءة البيانات من الصورة. يرجى التحقق يدوياً.";
-    case "low":
-      return "دقة القراءة منخفضة. يرجى التأكد من وضوح الصورة.";
-    case "medium":
-      return "دقة القراءة متوسطة. قد يكون هناك فرق بسيط.";
     case "high":
+      return null;
+    case "medium":
+      return "جودة الصورة متوسطة - النتائج قد تكون غير دقيقة 100%";
+    case "low":
+      return "جودة الصورة منخفضة - يرجى رفع صورة أوضح";
+    case "none":
+      return "لم نتمكن من قراءة الصورة - يرجى التأكد من وضوح الصورة";
+    default:
       return null;
   }
 }
 
 /**
- * التحقق من تطابق التاريخ فقط
+ * التحقق من التاريخ فقط (بدون المبلغ)
  */
 export function verifyDateOnly(
   extractedDate: string | null,
@@ -768,18 +872,18 @@ export function verifyDateOnly(
       message: "لم نتمكن من قراءة التاريخ من الإيصال"
     };
   }
-
+  
   const isMatched = datesMatch(extractedDate, expectedDate);
   
   if (isMatched) {
     return {
       isMatched: true,
-      message: `التاريخ مطابق: ${extractedDate}`
+      message: "التاريخ مطابق"
     };
   }
-
+  
   return {
     isMatched: false,
-    message: `التاريخ غير مطابق: تاريخ الإيصال ${extractedDate}، تاريخ الرفع المتوقع ${expectedDate}`
+    message: `التاريخ غير مطابق: تاريخ الإيصال ${extractedDate}، التاريخ المتوقع ${expectedDate}`
   };
 }

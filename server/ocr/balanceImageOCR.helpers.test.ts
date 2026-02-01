@@ -577,8 +577,8 @@ describe('generateWarnings', () => {
   });
 
   describe('Unclear Image Warning', () => {
-    it('should generate unclear_image warning for low confidence', () => {
-      const result = createExtractionResult({ confidence: 'low' });
+    it('should generate unclear_image warning for low confidence with empty sections', () => {
+      const result = createExtractionResult({ confidence: 'low', sections: [] });
       const warnings = generateWarnings(
         result,
         true,
@@ -591,8 +591,8 @@ describe('generateWarnings', () => {
       expect(warnings.some(w => w.type === 'unclear_image')).toBe(true);
     });
 
-    it('should generate unclear_image warning for none confidence', () => {
-      const result = createExtractionResult({ confidence: 'none' });
+    it('should generate unclear_image warning for none confidence with empty sections', () => {
+      const result = createExtractionResult({ confidence: 'none', sections: [] });
       const warnings = generateWarnings(
         result,
         true,
@@ -603,6 +603,20 @@ describe('generateWarnings', () => {
         1000
       );
       expect(warnings.some(w => w.type === 'unclear_image')).toBe(true);
+    });
+
+    it('should NOT generate unclear_image warning for low confidence with sections', () => {
+      const result = createExtractionResult({ confidence: 'low' }); // has default 3 sections
+      const warnings = generateWarnings(
+        result,
+        true,
+        true,
+        '2024-01-15',
+        '2024-01-15',
+        1000,
+        1000
+      );
+      expect(warnings.some(w => w.type === 'unclear_image')).toBe(false);
     });
   });
 
@@ -619,7 +633,7 @@ describe('generateWarnings', () => {
         1000
       );
       expect(warnings.some(w => w.type === 'low_confidence')).toBe(true);
-      expect(warnings.find(w => w.type === 'low_confidence')?.severity).toBe('info');
+      expect(warnings.find(w => w.type === 'low_confidence')?.severity).toBe('warning');
     });
   });
 
@@ -658,10 +672,14 @@ describe('generateWarnings', () => {
       expect(warnings.find(w => w.type === 'partial_read')?.severity).toBe('info');
     });
 
-    it('should NOT generate partial_read warning for small amounts', () => {
+    it('should NOT generate partial_read warning for 3+ sections', () => {
       const result = createExtractionResult({
-        sections: [{ name: 'mada', hostTotal: 500, terminalTotal: 500, count: 10 }],
-        extractedAmount: 500,
+        sections: [
+          { name: 'mada', hostTotal: 500, terminalTotal: 500, count: 10 },
+          { name: 'VISA', hostTotal: 200, terminalTotal: 200, count: 5 },
+          { name: 'MasterCard', hostTotal: 100, terminalTotal: 100, count: 3 }
+        ],
+        extractedAmount: 800,
       });
       const warnings = generateWarnings(
         result,
@@ -669,8 +687,8 @@ describe('generateWarnings', () => {
         true,
         '2024-01-15',
         '2024-01-15',
-        500,
-        500
+        800,
+        800
       );
       expect(warnings.some(w => w.type === 'partial_read')).toBe(false);
     });

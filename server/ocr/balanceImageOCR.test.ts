@@ -98,7 +98,7 @@ describe('POS Receipt OCR Service', () => {
       expect(result.success).toBe(false);
       expect(result.isMatched).toBe(false);
       expect(result.isDateMatched).toBe(false);
-      expect(result.message).toContain('لم يتم رفع');
+      expect(result.message).toContain('لم يتم توفير صورة صالحة');
     });
 
     it('should return success when expected amount is zero', async () => {
