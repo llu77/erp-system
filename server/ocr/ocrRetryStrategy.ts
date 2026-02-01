@@ -14,6 +14,7 @@ import { createLogger } from "../utils/logger";
 import type { OCRExtractionResult, POSSection } from "./balanceImageOCR";
 import { parseExtractedAmount, normalizeDate, determineConfidence } from "./balanceImageOCR";
 import { smartPreprocess, type PreprocessingResult } from "./imagePreprocessing";
+import { enhanceReceiptImage, enhanceWeakReceiptImage, type EnhancementResult } from "./receiptEnhancer";
 
 const logger = createLogger("OCRRetryStrategy");
 
@@ -22,8 +23,10 @@ export interface RetryConfig {
   maxRetries: number;
   prompts: PromptVariant[];
   combineResults: boolean;
-  /** تفعيل معالجة الصور مسبقاً (افتراضي: true) */
+  /** تفعيل معالجة الصور مسبقاً (افتراضي: false) */
   preprocessImage?: boolean;
+  /** استخدام ReceiptEnhancer v2.0 بدلاً من المعالجة القديمة */
+  useEnhancerV2?: boolean;
 }
 
 export interface PromptVariant {
@@ -153,6 +156,32 @@ const TOTAL_ONLY_PROMPT: PromptVariant = {
 };
 
 // ==================== الدوال المساعدة ====================
+
+/**
+ * تحميل الصورة كـ Buffer
+ */
+async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
+  // إذا كانت الصورة بالفعل base64
+  if (imageUrl.startsWith("data:image/")) {
+    const base64Data = imageUrl.split(",")[1];
+    return Buffer.from(base64Data, "base64");
+  }
+
+  // إذا كانت ملف محلي
+  if (imageUrl.startsWith("/") || imageUrl.startsWith("file://")) {
+    const fs = await import("fs");
+    const path = imageUrl.replace("file://", "");
+    return fs.readFileSync(path);
+  }
+
+  // إذا كانت URL خارجية
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
 
 /**
  * تحويل الصورة إلى base64
@@ -422,7 +451,8 @@ export async function extractWithRetry(
       TOTAL_ONLY_PROMPT
     ],
     combineResults: true,
-    preprocessImage: false // تم تعطيلها افتراضياً - تُستخدم كـ fallback
+    preprocessImage: false, // تم تعطيلها افتراضياً - تُستخدم كـ fallback
+    useEnhancerV2: true // استخدام ReceiptEnhancer v2.0 الجديد
   };
 
   const finalConfig = { ...defaultConfig, ...config };
@@ -487,13 +517,30 @@ export async function extractWithRetry(
       if (i === 0 && !attempt.result.success && !finalConfig.preprocessImage && !usedPreprocessingFallback) {
         logger.info("تفعيل Smart Fallback: معالجة الصورة بعد فشل المحاولة الأولى");
         try {
-          preprocessingResult = await smartPreprocess(imageUrl);
-          base64Image = preprocessingResult.base64Image;
-          usedPreprocessingFallback = true;
-          logger.info("تم تطبيق معالجة الصورة كـ fallback", {
-            originalSize: preprocessingResult.originalSize,
-            processedSize: preprocessingResult.processedSize
-          });
+          // استخدام ReceiptEnhancer v2.0 إذا كان مفعلاً
+          if (finalConfig.useEnhancerV2) {
+            logger.info("استخدام ReceiptEnhancer v2.0 للصور الضعيفة");
+            const imageBuffer = await fetchImageBuffer(imageUrl);
+            const enhancementResult = await enhanceWeakReceiptImage(imageBuffer);
+            base64Image = enhancementResult.base64;
+            usedPreprocessingFallback = true;
+            logger.info("تم تطبيق ReceiptEnhancer v2.0 كـ fallback", {
+              originalSize: enhancementResult.originalSize,
+              finalSize: enhancementResult.finalSize,
+              compressionPercent: enhancementResult.compressionPercent.toFixed(1) + '%',
+              ocrReadiness: enhancementResult.ocrReadiness.level,
+              appliedSteps: enhancementResult.appliedSteps
+            });
+          } else {
+            // استخدام المعالجة القديمة
+            preprocessingResult = await smartPreprocess(imageUrl);
+            base64Image = preprocessingResult.base64Image;
+            usedPreprocessingFallback = true;
+            logger.info("تم تطبيق معالجة الصورة القديمة كـ fallback", {
+              originalSize: preprocessingResult.originalSize,
+              processedSize: preprocessingResult.processedSize
+            });
+          }
         } catch (preprocessError: any) {
           logger.warn("فشل Smart Fallback", { error: preprocessError.message });
         }
