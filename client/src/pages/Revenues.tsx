@@ -38,7 +38,7 @@ import { CameraCapture } from "@/components/CameraCapture";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ImagePreviewLightbox, ImageThumbnail } from "@/components/ImagePreviewLightbox";
-import { RefreshableImage } from "@/components/RefreshableImage";
+import { RefreshableImage, usePrefetchImages } from "@/components/RefreshableImage";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ar } from "date-fns/locale";
 import { processImageForUpload, validateImageForUpload } from "@/utils/imageCompression";
@@ -1391,32 +1391,10 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                         </TableCell>
                         <TableCell>
                           {revenue.balanceImages && revenue.balanceImages.length > 0 ? (
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm" className="gap-1 h-8 px-2">
-                                  <ImageIcon className="h-4 w-4 text-primary" />
-                                  <span className="text-xs">عرض ({revenue.balanceImages.length})</span>
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-4xl">
-                                <DialogHeader>
-                                  <DialogTitle>صور الموازنة - {format(new Date(revenue.date), "d MMMM yyyy", { locale: ar })}</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  {revenue.balanceImages.map((img, idx) => (
-                                    <div key={idx} className="border rounded-lg overflow-hidden">
-                                      <RefreshableImage
-                                        src={img.url}
-                                        s3Key={img.key}
-                                        alt={`صورة الموازنة ${idx + 1}`}
-                                        className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
-                                        containerClassName="min-h-[200px]"
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              </DialogContent>
-                            </Dialog>
+                            <BalanceImagesDialog 
+                              images={revenue.balanceImages} 
+                              date={revenue.date} 
+                            />
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>
                           )}
@@ -1525,5 +1503,62 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
         </DialogContent>
       </Dialog>
     </Card>
+  );
+}
+
+// مكون منفصل لعرض صور الموازنة مع تجديد الروابط مسبقاً
+// يجدد الروابط عند فتح الـ modal لتحسين الأداء
+function BalanceImagesDialog({ 
+  images, 
+  date 
+}: { 
+  images: Array<{ url: string; key: string }>; 
+  date: string | Date;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { prefetch, isPending } = usePrefetchImages();
+  
+  // تجديد الروابط عند فتح الـ modal
+  const handleOpenChange = async (open: boolean) => {
+    if (open) {
+      // تجديد جميع الروابط مسبقاً
+      const keys = images.map(img => img.key);
+      await prefetch(keys);
+    }
+    setIsOpen(open);
+  };
+  
+  return (
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1 h-8 px-2">
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          ) : (
+            <ImageIcon className="h-4 w-4 text-primary" />
+          )}
+          <span className="text-xs">عرض ({images.length})</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>صور الموازنة - {format(new Date(date), "d MMMM yyyy", { locale: ar })}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {images.map((img, idx) => (
+            <div key={idx} className="border rounded-lg overflow-hidden">
+              <RefreshableImage
+                src={img.url}
+                s3Key={img.key}
+                alt={`صورة الموازنة ${idx + 1}`}
+                className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
+                containerClassName="min-h-[200px]"
+                prefetchUrl={false} // الروابط مجددة مسبقاً
+              />
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

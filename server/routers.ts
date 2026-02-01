@@ -1845,6 +1845,29 @@ export const appRouter = router({
         }
       }),
 
+    // تجديد روابط متعددة مرة واحدة (batch refresh) - لتحسين الأداء
+    refreshImageUrls: protectedProcedure
+      .input(z.object({
+        keys: z.array(z.string()),
+      }))
+      .mutation(async ({ input }) => {
+        const { storageGet } = await import('./storage');
+        const results: { key: string; url: string | null; success: boolean }[] = [];
+        
+        // تجديد جميع الروابط بالتوازي
+        await Promise.all(input.keys.map(async (key) => {
+          try {
+            const { url } = await storageGet(key);
+            results.push({ key, url, success: true });
+          } catch (error) {
+            logger.error('فشل تجديد رابط الصورة', { key, error });
+            results.push({ key, url: null, success: false });
+          }
+        }));
+        
+        return { success: true, results };
+      }),
+
     // رفع صورة الموازنة إلى S3
     uploadBalanceImage: supervisorInputProcedure
       .input(z.object({
