@@ -15,6 +15,7 @@
 
 import { invokeLLM, type Message } from "../_core/llm";
 import { createLogger } from "../utils/logger";
+import { storageGet } from "../storage";
 
 const logger = createLogger("BalanceImageOCR");
 
@@ -345,8 +346,12 @@ export function getUploadDate(uploadedAt: string): string {
  * - روابط S3/HTTP (يتم جلبها وتحويلها)
  * - ملفات محلية (يتم قراءتها مباشرة)
  * - روابط base64 (يتم إعادتها كما هي)
+ * - مفاتيح S3 (يتم الحصول على رابط جديد عبر storageGet)
+ * 
+ * تحسين (1 فبراير 2026):
+ * - عند فشل التحميل بخطأ 403، يتم محاولة استخراج مفتاح S3 والحصول على رابط جديد
  */
-async function fetchImageAsBase64(imageUrl: string): Promise<string> {
+async function fetchImageAsBase64(imageUrl: string, s3Key?: string): Promise<string> {
   const fs = await import('fs');
   
   try {
@@ -374,16 +379,42 @@ async function fetchImageAsBase64(imageUrl: string): Promise<string> {
     }
     
     // جلب الصورة من الرابط HTTP/HTTPS
-    // ملاحظة: قد يفشل مع بعض روابط S3 بسبب CORS أو الصلاحيات
-    // في هذه الحالة، يجب تمرير الصورة كـ base64 من الـ frontend
-    const response = await fetch(imageUrl, {
+    let response = await fetch(imageUrl, {
       headers: {
         'Accept': 'image/*'
       }
     });
     
+    // إذا فشل التحميل بخطأ 403 (انتهاء صلاحية الرابط)، نحاول الحصول على رابط جديد
+    if (!response.ok && response.status === 403) {
+      logger.warn("رابط S3 منتهي الصلاحية (403)، محاولة الحصول على رابط جديد");
+      
+      // محاولة استخراج مفتاح S3 من الرابط أو استخدام المفتاح المُمرر
+      const key = s3Key || extractS3KeyFromUrl(imageUrl);
+      
+      if (key) {
+        try {
+          logger.info("الحصول على رابط جديد من S3", { key });
+          const { url: freshUrl } = await storageGet(key);
+          
+          // محاولة التحميل بالرابط الجديد
+          response = await fetch(freshUrl, {
+            headers: {
+              'Accept': 'image/*'
+            }
+          });
+          
+          if (response.ok) {
+            logger.info("تم الحصول على الصورة بنجاح بالرابط الجديد");
+          }
+        } catch (storageError: any) {
+          logger.error("فشل الحصول على رابط جديد من S3", { error: storageError.message });
+        }
+      }
+    }
+    
     if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.status}`);
+      throw new Error(`فشل تحميل الصورة: HTTP ${response.status}`);
     }
     
     const arrayBuffer = await response.arrayBuffer();
@@ -394,11 +425,59 @@ async function fetchImageAsBase64(imageUrl: string): Promise<string> {
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     
     return `data:${contentType};base64,${base64}`;
-  } catch (error) {
-    logger.error("خطأ في تحويل الصورة إلى base64", error);
+  } catch (error: any) {
+    logger.error("خطأ في تحويل الصورة إلى base64", { error: error.message, imageUrl: imageUrl.substring(0, 100) });
+    
+    // محاولة أخيرة: إذا كان لدينا مفتاح S3، نحاول الحصول على رابط جديد
+    if (s3Key) {
+      try {
+        logger.info("محاولة أخيرة: الحصول على رابط جديد من S3", { key: s3Key });
+        const { url: freshUrl } = await storageGet(s3Key);
+        
+        const response = await fetch(freshUrl, {
+          headers: { 'Accept': 'image/*' }
+        });
+        
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const base64 = buffer.toString('base64');
+          const contentType = response.headers.get('content-type') || 'image/jpeg';
+          logger.info("نجحت المحاولة الأخيرة في تحميل الصورة");
+          return `data:${contentType};base64,${base64}`;
+        }
+      } catch (lastError: any) {
+        logger.error("فشلت المحاولة الأخيرة", { error: lastError.message });
+      }
+    }
+    
     // إعادة الرابط الأصلي كـ fallback (قد لا يعمل مع LLM)
     logger.warn("سيتم استخدام الرابط الأصلي - قد لا يعمل مع بعض الصور");
     return imageUrl;
+  }
+}
+
+/**
+ * استخراج مفتاح S3 من رابط URL
+ * يدعم روابط CloudFront و S3 المباشرة
+ */
+function extractS3KeyFromUrl(url: string): string | null {
+  try {
+    const urlObj = new URL(url);
+    const pathname = urlObj.pathname;
+    
+    // إزالة الـ / الأولى وأي query params
+    let key = pathname.startsWith('/') ? pathname.substring(1) : pathname;
+    
+    // التحقق من أن المفتاح يبدو صالحاً (يحتوي على امتداد صورة)
+    if (key && /\.(jpg|jpeg|png|gif|webp)$/i.test(key)) {
+      logger.info("تم استخراج مفتاح S3 من الرابط", { key });
+      return key;
+    }
+    
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -427,10 +506,12 @@ function extractJsonFromResponse(content: string): any {
  * 
  * @param imageUrl رابط الصورة (S3, محلي، أو base64)
  * @param useRetryStrategy استخدام استراتيجية إعادة المحاولة (افتراضي: true)
+ * @param s3Key مفتاح S3 للحصول على رابط جديد عند انتهاء صلاحية الرابط
  */
 export async function extractAmountFromImage(
   imageUrl: string,
-  useRetryStrategy: boolean = true
+  useRetryStrategy: boolean = true,
+  s3Key?: string
 ): Promise<OCRExtractionResult> {
   const startTime = Date.now();
   
@@ -465,7 +546,8 @@ export async function extractAmountFromImage(
     });
 
     // تحويل الصورة إلى base64 لتجنب مشكلة "NO IMAGE AVAILABLE"
-    const base64ImageUrl = await fetchImageAsBase64(imageUrl);
+    // تمرير مفتاح S3 للحصول على رابط جديد في حالة انتهاء صلاحية الرابط (403)
+    const base64ImageUrl = await fetchImageAsBase64(imageUrl, s3Key);
     logger.info("تم تحويل الصورة إلى base64", {
       originalLength: imageUrl.length,
       base64Length: base64ImageUrl.length
@@ -744,7 +826,8 @@ export async function verifyBalanceImage(
       throw new Error("لم يتم توفير صورة صالحة");
     }
     
-    const extractionResult = await extractAmountFromImage(primaryImage.url);
+    // تمرير مفتاح S3 للحصول على رابط جديد في حالة انتهاء صلاحية الرابط الحالي
+    const extractionResult = await extractAmountFromImage(primaryImage.url, true, primaryImage.key);
 
     if (!extractionResult.success || extractionResult.grandTotal === null) {
       const warnings: OCRWarning[] = [{
