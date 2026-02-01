@@ -108,6 +108,16 @@ export {
   type EnhancementResult
 } from "./receiptEnhancer";
 
+// ==================== تصدير من simpleOCR (نظام مبسط) ====================
+export {
+  // الدوال الرئيسية
+  readReceiptImage,
+  verifyReceiptSimple,
+  
+  // الأنواع
+  type SimpleOCRResult
+} from "./simpleOCR";
+
 // ==================== معلومات الإصدار ====================
 export const VERSION = {
   major: 3,
@@ -122,6 +132,7 @@ export const VERSION = {
     "Smart Fallback مع ReceiptEnhancer",
     "Prompts محسّنة للتمييز بين تاريخ الموازنة والطباعة",
     "تحليل صورة محسّن (Laplacian variance)",
-    "تسجيل أحداث شامل مع metrics"
+    "تسجيل أحداث شامل مع metrics",
+    "✅ جديد: simpleOCR - نظام مبسط يرسل الصورة مباشرة إلى Claude"
   ]
 };

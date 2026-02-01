@@ -4766,3 +4766,11 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إصلاح ocrRetryStrategy.ts - استخدام s3Key في imageToBase64 و fetchImageBuffer
 - [x] إضافة logging لتتبع تدفق s3Key
 - [x] اختبار شامل مع سيناريو 403 حقيقي (1256 اختبار ناجح)
+
+
+## تبسيط نظام OCR - قبول الصورة مباشرة وإرسالها إلى Claude
+- [x] مراجعة الكود الحالي وتحديد نقاط التعقيد
+- [x] إنشاء simpleOCR.ts - نظام مبسط يرسل الصورة مباشرة إلى Claude
+- [x] إضافة readReceiptImage و verifyReceiptSimple
+- [x] إضافة التصديرات إلى index.ts
+- [x] اختبار النظام المبسط (8 اختبارات ناجحة)
