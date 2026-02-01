@@ -46,7 +46,8 @@ import {
   openPrintWindow,
   formatCurrency 
 } from "@/utils/pdfTemplates";
-import { S3Image, usePrefetchS3Images } from "@/components/S3Image";
+import { S3Image } from "@/components/S3Image";
+import { BalanceImagesDialog } from "@/components/BalanceImagesDialog";
 
 interface EmployeeRevenueInput {
   employeeId: number;
@@ -1247,35 +1248,10 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                           {parseFloat(revenue.total || "0").toLocaleString()} ر.س
                         </TableCell>
                         <TableCell>
-                          {revenue.balanceImages && revenue.balanceImages.length > 0 ? (
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm" className="gap-1 h-8 px-2">
-                                  <ImageIcon className="h-4 w-4 text-primary" />
-                                  <span className="text-xs">عرض ({revenue.balanceImages.length})</span>
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-4xl">
-                                <DialogHeader>
-                                  <DialogTitle>صور الموازنة - {format(new Date(revenue.date), "d MMMM yyyy", { locale: ar })}</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  {revenue.balanceImages.map((img, idx) => (
-                                    <div key={idx} className="border rounded-lg overflow-hidden">
-                                      <S3Image
-                                        src={img.url}
-                                        s3Key={img.key}
-                                        alt={`صورة الموازنة ${idx + 1}`}
-                                        className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">-</span>
-                          )}
+                          <BalanceImagesDialog
+                            images={revenue.balanceImages || []}
+                            date={revenue.date}
+                          />
                         </TableCell>
                         <TableCell>
                           {revenue.isMatched ? (

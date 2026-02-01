@@ -4260,3 +4260,10 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] تحديث Revenues.tsx لاستخدام S3Image
 - [x] إضافة localStorage cache للروابط المجددة (50 دقيقة TTL)
 - [x] اختبارات vitest (11 اختبار ناجح)
+
+## تحسين تجربة عرض صور الموازنة - Batch Prefetch (طلب جديد)
+- [x] إضافة usePrefetchS3Images hook عند فتح modal الصور
+- [x] تجديد جميع روابط الصور مسبقاً قبل العرض
+- [x] تحسين حالة التحميل أثناء التجديد المسبق
+- [x] إنشاء مكون BalanceImagesDialog منفصل
+- [x] اختبارات vitest (11 اختبار جديد)
