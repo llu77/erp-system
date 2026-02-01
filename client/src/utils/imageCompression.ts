@@ -18,6 +18,7 @@ export interface ImageCompressionOptions {
   maxSizeKB?: number;       // الحد الأقصى للحجم بالكيلوبايت (افتراضي: 500)
   enhanceForOCR?: boolean;  // تحسين للقراءة OCR (افتراضي: true)
   outputFormat?: 'jpeg' | 'png' | 'webp'; // صيغة الإخراج (افتراضي: jpeg)
+  useAdvancedProcessing?: boolean; // استخدام المعالجة المتقدمة (افتراضي: true)
 }
 
 export interface CompressionResult {
@@ -41,7 +42,8 @@ const DEFAULT_OPTIONS: Required<ImageCompressionOptions> = {
   quality: 0.85,
   maxSizeKB: 500,
   enhanceForOCR: true,
-  outputFormat: 'jpeg'
+  outputFormat: 'jpeg',
+  useAdvancedProcessing: true
 };
 
 // ==================== الدوال المساعدة ====================
@@ -304,6 +306,164 @@ function enhanceImageForOCR(
 }
 
 /**
+ * تطبيق التحسينات المتقدمة للصورة
+ * - Bilateral Filter: تنعيم مع الحفاظ على الحواف
+ * - Multi-scale Retinex: تحسين الإضاءة الديناميكي
+ * - Advanced Sharpening: تحسين الحدة القصوى
+ */
+function applyAdvancedEnhancements(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number
+): string[] {
+  const enhancements: string[] = [];
+  
+  try {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    const original = new Uint8ClampedArray(data);
+    
+    // ==================== Bilateral Filter مبسط ====================
+    // تنعيم الضوضاء مع الحفاظ على الحواف
+    const spatialSigma = 2;
+    const rangeSigma = 25;
+    const halfKernel = 2;
+    
+    for (let y = halfKernel; y < height - halfKernel; y++) {
+      for (let x = halfKernel; x < width - halfKernel; x++) {
+        const idx = (y * width + x) * 4;
+        
+        for (let c = 0; c < 3; c++) {
+          let weightedSum = 0;
+          let totalWeight = 0;
+          const centerValue = original[idx + c];
+          
+          for (let dy = -halfKernel; dy <= halfKernel; dy++) {
+            for (let dx = -halfKernel; dx <= halfKernel; dx++) {
+              const nIdx = ((y + dy) * width + (x + dx)) * 4;
+              const neighborValue = original[nIdx + c];
+              
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              const spatialWeight = Math.exp(-(dist * dist) / (2 * spatialSigma * spatialSigma));
+              
+              const intensityDiff = Math.abs(neighborValue - centerValue);
+              const rangeWeight = Math.exp(-(intensityDiff * intensityDiff) / (2 * rangeSigma * rangeSigma));
+              
+              const weight = spatialWeight * rangeWeight;
+              weightedSum += neighborValue * weight;
+              totalWeight += weight;
+            }
+          }
+          
+          data[idx + c] = clamp(weightedSum / totalWeight);
+        }
+      }
+    }
+    enhancements.push('تنعيم ذكي');
+    
+    // ==================== Multi-scale Retinex مبسط ====================
+    // تحسين الإضاءة الديناميكي
+    const scales = [5, 20, 80];
+    const retinexData = new Float32Array(data.length);
+    
+    for (const scale of scales) {
+      const halfScale = Math.min(Math.floor(scale / 2), 10);
+      
+      for (let y = halfScale; y < height - halfScale; y++) {
+        for (let x = halfScale; x < width - halfScale; x++) {
+          const idx = (y * width + x) * 4;
+          
+          // حساب المتوسط المحلي
+          let sum = [0, 0, 0];
+          let count = 0;
+          
+          for (let dy = -halfScale; dy <= halfScale; dy += 2) {
+            for (let dx = -halfScale; dx <= halfScale; dx += 2) {
+              const nIdx = ((y + dy) * width + (x + dx)) * 4;
+              sum[0] += data[nIdx];
+              sum[1] += data[nIdx + 1];
+              sum[2] += data[nIdx + 2];
+              count++;
+            }
+          }
+          
+          for (let c = 0; c < 3; c++) {
+            const localAvg = sum[c] / count;
+            const logDiff = Math.log(data[idx + c] + 1) - Math.log(localAvg + 1);
+            retinexData[idx + c] += logDiff / scales.length;
+          }
+        }
+      }
+    }
+    
+    // تطبيق Retinex
+    for (let i = 0; i < data.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const retinexValue = retinexData[i + c] * 60 + 128;
+        // دمج مع الصورة الأصلية
+        data[i + c] = clamp(data[i + c] * 0.6 + retinexValue * 0.4);
+      }
+    }
+    enhancements.push('تحسين الإضاءة المتقدم');
+    
+    // ==================== 7x7 Unsharp Masking ====================
+    // تحسين الحدة القصوى
+    const sharpOriginal = new Uint8ClampedArray(data);
+    const sharpAmount = 1.2;
+    const sharpRadius = 3;
+    
+    // Gaussian kernel 7x7
+    const gaussKernel: number[][] = [];
+    let gaussSum = 0;
+    for (let y = 0; y < 7; y++) {
+      gaussKernel[y] = [];
+      for (let x = 0; x < 7; x++) {
+        const dx = x - 3;
+        const dy = y - 3;
+        const val = Math.exp(-(dx * dx + dy * dy) / (2 * sharpRadius * sharpRadius));
+        gaussKernel[y][x] = val;
+        gaussSum += val;
+      }
+    }
+    // Normalize
+    for (let y = 0; y < 7; y++) {
+      for (let x = 0; x < 7; x++) {
+        gaussKernel[y][x] /= gaussSum;
+      }
+    }
+    
+    for (let y = 3; y < height - 3; y++) {
+      for (let x = 3; x < width - 3; x++) {
+        const idx = (y * width + x) * 4;
+        
+        for (let c = 0; c < 3; c++) {
+          let blurred = 0;
+          for (let ky = 0; ky < 7; ky++) {
+            for (let kx = 0; kx < 7; kx++) {
+              const nIdx = ((y + ky - 3) * width + (x + kx - 3)) * 4;
+              blurred += sharpOriginal[nIdx + c] * gaussKernel[ky][kx];
+            }
+          }
+          
+          const diff = sharpOriginal[idx + c] - blurred;
+          if (Math.abs(diff) > 2) {
+            data[idx + c] = clamp(sharpOriginal[idx + c] + diff * sharpAmount);
+          }
+        }
+      }
+    }
+    enhancements.push('تحسين الحدة القصوى');
+    
+    ctx.putImageData(imageData, 0, 0);
+    
+  } catch (error) {
+    console.warn('فشل تطبيق التحسينات المتقدمة:', error);
+  }
+  
+  return enhancements;
+}
+
+/**
  * تقييد القيمة بين 0 و 255
  */
 function clamp(value: number): number {
@@ -516,6 +676,12 @@ export async function compressAndEnhanceImage(
     if (opts.enhanceForOCR) {
       const ocrEnhancements = enhanceImageForOCR(ctx, canvas.width, canvas.height);
       enhancements.push(...ocrEnhancements);
+      
+      // تطبيق المعالجة المتقدمة إضافياً
+      if (opts.useAdvancedProcessing) {
+        const advancedEnhancements = applyAdvancedEnhancements(ctx, canvas.width, canvas.height);
+        enhancements.push(...advancedEnhancements);
+      }
     }
     
     // ضغط الصورة
