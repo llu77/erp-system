@@ -687,3 +687,260 @@ export async function processImageForUpload(
     contentType
   };
 }
+
+
+// ==================== تقييم جودة الصورة ====================
+
+/**
+ * نتيجة تقييم جودة الصورة
+ */
+export interface ImageQualityResult {
+  score: number;           // النسبة المئوية للجودة (0-100)
+  level: 'excellent' | 'good' | 'acceptable' | 'poor';
+  levelAr: string;         // المستوى بالعربية
+  details: {
+    brightness: number;    // جودة الإضاءة (0-100)
+    contrast: number;      // جودة التباين (0-100)
+    sharpness: number;     // جودة الحدة (0-100)
+    resolution: number;    // جودة الدقة (0-100)
+  };
+  suggestions: string[];   // اقتراحات للتحسين
+  isAcceptableForOCR: boolean;
+}
+
+/**
+ * تقييم جودة الصورة للـ OCR
+ * يحلل الصورة ويعطي نسبة مئوية للجودة مع اقتراحات للتحسين
+ */
+export async function evaluateImageQuality(base64Data: string): Promise<ImageQualityResult> {
+  try {
+    const img = await loadImage(base64Data);
+    
+    // إنشاء canvas للتحليل
+    const canvas = document.createElement('canvas');
+    const maxDim = 800; // تقليل الحجم للتحليل السريع
+    let width = img.naturalWidth;
+    let height = img.naturalHeight;
+    
+    if (width > maxDim || height > maxDim) {
+      const ratio = Math.min(maxDim / width, maxDim / height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+    
+    canvas.width = width;
+    canvas.height = height;
+    
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) {
+      throw new Error('فشل إنشاء سياق الرسم');
+    }
+    
+    ctx.drawImage(img, 0, 0, width, height);
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    const pixelCount = data.length / 4;
+    
+    // ==================== تحليل الإضاءة ====================
+    let totalBrightness = 0;
+    let minBrightness = 255;
+    let maxBrightness = 0;
+    
+    for (let i = 0; i < data.length; i += 4) {
+      const brightness = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+      totalBrightness += brightness;
+      minBrightness = Math.min(minBrightness, brightness);
+      maxBrightness = Math.max(maxBrightness, brightness);
+    }
+    
+    const avgBrightness = totalBrightness / pixelCount;
+    
+    // جودة الإضاءة: الأفضل بين 100-180
+    let brightnessScore: number;
+    if (avgBrightness >= 100 && avgBrightness <= 180) {
+      brightnessScore = 100;
+    } else if (avgBrightness < 100) {
+      brightnessScore = Math.max(0, (avgBrightness / 100) * 100);
+    } else {
+      brightnessScore = Math.max(0, ((255 - avgBrightness) / 75) * 100);
+    }
+    
+    // ==================== تحليل التباين ====================
+    const dynamicRange = maxBrightness - minBrightness;
+    
+    // جودة التباين: الأفضل > 150
+    let contrastScore: number;
+    if (dynamicRange >= 150) {
+      contrastScore = 100;
+    } else if (dynamicRange >= 100) {
+      contrastScore = 70 + ((dynamicRange - 100) / 50) * 30;
+    } else {
+      contrastScore = (dynamicRange / 100) * 70;
+    }
+    
+    // ==================== تحليل الحدة (Laplacian Variance) ====================
+    let laplacianSum = 0;
+    let laplacianCount = 0;
+    
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = (y * width + x) * 4;
+        
+        // حساب Laplacian للقناة الرمادية
+        const center = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        const top = (data[idx - width * 4] + data[idx - width * 4 + 1] + data[idx - width * 4 + 2]) / 3;
+        const bottom = (data[idx + width * 4] + data[idx + width * 4 + 1] + data[idx + width * 4 + 2]) / 3;
+        const left = (data[idx - 4] + data[idx - 3] + data[idx - 2]) / 3;
+        const right = (data[idx + 4] + data[idx + 5] + data[idx + 6]) / 3;
+        
+        const laplacian = Math.abs(4 * center - top - bottom - left - right);
+        laplacianSum += laplacian * laplacian;
+        laplacianCount++;
+      }
+    }
+    
+    const laplacianVariance = laplacianSum / laplacianCount;
+    
+    // جودة الحدة: الأفضل > 500
+    let sharpnessScore: number;
+    if (laplacianVariance >= 500) {
+      sharpnessScore = 100;
+    } else if (laplacianVariance >= 200) {
+      sharpnessScore = 60 + ((laplacianVariance - 200) / 300) * 40;
+    } else if (laplacianVariance >= 50) {
+      sharpnessScore = 30 + ((laplacianVariance - 50) / 150) * 30;
+    } else {
+      sharpnessScore = (laplacianVariance / 50) * 30;
+    }
+    
+    // ==================== تحليل الدقة ====================
+    const originalWidth = img.naturalWidth;
+    const originalHeight = img.naturalHeight;
+    const megapixels = (originalWidth * originalHeight) / 1000000;
+    
+    // جودة الدقة: الأفضل > 2 ميجابكسل
+    let resolutionScore: number;
+    if (megapixels >= 2) {
+      resolutionScore = 100;
+    } else if (megapixels >= 1) {
+      resolutionScore = 70 + ((megapixels - 1) / 1) * 30;
+    } else if (megapixels >= 0.5) {
+      resolutionScore = 40 + ((megapixels - 0.5) / 0.5) * 30;
+    } else {
+      resolutionScore = (megapixels / 0.5) * 40;
+    }
+    
+    // ==================== حساب النتيجة الإجمالية ====================
+    // الأوزان: الحدة والتباين أهم للـ OCR
+    const weights = {
+      brightness: 0.2,
+      contrast: 0.3,
+      sharpness: 0.35,
+      resolution: 0.15
+    };
+    
+    const overallScore = Math.round(
+      brightnessScore * weights.brightness +
+      contrastScore * weights.contrast +
+      sharpnessScore * weights.sharpness +
+      resolutionScore * weights.resolution
+    );
+    
+    // ==================== تحديد المستوى ====================
+    let level: 'excellent' | 'good' | 'acceptable' | 'poor';
+    let levelAr: string;
+    
+    if (overallScore >= 80) {
+      level = 'excellent';
+      levelAr = 'ممتازة';
+    } else if (overallScore >= 60) {
+      level = 'good';
+      levelAr = 'جيدة';
+    } else if (overallScore >= 40) {
+      level = 'acceptable';
+      levelAr = 'مقبولة';
+    } else {
+      level = 'poor';
+      levelAr = 'ضعيفة';
+    }
+    
+    // ==================== إنشاء الاقتراحات ====================
+    const suggestions: string[] = [];
+    
+    if (brightnessScore < 60) {
+      if (avgBrightness < 100) {
+        suggestions.push('الصورة داكنة جداً - حاول التصوير في مكان أكثر إضاءة');
+      } else {
+        suggestions.push('الصورة ساطعة جداً - تجنب الإضاءة المباشرة القوية');
+      }
+    }
+    
+    if (contrastScore < 60) {
+      suggestions.push('التباين منخفض - تأكد من وضوح النص على الخلفية');
+    }
+    
+    if (sharpnessScore < 60) {
+      suggestions.push('الصورة غير واضحة - ثبّت الهاتف جيداً أثناء التصوير');
+    }
+    
+    if (resolutionScore < 60) {
+      suggestions.push('الدقة منخفضة - اقترب أكثر من الإيصال');
+    }
+    
+    if (suggestions.length === 0 && overallScore < 80) {
+      suggestions.push('حاول تحسين الإضاءة والثبات للحصول على نتيجة أفضل');
+    }
+    
+    return {
+      score: overallScore,
+      level,
+      levelAr,
+      details: {
+        brightness: Math.round(brightnessScore),
+        contrast: Math.round(contrastScore),
+        sharpness: Math.round(sharpnessScore),
+        resolution: Math.round(resolutionScore)
+      },
+      suggestions,
+      isAcceptableForOCR: overallScore >= 40
+    };
+    
+  } catch (error) {
+    console.error('فشل تقييم جودة الصورة:', error);
+    return {
+      score: 0,
+      level: 'poor',
+      levelAr: 'غير معروفة',
+      details: {
+        brightness: 0,
+        contrast: 0,
+        sharpness: 0,
+        resolution: 0
+      },
+      suggestions: ['فشل تحليل الصورة - يرجى المحاولة مرة أخرى'],
+      isAcceptableForOCR: false
+    };
+  }
+}
+
+/**
+ * الحصول على لون مؤشر الجودة
+ */
+export function getQualityColor(score: number): string {
+  if (score >= 80) return '#22c55e'; // أخضر
+  if (score >= 60) return '#84cc16'; // أخضر فاتح
+  if (score >= 40) return '#eab308'; // أصفر
+  return '#ef4444'; // أحمر
+}
+
+/**
+ * الحصول على أيقونة مؤشر الجودة
+ */
+export function getQualityIcon(level: 'excellent' | 'good' | 'acceptable' | 'poor'): string {
+  switch (level) {
+    case 'excellent': return '✓✓';
+    case 'good': return '✓';
+    case 'acceptable': return '~';
+    case 'poor': return '✗';
+  }
+}

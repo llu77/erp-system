@@ -9,8 +9,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Camera, X, RotateCcw, Check, SwitchCamera, Loader2 } from "lucide-react";
+import { Camera, X, RotateCcw, Check, SwitchCamera, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { evaluateImageQuality, getQualityColor, type ImageQualityResult } from "@/utils/imageCompression";
 
 // ==================== الأنواع ====================
 
@@ -34,6 +35,8 @@ export function CameraCapture({ onCapture, onClose, isOpen }: CameraCaptureProps
   const [facingMode, setFacingMode] = useState<FacingMode>("environment");
   const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imageQuality, setImageQuality] = useState<ImageQualityResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // التحقق من وجود كاميرات متعددة
   const checkMultipleCameras = useCallback(async () => {
@@ -136,11 +139,21 @@ export function CameraCapture({ onCapture, onClose, isOpen }: CameraCaptureProps
     
     // إيقاف الكاميرا بعد الالتقاط
     stopCamera();
+    
+    // تحليل جودة الصورة
+    setIsAnalyzing(true);
+    evaluateImageQuality(imageData).then(quality => {
+      setImageQuality(quality);
+      setIsAnalyzing(false);
+    }).catch(() => {
+      setIsAnalyzing(false);
+    });
   }, [stopCamera]);
 
   // إعادة التقاط
   const retakeImage = useCallback(() => {
     setCapturedImage(null);
+    setImageQuality(null);
     startCamera();
   }, [startCamera]);
 
@@ -243,13 +256,106 @@ export function CameraCapture({ onCapture, onClose, isOpen }: CameraCaptureProps
           {/* Canvas مخفي للالتقاط */}
           <canvas ref={canvasRef} className="hidden" />
 
-          {/* إطار التوجيه */}
+          {/* إطار التوجيه المتقدم */}
           {!capturedImage && !isLoading && !error && (
-            <div className="absolute inset-4 border-2 border-white/50 rounded-lg pointer-events-none">
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg" />
+            <>
+              {/* الإطار الخارجي */}
+              <div className="absolute inset-4 border-2 border-white/30 rounded-lg pointer-events-none">
+                {/* زوايا الإطار */}
+                <div className="absolute -top-1 -left-1 w-10 h-10 border-t-4 border-l-4 border-primary rounded-tl-lg" />
+                <div className="absolute -top-1 -right-1 w-10 h-10 border-t-4 border-r-4 border-primary rounded-tr-lg" />
+                <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-4 border-l-4 border-primary rounded-bl-lg" />
+                <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-4 border-r-4 border-primary rounded-br-lg" />
+                
+                {/* خطوط التوجيه الوسطى */}
+                <div className="absolute top-1/2 left-0 right-0 h-px bg-white/20" />
+                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/20" />
+              </div>
+              
+              {/* نص التوجيه */}
+              <div className="absolute top-6 left-0 right-0 text-center">
+                <span className="bg-black/60 text-white text-sm px-3 py-1 rounded-full">
+                  ضع الإيصال داخل الإطار
+                </span>
+              </div>
+              
+              {/* أيقونة الإيصال المرجعية */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-32 h-48 border-2 border-dashed border-white/30 rounded-lg flex flex-col items-center justify-center">
+                  <svg className="w-12 h-12 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="text-white/40 text-xs mt-2">إيصال POS</span>
+                </div>
+              </div>
+            </>
+          )}
+          
+          {/* مؤشر جودة الصورة */}
+          {capturedImage && imageQuality && !isAnalyzing && (
+            <div className="absolute bottom-4 left-4 right-4 bg-black/80 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {imageQuality.isAcceptableForOCR ? (
+                    <CheckCircle2 className="h-5 w-5" style={{ color: getQualityColor(imageQuality.score) }} />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-red-500" />
+                  )}
+                  <span className="text-white font-medium">جودة الصورة: {imageQuality.levelAr}</span>
+                </div>
+                <span 
+                  className="text-lg font-bold" 
+                  style={{ color: getQualityColor(imageQuality.score) }}
+                >
+                  {imageQuality.score}%
+                </span>
+              </div>
+              
+              {/* شريط التقدم */}
+              <div className="h-2 bg-gray-700 rounded-full overflow-hidden mb-2">
+                <div 
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ 
+                    width: `${imageQuality.score}%`,
+                    backgroundColor: getQualityColor(imageQuality.score)
+                  }}
+                />
+              </div>
+              
+              {/* التفاصيل */}
+              <div className="grid grid-cols-4 gap-2 text-xs text-gray-400 mb-2">
+                <div className="text-center">
+                  <div className="text-white">{imageQuality.details.brightness}%</div>
+                  <div>الإضاءة</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-white">{imageQuality.details.contrast}%</div>
+                  <div>التباين</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-white">{imageQuality.details.sharpness}%</div>
+                  <div>الحدة</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-white">{imageQuality.details.resolution}%</div>
+                  <div>الدقة</div>
+                </div>
+              </div>
+              
+              {/* الاقتراحات */}
+              {imageQuality.suggestions.length > 0 && (
+                <div className="text-xs text-yellow-400">
+                  لنتيجة أفضل: {imageQuality.suggestions[0]}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* حالة التحليل */}
+          {capturedImage && isAnalyzing && (
+            <div className="absolute bottom-4 left-4 right-4 bg-black/80 rounded-lg p-3 flex items-center justify-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <span className="text-white">جاري تحليل جودة الصورة...</span>
             </div>
           )}
         </div>
@@ -315,10 +421,17 @@ export function CameraCapture({ onCapture, onClose, isOpen }: CameraCaptureProps
           )}
         </div>
 
-        {/* نصيحة للمستخدم */}
+        {/* نصائح للمستخدم */}
         {!capturedImage && !isLoading && !error && (
-          <div className="px-4 pb-4 text-center text-sm text-muted-foreground">
-            وجّه الكاميرا نحو إيصال نقطة البيع (POS) وتأكد من وضوح الأرقام
+          <div className="px-4 pb-4 space-y-2">
+            <div className="text-center text-sm text-muted-foreground">
+              وجّه الكاميرا نحو إيصال نقطة البيع (POS) وتأكد من وضوح الأرقام
+            </div>
+            <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
+              <span className="bg-muted px-2 py-1 rounded">إضاءة جيدة</span>
+              <span className="bg-muted px-2 py-1 rounded">ثبّت الهاتف</span>
+              <span className="bg-muted px-2 py-1 rounded">اقترب من الإيصال</span>
+            </div>
           </div>
         )}
       </DialogContent>
