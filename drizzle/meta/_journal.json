@@ -421,6 +421,20 @@
       "when": 1769866917072,
       "tag": "0059_elite_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "5",
+      "when": 1769887899762,
+      "tag": "0060_lean_silvermane",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "5",
+      "when": 1769949787115,
+      "tag": "0061_organic_madrox",
+      "breakpoints": true
     }
   ]
 }

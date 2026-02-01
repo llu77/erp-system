@@ -46,6 +46,7 @@ import {
   openPrintWindow,
   formatCurrency 
 } from "@/utils/pdfTemplates";
+import { S3Image, usePrefetchS3Images } from "@/components/S3Image";
 
 interface EmployeeRevenueInput {
   employeeId: number;
@@ -1261,8 +1262,9 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                                 <div className="space-y-4">
                                   {revenue.balanceImages.map((img, idx) => (
                                     <div key={idx} className="border rounded-lg overflow-hidden">
-                                      <img
+                                      <S3Image
                                         src={img.url}
+                                        s3Key={img.key}
                                         alt={`صورة الموازنة ${idx + 1}`}
                                         className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
                                       />

@@ -2217,6 +2217,49 @@ export const appRouter = router({
         return { success: true, message: 'تم حذف الإيراد بنجاح' };
       }),
 
+    // تجديد رابط صورة S3 منتهي الصلاحية
+    refreshImageUrl: protectedProcedure
+      .input(z.object({
+        s3Key: z.string().min(1, 'مفتاح الصورة مطلوب'),
+      }))
+      .mutation(async ({ input }) => {
+        const { storageGet } = await import('./storage');
+        
+        try {
+          const { url } = await storageGet(input.s3Key);
+          return { success: true, url, s3Key: input.s3Key };
+        } catch (error: any) {
+          logger.error('فشل تجديد رابط الصورة', { s3Key: input.s3Key, error: error.message });
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'فشل تجديد رابط الصورة',
+          });
+        }
+      }),
+
+    // تجديد روابط صور متعددة دفعة واحدة
+    batchRefreshImageUrls: protectedProcedure
+      .input(z.object({
+        s3Keys: z.array(z.string()).min(1).max(20, 'الحد الأقصى 20 صورة'),
+      }))
+      .mutation(async ({ input }) => {
+        const { storageGet } = await import('./storage');
+        
+        const results: Array<{ s3Key: string; url: string | null; error?: string }> = [];
+        
+        for (const s3Key of input.s3Keys) {
+          try {
+            const { url } = await storageGet(s3Key);
+            results.push({ s3Key, url });
+          } catch (error: any) {
+            logger.error('فشل تجديد رابط الصورة', { s3Key, error: error.message });
+            results.push({ s3Key, url: null, error: error.message });
+          }
+        }
+        
+        return { success: true, urls: results };
+      }),
+
     // تقرير فواتير المدفوع
     getPaidInvoicesReport: protectedProcedure
       .input(z.object({

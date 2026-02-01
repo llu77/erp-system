@@ -1,0 +1,1 @@
+DROP TABLE `ocr_audit_logs`;
