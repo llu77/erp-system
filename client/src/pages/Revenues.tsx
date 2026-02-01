@@ -153,14 +153,16 @@ export default function Revenues() {
 
     try {
       // ضغط وتحسين الصورة تلقائياً
-      toast.info("جاري ضغط وتحسين الصورة...", { duration: 2000 });
+      toast.info("جاري رفع الصورة...", { duration: 2000 });
       
+      // تعطيل معالجة الصور لأنها تُسيء للجودة - رفع الصورة الأصلية فقط
       const result = await processImageForUpload(file, {
         maxWidth: 1920,
         maxHeight: 1920,
-        quality: 0.85,
-        maxSizeKB: 500,
-        enhanceForOCR: true,
+        quality: 0.92,           // جودة أعلى للحفاظ على التفاصيل
+        maxSizeKB: 1000,         // حجم أكبر للحفاظ على الجودة
+        enhanceForOCR: false,    // ❌ تعطيل التحسينات - تُسيء للقراءة
+        useAdvancedProcessing: false, // ❌ تعطيل المعالجة المتقدمة
         outputFormat: 'jpeg'
       });
 
@@ -214,14 +216,16 @@ export default function Revenues() {
       const file = new File([blob], `camera-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
 
       // ضغط وتحسين الصورة تلقائياً
-      toast.info("جاري ضغط وتحسين الصورة...", { duration: 2000 });
+      toast.info("جاري رفع الصورة...", { duration: 2000 });
       
+      // تعطيل معالجة الصور لأنها تُسيء للجودة - رفع الصورة الأصلية فقط
       const result = await processImageForUpload(file, {
         maxWidth: 1920,
         maxHeight: 1920,
-        quality: 0.85,
-        maxSizeKB: 500,
-        enhanceForOCR: true,
+        quality: 0.92,           // جودة أعلى للحفاظ على التفاصيل
+        maxSizeKB: 1000,         // حجم أكبر للحفاظ على الجودة
+        enhanceForOCR: false,    // ❌ تعطيل التحسينات - تُسيء للقراءة
+        useAdvancedProcessing: false, // ❌ تعطيل المعالجة المتقدمة
         outputFormat: 'jpeg'
       });
 
