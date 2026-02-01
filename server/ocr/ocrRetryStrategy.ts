@@ -173,8 +173,9 @@ const TOTAL_ONLY_PROMPT: PromptVariant = {
 
 /**
  * تحميل الصورة كـ Buffer
+ * v3.0: دعم s3Key لتجديد الروابط المنتهية
  */
-async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
+async function fetchImageBuffer(imageUrl: string, s3Key?: string): Promise<Buffer> {
   // إذا كانت الصورة بالفعل base64
   if (imageUrl.startsWith("data:image/")) {
     const base64Data = imageUrl.split(",")[1];
@@ -189,7 +190,29 @@ async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
   }
 
   // إذا كانت URL خارجية
-  const response = await fetch(imageUrl);
+  let response = await fetch(imageUrl);
+  
+  // ✅ v3.0: إذا فشل التحميل بخطأ 403، نحاول تجديد الرابط
+  if (!response.ok && (response.status === 403 || response.status === 401) && s3Key) {
+    logger.warn(`رابط S3 منتهي الصلاحية (${response.status}) في fetchImageBuffer، محاولة التجديد`, {
+      status: response.status,
+      s3Key
+    });
+    
+    try {
+      const { storageGet } = await import("../storage");
+      const { url: freshUrl } = await storageGet(s3Key);
+      logger.info("تم الحصول على رابط جديد في fetchImageBuffer", { freshUrlPreview: freshUrl.substring(0, 80) });
+      
+      response = await fetch(freshUrl);
+      if (response.ok) {
+        logger.info("✅ نجح تجديد الرابط في fetchImageBuffer");
+      }
+    } catch (refreshError: any) {
+      logger.error("فشل تجديد الرابط في fetchImageBuffer", { error: refreshError.message });
+    }
+  }
+  
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
@@ -559,7 +582,8 @@ export async function extractWithRetry(
           // استخدام ReceiptEnhancer v2.0 إذا كان مفعلاً
           if (finalConfig.useEnhancerV2) {
             logger.info("استخدام ReceiptEnhancer v2.0 للصور الضعيفة");
-            const imageBuffer = await fetchImageBuffer(imageUrl);
+            // ✅ v3.0: تمرير s3Key لتجديد الروابط المنتهية
+            const imageBuffer = await fetchImageBuffer(imageUrl, finalConfig.s3Key);
             const enhancementResult = await enhanceWeakReceiptImage(imageBuffer);
             base64Image = enhancementResult.base64;
             usedPreprocessingFallback = true;

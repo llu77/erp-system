@@ -4757,3 +4757,12 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] إنشاء اختبار vitest لتجديد الروابط المنتهية (403)
 - [x] التحقق من تمرير s3Key عبر جميع الطبقات
 - [x] اختبار سيناريو الرابط المنتهي والتجديد التلقائي
+
+
+## إصلاح جذري لمشكلة s3Key في نظام OCR (تحليل مهندس)
+- [x] تحليل تدفق s3Key من verifyBalanceImage إلى imageToBase64
+- [x] تحديد جميع نقاط الفشل في السلسلة
+- [x] إصلاح balanceImageOCR.ts - تمرير s3Key بشكل صحيح
+- [x] إصلاح ocrRetryStrategy.ts - استخدام s3Key في imageToBase64 و fetchImageBuffer
+- [x] إضافة logging لتتبع تدفق s3Key
+- [x] اختبار شامل مع سيناريو 403 حقيقي (1256 اختبار ناجح)
