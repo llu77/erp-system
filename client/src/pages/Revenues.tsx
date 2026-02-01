@@ -38,6 +38,7 @@ import { CameraCapture } from "@/components/CameraCapture";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ImagePreviewLightbox, ImageThumbnail } from "@/components/ImagePreviewLightbox";
+import { RefreshableImage } from "@/components/RefreshableImage";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ar } from "date-fns/locale";
 import { processImageForUpload, validateImageForUpload } from "@/utils/imageCompression";
@@ -1404,10 +1405,12 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                                 <div className="space-y-4">
                                   {revenue.balanceImages.map((img, idx) => (
                                     <div key={idx} className="border rounded-lg overflow-hidden">
-                                      <img
+                                      <RefreshableImage
                                         src={img.url}
+                                        s3Key={img.key}
                                         alt={`صورة الموازنة ${idx + 1}`}
                                         className="w-full h-auto max-h-[70vh] object-contain rounded-lg"
+                                        containerClassName="min-h-[200px]"
                                       />
                                     </div>
                                   ))}

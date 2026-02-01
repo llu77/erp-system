@@ -1829,6 +1829,22 @@ export const appRouter = router({
   }),
   // ==================== إدارة الإيرادات ====================
   revenues: router({
+    // تجديد رابط صورة منتهية الصلاحية
+    refreshImageUrl: protectedProcedure
+      .input(z.object({
+        key: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const { storageGet } = await import('./storage');
+        try {
+          const { url } = await storageGet(input.key);
+          return { success: true, url };
+        } catch (error) {
+          logger.error('فشل تجديد رابط الصورة', { key: input.key, error });
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل تجديد رابط الصورة' });
+        }
+      }),
+
     // رفع صورة الموازنة إلى S3
     uploadBalanceImage: supervisorInputProcedure
       .input(z.object({
