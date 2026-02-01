@@ -118,12 +118,16 @@ export default function Revenues() {
   const [currentUploadPreview, setCurrentUploadPreview] = useState<string>('');
   const uploadImageMutation = trpc.revenues.uploadBalanceImage.useMutation({
     onSuccess: (data) => {
+      // إخفاء إشعار التحليل
+      toast.dismiss('uploading-image');
       setBalanceImages(prev => [...prev, { url: data.url, key: data.key, preview: currentUploadPreview }]);
       toast.success("تم رفع صورة الموازنة بنجاح");
       setIsUploading(false);
       setCurrentUploadPreview('');
     },
     onError: (error) => {
+      // إخفاء إشعار التحليل
+      toast.dismiss('uploading-image');
       toast.error(error.message || "فشل رفع الصورة");
       setIsUploading(false);
       setCurrentUploadPreview('');
@@ -153,7 +157,7 @@ export default function Revenues() {
 
     try {
       // ضغط وتحسين الصورة تلقائياً
-      toast.info("جاري رفع الصورة...", { duration: 2000 });
+      toast.info("جاري رفع الصورة...", { duration: 3000, id: 'uploading-image' });
       
       // تعطيل معالجة الصور لأنها تُسيء للجودة - رفع الصورة الأصلية فقط
       const result = await processImageForUpload(file, {
