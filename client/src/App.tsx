@@ -39,6 +39,7 @@ import ReportSettings from "./pages/ReportSettings";
 import HROnboarding from "./pages/HROnboarding";
 import SchedulerSettings from "./pages/SchedulerSettings";
 import NotificationRecipients from "./pages/NotificationRecipients";
+import DiscrepancyAlerts from "./pages/DiscrepancyAlerts";
 import EmployeeInvoices from "./pages/EmployeeInvoices";
 import InventoryCounting from "./pages/InventoryCounting";
 import InventoryVarianceReport from "./pages/InventoryVarianceReport";
@@ -318,6 +319,12 @@ function Router() {
       <Route path="/notification-recipients">
         <DashboardLayout>
           <NotificationRecipients />
+        </DashboardLayout>
+      </Route>
+      {/* Discrepancy Alerts */}
+      <Route path="/discrepancy-alerts">
+        <DashboardLayout>
+          <DiscrepancyAlerts />
         </DashboardLayout>
       </Route>
       {/* HR Onboarding Portal - Public Page */}

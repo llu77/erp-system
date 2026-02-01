@@ -31,6 +31,7 @@ import * as aiRecommendationNotifier from "./ai/aiRecommendationNotifier";
 import * as aiRecommendationMonitor from "./scheduler/aiRecommendationMonitor";
 import * as financialValidation from "./validation/financialValidation";
 import * as balanceImageOCR from "./ocr/balanceImageOCR";
+import * as discrepancyAlertService from "./notifications/discrepancyAlertService";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -2164,6 +2165,37 @@ export const appRouter = router({
               sections: imageVerificationResult.sections,
               confidence: imageVerificationResult.confidence
             });
+            
+            // ==================== إرسال تنبيه فوري عند اكتشاف أي فرق ====================
+            // حتى لو تم قبول الإيراد، نرسل تنبيه إذا كان هناك أي تحذيرات
+            if (imageVerificationResult.warnings && imageVerificationResult.warnings.length > 0) {
+              try {
+                // جلب معلومات الفرع
+                const branch = await db.getBranchById(input.branchId);
+                const branchName = branch?.name || `فرع ${input.branchId}`;
+                
+                // إنشاء تفاصيل الفرق
+                const discrepancyDetails = discrepancyAlertService.createDiscrepancyDetails(
+                  imageVerificationResult,
+                  input.branchId,
+                  branchName,
+                  ctx.user.name || ctx.user.email || 'موظف',
+                  networkAmount,
+                  expectedUploadDate,
+                  input.balanceImages?.[0]?.url
+                );
+                
+                // إرسال التنبيه
+                const alertResult = await discrepancyAlertService.sendDiscrepancyAlert(discrepancyDetails);
+                
+                if (alertResult.success && alertResult.alertsSent > 0) {
+                  logger.info(`📧 تم إرسال ${alertResult.alertsSent} تنبيه للفروقات إلى: ${alertResult.recipients.join(', ')}`);
+                }
+              } catch (alertError: any) {
+                // لا نوقف العملية إذا فشل إرسال التنبيه
+                logger.warn('فشل إرسال تنبيه الفروقات:', alertError.message);
+              }
+            }
               
           } catch (ocrError: any) {
             // إذا كان الخطأ من TRPCError (عدم تطابق)، نعيد رميه
