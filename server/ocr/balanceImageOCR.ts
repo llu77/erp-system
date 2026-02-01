@@ -423,14 +423,44 @@ function extractJsonFromResponse(content: string): any {
 
 /**
  * استخراج المبالغ والتاريخ من صورة إيصال نقاط البيع
+ * يستخدم استراتيجية إعادة المحاولة مع prompts متعددة للحصول على أفضل نتيجة
+ * 
+ * @param imageUrl رابط الصورة (S3, محلي، أو base64)
+ * @param useRetryStrategy استخدام استراتيجية إعادة المحاولة (افتراضي: true)
  */
 export async function extractAmountFromImage(
-  imageUrl: string
+  imageUrl: string,
+  useRetryStrategy: boolean = true
 ): Promise<OCRExtractionResult> {
   const startTime = Date.now();
   
+  // استخدام استراتيجية إعادة المحاولة للحصول على أفضل نتيجة
+  if (useRetryStrategy) {
+    try {
+      const { extractWithRetry } = await import("./ocrRetryStrategy");
+      const retryResult = await extractWithRetry(imageUrl, {
+        maxRetries: 3,
+        combineResults: true
+      });
+      
+      logger.info("نتيجة استراتيجية إعادة المحاولة", {
+        success: retryResult.success,
+        attempts: retryResult.attempts.length,
+        grandTotal: retryResult.finalResult.grandTotal,
+        processingTime: Date.now() - startTime
+      });
+      
+      return retryResult.finalResult;
+    } catch (retryError: any) {
+      logger.warn("فشل استراتيجية إعادة المحاولة، الرجوع للطريقة الأساسية", {
+        error: retryError.message
+      });
+      // الرجوع للطريقة الأساسية
+    }
+  }
+  
   try {
-    logger.info("بدء استخراج المبالغ والتاريخ من صورة إيصال POS", { 
+    logger.info("بدء استخراج المبالغ والتاريخ من صورة إيصال POS (الطريقة الأساسية)", { 
       imageUrl: imageUrl.substring(0, 50) + "..." 
     });
 
