@@ -160,13 +160,13 @@ export default function Revenues() {
       // ضغط وتحسين الصورة تلقائياً
       toast.info("جاري رفع الصورة...", { duration: 3000, id: 'uploading-image' });
       
-      // تعطيل معالجة الصور لأنها تُسيء للجودة - رفع الصورة الأصلية فقط
+      // ضغط الصورة لتسريع الرفع والتحميل
       const result = await processImageForUpload(file, {
-        maxWidth: 1920,
-        maxHeight: 1920,
-        quality: 0.92,           // جودة أعلى للحفاظ على التفاصيل
-        maxSizeKB: 1000,         // حجم أكبر للحفاظ على الجودة
-        enhanceForOCR: false,    // ❌ تعطيل التحسينات - تُسيء للقراءة
+        maxWidth: 1280,          // أبعاد أصغر لتسريع التحميل
+        maxHeight: 1280,
+        quality: 0.75,           // جودة متوسطة (توازن بين الحجم والوضوح)
+        maxSizeKB: 400,          // حجم أصغر لرفع أسرع
+        enhanceForOCR: false,    // ❌ تعطيل التحسينات
         useAdvancedProcessing: false, // ❌ تعطيل المعالجة المتقدمة
         outputFormat: 'jpeg'
       });
@@ -223,13 +223,13 @@ export default function Revenues() {
       // ضغط وتحسين الصورة تلقائياً
       toast.info("جاري رفع الصورة...", { duration: 2000 });
       
-      // تعطيل معالجة الصور لأنها تُسيء للجودة - رفع الصورة الأصلية فقط
+      // ضغط الصورة لتسريع الرفع والتحميل
       const result = await processImageForUpload(file, {
-        maxWidth: 1920,
-        maxHeight: 1920,
-        quality: 0.92,           // جودة أعلى للحفاظ على التفاصيل
-        maxSizeKB: 1000,         // حجم أكبر للحفاظ على الجودة
-        enhanceForOCR: false,    // ❌ تعطيل التحسينات - تُسيء للقراءة
+        maxWidth: 1280,          // أبعاد أصغر لتسريع التحميل
+        maxHeight: 1280,
+        quality: 0.75,           // جودة متوسطة (توازن بين الحجم والوضوح)
+        maxSizeKB: 400,          // حجم أصغر لرفع أسرع
+        enhanceForOCR: false,    // ❌ تعطيل التحسينات
         useAdvancedProcessing: false, // ❌ تعطيل المعالجة المتقدمة
         outputFormat: 'jpeg'
       });
