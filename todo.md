@@ -4727,3 +4727,27 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] تسجيل أحداث شامل مع metrics
 - [x] دعم الأرقام العربية (٠-٩)
 - [x] تصحيح تلقائي لأخطاء OCR في التاريخ
+
+
+## إصلاح مشكلة تمرير s3Key في OCR (1 Feb 2026)
+
+### المشكلة:
+- [ ] s3Key لا يصل إلى extractWithRetry عند استدعاء extractAmountFromImage
+- [ ] الروابط المنتهية (HTTP 403) لا يتم تجديدها تلقائياً
+
+### الإصلاحات المطلوبة:
+- [ ] تغيير API في extractAmountFromImage لاستخدام ExtractionOptions object
+- [ ] إضافة s3Key إلى RetryConfig في ocrRetryStrategy.ts
+- [ ] تمرير s3Key عبر جميع طبقات الاستدعاء
+- [ ] تحديث index.ts للتصديرات الجديدة
+- [ ] اختبار TypeScript والتحقق من الأخطاء
+
+
+## إصلاح مشكلة تمرير s3Key في نظام OCR v3.0 (مكتمل)
+- [x] إضافة ExtractionOptions interface إلى balanceImageOCR.ts
+- [x] تعديل توقيع extractAmountFromImage لاستخدام options object
+- [x] إضافة s3Key إلى RetryConfig في ocrRetryStrategy.ts
+- [x] تعديل imageToBase64 لدعم تجديد الروابط المنتهية (403)
+- [x] تحديث index.ts لتصدير ExtractionOptions
+- [x] اختبار TypeScript والتأكد من عدم وجود أخطاء
+- [x] جميع الاختبارات ناجحة (1244/1244)

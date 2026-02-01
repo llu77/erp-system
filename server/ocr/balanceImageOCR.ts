@@ -65,6 +65,18 @@ export interface BalanceVerificationResult {
 }
 
 // أنواع الإشعارات
+
+/**
+ * خيارات استخراج البيانات من الصورة
+ * ExtractionOptions - يُستخدم لتمرير s3Key وخيارات أخرى
+ */
+export interface ExtractionOptions {
+  /** مفتاح S3 للحصول على رابط جديد عند انتهاء صلاحية الرابط */
+  s3Key?: string;
+  /** استخدام استراتيجية إعادة المحاولة (افتراضي: true) */
+  useRetryStrategy?: boolean;
+}
+
 export type OCRWarningType = 
   | "no_date" 
   | "unclear_image" 
@@ -592,24 +604,35 @@ function extractJsonFromResponse(content: string): any {
  * استخراج المبالغ والتاريخ من صورة إيصال نقاط البيع
  * يستخدم استراتيجية إعادة المحاولة مع prompts متعددة للحصول على أفضل نتيجة
  * 
+ * v3.0 API Change:
+ * - قبل: extractAmountFromImage(imageUrl, useRetryStrategy, s3Key)
+ * - بعد: extractAmountFromImage(imageUrl, { s3Key, useRetryStrategy })
+ * 
  * @param imageUrl رابط الصورة (S3, محلي، أو base64)
- * @param useRetryStrategy استخدام استراتيجية إعادة المحاولة (افتراضي: true)
- * @param s3Key مفتاح S3 للحصول على رابط جديد عند انتهاء صلاحية الرابط
+ * @param options خيارات الاستخراج (s3Key, useRetryStrategy)
  */
 export async function extractAmountFromImage(
   imageUrl: string,
-  useRetryStrategy: boolean = true,
-  s3Key?: string
+  options?: ExtractionOptions
 ): Promise<OCRExtractionResult> {
+  const { s3Key, useRetryStrategy = true } = options || {};
   const startTime = Date.now();
+  
+  logger.info("بدء استخراج البيانات من الصورة", {
+    hasS3Key: !!s3Key,
+    useRetryStrategy,
+    imageUrlPreview: imageUrl.substring(0, 50)
+  });
   
   // استخدام استراتيجية إعادة المحاولة للحصول على أفضل نتيجة
   if (useRetryStrategy) {
     try {
       const { extractWithRetry } = await import("./ocrRetryStrategy");
+      // ✅ تمرير s3Key إلى extractWithRetry
       const retryResult = await extractWithRetry(imageUrl, {
         maxRetries: 3,
-        combineResults: true
+        combineResults: true,
+        s3Key // ✅ جديد: تمرير مفتاح S3
       });
       
       logger.info("نتيجة استراتيجية إعادة المحاولة", {
@@ -914,8 +937,11 @@ export async function verifyBalanceImage(
       throw new Error("لم يتم توفير صورة صالحة");
     }
     
-    // تمرير مفتاح S3 للحصول على رابط جديد في حالة انتهاء صلاحية الرابط الحالي
-    const extractionResult = await extractAmountFromImage(primaryImage.url, true, primaryImage.key);
+    // ✅ v3.0: تمرير مفتاح S3 باستخدام ExtractionOptions
+    const extractionResult = await extractAmountFromImage(primaryImage.url, {
+      s3Key: primaryImage.key,
+      useRetryStrategy: true
+    });
 
     if (!extractionResult.success || extractionResult.grandTotal === null) {
       const warnings: OCRWarning[] = [{

@@ -23,8 +23,11 @@
  *   '2026-02-01'
  * );
  * 
- * // استخراج البيانات فقط
- * const extraction = await extractAmountFromImage(imageUrl, true, 'receipts/image.jpg');
+ * // استخراج البيانات فقط (v3.0 API)
+ * const extraction = await extractAmountFromImage(imageUrl, {
+ *   s3Key: 'receipts/image.jpg',
+ *   useRetryStrategy: true
+ * });
  * ```
  * 
  * @author Manus Team
@@ -65,7 +68,8 @@ export {
   type OCRExtractionResult,
   type BalanceVerificationResult,
   type OCRWarning,
-  type OCRWarningType
+  type OCRWarningType,
+  type ExtractionOptions // ✅ جديد v3.0
 } from "./balanceImageOCR";
 
 // ==================== تصدير من ocrRetryStrategy ====================

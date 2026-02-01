@@ -27,6 +27,8 @@ export interface RetryConfig {
   preprocessImage?: boolean;
   /** استخدام ReceiptEnhancer v2.0 بدلاً من المعالجة القديمة */
   useEnhancerV2?: boolean;
+  /** ✅ جديد v3.0: مفتاح S3 لتجديد الروابط المنتهية */
+  s3Key?: string;
 }
 
 export interface PromptVariant {
@@ -197,8 +199,9 @@ async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
 
 /**
  * تحويل الصورة إلى base64
+ * v3.0: دعم s3Key لتجديد الروابط المنتهية
  */
-async function imageToBase64(imageUrl: string): Promise<string> {
+async function imageToBase64(imageUrl: string, s3Key?: string): Promise<string> {
   // إذا كانت الصورة بالفعل base64
   if (imageUrl.startsWith("data:image/")) {
     return imageUrl;
@@ -217,7 +220,29 @@ async function imageToBase64(imageUrl: string): Promise<string> {
 
   // إذا كانت URL خارجية
   try {
-    const response = await fetch(imageUrl);
+    let response = await fetch(imageUrl);
+    
+    // ✅ v3.0: إذا فشل التحميل بخطأ 403، نحاول تجديد الرابط
+    if (!response.ok && (response.status === 403 || response.status === 401) && s3Key) {
+      logger.warn(`رابط S3 منتهي الصلاحية (${response.status})، محاولة التجديد`, {
+        status: response.status,
+        s3Key
+      });
+      
+      try {
+        const { storageGet } = await import("../storage");
+        const { url: freshUrl } = await storageGet(s3Key);
+        logger.info("تم الحصول على رابط جديد", { freshUrlPreview: freshUrl.substring(0, 80) });
+        
+        response = await fetch(freshUrl);
+        if (response.ok) {
+          logger.info("✅ نجح تجديد الرابط");
+        }
+      } catch (refreshError: any) {
+        logger.error("فشل تجديد الرابط", { error: refreshError.message });
+      }
+    }
+    
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -491,10 +516,12 @@ export async function extractWithRetry(
         });
       } catch (preprocessError: any) {
         logger.warn("فشل معالجة الصورة، استخدام الصورة الأصلية", { error: preprocessError.message });
-        base64Image = await imageToBase64(imageUrl);
+        // ✅ v3.0: تمرير s3Key
+        base64Image = await imageToBase64(imageUrl, finalConfig.s3Key);
       }
     } else {
-      base64Image = await imageToBase64(imageUrl);
+      // ✅ v3.0: تمرير s3Key
+      base64Image = await imageToBase64(imageUrl, finalConfig.s3Key);
     }
 
     // تنفيذ المحاولات
