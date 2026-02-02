@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc';
-import { FileText, Download, Filter, Calendar, Building2, Receipt, TrendingUp, Clock, CheckCircle, XCircle, FileCheck } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, Building2, Receipt, TrendingUp, Clock, CheckCircle, XCircle, FileCheck, Eye, Printer } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
 export default function VouchersReport() {
@@ -16,6 +17,48 @@ export default function VouchersReport() {
   const today = new Date();
   const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+  const [selectedVoucher, setSelectedVoucher] = useState<any>(null);
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+
+  // جلب بيانات المستخدم الحالي
+  const { data: user } = trpc.auth.me.useQuery();
+
+  // mutation لتحديث حالة السند
+  const updateStatusMutation = trpc.receiptVoucher.updateStatus.useMutation({
+    onSuccess: () => {
+      toast.success('تم اعتماد السند بنجاح');
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`فشل في اعتماد السند: ${error.message}`);
+    },
+  });
+
+  // mutation لتوليد PDF للسند الفردي
+  const generateSinglePDFMutation = trpc.receiptVoucher.generatePDF.useMutation({
+    onSuccess: (data) => {
+      const byteCharacters = atob(data.pdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = data.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('تم تحميل السند بنجاح');
+    },
+    onError: (error) => {
+      toast.error(`فشل في تحميل السند: ${error.message}`);
+    },
+  });
 
   const [filters, setFilters] = useState({
     startDate: firstDayOfMonth.toISOString().split('T')[0],
@@ -309,6 +352,7 @@ export default function VouchersReport() {
                     <TableHead className="text-gray-300 text-center">الفرع</TableHead>
                     <TableHead className="text-gray-300 text-center">المبلغ</TableHead>
                     <TableHead className="text-gray-300 text-center">الحالة</TableHead>
+                    <TableHead className="text-gray-300 text-center">الإجراءات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -321,6 +365,48 @@ export default function VouchersReport() {
                       <TableCell className="text-center text-gray-400">{voucher.branchName || 'غير محدد'}</TableCell>
                       <TableCell className="text-center font-bold text-white">{formatCurrency(voucher.totalAmount)}</TableCell>
                       <TableCell className="text-center">{getStatusBadge(voucher.status)}</TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20"
+                            onClick={() => {
+                              setSelectedVoucher(voucher);
+                              setShowPreviewDialog(true);
+                            }}
+                            title="معاينة"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          {user?.role === 'admin' && voucher.status === 'draft' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-green-400 hover:text-green-300 hover:bg-green-500/20"
+                              disabled={updateStatusMutation.isPending}
+                              onClick={() => {
+                                updateStatusMutation.mutate({ voucherId: voucher.voucherId, status: 'approved' });
+                              }}
+                              title="اعتماد"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-orange-400 hover:text-orange-300 hover:bg-orange-500/20"
+                            disabled={generateSinglePDFMutation.isPending}
+                            onClick={() => {
+                              generateSinglePDFMutation.mutate({ voucherId: voucher.voucherId });
+                            }}
+                            title="تحميل PDF"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -335,6 +421,81 @@ export default function VouchersReport() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog معاينة السند */}
+      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+        <DialogContent className="bg-gray-800 border-gray-700 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-orange-400" />
+              معاينة السند - {selectedVoucher?.voucherId}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedVoucher && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-700/50 p-4 rounded-lg">
+                  <p className="text-gray-400 text-sm">رقم السند</p>
+                  <p className="text-white font-bold text-lg">{selectedVoucher.voucherId}</p>
+                </div>
+                <div className="bg-gray-700/50 p-4 rounded-lg">
+                  <p className="text-gray-400 text-sm">التاريخ</p>
+                  <p className="text-white font-bold text-lg">{formatDate(selectedVoucher.voucherDate)}</p>
+                </div>
+                <div className="bg-gray-700/50 p-4 rounded-lg">
+                  <p className="text-gray-400 text-sm">المستقبل</p>
+                  <p className="text-white font-bold text-lg">{selectedVoucher.payeeName}</p>
+                </div>
+                <div className="bg-gray-700/50 p-4 rounded-lg">
+                  <p className="text-gray-400 text-sm">المبلغ</p>
+                  <p className="text-orange-400 font-bold text-lg">{formatCurrency(selectedVoucher.totalAmount)}</p>
+                </div>
+                <div className="bg-gray-700/50 p-4 rounded-lg">
+                  <p className="text-gray-400 text-sm">الفرع</p>
+                  <p className="text-white font-bold text-lg">{selectedVoucher.branchName || 'غير محدد'}</p>
+                </div>
+                <div className="bg-gray-700/50 p-4 rounded-lg">
+                  <p className="text-gray-400 text-sm">الحالة</p>
+                  <div className="mt-1">{getStatusBadge(selectedVoucher.status)}</div>
+                </div>
+              </div>
+              {selectedVoucher.notes && (
+                <div className="bg-gray-700/50 p-4 rounded-lg">
+                  <p className="text-gray-400 text-sm">ملاحظات</p>
+                  <p className="text-white mt-1">{selectedVoucher.notes}</p>
+                </div>
+              )}
+              <div className="flex gap-2 justify-end pt-4 border-t border-gray-700">
+                {user?.role === 'admin' && selectedVoucher.status === 'draft' && (
+                  <Button
+                    className="bg-green-600 hover:bg-green-700"
+                    disabled={updateStatusMutation.isPending}
+                    onClick={() => {
+                      updateStatusMutation.mutate(
+                        { voucherId: selectedVoucher.voucherId, status: 'approved' },
+                        { onSuccess: () => setShowPreviewDialog(false) }
+                      );
+                    }}
+                  >
+                    <CheckCircle className="w-4 h-4 ml-2" />
+                    اعتماد السند
+                  </Button>
+                )}
+                <Button
+                  className="bg-orange-600 hover:bg-orange-700"
+                  disabled={generateSinglePDFMutation.isPending}
+                  onClick={() => {
+                    generateSinglePDFMutation.mutate({ voucherId: selectedVoucher.voucherId });
+                  }}
+                >
+                  <Printer className="w-4 h-4 ml-2" />
+                  تحميل PDF
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
