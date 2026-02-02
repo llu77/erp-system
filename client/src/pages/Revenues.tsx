@@ -32,7 +32,8 @@ import {
   X,
   Eye,
   ImageIcon,
-  Clock
+  Clock,
+  FileSpreadsheet
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -912,6 +913,72 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
     }
   };
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+
+  // دالة تصدير Excel
+  const handleExportExcel = async (
+    revenues: typeof monthlyRevenues,
+    totals: { cash: number; network: number; balance: number; paidInvoices: number; loyalty: number; total: number; matched: number; unmatched: number },
+    monthName: string,
+    monthStart: Date,
+    monthEnd: Date
+  ) => {
+    if (!revenues || revenues.length === 0) return;
+    
+    setIsExportingExcel(true);
+    try {
+      // إنشاء بيانات التقرير
+      const reportData = {
+        title: `سجل إيرادات شهر ${monthName}`,
+        dateRange: `من ${format(monthStart, "d MMMM", { locale: ar })} إلى ${format(monthEnd, "d MMMM yyyy", { locale: ar })}`,
+        totals,
+        revenues: revenues.map(rev => ({
+          date: rev.date,
+          dayName: format(new Date(rev.date), "EEEE", { locale: ar }),
+          cash: parseFloat(rev.cash || "0"),
+          network: parseFloat(rev.network || "0"),
+          balance: parseFloat(rev.balance || "0"),
+          paidInvoices: parseFloat(rev.paidInvoices || "0"),
+          loyalty: parseFloat((rev as any).loyalty || "0"),
+          total: parseFloat(rev.total || "0"),
+          isMatched: rev.isMatched,
+          posConfirmed: (rev as any).posConfirmed || false,
+          branchName: (rev as any).branchName || "",
+        }))
+      };
+
+      // إرسال الطلب للسيرفر لإنشاء ملف Excel
+      const response = await fetch('/api/revenues/export-excel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(reportData),
+      });
+
+      if (!response.ok) {
+        throw new Error('فشل تصدير التقرير');
+      }
+
+      // تحميل الملف
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `revenues-${format(monthStart, "yyyy-MM")}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success("تم تصدير التقرير بنجاح");
+    } catch (error) {
+      console.error('Export Excel error:', error);
+      toast.error("فشل تصدير التقرير");
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
   
   // حساب أول وآخر يوم في الشهر
   const currentDate = new Date(selectedDate);
@@ -1080,20 +1147,36 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
               <div className="text-xs text-muted-foreground">إجمالي الشهر</div>
             </div>
             {monthlyRevenues && monthlyRevenues.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleExportPDF(monthlyRevenues, totals, monthName, monthStart, monthEnd)}
-                disabled={isExporting}
-                className="gap-2"
-              >
-                {isExporting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                تصدير PDF
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleExportPDF(monthlyRevenues, totals, monthName, monthStart, monthEnd)}
+                  disabled={isExporting}
+                  className="gap-2"
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  تصدير PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleExportExcel(monthlyRevenues, totals, monthName, monthStart, monthEnd)}
+                  disabled={isExportingExcel}
+                  className="gap-2 text-green-600 border-green-600 hover:bg-green-50"
+                >
+                  {isExportingExcel ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="h-4 w-4" />
+                  )}
+                  تصدير Excel
+                </Button>
+              </div>
             )}
           </div>
         </div>

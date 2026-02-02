@@ -69,6 +69,160 @@ async function startServer() {
       res.status(500).json({ error: 'فشل رفع الملف الصوتي' });
     }
   });
+  // Excel Export API for Revenues
+  app.post('/api/revenues/export-excel', async (req: any, res: any) => {
+    try {
+      const ExcelJS = await import('exceljs');
+      const { title, dateRange, totals, revenues } = req.body;
+
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Symbol AI - نظام إدارة متكامل';
+      workbook.created = new Date();
+
+      const worksheet = workbook.addWorksheet('سجل الإيرادات', {
+        views: [{ rightToLeft: true }]
+      });
+
+      // إعداد الأعمدة
+      worksheet.columns = [
+        { header: 'التاريخ', key: 'date', width: 15 },
+        { header: 'اليوم', key: 'dayName', width: 12 },
+        { header: 'نقدي', key: 'cash', width: 12 },
+        { header: 'شبكة', key: 'network', width: 12 },
+        { header: 'رصيد', key: 'balance', width: 12 },
+        { header: 'فواتير مدفوع', key: 'paidInvoices', width: 14 },
+        { header: 'ولاء', key: 'loyalty', width: 12 },
+        { header: 'الإجمالي', key: 'total', width: 14 },
+        { header: 'الحالة', key: 'status', width: 14 },
+        { header: 'الكاشير', key: 'posStatus', width: 12 },
+      ];
+
+      // عنوان التقرير
+      worksheet.insertRow(1, [title]);
+      worksheet.mergeCells('A1:J1');
+      const titleRow = worksheet.getRow(1);
+      titleRow.font = { bold: true, size: 16, color: { argb: 'FF1A1A1A' } };
+      titleRow.alignment = { horizontal: 'center', vertical: 'middle' };
+      titleRow.height = 30;
+
+      // نطاق التاريخ
+      worksheet.insertRow(2, [dateRange]);
+      worksheet.mergeCells('A2:J2');
+      const dateRow = worksheet.getRow(2);
+      dateRow.font = { size: 12, color: { argb: 'FF666666' } };
+      dateRow.alignment = { horizontal: 'center', vertical: 'middle' };
+      dateRow.height = 20;
+
+      // صف فارغ
+      worksheet.insertRow(3, []);
+
+      // رؤوس الأعمدة (الصف 4)
+      const headerRow = worksheet.getRow(4);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1A1A1A' }
+      };
+      headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+      headerRow.height = 25;
+
+      // إضافة البيانات
+      revenues.forEach((rev: any, index: number) => {
+        const row = worksheet.addRow({
+          date: rev.date,
+          dayName: rev.dayName,
+          cash: rev.cash,
+          network: rev.network,
+          balance: rev.balance,
+          paidInvoices: rev.paidInvoices,
+          loyalty: rev.loyalty,
+          total: rev.total,
+          status: rev.isMatched ? '✓ متطابق' : '✗ غير متطابق',
+          posStatus: rev.posConfirmed ? '✓ مؤكد' : '○ بانتظار',
+        });
+
+        // تنسيق الصفوف
+        row.alignment = { horizontal: 'center', vertical: 'middle' };
+        row.height = 22;
+
+        // تلوين الصفوف بالتناوب
+        if (index % 2 === 0) {
+          row.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF5F5F5' }
+          };
+        }
+
+        // تلوين خلية الحالة
+        const statusCell = row.getCell('status');
+        statusCell.font = {
+          bold: true,
+          color: { argb: rev.isMatched ? 'FF22C55E' : 'FFEF4444' }
+        };
+
+        // تلوين خلية الكاشير
+        const posCell = row.getCell('posStatus');
+        posCell.font = {
+          bold: true,
+          color: { argb: rev.posConfirmed ? 'FF22C55E' : 'FFFBBF24' }
+        };
+      });
+
+      // صف الإجمالي
+      const totalRow = worksheet.addRow({
+        date: 'الإجمالي',
+        dayName: '',
+        cash: totals.cash,
+        network: totals.network,
+        balance: totals.balance,
+        paidInvoices: totals.paidInvoices,
+        loyalty: totals.loyalty,
+        total: totals.total,
+        status: `${totals.matched} متطابق`,
+        posStatus: '',
+      });
+      totalRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      totalRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1A1A1A' }
+      };
+      totalRow.alignment = { horizontal: 'center', vertical: 'middle' };
+      totalRow.height = 28;
+
+      // تنسيق الأرقام
+      ['cash', 'network', 'balance', 'paidInvoices', 'loyalty', 'total'].forEach(col => {
+        worksheet.getColumn(col).numFmt = '#,##0.00';
+      });
+
+      // إضافة حدود للجدول
+      const lastRow = worksheet.rowCount;
+      for (let i = 4; i <= lastRow; i++) {
+        const row = worksheet.getRow(i);
+        row.eachCell({ includeEmpty: true }, (cell) => {
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFE5E5E5' } },
+            left: { style: 'thin', color: { argb: 'FFE5E5E5' } },
+            bottom: { style: 'thin', color: { argb: 'FFE5E5E5' } },
+            right: { style: 'thin', color: { argb: 'FFE5E5E5' } }
+          };
+        });
+      }
+
+      // إرسال الملف
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=revenues-report.xlsx');
+
+      await workbook.xlsx.write(res);
+      res.end();
+    } catch (error) {
+      console.error('Excel export error:', error);
+      res.status(500).json({ error: 'فشل تصدير التقرير' });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
