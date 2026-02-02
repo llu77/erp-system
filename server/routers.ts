@@ -9951,6 +9951,63 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           return await db.getServicePerformanceDaily(startDate, endDate, input.branchId);
         }),
     }),
+
+    // تقرير أداء الموظفين
+    employeePerformance: router({
+      // جلب تقرير أداء الموظفين
+      topEmployees: protectedProcedure
+        .input(z.object({
+          startDate: z.string(),
+          endDate: z.string(),
+          branchId: z.number().optional(),
+          limit: z.number().optional().default(20),
+        }))
+        .query(async ({ input }) => {
+          const startDate = new Date(input.startDate);
+          const endDate = new Date(input.endDate);
+          return await db.getEmployeePerformanceReport(startDate, endDate, input.branchId, input.limit);
+        }),
+
+      // جلب ملخص أداء الموظفين
+      summary: protectedProcedure
+        .input(z.object({
+          startDate: z.string(),
+          endDate: z.string(),
+          branchId: z.number().optional(),
+        }))
+        .query(async ({ input }) => {
+          const startDate = new Date(input.startDate);
+          const endDate = new Date(input.endDate);
+          return await db.getEmployeePerformanceSummary(startDate, endDate, input.branchId);
+        }),
+
+      // جلب أداء الموظفين اليومي
+      daily: protectedProcedure
+        .input(z.object({
+          startDate: z.string(),
+          endDate: z.string(),
+          branchId: z.number().optional(),
+        }))
+        .query(async ({ input }) => {
+          const startDate = new Date(input.startDate);
+          const endDate = new Date(input.endDate);
+          return await db.getEmployeePerformanceDaily(startDate, endDate, input.branchId);
+        }),
+
+      // جلب تفاصيل خدمات موظف معين
+      employeeServices: protectedProcedure
+        .input(z.object({
+          employeeId: z.number(),
+          startDate: z.string(),
+          endDate: z.string(),
+          branchId: z.number().optional(),
+        }))
+        .query(async ({ input }) => {
+          const startDate = new Date(input.startDate);
+          const endDate = new Date(input.endDate);
+          return await db.getEmployeeServiceDetails(input.employeeId, startDate, endDate, input.branchId);
+        }),
+    }),
   }),
 });
 

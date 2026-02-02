@@ -3002,3 +3002,484 @@ export async function generateServicePerformancePDF(data: ServicePerformanceData
     await browser.close();
   }
 }
+
+
+/**
+ * تصدير تقرير أداء الموظفين إلى PDF
+ */
+export async function generateEmployeePerformancePDF(data: {
+  employees: Array<{
+    rank: number;
+    employeeId: number;
+    employeeName: string;
+    employeePhoto: string | null;
+    employeePosition: string;
+    totalRevenue: number;
+    invoiceCount: number;
+    serviceCount: number;
+    averageInvoiceValue: number;
+    cashAmount: number;
+    cardAmount: number;
+  }>;
+  summary: {
+    totalRevenue: number;
+    totalInvoices: number;
+    uniqueEmployees: number;
+    averageInvoiceValue: number;
+    averageRevenuePerEmployee: number;
+    revenueChange: number;
+    invoicesChange: number;
+  } | null;
+  dailyData: Array<{
+    date: string;
+    totalRevenue: number;
+    invoiceCount: number;
+    uniqueEmployees: number;
+  }>;
+  month: string;
+  year: string;
+  branchName: string;
+}): Promise<Buffer> {
+  const { employees, summary, dailyData, month, year, branchName } = data;
+
+  const formatCurrency = (amount: number) => `${amount.toLocaleString('ar-SA')} ر.س`;
+  const formatNumber = (num: number) => num.toLocaleString('ar-SA');
+
+  const getRankBadge = (rank: number) => {
+    if (rank === 1) return '<span style="color: #f59e0b; font-size: 20px;">🏆</span>';
+    if (rank === 2) return '<span style="color: #9ca3af; font-size: 18px;">🥈</span>';
+    if (rank === 3) return '<span style="color: #d97706; font-size: 18px;">🥉</span>';
+    return `<span style="color: #6b7280; font-weight: bold;">${rank}</span>`;
+  };
+
+  // إنشاء صفوف جدول الموظفين
+  const employeeRows = employees.map(emp => `
+    <tr>
+      <td style="text-align: center; padding: 12px 8px;">${getRankBadge(emp.rank)}</td>
+      <td style="padding: 12px 8px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          ${emp.employeePhoto 
+            ? `<img src="${emp.employeePhoto}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />`
+            : `<div style="width: 40px; height: 40px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; color: #6b7280;">👤</div>`
+          }
+          <div>
+            <div style="font-weight: 600; color: #1f2937;">${emp.employeeName}</div>
+            <div style="font-size: 11px; color: #6b7280;">${emp.employeePosition}</div>
+          </div>
+        </div>
+      </td>
+      <td style="text-align: center; padding: 12px 8px; color: #1f2937;">${formatNumber(emp.invoiceCount)}</td>
+      <td style="text-align: center; padding: 12px 8px; color: #1f2937;">${formatNumber(emp.serviceCount)}</td>
+      <td style="text-align: center; padding: 12px 8px; color: #1f2937;">${formatCurrency(emp.averageInvoiceValue)}</td>
+      <td style="text-align: left; padding: 12px 8px; font-weight: bold; color: #059669;">${formatCurrency(emp.totalRevenue)}</td>
+    </tr>
+  `).join('');
+
+  // إنشاء صفوف جدول الأداء اليومي
+  const dailyRows = dailyData.map(day => `
+    <tr>
+      <td style="padding: 10px 8px; color: #1f2937;">${new Date(day.date).toLocaleDateString('ar-SA', { weekday: 'short', day: 'numeric', month: 'short' })}</td>
+      <td style="text-align: center; padding: 10px 8px; font-weight: 600; color: #1f2937;">${formatCurrency(day.totalRevenue)}</td>
+      <td style="text-align: center; padding: 10px 8px; color: #1f2937;">${formatNumber(day.invoiceCount)}</td>
+      <td style="text-align: center; padding: 10px 8px; color: #1f2937;">${formatNumber(day.uniqueEmployees)}</td>
+    </tr>
+  `).join('');
+
+  const totalDailyRevenue = dailyData.reduce((sum, d) => sum + d.totalRevenue, 0);
+  const totalDailyInvoices = dailyData.reduce((sum, d) => sum + d.invoiceCount, 0);
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: #f8fafc;
+      color: #1f2937;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 210mm;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid #059669;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .logo-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .logo {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #059669, #10b981);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    
+    .company-info h1 {
+      font-size: 22px;
+      color: #059669;
+      font-weight: 700;
+    }
+    
+    .company-info p {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    
+    .report-info {
+      text-align: left;
+      background: #f0fdf4;
+      padding: 12px 18px;
+      border-radius: 8px;
+    }
+    
+    .report-info h2 {
+      font-size: 16px;
+      color: #059669;
+      margin-bottom: 4px;
+    }
+    
+    .report-info p {
+      font-size: 12px;
+      color: #374151;
+    }
+    
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .summary-card {
+      background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+      border: 1px solid #bbf7d0;
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+    }
+    
+    .summary-card.primary {
+      background: linear-gradient(135deg, #059669, #10b981);
+      border: none;
+      color: white;
+    }
+    
+    .summary-card .label {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    
+    .summary-card.primary .label {
+      color: rgba(255,255,255,0.9);
+    }
+    
+    .summary-card .value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1f2937;
+    }
+    
+    .summary-card.primary .value {
+      color: white;
+    }
+    
+    .summary-card .change {
+      font-size: 10px;
+      margin-top: 4px;
+    }
+    
+    .change.positive { color: #059669; }
+    .change.negative { color: #dc2626; }
+    .summary-card.primary .change { color: rgba(255,255,255,0.9); }
+    
+    .section {
+      margin-bottom: 20px;
+    }
+    
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #059669;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #d1fae5;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    thead {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: white;
+    }
+    
+    th {
+      padding: 12px 8px;
+      font-weight: 600;
+      font-size: 12px;
+      text-align: center;
+    }
+    
+    th:first-child { text-align: center; }
+    th:nth-child(2) { text-align: right; }
+    th:last-child { text-align: left; }
+    
+    tbody tr {
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    tbody tr:nth-child(even) {
+      background: #f9fafb;
+    }
+    
+    tbody tr:hover {
+      background: #f0fdf4;
+    }
+    
+    .total-row {
+      background: #f0fdf4 !important;
+      font-weight: 700;
+    }
+    
+    .signatures {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #e5e7eb;
+    }
+    
+    .signature-box {
+      text-align: center;
+      min-width: 150px;
+    }
+    
+    .signature-image {
+      width: 100px;
+      height: 50px;
+      margin-bottom: 8px;
+    }
+    
+    .signature-line {
+      border-top: 2px solid #374151;
+      padding-top: 8px;
+    }
+    
+    .signature-name {
+      font-weight: 700;
+      color: #1f2937;
+      font-size: 13px;
+    }
+    
+    .signature-title {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    
+    .stamp {
+      width: 80px;
+      height: 80px;
+      border: 3px solid #059669;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 10px;
+      font-size: 10px;
+      color: #059669;
+      font-weight: 600;
+      text-align: center;
+    }
+    
+    .footer {
+      text-align: center;
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 10px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo-section">
+        <div class="logo">S</div>
+        <div class="company-info">
+          <h1>Symbol AI</h1>
+          <p>نظام إدارة الموارد المتكامل</p>
+        </div>
+      </div>
+      <div class="report-info">
+        <h2>تقرير أداء الموظفين</h2>
+        <p>${month} ${year} | ${branchName}</p>
+      </div>
+    </div>
+    
+    <div class="summary-cards">
+      <div class="summary-card primary">
+        <div class="label">إجمالي الإيرادات</div>
+        <div class="value">${formatCurrency(summary?.totalRevenue || 0)}</div>
+        ${summary?.revenueChange ? `<div class="change ${summary.revenueChange > 0 ? 'positive' : 'negative'}">${summary.revenueChange > 0 ? '↑' : '↓'} ${Math.abs(summary.revenueChange)}%</div>` : ''}
+      </div>
+      <div class="summary-card">
+        <div class="label">عدد الفواتير</div>
+        <div class="value">${formatNumber(summary?.totalInvoices || 0)}</div>
+        ${summary?.invoicesChange ? `<div class="change ${summary.invoicesChange > 0 ? 'positive' : 'negative'}">${summary.invoicesChange > 0 ? '↑' : '↓'} ${Math.abs(summary.invoicesChange)}%</div>` : ''}
+      </div>
+      <div class="summary-card">
+        <div class="label">عدد الموظفين</div>
+        <div class="value">${formatNumber(summary?.uniqueEmployees || 0)}</div>
+        <div class="change">موظف نشط</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">متوسط لكل موظف</div>
+        <div class="value">${formatCurrency(summary?.averageRevenuePerEmployee || 0)}</div>
+        <div class="change">إيراد/موظف</div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <div class="section-title">🏆 ترتيب الموظفين حسب الإيرادات</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 60px;">الترتيب</th>
+            <th style="text-align: right;">الموظف</th>
+            <th>الفواتير</th>
+            <th>الخدمات</th>
+            <th>متوسط الفاتورة</th>
+            <th style="text-align: left;">الإيرادات</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${employeeRows}
+        </tbody>
+      </table>
+    </div>
+    
+    ${dailyData.length > 0 ? `
+    <div class="section">
+      <div class="section-title">📊 الأداء اليومي</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align: right;">التاريخ</th>
+            <th>الإيرادات</th>
+            <th>الفواتير</th>
+            <th>الموظفين النشطين</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${dailyRows}
+          <tr class="total-row">
+            <td style="padding: 10px 8px; font-weight: 700;">الإجمالي</td>
+            <td style="text-align: center; padding: 10px 8px; font-weight: 700; color: #059669;">${formatCurrency(totalDailyRevenue)}</td>
+            <td style="text-align: center; padding: 10px 8px; font-weight: 700;">${formatNumber(totalDailyInvoices)}</td>
+            <td style="text-align: center; padding: 10px 8px;">-</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+    
+    <div class="signatures">
+      <div class="signature-box">
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik01IDQwYzE1LTIwIDMwLTMwIDQ1LTI1czI1IDEwIDQwIDUiIHN0cm9rZT0iIzFlM2E1ZiIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTkwIDE1YzAgMTAtNSAxNS0xMCAxNSIgc3Ryb2tlPSIjMWUzYTVmIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiLz48L3N2Zz4=" class="signature-image" alt="توقيع">
+        <div class="signature-line">
+          <div class="signature-name">سالم الوادعي</div>
+          <div class="signature-title">المشرف العام</div>
+        </div>
+      </div>
+      
+      <div class="signature-box">
+        <div class="stamp">
+          <div>Symbol AI<br/>الإدارة</div>
+        </div>
+      </div>
+      
+      <div class="signature-box">
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAzNWMyMC0xMCA0MC01IDYwLTIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik03MCAxNWM1IDEwIDEwIDE1IDIwIDIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" class="signature-image" alt="توقيع">
+        <div class="signature-line">
+          <div class="signature-name">عمر المطيري</div>
+          <div class="signature-title">المدير</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      تم إنشاء هذا التقرير بواسطة نظام Symbol AI | التاريخ: ${new Date().toLocaleDateString('ar-SA')} | الوقت: ${new Date().toLocaleTimeString('ar-SA')}
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: '/usr/bin/chromium-browser',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '10mm',
+        right: '10mm',
+        bottom: '10mm',
+        left: '10mm'
+      }
+    });
+
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await browser.close();
+  }
+}

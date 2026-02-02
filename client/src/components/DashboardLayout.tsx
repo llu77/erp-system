@@ -231,6 +231,13 @@ const menuStructure: MenuItem[] = [
     path: "/pos/service-performance",
     roles: ["admin", "manager", "supervisor", "viewer"],
   },
+  // تقرير أداء الموظفين
+  {
+    icon: Users,
+    label: "تقرير أداء الموظفين",
+    path: "/pos/employee-performance",
+    roles: ["admin", "manager", "supervisor", "viewer"],
+  },
   
   // إعدادات النظام (للأدمن فقط)
   {

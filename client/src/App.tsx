@@ -80,6 +80,7 @@ import POSSettings from "./pages/POSSettings";
 import POSLogin from "./pages/POSLogin";
 import POSServicesManagement from "./pages/POSServicesManagement";
 import ServicePerformanceReport from "./pages/ServicePerformanceReport";
+import EmployeePerformanceReport from "./pages/EmployeePerformanceReport";
 
 function Router() {
   return (
@@ -428,6 +429,7 @@ function Router() {
         </DashboardLayout>
       </Route>
       <Route path="/pos/service-performance" component={ServicePerformanceReport} />
+      <Route path="/pos/employee-performance" component={EmployeePerformanceReport} />
       <Route path="/pos" component={POS} />
       <Route path="/pos/daily-report" component={POSDailyReport} />
       <Route path="/pos/settings" component={POSSettings} />

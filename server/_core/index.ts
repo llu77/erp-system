@@ -271,6 +271,44 @@ async function startServer() {
     }
   });
 
+  // Employee Performance PDF export endpoint
+  app.get('/api/reports/employee-performance', async (req: any, res: any) => {
+    try {
+      const { startDate, endDate, branchId, branchName, month, year } = req.query;
+      
+      // Import database functions
+      const db = await import('../db');
+      const { generateEmployeePerformancePDF } = await import('../pdfService');
+      
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      const branchIdNum = branchId ? parseInt(branchId as string) : undefined;
+      
+      // Fetch data
+      const [employees, summary, dailyData] = await Promise.all([
+        db.getEmployeePerformanceReport(start, end, branchIdNum, 20),
+        db.getEmployeePerformanceSummary(start, end, branchIdNum),
+        db.getEmployeePerformanceDaily(start, end, branchIdNum),
+      ]);
+      
+      const pdfBuffer = await generateEmployeePerformancePDF({
+        month: month as string || 'غير محدد',
+        year: year as string || new Date().getFullYear().toString(),
+        branchName: branchName as string || 'جميع الفروع',
+        summary: summary,
+        employees: employees || [],
+        dailyData: dailyData || [],
+      });
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=employee-performance-${month}-${year}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error('Employee Performance PDF export error:', error);
+      res.status(500).json({ error: 'فشل تصدير التقرير' });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

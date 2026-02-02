@@ -12451,3 +12451,253 @@ export async function getServicePerformanceDaily(
     invoiceCount: Number(item.invoiceCount || 0),
   }));
 }
+
+
+// ==================== تقرير أداء الموظفين ====================
+
+/**
+ * جلب تقرير أداء الموظفين - ترتيب حسب الإيرادات
+ */
+export async function getEmployeePerformanceReport(
+  startDate: Date,
+  endDate: Date,
+  branchId?: number,
+  limit: number = 20
+) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [
+    gte(posInvoices.invoiceDate, startDate),
+    lte(posInvoices.invoiceDate, endDate),
+    eq(posInvoices.status, 'completed'),
+  ];
+
+  if (branchId) {
+    conditions.push(eq(posInvoices.branchId, branchId));
+  }
+
+  const result = await db
+    .select({
+      employeeId: posInvoices.employeeId,
+      employeeName: posInvoices.employeeName,
+      totalRevenue: sql<number>`COALESCE(SUM(CAST(${posInvoices.total} AS DECIMAL(12,2))), 0)`,
+      invoiceCount: sql<number>`COUNT(DISTINCT ${posInvoices.id})`,
+      cashAmount: sql<number>`COALESCE(SUM(CAST(${posInvoices.cashAmount} AS DECIMAL(12,2))), 0)`,
+      cardAmount: sql<number>`COALESCE(SUM(CAST(${posInvoices.cardAmount} AS DECIMAL(12,2))), 0)`,
+    })
+    .from(posInvoices)
+    .where(and(...conditions))
+    .groupBy(posInvoices.employeeId, posInvoices.employeeName)
+    .orderBy(sql`totalRevenue DESC`)
+    .limit(limit);
+
+  // جلب عدد الخدمات لكل موظف
+  const serviceCountResult = await db
+    .select({
+      employeeId: posInvoices.employeeId,
+      serviceCount: sql<number>`COALESCE(SUM(${posInvoiceItems.quantity}), 0)`,
+    })
+    .from(posInvoices)
+    .innerJoin(posInvoiceItems, eq(posInvoices.id, posInvoiceItems.invoiceId))
+    .where(and(...conditions))
+    .groupBy(posInvoices.employeeId);
+
+  const serviceCountMap = new Map(serviceCountResult.map(r => [r.employeeId, Number(r.serviceCount) || 0]));
+
+  // إضافة صورة الموظف
+  const employeeIds = result.map(r => r.employeeId);
+  const employeePhotos = employeeIds.length > 0 
+    ? await db
+        .select({ id: employees.id, photoUrl: employees.photoUrl, position: employees.position })
+        .from(employees)
+        .where(inArray(employees.id, employeeIds))
+    : [];
+
+  const photoMap = new Map(employeePhotos.map(e => [e.id, { photoUrl: e.photoUrl, position: e.position }]));
+
+  return result.map((item, index) => {
+    const totalRevenue = Number(item.totalRevenue) || 0;
+    const invoiceCount = Number(item.invoiceCount) || 0;
+    return {
+      rank: index + 1,
+      employeeId: item.employeeId,
+      employeeName: item.employeeName || 'غير محدد',
+      employeePhoto: photoMap.get(item.employeeId)?.photoUrl || null,
+      employeePosition: photoMap.get(item.employeeId)?.position || 'موظف',
+      totalRevenue,
+      invoiceCount,
+      serviceCount: serviceCountMap.get(item.employeeId) || 0,
+      averageInvoiceValue: invoiceCount > 0 ? Math.round(totalRevenue / invoiceCount) : 0,
+      cashAmount: Number(item.cashAmount) || 0,
+      cardAmount: Number(item.cardAmount) || 0,
+    };
+  });
+}
+
+/**
+ * جلب ملخص أداء الموظفين
+ */
+export async function getEmployeePerformanceSummary(
+  startDate: Date,
+  endDate: Date,
+  branchId?: number
+) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const conditions = [
+    gte(posInvoices.invoiceDate, startDate),
+    lte(posInvoices.invoiceDate, endDate),
+    eq(posInvoices.status, 'completed'),
+  ];
+
+  if (branchId) {
+    conditions.push(eq(posInvoices.branchId, branchId));
+  }
+
+  // الفترة الحالية
+  const currentResult = await db
+    .select({
+      totalRevenue: sql<number>`COALESCE(SUM(CAST(${posInvoices.total} AS DECIMAL(12,2))), 0)`,
+      totalInvoices: sql<number>`COUNT(DISTINCT ${posInvoices.id})`,
+      uniqueEmployees: sql<number>`COUNT(DISTINCT ${posInvoices.employeeId})`,
+    })
+    .from(posInvoices)
+    .where(and(...conditions));
+
+  // حساب الفترة السابقة للمقارنة
+  const periodLength = endDate.getTime() - startDate.getTime();
+  const previousStartDate = new Date(startDate.getTime() - periodLength);
+  const previousEndDate = new Date(startDate.getTime() - 1);
+
+  const previousConditions = [
+    gte(posInvoices.invoiceDate, previousStartDate),
+    lte(posInvoices.invoiceDate, previousEndDate),
+    eq(posInvoices.status, 'completed'),
+  ];
+
+  if (branchId) {
+    previousConditions.push(eq(posInvoices.branchId, branchId));
+  }
+
+  const previousResult = await db
+    .select({
+      totalRevenue: sql<number>`COALESCE(SUM(CAST(${posInvoices.total} AS DECIMAL(12,2))), 0)`,
+      totalInvoices: sql<number>`COUNT(DISTINCT ${posInvoices.id})`,
+    })
+    .from(posInvoices)
+    .where(and(...previousConditions));
+
+  const current = currentResult[0];
+  const previous = previousResult[0];
+
+  const currentRevenue = Number(current?.totalRevenue) || 0;
+  const previousRevenue = Number(previous?.totalRevenue) || 0;
+  const currentInvoices = Number(current?.totalInvoices) || 0;
+  const previousInvoices = Number(previous?.totalInvoices) || 0;
+  const uniqueEmployees = Number(current?.uniqueEmployees) || 0;
+
+  const revenueChange = previousRevenue > 0 
+    ? Math.round(((currentRevenue - previousRevenue) / previousRevenue) * 100 * 10) / 10
+    : 0;
+
+  const invoicesChange = previousInvoices > 0
+    ? Math.round(((currentInvoices - previousInvoices) / previousInvoices) * 100 * 10) / 10
+    : 0;
+
+  return {
+    totalRevenue: currentRevenue,
+    totalInvoices: currentInvoices,
+    uniqueEmployees,
+    averageInvoiceValue: currentInvoices > 0 ? Math.round(currentRevenue / currentInvoices) : 0,
+    averageRevenuePerEmployee: uniqueEmployees > 0 ? Math.round(currentRevenue / uniqueEmployees) : 0,
+    revenueChange,
+    invoicesChange,
+  };
+}
+
+/**
+ * جلب أداء الموظفين اليومي
+ */
+export async function getEmployeePerformanceDaily(
+  startDate: Date,
+  endDate: Date,
+  branchId?: number
+) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [
+    gte(posInvoices.invoiceDate, startDate),
+    lte(posInvoices.invoiceDate, endDate),
+    eq(posInvoices.status, 'completed'),
+  ];
+
+  if (branchId) {
+    conditions.push(eq(posInvoices.branchId, branchId));
+  }
+
+  const result = await db
+    .select({
+      date: sql<string>`DATE(${posInvoices.invoiceDate})`,
+      totalRevenue: sql<number>`COALESCE(SUM(CAST(${posInvoices.total} AS DECIMAL(12,2))), 0)`,
+      invoiceCount: sql<number>`COUNT(DISTINCT ${posInvoices.id})`,
+      uniqueEmployees: sql<number>`COUNT(DISTINCT ${posInvoices.employeeId})`,
+    })
+    .from(posInvoices)
+    .where(and(...conditions))
+    .groupBy(sql`DATE(${posInvoices.invoiceDate})`)
+    .orderBy(sql`DATE(${posInvoices.invoiceDate})`);
+
+  return result.map(item => ({
+    date: String(item.date),
+    totalRevenue: Number(item.totalRevenue) || 0,
+    invoiceCount: Number(item.invoiceCount) || 0,
+    uniqueEmployees: Number(item.uniqueEmployees) || 0,
+  }));
+}
+
+/**
+ * جلب تفاصيل الخدمات لموظف معين
+ */
+export async function getEmployeeServiceDetails(
+  employeeId: number,
+  startDate: Date,
+  endDate: Date,
+  branchId?: number
+) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [
+    gte(posInvoices.invoiceDate, startDate),
+    lte(posInvoices.invoiceDate, endDate),
+    eq(posInvoices.status, 'completed'),
+    eq(posInvoices.employeeId, employeeId),
+  ];
+
+  if (branchId) {
+    conditions.push(eq(posInvoices.branchId, branchId));
+  }
+
+  const result = await db
+    .select({
+      serviceName: posInvoiceItems.serviceName,
+      serviceNameAr: posInvoiceItems.serviceNameAr,
+      totalQuantity: sql<number>`SUM(${posInvoiceItems.quantity})`,
+      totalRevenue: sql<number>`COALESCE(SUM(CAST(${posInvoiceItems.total} AS DECIMAL(12,2))), 0)`,
+    })
+    .from(posInvoiceItems)
+    .innerJoin(posInvoices, eq(posInvoiceItems.invoiceId, posInvoices.id))
+    .where(and(...conditions))
+    .groupBy(posInvoiceItems.serviceName, posInvoiceItems.serviceNameAr)
+    .orderBy(sql`totalRevenue DESC`);
+
+  return result.map(item => ({
+    serviceName: item.serviceName || 'غير محدد',
+    serviceNameAr: item.serviceNameAr || item.serviceName || 'غير محدد',
+    totalQuantity: Number(item.totalQuantity) || 0,
+    totalRevenue: Number(item.totalRevenue) || 0,
+  }));
+}
