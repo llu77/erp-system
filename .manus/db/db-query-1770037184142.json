@@ -1,0 +1,38 @@
+{
+  "query": "SELECT id, name, photoUrl, branchId, position FROM employees WHERE name LIKE '%محمد%' OR name LIKE '%Mohamed%' OR name LIKE '%Ismail%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, name, photoUrl, branchId, position FROM employees WHERE name LIKE '%محمد%' OR name LIKE '%Mohamed%' OR name LIKE '%Ismail%';",
+  "rows": [
+    {
+      "id": "30007",
+      "name": "السيد محمد",
+      "photoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-007-1769550451732.jpeg",
+      "branchId": "1",
+      "position": "Employee"
+    },
+    {
+      "id": "60001",
+      "name": "محمد ناصر",
+      "photoUrl": "NULL",
+      "branchId": "30001",
+      "position": "Employee"
+    },
+    {
+      "id": "90001",
+      "name": "فارس محمد ",
+      "photoUrl": "NULL",
+      "branchId": "30001",
+      "position": "Employee"
+    },
+    {
+      "id": "90003",
+      "name": "محمد اسماعيل",
+      "photoUrl": "NULL",
+      "branchId": "30001",
+      "position": "Supervisor "
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tphotoUrl\tbranchId\tposition\n30007\tالسيد محمد\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-007-1769550451732.jpeg\t1\tEmployee\n60001\tمحمد ناصر\tNULL\t30001\tEmployee\n90001\tفارس محمد \tNULL\t30001\tEmployee\n90003\tمحمد اسماعيل\tNULL\t30001\tSupervisor \n",
+  "stderr": "",
+  "execution_time_ms": 1523
+}

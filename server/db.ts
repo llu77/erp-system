@@ -11942,6 +11942,7 @@ export async function getEmployeesByBranchForPos(branchId: number) {
     id: employees.id,
     name: employees.name,
     position: employees.position,
+    photoUrl: employees.photoUrl,
   })
     .from(employees)
     .where(eq(employees.branchId, branchId))

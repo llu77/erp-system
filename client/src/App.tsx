@@ -78,6 +78,7 @@ import POS from "./pages/POS";
 import POSDailyReport from "./pages/POSDailyReport";
 import POSSettings from "./pages/POSSettings";
 import POSLogin from "./pages/POSLogin";
+import POSServicesManagement from "./pages/POSServicesManagement";
 
 function Router() {
   return (
@@ -420,6 +421,11 @@ function Router() {
       
       {/* بوابة الكاشير (POS) */}
       <Route path="/pos/login" component={POSLogin} />
+      <Route path="/pos/services-management">
+        <DashboardLayout>
+          <POSServicesManagement />
+        </DashboardLayout>
+      </Route>
       <Route path="/pos" component={POS} />
       <Route path="/pos/daily-report" component={POSDailyReport} />
       <Route path="/pos/settings" component={POSSettings} />

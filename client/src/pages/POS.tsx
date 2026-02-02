@@ -792,7 +792,16 @@ export default function POS() {
           </div>
           
           <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-xl border">
-            <User className="h-5 w-5 text-primary" />
+            {/* صورة الموظف المحدد */}
+            {selectedEmployeeId && employees.find(e => e.id === selectedEmployeeId)?.photoUrl ? (
+              <img 
+                src={employees.find(e => e.id === selectedEmployeeId)?.photoUrl || ''}
+                alt={employees.find(e => e.id === selectedEmployeeId)?.name || ''}
+                className="w-10 h-10 rounded-full object-cover border-2 border-primary/30 shadow-sm"
+              />
+            ) : (
+              <User className="h-5 w-5 text-primary" />
+            )}
             <Select 
               value={selectedEmployeeId?.toString() || ''} 
               onValueChange={(v) => setSelectedEmployeeId(Number(v))}
@@ -804,7 +813,16 @@ export default function POS() {
               <SelectContent>
                 {employees.map(emp => (
                   <SelectItem key={emp.id} value={emp.id.toString()} className="text-base">
-                    {emp.name}
+                    <div className="flex items-center gap-2">
+                      {emp.photoUrl ? (
+                        <img src={emp.photoUrl} alt={emp.name} className="w-6 h-6 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                          <User className="h-3 w-3" />
+                        </div>
+                      )}
+                      {emp.name}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

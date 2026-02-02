@@ -1,0 +1,42 @@
+{
+  "query": "SELECT id, code, name, phone, branchId, photoUrl FROM employees WHERE name LIKE '%محمد%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, code, name, phone, branchId, photoUrl FROM employees WHERE name LIKE '%محمد%';",
+  "rows": [
+    {
+      "id": "30007",
+      "code": "EMP-007",
+      "name": "السيد محمد",
+      "phone": "0557890123",
+      "branchId": "1",
+      "photoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-007-1769550451732.jpeg"
+    },
+    {
+      "id": "60001",
+      "code": "EMP100",
+      "name": "محمد ناصر",
+      "phone": "00",
+      "branchId": "30001",
+      "photoUrl": "NULL"
+    },
+    {
+      "id": "90001",
+      "code": "T03",
+      "name": "فارس محمد ",
+      "phone": "5",
+      "branchId": "30001",
+      "photoUrl": "NULL"
+    },
+    {
+      "id": "90003",
+      "code": "T4",
+      "name": "محمد اسماعيل",
+      "phone": "0563113205",
+      "branchId": "30001",
+      "photoUrl": "https://files.manuscdn.com/user_upload_by_module/session_file/310419663030110188/vQGHEbfeZDqvqZTH.jpeg"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcode\tname\tphone\tbranchId\tphotoUrl\n30007\tEMP-007\tالسيد محمد\t0557890123\t1\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-007-1769550451732.jpeg\n60001\tEMP100\tمحمد ناصر\t00\t30001\tNULL\n90001\tT03\tفارس محمد \t5\t30001\tNULL\n90003\tT4\tمحمد اسماعيل\t0563113205\t30001\thttps://files.manuscdn.com/user_upload_by_module/session_file/310419663030110188/vQGHEbfeZDqvqZTH.jpeg\n",
+  "stderr": "",
+  "execution_time_ms": 1551
+}
