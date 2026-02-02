@@ -223,23 +223,23 @@ const menuStructure: MenuItem[] = [
     label: "إدارة الكاشير",
     roles: ["admin"],
     children: [
-      { icon: Boxes, label: "إدارة الأقسام", path: "/pos/categories-management", roles: ["admin"] },
-      { icon: Package, label: "إدارة الخدمات", path: "/pos/services-only", roles: ["admin"] },
-      { icon: Users, label: "إحصائيات الموظفين", path: "/pos/employee-stats", roles: ["admin"] },
+      { icon: Boxes, label: "إدارة الأقسام", path: "/pos-categories", roles: ["admin"] },
+      { icon: Package, label: "إدارة الخدمات", path: "/pos-services-only", roles: ["admin"] },
+      { icon: Users, label: "إحصائيات الموظفين", path: "/pos-employee-stats", roles: ["admin"] },
     ]
   },
   // تقرير أداء الخدمات
   {
     icon: BarChart3,
     label: "تقرير أداء الخدمات",
-    path: "/pos/service-performance",
+    path: "/pos-services",
     roles: ["admin", "manager", "supervisor", "viewer"],
   },
   // تقرير أداء الموظفين
   {
     icon: Users,
     label: "تقرير أداء الموظفين",
-    path: "/pos/employee-performance",
+    path: "/pos-employee-ranking",
     roles: ["admin", "manager", "supervisor", "viewer"],
   },
   

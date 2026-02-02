@@ -215,7 +215,7 @@ export default function POSSettings() {
               الكاشير
             </Button>
           </Link>
-          <Link href="/pos/report">
+          <Link href="/pos-daily-report">
             <Button variant="outline" size="lg" className="gap-2 h-12">
               <BarChart3 className="h-5 w-5" />
               تقرير اليوم

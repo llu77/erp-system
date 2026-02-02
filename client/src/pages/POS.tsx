@@ -852,13 +852,13 @@ export default function POS() {
         
         {/* Quick Actions */}
         <div className="flex items-center gap-2">
-          <Link href="/pos/daily-report">
+          <Link href="/pos-daily-report">
             <Button variant="outline" size="lg" className="gap-2 h-12">
               <BarChart3 className="h-5 w-5" />
               تقرير اليوم
             </Button>
           </Link>
-          <Link href="/pos/settings">
+          <Link href="/pos-settings">
             <Button variant="outline" size="icon" className="h-12 w-12">
               <Settings className="h-5 w-5" />
             </Button>
@@ -930,7 +930,7 @@ export default function POS() {
               <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                 <Store className="h-16 w-16 mb-4 opacity-50" />
                 <p className="text-xl">لا توجد خدمات في هذا القسم</p>
-                <Link href="/pos/settings">
+                <Link href="/pos-settings">
                   <Button variant="link" className="mt-2">
                     إضافة خدمات جديدة
                   </Button>

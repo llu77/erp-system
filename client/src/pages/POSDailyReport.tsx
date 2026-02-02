@@ -297,7 +297,7 @@ export default function POSDailyReport() {
             </Button>
           </Link>
           
-          <Link href="/pos/settings">
+          <Link href="/pos-settings">
             <Button variant="outline" size="icon" className="h-12 w-12">
               <Settings className="h-5 w-5" />
             </Button>
