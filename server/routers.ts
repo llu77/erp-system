@@ -861,7 +861,8 @@ export const appRouter = router({
         return { success: true, message: 'تم إنشاء الفاتورة بنجاح', invoiceNumber, invoiceId };
       }),
 
-    updateStatus: managerProcedure
+    // تعديل حالة الفاتورة - للأدمن فقط
+    updateStatus: adminProcedure
       .input(z.object({
         id: z.number(),
         status: z.enum(['draft', 'pending', 'paid', 'partial', 'cancelled']),

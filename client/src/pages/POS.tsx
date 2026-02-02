@@ -263,13 +263,23 @@ export default function POS() {
     if (!lastInvoice) return;
     
     const branchName = branches.find(b => b.id === selectedBranchId)?.nameAr || 'غير محدد';
+    const branchPhone = '0500000000'; // سيتم إضافة رقم الهاتف للفروع لاحقاً
     const employeeName = employees.find(e => e.id === selectedEmployeeId)?.name || 'غير محدد';
     
     // تنسيق التاريخ بالميلادي
     const dateStr = currentTime.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const timeStr = currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
     
-    // تصميم فاتورة حرارية متوافقة مع طابعات 80mm (أبيض وأسود)
+    // إنشاء بيانات QR Code للتحقق
+    const qrData = JSON.stringify({
+      inv: lastInvoice.invoiceNumber,
+      total: lastInvoice.total,
+      date: dateStr,
+      branch: branchName
+    });
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(qrData)}`;
+    
+    // تصميم فاتورة حرارية متوافقة مع طابعات 80mm (أبيض وأسود) - محسنة
     const receiptHTML = `
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
@@ -301,9 +311,9 @@ export default function POS() {
             width: 80mm;
             max-width: 80mm;
             margin: 0 auto;
-            padding: 3mm;
+            padding: 2mm;
             font-size: 11px;
-            line-height: 1.3;
+            line-height: 1.4;
             direction: rtl;
             background: #fff;
             color: #000;
@@ -313,31 +323,51 @@ export default function POS() {
           .receipt {
             width: 100%;
           }
+          /* الشعار والهيدر */
           .header {
             text-align: center;
-            padding-bottom: 8px;
-            border-bottom: 1px dashed #000;
-            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 2px double #000;
+            margin-bottom: 6px;
+          }
+          .logo {
+            width: 50px;
+            height: 50px;
+            margin: 0 auto 4px;
+            border: 2px solid #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
           }
           .header h1 {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: bold;
-            margin-bottom: 4px;
-            letter-spacing: 1px;
+            margin-bottom: 2px;
+            letter-spacing: 2px;
           }
           .header .branch {
-            font-size: 12px;
+            font-size: 13px;
+            font-weight: bold;
             margin-bottom: 2px;
           }
+          .header .phone {
+            font-size: 11px;
+            margin-bottom: 4px;
+          }
           .header .invoice-num {
-            font-size: 10px;
+            font-size: 11px;
             font-weight: bold;
             background: #000;
             color: #fff;
-            padding: 2px 8px;
+            padding: 3px 10px;
             display: inline-block;
             margin-top: 4px;
+            letter-spacing: 1px;
           }
+          /* قسم المعلومات */
           .info-section {
             padding: 6px 0;
             border-bottom: 1px dashed #000;
@@ -345,12 +375,13 @@ export default function POS() {
           .info-row {
             display: flex;
             justify-content: space-between;
-            margin: 3px 0;
-            font-size: 10px;
+            margin: 4px 0;
+            font-size: 11px;
           }
           .info-row span:first-child {
             font-weight: bold;
           }
+          /* قسم الخدمات */
           .items-section {
             padding: 6px 0;
             border-bottom: 1px dashed #000;
@@ -359,30 +390,41 @@ export default function POS() {
             display: flex;
             justify-content: space-between;
             font-weight: bold;
-            font-size: 10px;
+            font-size: 11px;
             padding-bottom: 4px;
             border-bottom: 1px solid #000;
             margin-bottom: 4px;
+            background: #f0f0f0;
+            padding: 4px 2px;
           }
           .item {
             display: flex;
             justify-content: space-between;
-            margin: 4px 0;
-            font-size: 10px;
+            align-items: center;
+            margin: 5px 0;
+            font-size: 11px;
+            padding: 2px 0;
+            border-bottom: 1px dotted #ccc;
+          }
+          .item:last-child {
+            border-bottom: none;
           }
           .item-name {
             flex: 1;
             text-align: right;
+            font-weight: 500;
           }
           .item-qty {
-            width: 25px;
+            width: 30px;
             text-align: center;
+            font-weight: bold;
           }
           .item-price {
-            width: 50px;
+            width: 55px;
             text-align: left;
             font-weight: bold;
           }
+          /* قسم المجاميع */
           .totals-section {
             padding: 8px 0;
           }
@@ -396,35 +438,73 @@ export default function POS() {
             color: #000;
           }
           .total-row.grand-total {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: bold;
             border-top: 2px solid #000;
-            padding-top: 6px;
+            border-bottom: 2px solid #000;
+            padding: 8px 0;
             margin-top: 6px;
+            background: #f5f5f5;
           }
+          /* طريقة الدفع */
           .payment-method {
             text-align: center;
             margin: 8px 0;
-            padding: 4px;
-            border: 1px solid #000;
-            font-size: 11px;
+            padding: 6px;
+            border: 2px solid #000;
+            font-size: 12px;
             font-weight: bold;
+            background: #f9f9f9;
           }
+          /* عميل الولاء */
+          .loyalty-section {
+            text-align: center;
+            margin: 6px 0;
+            padding: 4px;
+            border: 1px dashed #000;
+            font-size: 10px;
+            background: #fffef0;
+          }
+          /* QR Code */
+          .qr-section {
+            text-align: center;
+            padding: 8px 0;
+            border-top: 1px dashed #000;
+            margin-top: 6px;
+          }
+          .qr-section img {
+            width: 70px;
+            height: 70px;
+            margin: 4px auto;
+          }
+          .qr-section p {
+            font-size: 8px;
+            color: #666;
+          }
+          /* الفوتر */
           .footer {
             text-align: center;
             padding-top: 8px;
-            border-top: 1px dashed #000;
-            font-size: 9px;
-          }
-          .footer p {
-            margin: 2px 0;
+            border-top: 2px double #000;
+            font-size: 10px;
           }
           .footer .thanks {
-            font-size: 11px;
+            font-size: 14px;
             font-weight: bold;
             margin-bottom: 4px;
           }
-          /* أزرار التحكم - تظهر فقط على الشاشة */
+          .footer .welcome {
+            font-size: 11px;
+            margin: 4px 0;
+            font-style: italic;
+          }
+          .footer .brand {
+            font-size: 9px;
+            margin-top: 6px;
+            padding-top: 4px;
+            border-top: 1px dashed #000;
+          }
+          /* أزرار التحكم */
           .print-controls {
             position: fixed;
             bottom: 10px;
@@ -455,14 +535,16 @@ export default function POS() {
       </head>
       <body>
         <div class="receipt">
-          <!-- Header -->
+          <!-- Header مع الشعار -->
           <div class="header">
+            <div class="logo">✂</div>
             <h1>Symbol AI</h1>
             <div class="branch">${branchName}</div>
+            <div class="phone">هاتف: ${branchPhone}</div>
             <div class="invoice-num">${lastInvoice.invoiceNumber}</div>
           </div>
           
-          <!-- Info Section -->
+          <!-- معلومات الفاتورة -->
           <div class="info-section">
             <div class="info-row">
               <span>التاريخ:</span>
@@ -478,23 +560,23 @@ export default function POS() {
             </div>
           </div>
           
-          <!-- Items Section -->
+          <!-- الخدمات -->
           <div class="items-section">
             <div class="items-header">
-              <span style="flex:1;text-align:right;">البيان</span>
-              <span style="width:25px;text-align:center;">×</span>
-              <span style="width:50px;text-align:left;">السعر</span>
+              <span style="flex:1;text-align:right;">الخدمة</span>
+              <span style="width:30px;text-align:center;">الكمية</span>
+              <span style="width:55px;text-align:left;">السعر</span>
             </div>
             ${cart.map(item => `
               <div class="item">
                 <span class="item-name">${item.serviceNameAr}</span>
                 <span class="item-qty">${item.quantity}</span>
-                <span class="item-price">${item.total.toFixed(0)}</span>
+                <span class="item-price">${item.total.toFixed(0)} ر.س</span>
               </div>
             `).join('')}
           </div>
           
-          <!-- Totals Section -->
+          <!-- المجاميع -->
           <div class="totals-section">
             <div class="total-row">
               <span>المجموع الفرعي:</span>
@@ -502,7 +584,7 @@ export default function POS() {
             </div>
             ${discountAmount > 0 ? `
               <div class="total-row discount">
-                <span>الخصم:</span>
+                <span>الخصم${loyaltyCustomer ? ' (ولاء)' : ''}:</span>
                 <span>- ${discountAmount.toFixed(2)} ر.س</span>
               </div>
             ` : ''}
@@ -512,32 +594,45 @@ export default function POS() {
             </div>
           </div>
           
-          <!-- Payment Method -->
+          <!-- طريقة الدفع -->
           <div class="payment-method">
-            طريقة الدفع: ${paymentMethod === 'cash' ? 'كاش' : paymentMethod === 'card' ? 'شبكة/Card' : paymentMethod === 'split' ? 'تقسيم' : 'ولاء'}
+            طريقة الدفع: ${paymentMethod === 'cash' ? 'نقدي (كاش)' : paymentMethod === 'card' ? 'شبكة (Card)' : paymentMethod === 'split' ? 'تقسيم' : 'برنامج الولاء'}
           </div>
           
-          <!-- Footer -->
+          ${loyaltyCustomer ? `
+            <div class="loyalty-section">
+              <strong>عميل الولاء:</strong> ${loyaltyCustomer.name}<br/>
+              <span>هاتف: ${loyaltyCustomer.phone}</span>
+            </div>
+          ` : ''}
+          
+          <!-- QR Code للتحقق -->
+          <div class="qr-section">
+            <img src="${qrCodeUrl}" alt="QR Code" />
+            <p>امسح للتحقق من الفاتورة</p>
+          </div>
+          
+          <!-- الفوتر مع الجملة الترحيبية -->
           <div class="footer">
-            <p class="thanks">شكراً لزيارتكم</p>
-            <p>نتطلع لخدمتكم مرة أخرى</p>
-            <p style="margin-top:6px;">Symbol AI - نظام نقاط البيع</p>
+            <p class="thanks">شكراً لزيارتكم ❤</p>
+            <p class="welcome">نتشرف بخدمتكم دائماً</p>
+            <p class="welcome">نتمنى لكم يوماً سعيداً</p>
+            <p class="brand">Symbol AI - نظام نقاط البيع الذكي</p>
           </div>
         </div>
         
-        <!-- Print Controls (hidden when printing) -->
+        <!-- أزرار التحكم -->
         <div class="print-controls no-print">
-          <button class="print-btn primary" onclick="window.print();">طباعة</button>
-          <button class="print-btn secondary" onclick="window.close();">إغلاق</button>
+          <button class="print-btn primary" onclick="window.print();">🖨️ طباعة</button>
+          <button class="print-btn secondary" onclick="window.close();">✕ إغلاق</button>
         </div>
         
         <script>
           // الطباعة التلقائية بعد تحميل الصفحة
           window.onload = function() {
-            // انتظار قليل لضمان تحميل الخطوط
             setTimeout(function() {
               window.print();
-            }, 300);
+            }, 500);
           };
           
           // إغلاق النافذة بعد الطباعة
@@ -552,7 +647,7 @@ export default function POS() {
     `;
     
     // فتح نافذة الطباعة
-    const printWindow = window.open('', '_blank', 'width=320,height=600,scrollbars=yes');
+    const printWindow = window.open('', '_blank', 'width=320,height=700,scrollbars=yes');
     if (printWindow) {
       printWindow.document.write(receiptHTML);
       printWindow.document.close();
