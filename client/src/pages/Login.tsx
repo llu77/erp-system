@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Lock, User, Building2, Users } from "lucide-react";
+import { Loader2, Lock, User, Store, Users } from "lucide-react";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -115,16 +115,29 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-slate-700 space-y-4">
-            <Button
-              variant="outline"
-              className="w-full border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white"
-              onClick={() => setLocation('/employee-login')}
-            >
-              <Users className="ml-2 h-4 w-4" />
-              بوابة الموظفين
-            </Button>
-            <p className="text-center text-sm text-slate-500">
+          <div className="mt-6 pt-6 border-t border-slate-700 space-y-3">
+            {/* بوابات الدخول الأخرى */}
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                className="border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white h-12"
+                onClick={() => setLocation('/employee-login')}
+              >
+                <Users className="ml-2 h-4 w-4" />
+                بوابة الموظفين
+              </Button>
+              
+              <Button
+                variant="outline"
+                className="border-amber-600/50 text-amber-400 hover:bg-amber-600/20 hover:text-amber-300 hover:border-amber-500 h-12"
+                onClick={() => setLocation('/pos/login')}
+              >
+                <Store className="ml-2 h-4 w-4" />
+                بوابة الكاشير
+              </Button>
+            </div>
+            
+            <p className="text-center text-sm text-slate-500 pt-2">
               Symbol AI - جميع الحقوق محفوظة
             </p>
           </div>
