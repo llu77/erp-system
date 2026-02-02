@@ -12127,9 +12127,15 @@ export async function getBranchEmployeesWithMonthlyRevenue(branchId: number, yea
   const db = await getDb();
   if (!db) return [];
   
-  // حساب بداية ونهاية الشهر
+  // حساب بداية ونهاية الشهر الحالي
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0);
+  
+  // حساب بداية ونهاية الشهر السابق
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevStartDate = new Date(prevYear, prevMonth - 1, 1);
+  const prevEndDate = new Date(prevYear, prevMonth, 0);
   
   // جلب موظفي الفرع مع إيراداتهم الشهرية
   const result = await db.select({
@@ -12155,10 +12161,49 @@ export async function getBranchEmployeesWithMonthlyRevenue(branchId: number, yea
   .groupBy(employees.id, employees.name, employees.code, employees.position, employees.photoUrl)
   .orderBy(desc(sql`totalRevenue`));
   
-  return result.map((emp, index) => ({
-    ...emp,
-    rank: index + 1,
-    totalRevenue: Number(emp.totalRevenue || 0),
-    invoiceCount: Number(emp.invoiceCount || 0),
-  }));
+  // جلب إيرادات الشهر السابق لكل موظف
+  const prevMonthRevenues = await db.select({
+    employeeId: employees.id,
+    totalRevenue: sql<number>`COALESCE(SUM(${employeeRevenues.total}), 0)`.as('totalRevenue'),
+  })
+  .from(employees)
+  .leftJoin(employeeRevenues, eq(employees.id, employeeRevenues.employeeId))
+  .leftJoin(dailyRevenues, and(
+    eq(employeeRevenues.dailyRevenueId, dailyRevenues.id),
+    gte(dailyRevenues.date, prevStartDate),
+    lte(dailyRevenues.date, prevEndDate)
+  ))
+  .where(and(
+    eq(employees.branchId, branchId),
+    eq(employees.isActive, true)
+  ))
+  .groupBy(employees.id);
+  
+  // تحويل إيرادات الشهر السابق إلى Map للوصول السريع
+  const prevRevenueMap = new Map<number, number>();
+  prevMonthRevenues.forEach(emp => {
+    prevRevenueMap.set(emp.employeeId, Number(emp.totalRevenue || 0));
+  });
+  
+  return result.map((emp, index) => {
+    const currentRevenue = Number(emp.totalRevenue || 0);
+    const previousRevenue = prevRevenueMap.get(emp.employeeId) || 0;
+    
+    // حساب نسبة التغيير
+    let changePercentage = 0;
+    if (previousRevenue > 0) {
+      changePercentage = ((currentRevenue - previousRevenue) / previousRevenue) * 100;
+    } else if (currentRevenue > 0) {
+      changePercentage = 100; // إذا لم يكن هناك إيرادات سابقة والآن يوجد
+    }
+    
+    return {
+      ...emp,
+      rank: index + 1,
+      totalRevenue: currentRevenue,
+      invoiceCount: Number(emp.invoiceCount || 0),
+      previousRevenue,
+      changePercentage: Math.round(changePercentage * 10) / 10, // تقريب لرقم عشري واحد
+    };
+  });
 }

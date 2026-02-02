@@ -39,6 +39,8 @@ import {
   Crown,
   Medal,
   Award,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -1031,7 +1033,21 @@ export default function POS() {
                         }`}>
                           {emp.totalRevenue.toLocaleString()}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">ر.س</p>
+                        <div className="flex items-center gap-1">
+                          <p className="text-[10px] text-muted-foreground">ر.س</p>
+                          {emp.changePercentage !== undefined && emp.changePercentage !== 0 && (
+                            <span className={`text-[10px] font-medium flex items-center ${
+                              emp.changePercentage > 0 ? 'text-emerald-500' : 'text-red-500'
+                            }`}>
+                              {emp.changePercentage > 0 ? (
+                                <TrendingUp className="h-2.5 w-2.5 ml-0.5" />
+                              ) : (
+                                <TrendingDown className="h-2.5 w-2.5 ml-0.5" />
+                              )}
+                              {Math.abs(emp.changePercentage)}%
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))
