@@ -1,0 +1,31 @@
+{
+  "query": "EXPLAIN SELECT * FROM posInvoices WHERE branchId = 1 AND invoiceDate >= CURDATE() AND invoiceDate < CURDATE() + INTERVAL 1 DAY;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute EXPLAIN SELECT * FROM posInvoices WHERE branchId = 1 AND invoiceDate >= CURDATE() AND invoiceDate < CURDATE() + INTERVAL 1 DAY;",
+  "rows": [
+    {
+      "id": "IndexLookUp_10",
+      "estRows": "0.01",
+      "task": "root",
+      "access object": "",
+      "operator info": ""
+    },
+    {
+      "id": "├─IndexRangeScan_8(Build)",
+      "estRows": "0.01",
+      "task": "cop[tikv]",
+      "access object": "table:posInvoices, index:idx_posInvoices_branchId_invoiceDate(branchId, invoiceDate)",
+      "operator info": "range:[? ?,? ?), keep order:false, stats:pseudo"
+    },
+    {
+      "id": "└─TableRowIDScan_9(Probe)",
+      "estRows": "0.01",
+      "task": "cop[tikv]",
+      "access object": "table:posInvoices",
+      "operator info": "keep order:false, stats:pseudo"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\testRows\ttask\taccess object\toperator info\nIndexLookUp_10\t0.01\troot\t\t\n├─IndexRangeScan_8(Build)\t0.01\tcop[tikv]\ttable:posInvoices, index:idx_posInvoices_branchId_invoiceDate(branchId, invoiceDate)\trange:[? ?,? ?), keep order:false, stats:pseudo\n└─TableRowIDScan_9(Probe)\t0.01\tcop[tikv]\ttable:posInvoices\tkeep order:false, stats:pseudo\n",
+  "stderr": "",
+  "execution_time_ms": 1531
+}
