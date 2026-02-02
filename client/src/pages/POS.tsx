@@ -43,6 +43,9 @@ import {
   TrendingDown,
 } from 'lucide-react';
 import { Link } from 'wouter';
+import usePOSKeyboard from '@/hooks/usePOSKeyboard';
+import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
+import { Keyboard } from 'lucide-react';
 
 // Types
 interface CartItem {
@@ -245,6 +248,42 @@ export default function POS() {
     setCashAmount(0);
     setCardAmount(0);
   }, []);
+  
+  // Keyboard Shortcuts
+  const { shortcuts } = usePOSKeyboard({
+    onPaymentCash: () => {
+      setPaymentMethod('cash');
+      toast.info('تم اختيار الدفع نقداً');
+    },
+    onPaymentCard: () => {
+      setPaymentMethod('card');
+      toast.info('تم اختيار الدفع بالبطاقة');
+    },
+    onPaymentMixed: () => {
+      setPaymentMethod('split');
+      toast.info('تم اختيار الدفع المختلط');
+    },
+    onConfirm: () => {
+      if (showPaymentDialog) {
+        handlePayment();
+      } else if (cart.length > 0) {
+        handleCheckout();
+      }
+    },
+    onCancel: () => {
+      if (showPaymentDialog) setShowPaymentDialog(false);
+      else if (showSuccessDialog) setShowSuccessDialog(false);
+      else if (showLoyaltyDialog) setShowLoyaltyDialog(false);
+    },
+    onNewInvoice: () => {
+      clearCart();
+      toast.info('تم تجهيز فاتورة جديدة');
+    },
+    onPrint: () => {
+      if (lastInvoice) handlePrint();
+    },
+    enabled: true,
+  });
   
   const selectLoyaltyCustomer = useCallback((customer: LoyaltyCustomer) => {
     setLoyaltyCustomer(customer);
@@ -852,6 +891,7 @@ export default function POS() {
         
         {/* Quick Actions */}
         <div className="flex items-center gap-2">
+          <KeyboardShortcutsHelp shortcuts={shortcuts} />
           <Link href="/pos-daily-report">
             <Button variant="outline" size="lg" className="gap-2 h-12">
               <BarChart3 className="h-5 w-5" />
