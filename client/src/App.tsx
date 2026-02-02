@@ -207,6 +207,13 @@ function Router() {
       <Route path="/loyalty-visit">
         <LazyPage component={LoyaltyVisit} />
       </Route>
+      {/* مسارات بديلة للباركود المطبوع */}
+      <Route path="/loyalty/register">
+        <LazyPage component={LoyaltyRegister} />
+      </Route>
+      <Route path="/loyalty/visit">
+        <LazyPage component={LoyaltyVisit} />
+      </Route>
       <Route path="/loyalty-settings">
         <DashboardLayout>
           <LazyPage component={LoyaltySettings} />
