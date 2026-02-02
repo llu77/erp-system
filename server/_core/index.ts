@@ -223,6 +223,54 @@ async function startServer() {
     }
   });
 
+  // Service Performance PDF Report API
+  app.get('/api/reports/service-performance', async (req: any, res: any) => {
+    try {
+      const { startDate, endDate, branchId, branchName, month, year } = req.query;
+      
+      // Import database functions
+      const db = await import('../db');
+      const { generateServicePerformancePDF } = await import('../pdfService');
+      
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      const branchIdNum = branchId ? parseInt(branchId as string) : undefined;
+      
+      // Fetch data
+      const [topServices, categoryPerformance, summary, dailyData] = await Promise.all([
+        db.getServicePerformanceReport(start, end, branchIdNum, 20),
+        db.getServicePerformanceByCategory(start, end, branchIdNum),
+        db.getServicePerformanceSummary(start, end, branchIdNum),
+        db.getServicePerformanceDaily(start, end, branchIdNum),
+      ]);
+      
+      const pdfBuffer = await generateServicePerformancePDF({
+        month: month as string || 'غير محدد',
+        year: parseInt(year as string) || new Date().getFullYear(),
+        branchName: branchName as string || 'جميع الفروع',
+        summary: summary || {
+          totalRevenue: 0,
+          totalServices: 0,
+          totalInvoices: 0,
+          uniqueServices: 0,
+          averageInvoiceValue: 0,
+          revenueChange: 0,
+          servicesChange: 0,
+        },
+        topServices: topServices || [],
+        categoryPerformance: categoryPerformance || [],
+        dailyData: dailyData || [],
+      });
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=service-performance-${month}-${year}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error('Service Performance PDF export error:', error);
+      res.status(500).json({ error: 'فشل تصدير التقرير' });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

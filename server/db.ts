@@ -12208,3 +12208,246 @@ export async function getBranchEmployeesWithMonthlyRevenue(branchId: number, yea
     };
   });
 }
+
+
+// ==================== تقارير أداء الخدمات ====================
+
+/**
+ * جلب إحصائيات الخدمات الأكثر طلباً
+ * يحسب عدد الطلبات والإيرادات لكل خدمة في فترة زمنية محددة
+ */
+export async function getServicePerformanceReport(
+  startDate: Date,
+  endDate: Date,
+  branchId?: number,
+  limit: number = 20
+) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // بناء شرط الفرع
+  const branchCondition = branchId 
+    ? and(
+        gte(posInvoices.invoiceDate, startDate),
+        lte(posInvoices.invoiceDate, endDate),
+        eq(posInvoices.branchId, branchId),
+        eq(posInvoices.status, 'completed')
+      )
+    : and(
+        gte(posInvoices.invoiceDate, startDate),
+        lte(posInvoices.invoiceDate, endDate),
+        eq(posInvoices.status, 'completed')
+      );
+  
+  const result = await db.select({
+    serviceId: posInvoiceItems.serviceId,
+    serviceName: posInvoiceItems.serviceName,
+    serviceNameAr: posInvoiceItems.serviceNameAr,
+    totalQuantity: sql<number>`SUM(${posInvoiceItems.quantity})`.as('totalQuantity'),
+    totalRevenue: sql<number>`SUM(${posInvoiceItems.total})`.as('totalRevenue'),
+    averagePrice: sql<number>`AVG(${posInvoiceItems.price})`.as('averagePrice'),
+    invoiceCount: sql<number>`COUNT(DISTINCT ${posInvoiceItems.invoiceId})`.as('invoiceCount'),
+  })
+  .from(posInvoiceItems)
+  .innerJoin(posInvoices, eq(posInvoiceItems.invoiceId, posInvoices.id))
+  .where(branchCondition)
+  .groupBy(posInvoiceItems.serviceId, posInvoiceItems.serviceName, posInvoiceItems.serviceNameAr)
+  .orderBy(desc(sql`totalQuantity`))
+  .limit(limit);
+  
+  return result.map((item, index) => ({
+    rank: index + 1,
+    serviceId: item.serviceId,
+    serviceName: item.serviceName,
+    serviceNameAr: item.serviceNameAr,
+    totalQuantity: Number(item.totalQuantity || 0),
+    totalRevenue: Number(item.totalRevenue || 0),
+    averagePrice: Number(item.averagePrice || 0),
+    invoiceCount: Number(item.invoiceCount || 0),
+  }));
+}
+
+/**
+ * جلب ملخص أداء الخدمات حسب الفئة
+ */
+export async function getServicePerformanceByCategory(
+  startDate: Date,
+  endDate: Date,
+  branchId?: number
+) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // بناء شرط الفرع
+  const branchCondition = branchId 
+    ? and(
+        gte(posInvoices.invoiceDate, startDate),
+        lte(posInvoices.invoiceDate, endDate),
+        eq(posInvoices.branchId, branchId),
+        eq(posInvoices.status, 'completed')
+      )
+    : and(
+        gte(posInvoices.invoiceDate, startDate),
+        lte(posInvoices.invoiceDate, endDate),
+        eq(posInvoices.status, 'completed')
+      );
+  
+  const result = await db.select({
+    categoryId: posServices.categoryId,
+    categoryName: posCategories.name,
+    categoryNameAr: posCategories.nameAr,
+    categoryColor: posCategories.color,
+    totalQuantity: sql<number>`SUM(${posInvoiceItems.quantity})`.as('totalQuantity'),
+    totalRevenue: sql<number>`SUM(${posInvoiceItems.total})`.as('totalRevenue'),
+    serviceCount: sql<number>`COUNT(DISTINCT ${posInvoiceItems.serviceId})`.as('serviceCount'),
+  })
+  .from(posInvoiceItems)
+  .innerJoin(posInvoices, eq(posInvoiceItems.invoiceId, posInvoices.id))
+  .innerJoin(posServices, eq(posInvoiceItems.serviceId, posServices.id))
+  .innerJoin(posCategories, eq(posServices.categoryId, posCategories.id))
+  .where(branchCondition)
+  .groupBy(posServices.categoryId, posCategories.name, posCategories.nameAr, posCategories.color)
+  .orderBy(desc(sql`totalRevenue`));
+  
+  return result.map(item => ({
+    categoryId: item.categoryId,
+    categoryName: item.categoryName,
+    categoryNameAr: item.categoryNameAr,
+    categoryColor: item.categoryColor,
+    totalQuantity: Number(item.totalQuantity || 0),
+    totalRevenue: Number(item.totalRevenue || 0),
+    serviceCount: Number(item.serviceCount || 0),
+  }));
+}
+
+/**
+ * جلب إحصائيات عامة لأداء الخدمات
+ */
+export async function getServicePerformanceSummary(
+  startDate: Date,
+  endDate: Date,
+  branchId?: number
+) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  // بناء شرط الفرع
+  const branchCondition = branchId 
+    ? and(
+        gte(posInvoices.invoiceDate, startDate),
+        lte(posInvoices.invoiceDate, endDate),
+        eq(posInvoices.branchId, branchId),
+        eq(posInvoices.status, 'completed')
+      )
+    : and(
+        gte(posInvoices.invoiceDate, startDate),
+        lte(posInvoices.invoiceDate, endDate),
+        eq(posInvoices.status, 'completed')
+      );
+  
+  const [result] = await db.select({
+    totalInvoices: sql<number>`COUNT(DISTINCT ${posInvoices.id})`.as('totalInvoices'),
+    totalRevenue: sql<number>`SUM(${posInvoices.total})`.as('totalRevenue'),
+    totalServices: sql<number>`SUM(${posInvoiceItems.quantity})`.as('totalServices'),
+    uniqueServices: sql<number>`COUNT(DISTINCT ${posInvoiceItems.serviceId})`.as('uniqueServices'),
+    averageInvoiceValue: sql<number>`AVG(${posInvoices.total})`.as('averageInvoiceValue'),
+  })
+  .from(posInvoices)
+  .innerJoin(posInvoiceItems, eq(posInvoices.id, posInvoiceItems.invoiceId))
+  .where(branchCondition);
+  
+  // حساب الفترة السابقة للمقارنة
+  const periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  const prevEndDate = new Date(startDate.getTime() - 1);
+  const prevStartDate = new Date(prevEndDate.getTime() - (periodDays * 24 * 60 * 60 * 1000));
+  
+  const prevCondition = branchId 
+    ? and(
+        gte(posInvoices.invoiceDate, prevStartDate),
+        lte(posInvoices.invoiceDate, prevEndDate),
+        eq(posInvoices.branchId, branchId),
+        eq(posInvoices.status, 'completed')
+      )
+    : and(
+        gte(posInvoices.invoiceDate, prevStartDate),
+        lte(posInvoices.invoiceDate, prevEndDate),
+        eq(posInvoices.status, 'completed')
+      );
+  
+  const [prevResult] = await db.select({
+    totalRevenue: sql<number>`SUM(${posInvoices.total})`.as('totalRevenue'),
+    totalServices: sql<number>`SUM(${posInvoiceItems.quantity})`.as('totalServices'),
+  })
+  .from(posInvoices)
+  .innerJoin(posInvoiceItems, eq(posInvoices.id, posInvoiceItems.invoiceId))
+  .where(prevCondition);
+  
+  const currentRevenue = Number(result?.totalRevenue || 0);
+  const previousRevenue = Number(prevResult?.totalRevenue || 0);
+  const revenueChange = previousRevenue > 0 
+    ? ((currentRevenue - previousRevenue) / previousRevenue) * 100 
+    : (currentRevenue > 0 ? 100 : 0);
+  
+  const currentServices = Number(result?.totalServices || 0);
+  const previousServices = Number(prevResult?.totalServices || 0);
+  const servicesChange = previousServices > 0 
+    ? ((currentServices - previousServices) / previousServices) * 100 
+    : (currentServices > 0 ? 100 : 0);
+  
+  return {
+    totalInvoices: Number(result?.totalInvoices || 0),
+    totalRevenue: currentRevenue,
+    totalServices: currentServices,
+    uniqueServices: Number(result?.uniqueServices || 0),
+    averageInvoiceValue: Number(result?.averageInvoiceValue || 0),
+    revenueChange: Math.round(revenueChange * 10) / 10,
+    servicesChange: Math.round(servicesChange * 10) / 10,
+    previousRevenue,
+    previousServices,
+  };
+}
+
+/**
+ * جلب أداء الخدمات اليومي للرسم البياني
+ */
+export async function getServicePerformanceDaily(
+  startDate: Date,
+  endDate: Date,
+  branchId?: number
+) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // بناء شرط الفرع
+  const branchCondition = branchId 
+    ? and(
+        gte(posInvoices.invoiceDate, startDate),
+        lte(posInvoices.invoiceDate, endDate),
+        eq(posInvoices.branchId, branchId),
+        eq(posInvoices.status, 'completed')
+      )
+    : and(
+        gte(posInvoices.invoiceDate, startDate),
+        lte(posInvoices.invoiceDate, endDate),
+        eq(posInvoices.status, 'completed')
+      );
+  
+  const result = await db.select({
+    date: sql<string>`DATE(${posInvoices.invoiceDate})`.as('date'),
+    totalRevenue: sql<number>`SUM(${posInvoices.total})`.as('totalRevenue'),
+    totalServices: sql<number>`SUM(${posInvoiceItems.quantity})`.as('totalServices'),
+    invoiceCount: sql<number>`COUNT(DISTINCT ${posInvoices.id})`.as('invoiceCount'),
+  })
+  .from(posInvoices)
+  .innerJoin(posInvoiceItems, eq(posInvoices.id, posInvoiceItems.invoiceId))
+  .where(branchCondition)
+  .groupBy(sql`DATE(${posInvoices.invoiceDate})`)
+  .orderBy(sql`date`);
+  
+  return result.map(item => ({
+    date: item.date,
+    totalRevenue: Number(item.totalRevenue || 0),
+    totalServices: Number(item.totalServices || 0),
+    invoiceCount: Number(item.invoiceCount || 0),
+  }));
+}

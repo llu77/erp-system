@@ -224,6 +224,13 @@ const menuStructure: MenuItem[] = [
     path: "/pos/services-management",
     roles: ["admin"],
   },
+  // تقرير أداء الخدمات
+  {
+    icon: BarChart3,
+    label: "تقرير أداء الخدمات",
+    path: "/pos/service-performance",
+    roles: ["admin", "manager", "supervisor", "viewer"],
+  },
   
   // إعدادات النظام (للأدمن فقط)
   {

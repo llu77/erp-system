@@ -2344,3 +2344,661 @@ export async function generateVouchersReportPDF(data: VoucherReportPDFData): Pro
     await browser.close();
   }
 }
+
+
+/**
+ * تقرير أداء الخدمات الشهري
+ */
+interface ServicePerformanceData {
+  month: string;
+  year: number;
+  branchName: string;
+  summary: {
+    totalRevenue: number;
+    totalServices: number;
+    totalInvoices: number;
+    uniqueServices: number;
+    averageInvoiceValue: number;
+    revenueChange: number;
+    servicesChange: number;
+  };
+  topServices: Array<{
+    rank: number;
+    serviceName: string;
+    serviceNameAr: string;
+    totalQuantity: number;
+    totalRevenue: number;
+    averagePrice: number;
+    invoiceCount: number;
+  }>;
+  categoryPerformance: Array<{
+    categoryName: string;
+    categoryNameAr: string;
+    categoryColor: string | null;
+    totalQuantity: number;
+    totalRevenue: number;
+    serviceCount: number;
+  }>;
+  dailyData: Array<{
+    date: string;
+    totalRevenue: number;
+    totalServices: number;
+    invoiceCount: number;
+  }>;
+}
+
+export async function generateServicePerformancePDF(data: ServicePerformanceData): Promise<Buffer> {
+  const formatCurrencyLocal = (amount: number): string => {
+    return `${amount.toLocaleString('ar-SA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ر.س`;
+  };
+
+  const formatNumber = (num: number): string => {
+    return num.toLocaleString('ar-SA');
+  };
+
+  const totalCategoryRevenue = data.categoryPerformance.reduce((sum, cat) => sum + cat.totalRevenue, 0);
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير أداء الخدمات - ${data.month} ${data.year}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;600;700;800&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Tajawal', sans-serif;
+      background: #fff;
+      color: #1a1a1a;
+      font-size: 11pt;
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 15mm;
+    }
+    
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid #1e3a5f;
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .logo-section {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .logo {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #1e3a5f, #2c5282);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 18pt;
+    }
+    
+    .company-info h1 {
+      font-size: 16pt;
+      color: #1e3a5f;
+      font-weight: 700;
+    }
+    
+    .company-info p {
+      font-size: 9pt;
+      color: #666;
+    }
+    
+    .report-info {
+      text-align: left;
+    }
+    
+    .report-info h2 {
+      font-size: 14pt;
+      color: #1e3a5f;
+      font-weight: 600;
+    }
+    
+    .report-info p {
+      font-size: 9pt;
+      color: #666;
+    }
+    
+    /* Summary Cards */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 25px;
+    }
+    
+    .summary-card {
+      background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 15px;
+      text-align: center;
+    }
+    
+    .summary-card.primary {
+      background: linear-gradient(135deg, #1e3a5f, #2c5282);
+      color: white;
+      border: none;
+    }
+    
+    .summary-card .label {
+      font-size: 9pt;
+      color: #64748b;
+      margin-bottom: 5px;
+    }
+    
+    .summary-card.primary .label {
+      color: rgba(255,255,255,0.8);
+    }
+    
+    .summary-card .value {
+      font-size: 16pt;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+    
+    .summary-card.primary .value {
+      color: white;
+    }
+    
+    .summary-card .change {
+      font-size: 8pt;
+      margin-top: 5px;
+    }
+    
+    .change.positive {
+      color: #22c55e;
+    }
+    
+    .change.negative {
+      color: #ef4444;
+    }
+    
+    .summary-card.primary .change.positive {
+      color: #86efac;
+    }
+    
+    .summary-card.primary .change.negative {
+      color: #fca5a5;
+    }
+    
+    /* Section Title */
+    .section-title {
+      font-size: 13pt;
+      font-weight: 700;
+      color: #1e3a5f;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 20px;
+      background: #1e3a5f;
+      border-radius: 2px;
+    }
+    
+    /* Two Column Layout */
+    .two-columns {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+      margin-bottom: 25px;
+    }
+    
+    /* Top Services Table */
+    .services-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9pt;
+    }
+    
+    .services-table th {
+      background: #1e3a5f;
+      color: white;
+      padding: 10px 8px;
+      text-align: right;
+      font-weight: 600;
+    }
+    
+    .services-table td {
+      padding: 8px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #1a1a1a;
+    }
+    
+    .services-table tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    
+    .services-table tr:hover {
+      background: #f1f5f9;
+    }
+    
+    .rank-badge {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      color: #1a1a1a;
+      text-align: center;
+      line-height: 24px;
+      font-weight: 700;
+      font-size: 10pt;
+    }
+    
+    .rank-badge.gold {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      color: white;
+    }
+    
+    .rank-badge.silver {
+      background: linear-gradient(135deg, #9ca3af, #6b7280);
+      color: white;
+    }
+    
+    .rank-badge.bronze {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      color: white;
+    }
+    
+    /* Category Performance */
+    .category-list {
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 15px;
+    }
+    
+    .category-item {
+      margin-bottom: 12px;
+    }
+    
+    .category-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .category-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    
+    .category-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+    
+    .category-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    
+    .category-percentage {
+      font-weight: 700;
+      color: #1e3a5f;
+    }
+    
+    .category-bar {
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    
+    .category-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+    }
+    
+    .category-stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 8pt;
+      color: #64748b;
+      margin-top: 3px;
+    }
+    
+    /* Daily Data Table */
+    .daily-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+      margin-top: 15px;
+    }
+    
+    .daily-table th {
+      background: #f1f5f9;
+      color: #1e3a5f;
+      padding: 8px 6px;
+      text-align: right;
+      font-weight: 600;
+      border-bottom: 2px solid #1e3a5f;
+    }
+    
+    .daily-table td {
+      padding: 6px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #1a1a1a;
+    }
+    
+    .daily-table tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    
+    .daily-table .total-row {
+      background: #1e3a5f;
+      color: white;
+      font-weight: 700;
+    }
+    
+    .daily-table .total-row td {
+      border-bottom: none;
+    }
+    
+    /* Footer */
+    .footer {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #e2e8f0;
+    }
+    
+    .signatures {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    
+    .signature-box {
+      text-align: center;
+      width: 30%;
+    }
+    
+    .signature-image {
+      width: 100px;
+      height: 50px;
+      margin-bottom: 5px;
+    }
+    
+    .signature-line {
+      border-top: 1px solid #1a1a1a;
+      padding-top: 8px;
+    }
+    
+    .signature-name {
+      font-weight: 700;
+      color: #1a1a1a;
+      font-size: 10pt;
+    }
+    
+    .signature-title {
+      font-size: 8pt;
+      color: #64748b;
+    }
+    
+    .stamp {
+      width: 80px;
+      height: 80px;
+      border: 3px solid #1e3a5f;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto;
+      font-size: 8pt;
+      color: #1e3a5f;
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.3;
+    }
+    
+    .report-footer {
+      text-align: center;
+      font-size: 8pt;
+      color: #64748b;
+      padding-top: 15px;
+      border-top: 1px solid #e2e8f0;
+    }
+    
+    @media print {
+      body {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo-section">
+        <div class="logo">S</div>
+        <div class="company-info">
+          <h1>Symbol AI</h1>
+          <p>سيمبول للذكاء الاصطناعي - صالونات قصه وتخفيف</p>
+        </div>
+      </div>
+      <div class="report-info">
+        <h2>تقرير أداء الخدمات</h2>
+        <p>${data.month} ${data.year}</p>
+        <p>الفرع: ${data.branchName}</p>
+      </div>
+    </div>
+    
+    <!-- Summary Cards -->
+    <div class="summary-grid">
+      <div class="summary-card primary">
+        <div class="label">إجمالي الإيرادات</div>
+        <div class="value">${formatCurrencyLocal(data.summary.totalRevenue)}</div>
+        ${data.summary.revenueChange !== 0 ? `
+          <div class="change ${data.summary.revenueChange > 0 ? 'positive' : 'negative'}">
+            ${data.summary.revenueChange > 0 ? '↑' : '↓'} ${Math.abs(data.summary.revenueChange)}% عن الفترة السابقة
+          </div>
+        ` : ''}
+      </div>
+      <div class="summary-card">
+        <div class="label">الخدمات المقدمة</div>
+        <div class="value">${formatNumber(data.summary.totalServices)}</div>
+        ${data.summary.servicesChange !== 0 ? `
+          <div class="change ${data.summary.servicesChange > 0 ? 'positive' : 'negative'}">
+            ${data.summary.servicesChange > 0 ? '↑' : '↓'} ${Math.abs(data.summary.servicesChange)}%
+          </div>
+        ` : ''}
+      </div>
+      <div class="summary-card">
+        <div class="label">عدد الفواتير</div>
+        <div class="value">${formatNumber(data.summary.totalInvoices)}</div>
+        <div class="change" style="color: #64748b;">متوسط ${formatCurrencyLocal(data.summary.averageInvoiceValue)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">الخدمات الفريدة</div>
+        <div class="value">${formatNumber(data.summary.uniqueServices)}</div>
+        <div class="change" style="color: #64748b;">خدمة مختلفة</div>
+      </div>
+    </div>
+    
+    <!-- Two Column Layout -->
+    <div class="two-columns">
+      <!-- Top Services -->
+      <div>
+        <div class="section-title">الخدمات الأكثر طلباً</div>
+        <table class="services-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;">#</th>
+              <th>الخدمة</th>
+              <th style="width: 80px;">الطلبات</th>
+              <th style="width: 100px;">الإيرادات</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.topServices.slice(0, 10).map((service, index) => `
+              <tr>
+                <td>
+                  <span class="rank-badge ${index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : ''}">${service.rank}</span>
+                </td>
+                <td>
+                  <div style="font-weight: 600;">${service.serviceNameAr}</div>
+                  <div style="font-size: 8pt; color: #64748b;">${service.serviceName}</div>
+                </td>
+                <td style="font-weight: 700;">${formatNumber(service.totalQuantity)}</td>
+                <td style="font-weight: 700;">${formatCurrencyLocal(service.totalRevenue)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Category Performance -->
+      <div>
+        <div class="section-title">أداء الأقسام</div>
+        <div class="category-list">
+          ${data.categoryPerformance.map(category => {
+            const percentage = totalCategoryRevenue > 0 ? (category.totalRevenue / totalCategoryRevenue) * 100 : 0;
+            return `
+              <div class="category-item">
+                <div class="category-header">
+                  <div class="category-name">
+                    <span class="category-dot" style="background: ${category.categoryColor || '#6366f1'};"></span>
+                    ${category.categoryNameAr}
+                  </div>
+                  <span class="category-percentage">${percentage.toFixed(1)}%</span>
+                </div>
+                <div class="category-bar">
+                  <div class="category-bar-fill" style="width: ${percentage}%; background: ${category.categoryColor || '#6366f1'};"></div>
+                </div>
+                <div class="category-stats">
+                  <span>${formatNumber(category.totalQuantity)} خدمة</span>
+                  <span>${formatCurrencyLocal(category.totalRevenue)}</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+    
+    <!-- Daily Performance -->
+    <div class="section-title">الأداء اليومي</div>
+    <table class="daily-table">
+      <thead>
+        <tr>
+          <th>التاريخ</th>
+          <th>الإيرادات</th>
+          <th>الخدمات</th>
+          <th>الفواتير</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.dailyData.map(day => `
+          <tr>
+            <td>${new Date(day.date).toLocaleDateString('ar-SA', { weekday: 'short', day: 'numeric', month: 'short' })}</td>
+            <td style="font-weight: 600;">${formatCurrencyLocal(day.totalRevenue)}</td>
+            <td>${formatNumber(day.totalServices)}</td>
+            <td>${formatNumber(day.invoiceCount)}</td>
+          </tr>
+        `).join('')}
+        <tr class="total-row">
+          <td>الإجمالي</td>
+          <td>${formatCurrencyLocal(data.dailyData.reduce((sum, d) => sum + d.totalRevenue, 0))}</td>
+          <td>${formatNumber(data.dailyData.reduce((sum, d) => sum + d.totalServices, 0))}</td>
+          <td>${formatNumber(data.dailyData.reduce((sum, d) => sum + d.invoiceCount, 0))}</td>
+        </tr>
+      </tbody>
+    </table>
+    
+    <!-- Footer -->
+    <div class="footer">
+      <div class="signatures">
+        <div class="signature-box">
+          <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAzNWMyMC0xMCA0MC01IDYwLTIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik03MCAxNWM1IDEwIDEwIDE1IDIwIDIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" class="signature-image" alt="توقيع">
+          <div class="signature-line">
+            <div class="signature-name">سالم الوادعي</div>
+            <div class="signature-title">المشرف العام</div>
+          </div>
+        </div>
+        
+        <div class="signature-box">
+          <div class="stamp">
+            <div>Symbol AI<br/>الإدارة</div>
+          </div>
+        </div>
+        
+        <div class="signature-box">
+          <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAzNWMyMC0xMCA0MC01IDYwLTIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik03MCAxNWM1IDEwIDEwIDE1IDIwIDIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" class="signature-image" alt="توقيع">
+          <div class="signature-line">
+            <div class="signature-name">عمر المطيري</div>
+            <div class="signature-title">المدير</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="report-footer">
+        تم إنشاء هذا التقرير بواسطة نظام Symbol AI | التاريخ: ${new Date().toLocaleDateString('ar-SA')} | الوقت: ${new Date().toLocaleTimeString('ar-SA')}
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: '/usr/bin/chromium-browser',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '10mm',
+        right: '10mm',
+        bottom: '10mm',
+        left: '10mm'
+      }
+    });
+
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await browser.close();
+  }
+}

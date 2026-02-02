@@ -9895,6 +9895,62 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         ];
       }),
     }),
+
+    // ==================== تقارير أداء الخدمات ====================
+    servicePerformance: router({
+      // جلب تقرير الخدمات الأكثر طلباً
+      topServices: protectedProcedure
+        .input(z.object({
+          startDate: z.string(),
+          endDate: z.string(),
+          branchId: z.number().optional(),
+          limit: z.number().optional().default(20),
+        }))
+        .query(async ({ input }) => {
+          const startDate = new Date(input.startDate);
+          const endDate = new Date(input.endDate);
+          return await db.getServicePerformanceReport(startDate, endDate, input.branchId, input.limit);
+        }),
+
+      // جلب أداء الخدمات حسب الفئة
+      byCategory: protectedProcedure
+        .input(z.object({
+          startDate: z.string(),
+          endDate: z.string(),
+          branchId: z.number().optional(),
+        }))
+        .query(async ({ input }) => {
+          const startDate = new Date(input.startDate);
+          const endDate = new Date(input.endDate);
+          return await db.getServicePerformanceByCategory(startDate, endDate, input.branchId);
+        }),
+
+      // جلب ملخص أداء الخدمات
+      summary: protectedProcedure
+        .input(z.object({
+          startDate: z.string(),
+          endDate: z.string(),
+          branchId: z.number().optional(),
+        }))
+        .query(async ({ input }) => {
+          const startDate = new Date(input.startDate);
+          const endDate = new Date(input.endDate);
+          return await db.getServicePerformanceSummary(startDate, endDate, input.branchId);
+        }),
+
+      // جلب أداء الخدمات اليومي للرسم البياني
+      daily: protectedProcedure
+        .input(z.object({
+          startDate: z.string(),
+          endDate: z.string(),
+          branchId: z.number().optional(),
+        }))
+        .query(async ({ input }) => {
+          const startDate = new Date(input.startDate);
+          const endDate = new Date(input.endDate);
+          return await db.getServicePerformanceDaily(startDate, endDate, input.branchId);
+        }),
+    }),
   }),
 });
 
