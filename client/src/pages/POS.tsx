@@ -58,6 +58,12 @@ interface LoyaltyCustomer {
   id: number;
   name: string;
   phone: string;
+  // معلومات الخصم (اختياري)
+  totalApprovedVisits?: number;
+  isEligibleForDiscount?: boolean;
+  discountPercentage?: number;
+  visitsInCycle?: number;
+  nextDiscountAt?: number;
 }
 
 export default function POS() {
@@ -114,9 +120,16 @@ export default function POS() {
     { query: loyaltySearchQuery },
     { enabled: loyaltySearchQuery.length >= 2 }
   );
-  const { data: loyaltyDiscount } = trpc.pos.loyaltyCustomers.checkDiscount.useQuery(
+  // جلب معلومات الخصم للعميل المختار (بناءً على الزيارات الموافق عليها)
+  const { data: loyaltyDiscount } = trpc.pos.loyaltyCustomers.getApprovedVisits.useQuery(
     { customerId: loyaltyCustomer?.id! },
     { enabled: !!loyaltyCustomer }
+  );
+
+  // جلب عملاء الولاء المؤهلين للخصم (للقائمة المنسدلة)
+  const { data: eligibleCustomers = [] } = trpc.pos.loyaltyCustomers.getEligibleForDiscount.useQuery(
+    { branchId: selectedBranchId || undefined },
+    { enabled: !!selectedBranchId }
   );
   
   // Query for employee ranking by revenue
@@ -169,14 +182,19 @@ export default function POS() {
     }
   }, [paymentMethod, total]);
   
-  // Auto-apply loyalty discount
+  // Auto-apply loyalty discount (60% للزيارة الثالثة الموافق عليها)
   useEffect(() => {
-    if (loyaltyDiscount?.eligible && paymentMethod === 'loyalty') {
-      const discount = subtotal * 0.4; // 40% discount
+    if (loyaltyDiscount?.isEligibleForDiscount && paymentMethod === 'loyalty') {
+      const discountPercent = loyaltyDiscount.discountPercentage || 60;
+      const discount = subtotal * (discountPercent / 100);
       setDiscountAmount(discount);
-      setDiscountReason('خصم برنامج الولاء (40%)');
+      setDiscountReason(`خصم برنامج الولاء (${discountPercent}%) - الزيارة ${loyaltyDiscount.totalApproved}`);
+    } else if (paymentMethod === 'loyalty' && loyaltyCustomer && !loyaltyDiscount?.isEligibleForDiscount) {
+      // إذا كان العميل غير مؤهل للخصم، لا يطبق خصم
+      setDiscountAmount(0);
+      setDiscountReason('');
     }
-  }, [loyaltyDiscount, paymentMethod, subtotal]);
+  }, [loyaltyDiscount, paymentMethod, subtotal, loyaltyCustomer]);
   
   // Functions - Optimized with useCallback
   const addToCart = useCallback((service: typeof services[0]) => {
@@ -1220,9 +1238,14 @@ export default function POS() {
                 </Button>
               </div>
               {loyaltyDiscount && (
-                <p className={`text-xs font-medium mt-1 ${loyaltyDiscount.eligible ? 'text-green-600' : 'text-yellow-600'}`}>
-                  {loyaltyDiscount.message}
-                </p>
+                <div className="mt-1 space-y-0.5">
+                  <p className={`text-xs font-medium ${loyaltyDiscount.isEligibleForDiscount ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {loyaltyDiscount.isEligibleForDiscount 
+                      ? `🎉 مؤهل لخصم ${loyaltyDiscount.discountPercentage}% (الزيارة ${loyaltyDiscount.totalApproved})`
+                      : `${loyaltyDiscount.visitsInCurrentCycle} زيارات - يحتاج ${loyaltyDiscount.nextDiscountAt} للخصم`
+                    }
+                  </p>
+                </div>
               )}
             </div>
           )}
@@ -1271,7 +1294,7 @@ export default function POS() {
       
       {/* Loyalty Search Dialog */}
       <Dialog open={showLoyaltyDialog} onOpenChange={setShowLoyaltyDialog}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
               <Gift className="h-6 w-6 text-primary" />
@@ -1280,6 +1303,7 @@ export default function POS() {
           </DialogHeader>
           
           <div className="space-y-4">
+            {/* البحث */}
             <div className="relative">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
@@ -1290,8 +1314,80 @@ export default function POS() {
                 autoFocus
               />
             </div>
+
+            {/* قائمة العملاء المؤهلين للخصم (كل 3 زيارات = 60%) */}
+            {eligibleCustomers.filter(c => c.isEligible).length > 0 && loyaltySearchQuery.length < 2 && (
+              <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Gift className="h-5 w-5 text-green-600" />
+                  <span className="font-semibold text-green-700">عملاء مؤهلين لخصم 60%</span>
+                  <Badge variant="secondary" className="bg-green-600 text-white">
+                    {eligibleCustomers.filter(c => c.isEligible).length}
+                  </Badge>
+                </div>
+                <ScrollArea className="h-[150px]">
+                  <div className="space-y-2">
+                    {eligibleCustomers.filter(c => c.isEligible).map(customer => (
+                      <Card 
+                        key={customer.customerId}
+                        className="cursor-pointer hover:border-green-500 transition-colors border-green-300 bg-green-50/50"
+                        onClick={() => selectLoyaltyCustomer({
+                          id: customer.customerId,
+                          name: customer.customerName,
+                          phone: customer.customerPhone,
+                          totalApprovedVisits: customer.totalApprovedVisits,
+                          isEligibleForDiscount: customer.isEligible,
+                          discountPercentage: customer.discountPercentage,
+                        })}
+                      >
+                        <CardContent className="p-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
+                              <Gift className="h-5 w-5 text-green-600" />
+                            </div>
+                            <div>
+                              <div className="font-semibold">{customer.customerName}</div>
+                              <div className="text-sm text-muted-foreground">{customer.customerPhone}</div>
+                            </div>
+                          </div>
+                          <div className="text-left">
+                            <Badge className="bg-green-600">خصم {customer.discountPercentage}%</Badge>
+                            <div className="text-xs text-muted-foreground mt-1">{customer.totalApprovedVisits} زيارات</div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            {/* حاسبة الخصم */}
+            {loyaltySearchQuery.length < 2 && eligibleCustomers.length > 0 && (
+              <div className="bg-muted/50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  <span className="font-semibold">حاسبة الخصم</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                  <div className="bg-background rounded p-2">
+                    <div className="text-2xl font-bold text-primary">{eligibleCustomers.filter(c => c.isEligible).length}</div>
+                    <div className="text-xs text-muted-foreground">مؤهل للخصم</div>
+                  </div>
+                  <div className="bg-background rounded p-2">
+                    <div className="text-2xl font-bold text-yellow-600">{eligibleCustomers.filter(c => !c.isEligible && c.visitsInCycle === 2).length}</div>
+                    <div className="text-xs text-muted-foreground">زيارة واحدة للخصم</div>
+                  </div>
+                  <div className="bg-background rounded p-2">
+                    <div className="text-2xl font-bold">{eligibleCustomers.length}</div>
+                    <div className="text-xs text-muted-foreground">إجمالي العملاء</div>
+                  </div>
+                </div>
+              </div>
+            )}
             
-            <ScrollArea className="h-[350px]">
+            {/* نتائج البحث */}
+            <ScrollArea className="h-[200px]">
               <div className="space-y-2">
                 {loyaltySearchResults.map(customer => (
                   <Card 
@@ -1315,16 +1411,16 @@ export default function POS() {
                 ))}
                 
                 {loyaltySearchQuery.length >= 2 && loyaltySearchResults.length === 0 && (
-                  <div className="text-center text-muted-foreground py-12">
-                    <User className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-lg">لا توجد نتائج</p>
+                  <div className="text-center text-muted-foreground py-8">
+                    <User className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                    <p>لا توجد نتائج</p>
                   </div>
                 )}
                 
-                {loyaltySearchQuery.length < 2 && (
-                  <div className="text-center text-muted-foreground py-12">
-                    <Search className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-lg">أدخل حرفين على الأقل للبحث</p>
+                {loyaltySearchQuery.length < 2 && eligibleCustomers.filter(c => c.isEligible).length === 0 && (
+                  <div className="text-center text-muted-foreground py-8">
+                    <Search className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                    <p>أدخل حرفين على الأقل للبحث</p>
                   </div>
                 )}
               </div>

@@ -9725,6 +9725,27 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         .query(async ({ input }) => {
           return await db.checkLoyaltyCustomerDiscount(input.customerId);
         }),
+
+      // جلب عملاء الولاء المؤهلين للخصم (للقائمة المنسدلة)
+      getEligibleForDiscount: protectedProcedure
+        .input(z.object({ branchId: z.number().optional() }))
+        .query(async ({ input }) => {
+          return await db.getEligibleLoyaltyCustomersForDiscount(input.branchId);
+        }),
+
+      // التحقق من خصم عميل برقم الجوال (للبحث السريع)
+      checkDiscountByPhone: protectedProcedure
+        .input(z.object({ phone: z.string().min(10, 'رقم الجوال غير صحيح') }))
+        .query(async ({ input }) => {
+          return await db.checkLoyaltyDiscountByPhone(input.phone);
+        }),
+
+      // جلب عدد الزيارات الموافق عليها لعميل
+      getApprovedVisits: protectedProcedure
+        .input(z.object({ customerId: z.number() }))
+        .query(async ({ input }) => {
+          return await db.getApprovedVisitsCount(input.customerId);
+        }),
     }),
 
     // ==================== الموظفين ====================

@@ -12701,3 +12701,241 @@ export async function getEmployeeServiceDetails(
     totalRevenue: Number(item.totalRevenue) || 0,
   }));
 }
+
+
+// ==================== نظام خصم الزيارة الثالثة (60%) ====================
+
+/**
+ * جلب عدد الزيارات الموافق عليها لعميل معين
+ * يحسب فقط الزيارات بحالة approved
+ */
+export async function getApprovedVisitsCount(customerId: number): Promise<{
+  totalApproved: number;
+  visitsInCurrentCycle: number;
+  isEligibleForDiscount: boolean;
+  discountPercentage: number;
+  nextDiscountAt: number;
+}> {
+  const db = await getDb();
+  if (!db) return { 
+    totalApproved: 0, 
+    visitsInCurrentCycle: 0, 
+    isEligibleForDiscount: false,
+    discountPercentage: 0,
+    nextDiscountAt: 3
+  };
+
+  // جلب إعدادات الولاء
+  const settings = await getLoyaltySettings();
+  const requiredVisits = settings?.requiredVisitsForDiscount || 3;
+  const discountPercentage = settings?.discountPercentage || 60;
+
+  // جلب عدد الزيارات الموافق عليها
+  const result = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(loyaltyVisits)
+    .where(and(
+      eq(loyaltyVisits.customerId, customerId),
+      eq(loyaltyVisits.status, 'approved')
+    ));
+
+  const totalApproved = Number(result[0]?.count) || 0;
+  
+  // حساب الزيارات في الدورة الحالية (باقي القسمة)
+  const visitsInCurrentCycle = totalApproved % requiredVisits;
+  
+  // التحقق من الأهلية للخصم (الزيارة الثالثة أو مضاعفاتها)
+  const isEligibleForDiscount = totalApproved > 0 && visitsInCurrentCycle === 0;
+  
+  // حساب عدد الزيارات المتبقية للخصم التالي
+  // إذا كان العميل ليس لديه زيارات، يحتاج 3 زيارات
+  // إذا كان مؤهل للخصم (زيارات مضاعفات 3)، يحتاج 3 زيارات إضافية
+  // غير ذلك، يحتاج (3 - الزيارات الحالية)
+  let nextDiscountAt: number;
+  if (totalApproved === 0) {
+    nextDiscountAt = requiredVisits; // 3
+  } else if (visitsInCurrentCycle === 0) {
+    nextDiscountAt = requiredVisits; // مؤهل للخصم، يحتاج 3 إضافية
+  } else {
+    nextDiscountAt = requiredVisits - visitsInCurrentCycle;
+  }
+
+  return {
+    totalApproved,
+    visitsInCurrentCycle: visitsInCurrentCycle === 0 && totalApproved > 0 ? requiredVisits : visitsInCurrentCycle,
+    isEligibleForDiscount,
+    discountPercentage: isEligibleForDiscount ? discountPercentage : 0,
+    nextDiscountAt,
+  };
+}
+
+/**
+ * جلب عملاء الولاء المؤهلين للخصم (لعرضهم في الكاشير)
+ * يجلب العملاء الذين لديهم زيارات موافق عليها مضاعفات 3
+ */
+export async function getEligibleLoyaltyCustomersForDiscount(branchId?: number): Promise<Array<{
+  customerId: number;
+  customerName: string;
+  customerPhone: string;
+  totalApprovedVisits: number;
+  discountPercentage: number;
+  isEligible: boolean;
+  visitsInCycle: number;
+  nextDiscountAt: number;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  // جلب إعدادات الولاء
+  const settings = await getLoyaltySettings();
+  const requiredVisits = settings?.requiredVisitsForDiscount || 3;
+  const discountPercentage = settings?.discountPercentage || 60;
+
+  // جلب جميع العملاء مع عدد زياراتهم الموافق عليها
+  const customersWithVisits = await db.select({
+    customerId: loyaltyCustomers.id,
+    customerName: loyaltyCustomers.name,
+    customerPhone: loyaltyCustomers.phone,
+    branchId: loyaltyCustomers.branchId,
+    approvedVisits: sql<number>`(
+      SELECT COUNT(*) FROM loyaltyVisits 
+      WHERE loyaltyVisits.customerId = loyaltyCustomers.id 
+      AND loyaltyVisits.status = 'approved'
+    )`,
+  })
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.isActive, true));
+
+  // تصفية وحساب الأهلية
+  return customersWithVisits
+    .filter(c => {
+      // تصفية حسب الفرع إذا تم تحديده
+      if (branchId && c.branchId !== branchId) return false;
+      // يجب أن يكون لديه زيارة واحدة على الأقل
+      return Number(c.approvedVisits) > 0;
+    })
+    .map(c => {
+      const totalApproved = Number(c.approvedVisits) || 0;
+      const visitsInCycle = totalApproved % requiredVisits;
+      const isEligible = totalApproved > 0 && visitsInCycle === 0;
+      const nextDiscountAt = visitsInCycle === 0 && totalApproved > 0 ? requiredVisits : (requiredVisits - visitsInCycle);
+
+      return {
+        customerId: c.customerId,
+        customerName: c.customerName,
+        customerPhone: c.customerPhone,
+        totalApprovedVisits: totalApproved,
+        discountPercentage: isEligible ? discountPercentage : 0,
+        isEligible,
+        visitsInCycle: visitsInCycle === 0 && totalApproved > 0 ? requiredVisits : visitsInCycle,
+        nextDiscountAt,
+      };
+    })
+    .sort((a, b) => {
+      // ترتيب: المؤهلين أولاً، ثم حسب عدد الزيارات
+      if (a.isEligible && !b.isEligible) return -1;
+      if (!a.isEligible && b.isEligible) return 1;
+      return b.totalApprovedVisits - a.totalApprovedVisits;
+    });
+}
+
+/**
+ * التحقق من خصم عميل برقم الجوال
+ * يستخدم في الكاشير للبحث السريع
+ */
+export async function checkLoyaltyDiscountByPhone(phone: string): Promise<{
+  found: boolean;
+  customer?: {
+    id: number;
+    name: string;
+    phone: string;
+  };
+  totalApprovedVisits: number;
+  isEligibleForDiscount: boolean;
+  discountPercentage: number;
+  visitsInCycle: number;
+  nextDiscountAt: number;
+  message: string;
+}> {
+  const db = await getDb();
+  if (!db) return { 
+    found: false, 
+    totalApprovedVisits: 0,
+    isEligibleForDiscount: false,
+    discountPercentage: 0,
+    visitsInCycle: 0,
+    nextDiscountAt: 3,
+    message: 'قاعدة البيانات غير متاحة' 
+  };
+
+  // البحث عن العميل برقم الجوال
+  const customer = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.phone, phone))
+    .limit(1);
+
+  if (!customer[0]) {
+    return {
+      found: false,
+      totalApprovedVisits: 0,
+      isEligibleForDiscount: false,
+      discountPercentage: 0,
+      visitsInCycle: 0,
+      nextDiscountAt: 3,
+      message: 'رقم الجوال غير مسجل في برنامج الولاء',
+    };
+  }
+
+  // جلب معلومات الخصم
+  const discountInfo = await getApprovedVisitsCount(customer[0].id);
+
+  return {
+    found: true,
+    customer: {
+      id: customer[0].id,
+      name: customer[0].name,
+      phone: customer[0].phone,
+    },
+    totalApprovedVisits: discountInfo.totalApproved,
+    isEligibleForDiscount: discountInfo.isEligibleForDiscount,
+    discountPercentage: discountInfo.discountPercentage,
+    visitsInCycle: discountInfo.visitsInCurrentCycle,
+    nextDiscountAt: discountInfo.nextDiscountAt,
+    message: discountInfo.isEligibleForDiscount 
+      ? `🎉 مبروك! العميل مؤهل لخصم ${discountInfo.discountPercentage}% (${discountInfo.totalApproved} زيارات موافق عليها)`
+      : `العميل لديه ${discountInfo.visitsInCurrentCycle} زيارات، يحتاج ${discountInfo.nextDiscountAt} زيارات إضافية للخصم`,
+  };
+}
+
+/**
+ * تسجيل استخدام خصم الولاء في فاتورة
+ * يُستخدم لتتبع استخدام الخصومات
+ */
+export async function recordLoyaltyDiscountUsage(data: {
+  customerId: number;
+  invoiceId: number;
+  discountPercentage: number;
+  discountAmount: number;
+  invoiceTotal: number;
+  usedBy: number;
+  branchId: number;
+}): Promise<{ success: boolean; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'قاعدة البيانات غير متاحة' };
+
+  try {
+    // تسجيل في سجل النشاط
+    await createActivityLog({
+      userId: data.usedBy,
+      userName: 'نظام الكاشير',
+      action: 'create',
+      entityType: 'loyalty_discount',
+      entityId: data.invoiceId,
+      details: `تم تطبيق خصم ولاء ${data.discountPercentage}% (${data.discountAmount} ريال) على فاتورة رقم ${data.invoiceId} للعميل رقم ${data.customerId}`,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error recording loyalty discount usage:', error);
+    return { success: false, error: 'حدث خطأ أثناء تسجيل استخدام الخصم' };
+  }
+}
