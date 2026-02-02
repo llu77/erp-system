@@ -11567,11 +11567,11 @@ async function generatePosInvoiceNumber(branchId: number, date: Date): Promise<s
   return `POS-${branchId}-${dateStr}-${String(count + 1).padStart(4, '0')}`;
 }
 
-export async function getTodayPosInvoices(branchId: number) {
+export async function getTodayPosInvoices(branchId: number, date?: Date) {
   const db = await getDb();
   if (!db) return [];
   
-  const today = getWorkingDate(new Date());
+  const today = date ? getWorkingDate(date) : getWorkingDate(new Date());
   const startOfDay = new Date(today);
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date(today);
@@ -11960,4 +11960,163 @@ export async function getBranchesForPos() {
     .from(branches)
     .where(eq(branches.isActive, true))
     .orderBy(asc(branches.name));
+}
+
+
+// ==================== دوال تأكيد وإرسال فواتير الكاشير للإيرادات ====================
+
+// التحقق من حالة التأكيد لليوم
+export async function checkPosConfirmationStatus(branchId: number, date: Date) {
+  const db = await getDb();
+  if (!db) return { isConfirmed: false, confirmedAt: null, confirmedBy: null };
+  
+  // تحديد بداية ونهاية اليوم
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  // البحث عن إيراد مؤكد من الكاشير لهذا اليوم (البحث في posInvoices المؤكدة)
+  const confirmedInvoices = await db.select()
+    .from(posInvoices)
+    .where(
+      and(
+        eq(posInvoices.branchId, branchId),
+        gte(posInvoices.invoiceDate, startOfDay),
+        lte(posInvoices.invoiceDate, endOfDay),
+        eq(posInvoices.status, 'completed')
+      )
+    )
+    .limit(1);
+  
+  // البحث عن إيراد يومي مرتبط
+  const existingRevenue = await db.select()
+    .from(dailyRevenues)
+    .where(
+      and(
+        eq(dailyRevenues.branchId, branchId),
+        gte(dailyRevenues.date, startOfDay),
+        lte(dailyRevenues.date, endOfDay)
+      )
+    )
+    .limit(1);
+  
+  if (existingRevenue.length > 0 && confirmedInvoices.length > 0) {
+    return {
+      isConfirmed: true,
+      confirmedAt: existingRevenue[0].createdAt,
+      confirmedBy: null,
+      revenueId: existingRevenue[0].id,
+    };
+  }
+  
+  return { isConfirmed: false, confirmedAt: null, confirmedBy: null };
+}
+
+// إنشاء سجل إيرادات من الكاشير
+export async function createRevenueFromPOS(data: {
+  branchId: number;
+  date: Date;
+  totalAmount: number;
+  cashAmount: number;
+  cardAmount: number;
+  balanceImageKey: string;
+  balanceImageUrl: string;
+  paidInvoices: { customerName: string; amount: number }[];
+  loyaltyInfo?: { invoiceCount: number; discountAmount: number };
+  notes?: string;
+  confirmedBy: number;
+  confirmedByName: string;
+  posInvoiceIds: number[];
+}) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  // حساب إجمالي فواتير المدفوع
+  const totalPaidInvoices = data.paidInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+  
+  // الحصول على أو إنشاء السجل الشهري
+  const year = data.date.getFullYear();
+  const month = data.date.getMonth() + 1;
+  
+  let monthlyRecord = await db.select()
+    .from(monthlyRecords)
+    .where(
+      and(
+        eq(monthlyRecords.branchId, data.branchId),
+        eq(monthlyRecords.year, year),
+        eq(monthlyRecords.month, month)
+      )
+    )
+    .limit(1);
+  
+  let monthlyRecordId: number;
+  
+  if (monthlyRecord.length === 0) {
+    // إنشاء سجل شهري جديد
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0); // آخر يوم في الشهر
+    
+    const newRecord = await db.insert(monthlyRecords).values({
+      branchId: data.branchId,
+      year,
+      month,
+      startDate,
+      endDate,
+      status: 'active',
+    });
+    monthlyRecordId = Number(newRecord[0].insertId);
+  } else {
+    monthlyRecordId = monthlyRecord[0].id;
+  }
+  
+  // إنشاء سجل الإيرادات اليومية
+  const result = await db.insert(dailyRevenues).values({
+    monthlyRecordId,
+    branchId: data.branchId,
+    date: data.date,
+    cash: String(data.cashAmount),
+    network: String(data.cardAmount),
+    balance: String(data.cardAmount), // الرصيد = الشبكة
+    paidInvoices: String(totalPaidInvoices),
+    paidInvoicesNote: data.notes || null,
+    paidInvoicesCustomer: data.paidInvoices.length > 0 
+      ? data.paidInvoices.map(inv => inv.customerName).join(', ') 
+      : null,
+    loyalty: String(data.loyaltyInfo?.discountAmount || 0),
+    total: String(data.totalAmount),
+    isMatched: true,
+    balanceImages: [{
+      url: data.balanceImageUrl,
+      key: data.balanceImageKey,
+      uploadedAt: new Date().toISOString(),
+    }],
+    imageVerificationStatus: 'verified',
+    createdBy: data.confirmedBy,
+  });
+  
+  const revenueId = Number(result[0].insertId);
+  
+  // تحديث فواتير الكاشير بربطها بالإيراد
+  if (data.posInvoiceIds.length > 0) {
+    await db.update(posInvoices)
+      .set({ 
+        status: 'completed',
+      })
+      .where(inArray(posInvoices.id, data.posInvoiceIds));
+  }
+  
+  return { id: revenueId };
+}
+
+// تحديث حالة فواتير الكاشير إلى مكتملة
+export async function markPosInvoicesAsConfirmed(invoiceIds: number[]) {
+  const db = await getDb();
+  if (!db) return;
+  
+  if (invoiceIds.length === 0) return;
+  
+  await db.update(posInvoices)
+    .set({ status: 'completed' })
+    .where(inArray(posInvoices.id, invoiceIds));
 }

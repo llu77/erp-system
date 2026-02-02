@@ -9732,6 +9732,126 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         return await db.getBranchesForPos();
       }),
     }),
+
+    // ==================== تأكيد وإرسال للإيرادات ====================
+    confirmation: router({
+      // التحقق من حالة التأكيد لليوم
+      checkStatus: protectedProcedure
+        .input(z.object({ branchId: z.number(), date: z.string().optional() }))
+        .query(async ({ input }) => {
+          const targetDate = input.date ? new Date(input.date) : new Date();
+          return await db.checkPosConfirmationStatus(input.branchId, targetDate);
+        }),
+
+      // تأكيد وإرسال فواتير اليوم للإيرادات
+      submit: protectedProcedure
+        .input(z.object({
+          branchId: z.number(),
+          date: z.string().optional(),
+          // صورة الموازنة (إجباري)
+          balanceImageKey: z.string().min(1, 'صورة الموازنة مطلوبة'),
+          balanceImageUrl: z.string().min(1, 'صورة الموازنة مطلوبة'),
+          // فواتير المدفوع (اختياري)
+          paidInvoices: z.array(z.object({
+            customerName: z.string(),
+            amount: z.number(),
+          })).optional(),
+          // فواتير الولاء (اختياري)
+          loyaltyInfo: z.object({
+            invoiceCount: z.number(),
+            discountAmount: z.number(),
+          }).optional(),
+          // ملاحظات
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          const targetDate = input.date ? new Date(input.date) : new Date();
+          
+          // التحقق من عدم وجود تأكيد سابق لنفس اليوم
+          const existingConfirmation = await db.checkPosConfirmationStatus(input.branchId, targetDate);
+          if (existingConfirmation.isConfirmed) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'تم تأكيد فواتير هذا اليوم مسبقاً',
+            });
+          }
+
+          // جلب فواتير اليوم
+          const todayInvoices = await db.getTodayPosInvoices(input.branchId, targetDate);
+          if (todayInvoices.length === 0) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'لا توجد فواتير للتأكيد',
+            });
+          }
+
+          // حساب الإجماليات
+          const totalRevenue = todayInvoices.reduce((sum, inv) => sum + Number(inv.total), 0);
+          const totalCash = todayInvoices
+            .filter(inv => inv.paymentMethod === 'cash')
+            .reduce((sum, inv) => sum + Number(inv.total), 0) +
+            todayInvoices
+            .filter(inv => inv.paymentMethod === 'split')
+            .reduce((sum, inv) => sum + Number(inv.cashAmount || 0), 0);
+          const totalCard = todayInvoices
+            .filter(inv => inv.paymentMethod === 'card')
+            .reduce((sum, inv) => sum + Number(inv.total), 0) +
+            todayInvoices
+            .filter(inv => inv.paymentMethod === 'split')
+            .reduce((sum, inv) => sum + Number(inv.cardAmount || 0), 0);
+
+          // حساب فواتير المدفوع
+          const totalPaidInvoices = input.paidInvoices?.reduce((sum, inv) => sum + inv.amount, 0) || 0;
+
+          // حساب فواتير الولاء
+          const loyaltyDiscount = input.loyaltyInfo?.discountAmount || 0;
+          const loyaltyInvoiceCount = input.loyaltyInfo?.invoiceCount || 0;
+
+          // إنشاء سجل الإيرادات
+          const revenueResult = await db.createRevenueFromPOS({
+            branchId: input.branchId,
+            date: targetDate,
+            totalAmount: totalRevenue,
+            cashAmount: totalCash,
+            cardAmount: totalCard,
+            balanceImageKey: input.balanceImageKey,
+            balanceImageUrl: input.balanceImageUrl,
+            paidInvoices: input.paidInvoices || [],
+            loyaltyInfo: input.loyaltyInfo,
+            notes: input.notes,
+            confirmedBy: ctx.user.id,
+            confirmedByName: ctx.user.name || 'غير معروف',
+            posInvoiceIds: todayInvoices.map(inv => inv.id),
+          });
+
+          // تحديث حالة الفواتير إلى مؤكدة
+          await db.markPosInvoicesAsConfirmed(todayInvoices.map(inv => inv.id));
+
+          return {
+            success: true,
+            revenueId: revenueResult.id,
+            summary: {
+              totalInvoices: todayInvoices.length,
+              totalRevenue,
+              totalCash,
+              totalCard,
+              totalPaidInvoices,
+              loyaltyDiscount,
+              loyaltyInvoiceCount,
+            },
+          };
+        }),
+
+      // جلب عملاء المدفوع
+      getPaidCustomers: protectedProcedure.query(async () => {
+        // قائمة العملاء المحددين
+        return [
+          { id: 1, name: 'سالم الوادعي' },
+          { id: 2, name: 'عمر المطيري' },
+          { id: 3, name: 'سعود الجريسي' },
+        ];
+      }),
+    }),
   }),
 });
 
