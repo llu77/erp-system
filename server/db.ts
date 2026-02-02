@@ -12707,7 +12707,8 @@ export async function getEmployeeServiceDetails(
 
 /**
  * جلب عدد الزيارات الموافق عليها لعميل معين
- * يحسب فقط الزيارات بحالة approved
+ * يستخدم نظام الدورة (30 يوم من الزيارة الأولى)
+ * بعد الزيارة الثالثة واستخدام الخصم، تبدأ دورة جديدة
  */
 export async function getApprovedVisitsCount(customerId: number): Promise<{
   totalApproved: number;
@@ -12715,6 +12716,12 @@ export async function getApprovedVisitsCount(customerId: number): Promise<{
   isEligibleForDiscount: boolean;
   discountPercentage: number;
   nextDiscountAt: number;
+  cycleInfo: {
+    startDate: Date | null;
+    endDate: Date | null;
+    daysRemaining: number;
+    isExpired: boolean;
+  };
 }> {
   const db = await getDb();
   if (!db) return { 
@@ -12722,7 +12729,8 @@ export async function getApprovedVisitsCount(customerId: number): Promise<{
     visitsInCurrentCycle: 0, 
     isEligibleForDiscount: false,
     discountPercentage: 0,
-    nextDiscountAt: 3
+    nextDiscountAt: 3,
+    cycleInfo: { startDate: null, endDate: null, daysRemaining: 30, isExpired: false }
   };
 
   // جلب إعدادات الولاء
@@ -12730,7 +12738,10 @@ export async function getApprovedVisitsCount(customerId: number): Promise<{
   const requiredVisits = settings?.requiredVisitsForDiscount || 3;
   const discountPercentage = settings?.discountPercentage || 60;
 
-  // جلب عدد الزيارات الموافق عليها
+  // جلب حالة الدورة الحالية للعميل
+  const cycleStatus = await getCustomerCycleStatus(customerId);
+  
+  // جلب إجمالي الزيارات الموافق عليها (للإحصائيات)
   const result = await db.select({ count: sql<number>`COUNT(*)` })
     .from(loyaltyVisits)
     .where(and(
@@ -12740,37 +12751,54 @@ export async function getApprovedVisitsCount(customerId: number): Promise<{
 
   const totalApproved = Number(result[0]?.count) || 0;
   
-  // حساب الزيارات في الدورة الحالية (باقي القسمة)
-  const visitsInCurrentCycle = totalApproved % requiredVisits;
+  // استخدام عدد الزيارات في الدورة الحالية (30 يوم)
+  const visitsInCurrentCycle = cycleStatus.visitsInCycle;
   
-  // التحقق من الأهلية للخصم (الزيارة الثالثة أو مضاعفاتها)
-  const isEligibleForDiscount = totalApproved > 0 && visitsInCurrentCycle === 0;
+  // التحقق من الأهلية للخصم:
+  // - يجب أن يكون لديه 3 زيارات موافق عليها في الدورة الحالية
+  // - يجب ألا يكون قد استخدم الخصم في هذه الدورة
+  // - يجب ألا تكون الدورة منتهية
+  const isEligibleForDiscount = 
+    cycleStatus.hasCycle && 
+    !cycleStatus.isExpired && 
+    visitsInCurrentCycle >= requiredVisits && 
+    !cycleStatus.discountUsed;
   
-  // حساب عدد الزيارات المتبقية للخصم التالي
-  // إذا كان العميل ليس لديه زيارات، يحتاج 3 زيارات
-  // إذا كان مؤهل للخصم (زيارات مضاعفات 3)، يحتاج 3 زيارات إضافية
-  // غير ذلك، يحتاج (3 - الزيارات الحالية)
+  // حساب عدد الزيارات المتبقية للخصم
   let nextDiscountAt: number;
-  if (totalApproved === 0) {
-    nextDiscountAt = requiredVisits; // 3
-  } else if (visitsInCurrentCycle === 0) {
-    nextDiscountAt = requiredVisits; // مؤهل للخصم، يحتاج 3 إضافية
+  if (!cycleStatus.hasCycle || cycleStatus.isExpired) {
+    // لا توجد دورة أو انتهت، يحتاج 3 زيارات جديدة
+    nextDiscountAt = requiredVisits;
+  } else if (cycleStatus.discountUsed) {
+    // استخدم الخصم، ينتظر دورة جديدة
+    nextDiscountAt = requiredVisits;
+  } else if (visitsInCurrentCycle >= requiredVisits) {
+    // مؤهل للخصم الآن
+    nextDiscountAt = 0;
   } else {
+    // يحتاج زيارات إضافية
     nextDiscountAt = requiredVisits - visitsInCurrentCycle;
   }
 
   return {
     totalApproved,
-    visitsInCurrentCycle: visitsInCurrentCycle === 0 && totalApproved > 0 ? requiredVisits : visitsInCurrentCycle,
+    visitsInCurrentCycle,
     isEligibleForDiscount,
     discountPercentage: isEligibleForDiscount ? discountPercentage : 0,
     nextDiscountAt,
+    cycleInfo: {
+      startDate: cycleStatus.cycleStartDate,
+      endDate: cycleStatus.cycleEndDate,
+      daysRemaining: cycleStatus.daysRemaining,
+      isExpired: cycleStatus.isExpired,
+    },
   };
 }
 
 /**
  * جلب عملاء الولاء المؤهلين للخصم (لعرضهم في الكاشير)
- * يجلب العملاء الذين لديهم زيارات موافق عليها مضاعفات 3
+ * يستخدم نظام الدورة (30 يوم لكل عميل)
+ * محسّن للأداء: يستخدم استعلام واحد مع بيانات الدورة من جدول العملاء
  */
 export async function getEligibleLoyaltyCustomersForDiscount(branchId?: number): Promise<Array<{
   customerId: number;
@@ -12781,6 +12809,13 @@ export async function getEligibleLoyaltyCustomersForDiscount(branchId?: number):
   isEligible: boolean;
   visitsInCycle: number;
   nextDiscountAt: number;
+  cycleInfo: {
+    startDate: Date | null;
+    endDate: Date | null;
+    daysRemaining: number;
+    isExpired: boolean;
+    discountUsed: boolean;
+  };
 }>> {
   const db = await getDb();
   if (!db) return [];
@@ -12790,13 +12825,16 @@ export async function getEligibleLoyaltyCustomersForDiscount(branchId?: number):
   const requiredVisits = settings?.requiredVisitsForDiscount || 3;
   const discountPercentage = settings?.discountPercentage || 60;
 
-  // جلب جميع العملاء مع عدد زياراتهم الموافق عليها
-  const customersWithVisits = await db.select({
-    customerId: loyaltyCustomers.id,
-    customerName: loyaltyCustomers.name,
-    customerPhone: loyaltyCustomers.phone,
+  // جلب جميع العملاء النشطين مع بيانات الدورة وعدد الزيارات في استعلام واحد
+  const customersWithData = await db.select({
+    id: loyaltyCustomers.id,
+    name: loyaltyCustomers.name,
+    phone: loyaltyCustomers.phone,
     branchId: loyaltyCustomers.branchId,
-    approvedVisits: sql<number>`(
+    cycleStartDate: loyaltyCustomers.cycleStartDate,
+    cycleVisitsCount: loyaltyCustomers.cycleVisitsCount,
+    cycleDiscountUsed: loyaltyCustomers.cycleDiscountUsed,
+    totalApproved: sql<number>`(
       SELECT COUNT(*) FROM loyaltyVisits 
       WHERE loyaltyVisits.customerId = loyaltyCustomers.id 
       AND loyaltyVisits.status = 'approved'
@@ -12805,42 +12843,85 @@ export async function getEligibleLoyaltyCustomersForDiscount(branchId?: number):
     .from(loyaltyCustomers)
     .where(eq(loyaltyCustomers.isActive, true));
 
-  // تصفية وحساب الأهلية
-  return customersWithVisits
-    .filter(c => {
-      // تصفية حسب الفرع إذا تم تحديده
-      if (branchId && c.branchId !== branchId) return false;
-      // يجب أن يكون لديه زيارة واحدة على الأقل
-      return Number(c.approvedVisits) > 0;
-    })
+  const now = new Date();
+
+  // معالجة البيانات محلياً
+  const results = customersWithData
+    .filter(c => !branchId || c.branchId === branchId)
     .map(c => {
-      const totalApproved = Number(c.approvedVisits) || 0;
-      const visitsInCycle = totalApproved % requiredVisits;
-      const isEligible = totalApproved > 0 && visitsInCycle === 0;
-      const nextDiscountAt = visitsInCycle === 0 && totalApproved > 0 ? requiredVisits : (requiredVisits - visitsInCycle);
+      const totalApproved = Number(c.totalApproved) || 0;
+      const visitsInCycle = c.cycleVisitsCount || 0;
+      
+      // حساب حالة الدورة
+      let cycleStartDate: Date | null = null;
+      let cycleEndDate: Date | null = null;
+      let daysRemaining = 30;
+      let isExpired = false;
+      let hasCycle = false;
+      
+      if (c.cycleStartDate) {
+        cycleStartDate = new Date(c.cycleStartDate);
+        cycleEndDate = new Date(cycleStartDate);
+        cycleEndDate.setDate(cycleEndDate.getDate() + 30);
+        
+        const timeDiff = cycleEndDate.getTime() - now.getTime();
+        daysRemaining = Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
+        isExpired = daysRemaining <= 0;
+        hasCycle = true;
+      }
+      
+      // التحقق من الأهلية
+      const isEligible = 
+        hasCycle && 
+        !isExpired && 
+        visitsInCycle >= requiredVisits && 
+        !c.cycleDiscountUsed;
+      
+      // حساب الزيارات المتبقية
+      let nextDiscountAt: number;
+      if (!hasCycle || isExpired) {
+        nextDiscountAt = requiredVisits;
+      } else if (c.cycleDiscountUsed) {
+        nextDiscountAt = requiredVisits;
+      } else if (visitsInCycle >= requiredVisits) {
+        nextDiscountAt = 0;
+      } else {
+        nextDiscountAt = requiredVisits - visitsInCycle;
+      }
 
       return {
-        customerId: c.customerId,
-        customerName: c.customerName,
-        customerPhone: c.customerPhone,
+        customerId: c.id,
+        customerName: c.name,
+        customerPhone: c.phone,
         totalApprovedVisits: totalApproved,
         discountPercentage: isEligible ? discountPercentage : 0,
         isEligible,
-        visitsInCycle: visitsInCycle === 0 && totalApproved > 0 ? requiredVisits : visitsInCycle,
+        visitsInCycle,
         nextDiscountAt,
+        cycleInfo: {
+          startDate: cycleStartDate,
+          endDate: cycleEndDate,
+          daysRemaining,
+          isExpired,
+          discountUsed: c.cycleDiscountUsed || false,
+        },
       };
-    })
+    });
+
+  // ترتيب: المؤهلين أولاً، ثم حسب عدد الزيارات
+  return results
+    .filter(r => r.totalApprovedVisits > 0 || r.visitsInCycle > 0)
     .sort((a, b) => {
-      // ترتيب: المؤهلين أولاً، ثم حسب عدد الزيارات
       if (a.isEligible && !b.isEligible) return -1;
       if (!a.isEligible && b.isEligible) return 1;
-      return b.totalApprovedVisits - a.totalApprovedVisits;
+      return b.visitsInCycle - a.visitsInCycle;
     });
 }
 
 /**
  * التحقق من خصم عميل برقم الجوال
  * يستخدم في الكاشير للبحث السريع
+ * يستخدم نظام الدورة (30 يوم من الزيارة الأولى)
  */
 export async function checkLoyaltyDiscountByPhone(phone: string): Promise<{
   found: boolean;
@@ -12854,6 +12935,12 @@ export async function checkLoyaltyDiscountByPhone(phone: string): Promise<{
   discountPercentage: number;
   visitsInCycle: number;
   nextDiscountAt: number;
+  cycleInfo: {
+    startDate: Date | null;
+    endDate: Date | null;
+    daysRemaining: number;
+    isExpired: boolean;
+  };
   message: string;
 }> {
   const db = await getDb();
@@ -12864,6 +12951,7 @@ export async function checkLoyaltyDiscountByPhone(phone: string): Promise<{
     discountPercentage: 0,
     visitsInCycle: 0,
     nextDiscountAt: 3,
+    cycleInfo: { startDate: null, endDate: null, daysRemaining: 30, isExpired: false },
     message: 'قاعدة البيانات غير متاحة' 
   };
 
@@ -12881,12 +12969,25 @@ export async function checkLoyaltyDiscountByPhone(phone: string): Promise<{
       discountPercentage: 0,
       visitsInCycle: 0,
       nextDiscountAt: 3,
+      cycleInfo: { startDate: null, endDate: null, daysRemaining: 30, isExpired: false },
       message: 'رقم الجوال غير مسجل في برنامج الولاء',
     };
   }
 
-  // جلب معلومات الخصم
+  // جلب معلومات الخصم مع حالة الدورة
   const discountInfo = await getApprovedVisitsCount(customer[0].id);
+
+  // بناء رسالة مفصلة
+  let message: string;
+  if (discountInfo.isEligibleForDiscount) {
+    message = `🎉 مبروك! العميل مؤهل لخصم ${discountInfo.discountPercentage}%`;
+  } else if (discountInfo.cycleInfo.isExpired) {
+    message = `انتهت الدورة - يحتاج ${discountInfo.nextDiscountAt} زيارات جديدة للخصم`;
+  } else if (!discountInfo.cycleInfo.startDate) {
+    message = `عميل جديد - يحتاج ${discountInfo.nextDiscountAt} زيارات للخصم`;
+  } else {
+    message = `لديه ${discountInfo.visitsInCurrentCycle} زيارات في الدورة - يحتاج ${discountInfo.nextDiscountAt} زيارات إضافية (باقي ${discountInfo.cycleInfo.daysRemaining} يوم)`;
+  }
 
   return {
     found: true,
@@ -12900,15 +13001,15 @@ export async function checkLoyaltyDiscountByPhone(phone: string): Promise<{
     discountPercentage: discountInfo.discountPercentage,
     visitsInCycle: discountInfo.visitsInCurrentCycle,
     nextDiscountAt: discountInfo.nextDiscountAt,
-    message: discountInfo.isEligibleForDiscount 
-      ? `🎉 مبروك! العميل مؤهل لخصم ${discountInfo.discountPercentage}% (${discountInfo.totalApproved} زيارات موافق عليها)`
-      : `العميل لديه ${discountInfo.visitsInCurrentCycle} زيارات، يحتاج ${discountInfo.nextDiscountAt} زيارات إضافية للخصم`,
+    cycleInfo: discountInfo.cycleInfo,
+    message,
   };
 }
 
 /**
  * تسجيل استخدام خصم الولاء في فاتورة
  * يُستخدم لتتبع استخدام الخصومات
+ * بعد استخدام الخصم، تبدأ دورة جديدة للعميل
  */
 export async function recordLoyaltyDiscountUsage(data: {
   customerId: number;
@@ -12918,24 +13019,37 @@ export async function recordLoyaltyDiscountUsage(data: {
   invoiceTotal: number;
   usedBy: number;
   branchId: number;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; newCycleStarted: boolean; error?: string }> {
   const db = await getDb();
-  if (!db) return { success: false, error: 'قاعدة البيانات غير متاحة' };
+  if (!db) return { success: false, newCycleStarted: false, error: 'قاعدة البيانات غير متاحة' };
 
   try {
-    // تسجيل في سجل النشاط
+    // 1. تعليم الخصم كمستخدم في الدورة الحالية
+    await markCycleDiscountUsed(data.customerId);
+    
+    // 2. تحديث إحصائيات العميل
+    await db.update(loyaltyCustomers)
+      .set({
+        totalDiscountsUsed: sql`${loyaltyCustomers.totalDiscountsUsed} + 1`,
+      })
+      .where(eq(loyaltyCustomers.id, data.customerId));
+    
+    // 3. بدء دورة جديدة للعميل (بعد استخدام الخصم)
+    await startNewLoyaltyCycle(data.customerId);
+    
+    // 4. تسجيل في سجل النشاط
     await createActivityLog({
       userId: data.usedBy,
       userName: 'نظام الكاشير',
       action: 'create',
       entityType: 'loyalty_discount',
       entityId: data.invoiceId,
-      details: `تم تطبيق خصم ولاء ${data.discountPercentage}% (${data.discountAmount} ريال) على فاتورة رقم ${data.invoiceId} للعميل رقم ${data.customerId}`,
+      details: `تم تطبيق خصم ولاء ${data.discountPercentage}% (${data.discountAmount} ريال) على فاتورة رقم ${data.invoiceId} للعميل رقم ${data.customerId} - بدأت دورة جديدة`,
     });
 
-    return { success: true };
+    return { success: true, newCycleStarted: true };
   } catch (error) {
     console.error('Error recording loyalty discount usage:', error);
-    return { success: false, error: 'حدث خطأ أثناء تسجيل استخدام الخصم' };
+    return { success: false, newCycleStarted: false, error: 'حدث خطأ أثناء تسجيل استخدام الخصم' };
   }
 }
