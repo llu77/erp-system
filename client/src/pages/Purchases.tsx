@@ -309,6 +309,7 @@ export default function PurchasesPage() {
                   <TableRow>
                     <TableHead className="text-xs py-2">رقم الطلب</TableHead>
                     <TableHead className="text-xs py-2">المورد</TableHead>
+                    <TableHead className="text-xs py-2">الفرع</TableHead>
                     <TableHead className="text-xs py-2">التاريخ</TableHead>
                     <TableHead className="text-xs py-2">الإجمالي</TableHead>
                     <TableHead className="text-xs py-2">الحالة</TableHead>
@@ -318,7 +319,7 @@ export default function PurchasesPage() {
                 <TableBody>
                   {filteredOrders.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground text-sm">
+                      <TableCell colSpan={7} className="text-center py-6 text-muted-foreground text-sm">
                         لا يوجد أوامر شراء
                       </TableCell>
                     </TableRow>
@@ -329,6 +330,7 @@ export default function PurchasesPage() {
                         <TableRow key={order.id}>
                           <TableCell className="font-mono text-xs py-2">{order.orderNumber}</TableCell>
                           <TableCell className="text-xs py-2">{order.supplierName || "-"}</TableCell>
+                          <TableCell className="text-xs py-2">{order.branchName || "-"}</TableCell>
                           <TableCell className="text-xs py-2">
                             {format(new Date(order.orderDate), "dd MMM yyyy", {
                               locale: ar,

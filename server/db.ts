@@ -388,7 +388,33 @@ export async function getCustomerInvoices(customerId: number) {
 export async function getAllPurchaseOrders() {
   const db = await getDb();
   if (!db) return [];
-  return await db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.createdAt));
+  const result = await db
+    .select({
+      id: purchaseOrders.id,
+      orderNumber: purchaseOrders.orderNumber,
+      supplierId: purchaseOrders.supplierId,
+      supplierName: purchaseOrders.supplierName,
+      branchId: purchaseOrders.branchId,
+      branchName: branches.nameAr,
+      orderDate: purchaseOrders.orderDate,
+      expectedDate: purchaseOrders.expectedDate,
+      receivedDate: purchaseOrders.receivedDate,
+      subtotal: purchaseOrders.subtotal,
+      taxRate: purchaseOrders.taxRate,
+      taxAmount: purchaseOrders.taxAmount,
+      shippingCost: purchaseOrders.shippingCost,
+      total: purchaseOrders.total,
+      paidAmount: purchaseOrders.paidAmount,
+      status: purchaseOrders.status,
+      notes: purchaseOrders.notes,
+      createdBy: purchaseOrders.createdBy,
+      createdAt: purchaseOrders.createdAt,
+      updatedAt: purchaseOrders.updatedAt,
+    })
+    .from(purchaseOrders)
+    .leftJoin(branches, eq(purchaseOrders.branchId, branches.id))
+    .orderBy(desc(purchaseOrders.createdAt));
+  return result;
 }
 
 export async function getPurchaseOrderById(id: number) {
