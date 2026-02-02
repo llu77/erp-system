@@ -20,8 +20,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { ArrowRight, Printer, Save, Eye, Settings2, Type, Image, MessageSquare } from 'lucide-react';
-import { Link } from 'wouter';
+import { Printer, Save, Eye, Settings2, Type, Image, MessageSquare } from 'lucide-react';
+import POSNavHeader from '@/components/POSNavHeader';
 import { useThermalPrinter, DEFAULT_SETTINGS, type PrinterSettings, type ReceiptData } from '@/components/ThermalReceiptPrinter';
 
 export default function POSPrintSettings() {
@@ -134,15 +134,15 @@ export default function POSPrintSettings() {
   // التحقق من صلاحية الأدمن
   if (user?.role !== 'admin') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4" dir="rtl">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 text-center">
             <div className="text-6xl mb-4">🔒</div>
             <h2 className="text-xl font-bold mb-2">صلاحية غير كافية</h2>
-            <p className="text-gray-600 mb-4">هذه الصفحة متاحة للمسؤولين فقط</p>
-            <Link href="/pos-login">
+            <p className="text-muted-foreground mb-4">هذه الصفحة متاحة للمسؤولين فقط</p>
+            <a href="/pos">
               <Button>العودة لبوابة الكاشير</Button>
-            </Link>
+            </a>
           </CardContent>
         </Card>
       </div>
@@ -150,37 +150,24 @@ export default function POSPrintSettings() {
   }
   
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
-      {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/pos-settings">
-                <Button variant="ghost" size="icon">
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-xl font-bold flex items-center gap-2">
-                  <Printer className="h-6 w-6" />
-                  إعدادات الطباعة الحرارية
-                </h1>
-                <p className="text-sm text-gray-500">تخصيص شكل ومحتوى الفاتورة المطبوعة</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={handlePreview}>
-                <Eye className="h-4 w-4 ml-2" />
-                معاينة
-              </Button>
-              <Button onClick={handleSave} disabled={isSaving || !selectedBranchId}>
-                <Save className="h-4 w-4 ml-2" />
-                {isSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
-              </Button>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-background" dir="rtl">
+      {/* POS Navigation Header */}
+      <POSNavHeader 
+        title="إعدادات الطباعة" 
+        subtitle="تخصيص شكل ومحتوى الفاتورة"
+        icon={<Printer className="h-5 w-5 text-primary" />}
+      />
+      
+      {/* Sub Header with Actions */}
+      <div className="h-14 bg-card/50 border-b flex items-center justify-end px-6 gap-3">
+        <Button variant="outline" size="sm" onClick={handlePreview}>
+          <Eye className="h-4 w-4 ml-2" />
+          معاينة
+        </Button>
+        <Button size="sm" onClick={handleSave} disabled={isSaving || !selectedBranchId}>
+          <Save className="h-4 w-4 ml-2" />
+          {isSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
+        </Button>
       </div>
       
       <div className="container py-6">

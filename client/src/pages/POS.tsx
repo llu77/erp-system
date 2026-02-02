@@ -41,6 +41,7 @@ import {
   Award,
   TrendingUp,
   TrendingDown,
+  Package,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import usePOSKeyboard from '@/hooks/usePOSKeyboard';
@@ -946,37 +947,81 @@ export default function POS() {
             </ScrollArea>
           </div>
           
-          {/* Services Grid */}
-          <ScrollArea className="flex-1 p-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-              {filteredServices.map(service => (
-                <button
-                  key={service.id}
-                  onClick={() => addToCart(service)}
-                  className="group bg-card hover:bg-primary/5 border border-border/60 hover:border-primary rounded-xl p-3 transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-95 min-h-[150px] flex flex-col items-center justify-center text-center"
-                >
-                  <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-2.5 group-hover:bg-primary/20 transition-colors border border-primary/20">
-                    {getCategoryIcon(service.categoryName || '')}
-                  </div>
-                  <div className="font-bold text-base mb-1 line-clamp-2">{service.nameAr}</div>
-                  <div className="text-xl font-bold text-primary">
-                    {Number(service.price).toFixed(0)} <span className="text-sm">ر.س</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-            
-            {filteredServices.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
-                <Store className="h-16 w-16 mb-4 opacity-50" />
-                <p className="text-xl">لا توجد خدمات في هذا القسم</p>
-                <Link href="/pos-settings">
-                  <Button variant="link" className="mt-2">
-                    إضافة خدمات جديدة
+          {/* Services Grid - Improved Sliding Design */}
+          <ScrollArea className="flex-1">
+            <div className="p-4">
+              {/* Services Count Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Package className="h-5 w-5 text-primary" />
+                  <span className="font-semibold text-sm">الخدمات المتاحة</span>
+                  <Badge variant="secondary" className="text-xs">{filteredServices.length}</Badge>
+                </div>
+                {selectedCategoryId && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setSelectedCategoryId(null)}
+                    className="text-xs h-7"
+                  >
+                    عرض الكل
                   </Button>
-                </Link>
+                )}
               </div>
-            )}
+              
+              {/* Services Grid with Better Sizing */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3">
+                {filteredServices.map(service => (
+                  <button
+                    key={service.id}
+                    onClick={() => addToCart(service)}
+                    className="group bg-card hover:bg-primary/5 border border-border/60 hover:border-primary rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-95 min-h-[130px] flex flex-col items-center justify-center text-center relative overflow-hidden"
+                  >
+                    {/* Category Badge */}
+                    <div className="absolute top-2 right-2">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/80">
+                        {service.categoryName || 'عام'}
+                      </Badge>
+                    </div>
+                    
+                    {/* Service Icon */}
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-2 group-hover:bg-primary/20 transition-colors border border-primary/20">
+                      {getCategoryIcon(service.categoryName || '')}
+                    </div>
+                    
+                    {/* Service Name */}
+                    <div className="font-bold text-sm mb-1 line-clamp-2 leading-tight">{service.nameAr}</div>
+                    
+                    {/* Price */}
+                    <div className="text-lg font-bold text-primary mt-auto">
+                      {Number(service.price).toFixed(0)} <span className="text-xs">ر.س</span>
+                    </div>
+                    
+                    {/* Hover Add Indicator */}
+                    <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-lg transform scale-0 group-hover:scale-100 transition-transform">
+                        <Plus className="h-5 w-5 text-primary-foreground" />
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              
+              {/* Empty State */}
+              {filteredServices.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-[350px] text-muted-foreground">
+                  <Store className="h-16 w-16 mb-4 opacity-50" />
+                  <p className="text-xl font-semibold mb-2">لا توجد خدمات</p>
+                  <p className="text-sm mb-4">لا توجد خدمات في هذا القسم</p>
+                  <Link href="/pos-settings">
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      إضافة خدمات
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
           </ScrollArea>
           
           {/* Keyboard Shortcuts Bar */}

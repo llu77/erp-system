@@ -19,12 +19,8 @@ import {
   Trash2, 
   FolderOpen,
   Package,
-  ArrowRight,
-  ShoppingCart,
-  BarChart3,
-  Printer,
 } from 'lucide-react';
-import { Link } from 'wouter';
+import POSNavHeader from '@/components/POSNavHeader';
 
 export default function POSSettings() {
   const utils = trpc.useUtils();
@@ -179,56 +175,12 @@ export default function POSSettings() {
   
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden" dir="rtl">
-      {/* Header */}
-      <header className="h-20 bg-gradient-to-l from-primary/10 via-background to-background border-b flex items-center justify-between px-6 shrink-0">
-        {/* Logo & Title */}
-        <div className="flex items-center gap-4">
-          <Link href="/pos">
-            <Button variant="ghost" size="icon" className="h-12 w-12">
-              <ArrowRight className="h-6 w-6" />
-            </Button>
-          </Link>
-          <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center">
-            <img 
-              src="/logo.png" 
-              alt="Symbol AI" 
-              className="w-10 h-10 object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <Settings className="h-6 w-6 text-primary" />
-              إعدادات الكاشير
-            </h1>
-            <p className="text-sm text-muted-foreground">إدارة الأقسام والخدمات</p>
-          </div>
-        </div>
-        
-        {/* Navigation */}
-        <div className="flex items-center gap-3">
-          <Link href="/pos">
-            <Button size="lg" className="gap-2 h-12">
-              <ShoppingCart className="h-5 w-5" />
-              الكاشير
-            </Button>
-          </Link>
-          <Link href="/pos-daily-report">
-            <Button variant="outline" size="lg" className="gap-2 h-12">
-              <BarChart3 className="h-5 w-5" />
-              تقرير اليوم
-            </Button>
-          </Link>
-          <Link href="/pos-print-settings">
-            <Button variant="outline" size="lg" className="gap-2 h-12">
-              <Printer className="h-5 w-5" />
-              إعدادات الطباعة
-            </Button>
-          </Link>
-        </div>
-      </header>
+      {/* POS Navigation Header */}
+      <POSNavHeader 
+        title="إعدادات الكاشير" 
+        subtitle="إدارة الأقسام والخدمات"
+        icon={<Settings className="h-5 w-5 text-primary" />}
+      />
       
       {/* Main Content */}
       <div className="flex-1 overflow-auto p-6">

@@ -5182,3 +5182,18 @@ node scripts/scheduledTasks.mjs weekly-report
 ### Phase 5: الاختبار ✅
 - [x] اختبار في بيئة التطوير - /pos-login يعمل بشكل صحيح
 - [x] جميع الاختبارات ناجحة (1085/1087)
+
+
+## إصلاح مشكلة القائمة الجانبية في بوابة الكاشير (طلب جديد - 2026-02-03)
+- [x] تحليل مشكلة تداخل القائمة الجانبية بين البرنامج الرئيسي وبوابة الكاشير
+- [x] إنشاء مكون POSNavHeader.tsx لتوحيد التنقل في صفحات الكاشير
+- [x] إزالة DashboardLayout من صفحة /pos-settings في App.tsx
+- [x] تحديث POSSettings.tsx لاستخدام POSNavHeader
+- [x] تحديث POSDailyReport.tsx لاستخدام POSNavHeader
+- [x] تحديث POSPrintSettings.tsx لاستخدام POSNavHeader
+- [x] تحديث POSEmployeeRanking.tsx لاستخدام POSNavHeader
+- [x] تحسين واجهة اختيار الخدمات في POS.tsx بتصميم أفضل
+- [x] إضافة عداد للخدمات المتاحة
+- [x] إضافة badge للقسم على كل بطاقة خدمة
+- [x] إضافة تأثير hover مع أيقونة إضافة
+- [x] جميع الاختبارات ناجحة (1086/1087)

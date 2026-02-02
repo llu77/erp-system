@@ -166,9 +166,7 @@ function Router() {
         <LazyPage component={POSDailyReport} />
       </Route>
       <Route path="/pos-settings">
-        <DashboardLayout>
-          <LazyPage component={POSSettings} />
-        </DashboardLayout>
+        <LazyPage component={POSSettings} />
       </Route>
       <Route path="/pos-print-settings">
         <LazyPage component={POSPrintSettings} />

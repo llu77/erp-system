@@ -18,7 +18,6 @@ import {
   User,
   Store,
   Calendar,
-  ArrowRight,
   BarChart3,
   Users,
   DollarSign,
@@ -31,7 +30,7 @@ import {
   FileSpreadsheet,
   Printer,
 } from 'lucide-react';
-import { Link } from 'wouter';
+import POSNavHeader from '@/components/POSNavHeader';
 
 // Memoized Employee Card Component for better performance
 const EmployeeRankCard = memo(({ 
@@ -335,40 +334,22 @@ export default function POSEmployeeRanking() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30" dir="rtl">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-xl border-b border-border/50 shadow-sm print:hidden">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-500/30">
-                <Trophy className="h-7 w-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-500 to-orange-600 bg-clip-text text-transparent">
-                  ترتيب الموظفين
-                </h1>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Star className="h-3.5 w-3.5 text-amber-500" />
-                  حسب الإيرادات الشهرية
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handlePrint} className="gap-2">
-                <Printer className="h-4 w-4" />
-                طباعة
-              </Button>
-              <Link href="/pos">
-                <Button variant="default" className="gap-2 bg-gradient-to-r from-primary to-primary/80">
-                  <ArrowRight className="h-4 w-4" />
-                  العودة للكاشير
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* POS Navigation Header */}
+      <div className="print:hidden">
+        <POSNavHeader 
+          title="ترتيب الموظفين" 
+          subtitle="حسب الإيرادات الشهرية"
+          icon={<Trophy className="h-5 w-5 text-amber-500" />}
+        />
+      </div>
+      
+      {/* Sub Header with Print Button */}
+      <div className="h-12 bg-card/50 border-b flex items-center justify-end px-6 print:hidden">
+        <Button variant="outline" size="sm" onClick={handlePrint} className="gap-2">
+          <Printer className="h-4 w-4" />
+          طباعة
+        </Button>
+      </div>
       
       <main className="container py-6 space-y-6">
         {/* Filters Card */}

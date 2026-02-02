@@ -16,17 +16,14 @@ import {
   CreditCard, 
   Users,
   TrendingUp,
-  ArrowRight,
   Clock,
   Calendar,
   Printer,
   FileDown,
-  ShoppingCart,
-  Settings,
   CheckCircle2,
   Send,
 } from 'lucide-react';
-import { Link } from 'wouter';
+import POSNavHeader from '@/components/POSNavHeader';
 import { useAuth } from '@/_core/hooks/useAuth';
 
 export default function POSDailyReport() {
@@ -218,92 +215,55 @@ export default function POSDailyReport() {
   
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden" dir="rtl">
-      {/* Header */}
-      <header className="h-20 bg-gradient-to-l from-primary/10 via-background to-background border-b flex items-center justify-between px-6 shrink-0">
-        {/* Logo & Title */}
-        <div className="flex items-center gap-4">
-          <Link href="/pos">
-            <Button variant="ghost" size="icon" className="h-12 w-12">
-              <ArrowRight className="h-6 w-6" />
-            </Button>
-          </Link>
-          <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center">
-            <img 
-              src="/logo.png" 
-              alt="Symbol AI" 
-              className="w-10 h-10 object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <BarChart3 className="h-6 w-6 text-primary" />
-              تقرير اليوم
-            </h1>
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              {formattedDate}
-            </p>
-          </div>
+      {/* POS Navigation Header */}
+      <POSNavHeader 
+        title="تقرير اليوم" 
+        subtitle={formattedDate}
+        icon={<BarChart3 className="h-5 w-5 text-primary" />}
+      />
+      
+      {/* Sub Header with Branch Selection & Actions */}
+      <div className="h-14 bg-card/50 border-b flex items-center justify-between px-6 shrink-0">
+        <div className="flex items-center gap-3">
+          <Store className="h-5 w-5 text-primary" />
+          {isAdmin ? (
+            <Select value={selectedBranchId?.toString() || ''} onValueChange={(v) => setSelectedBranchId(Number(v))}>
+              <SelectTrigger className="w-[180px] h-9">
+                <SelectValue placeholder="اختر الفرع" />
+              </SelectTrigger>
+              <SelectContent>
+                {branches.map(branch => (
+                  <SelectItem key={branch.id} value={branch.id.toString()}>
+                    {branch.nameAr}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="text-sm font-medium">
+              {branches.find(b => b.id === selectedBranchId)?.nameAr || 'الفرع'}
+            </span>
+          )}
         </div>
         
-        {/* Branch Selection */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-xl border">
-            <Store className="h-5 w-5 text-primary" />
-            {isAdmin ? (
-              <Select value={selectedBranchId?.toString() || ''} onValueChange={(v) => setSelectedBranchId(Number(v))}>
-                <SelectTrigger className="w-[180px] border-0 bg-transparent h-10 text-base">
-                  <SelectValue placeholder="اختر الفرع" />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map(branch => (
-                    <SelectItem key={branch.id} value={branch.id.toString()} className="text-base">
-                      {branch.nameAr}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <span className="text-base font-medium px-2">
-                {branches.find(b => b.id === selectedBranchId)?.nameAr || 'الفرع'}
-              </span>
-            )}
-          </div>
-          
-          {/* Actions */}
+        <div className="flex items-center gap-2">
           <Button 
             variant="default" 
-            size="lg" 
-            className="gap-2 h-12 bg-green-600 hover:bg-green-700" 
+            size="sm" 
+            className="gap-2 bg-green-600 hover:bg-green-700" 
             onClick={() => setShowConfirmationDialog(true)} 
             disabled={!selectedBranchId || !dailyReport || dailyReport.totalInvoices === 0}
           >
-            <Send className="h-5 w-5" />
-            تأكيد وإرسال للإيرادات
+            <Send className="h-4 w-4" />
+            تأكيد وإرسال
           </Button>
           
-          <Button variant="outline" size="lg" className="gap-2 h-12" onClick={handlePrint} disabled={!selectedBranchId}>
-            <Printer className="h-5 w-5" />
-            طباعة التقرير
+          <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint} disabled={!selectedBranchId}>
+            <Printer className="h-4 w-4" />
+            طباعة
           </Button>
-          
-          <Link href="/pos">
-            <Button size="lg" className="gap-2 h-12">
-              <ShoppingCart className="h-5 w-5" />
-              الكاشير
-            </Button>
-          </Link>
-          
-          <Link href="/pos-settings">
-            <Button variant="outline" size="icon" className="h-12 w-12">
-              <Settings className="h-5 w-5" />
-            </Button>
-          </Link>
         </div>
-      </header>
+      </div>
       
       {/* Main Content */}
       <div className="flex-1 overflow-auto p-6">
