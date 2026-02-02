@@ -1718,3 +1718,890 @@
 .sidebar-item-enhanced.active {
   background: oklch(from var(--primary) l c h / 10%);
 }
+
+
+/* ==================== تحسينات القوائم المتقدمة - Frontend Expert ==================== */
+
+/* تحسين الأداء باستخدام GPU acceleration */
+.sidebar-optimized {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* تحسين عناصر القائمة الرئيسية */
+.sidebar-menu-item {
+  position: relative;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  margin: 2px 8px;
+  border-radius: 10px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, background-color;
+}
+
+.sidebar-menu-item:hover {
+  background: oklch(from var(--primary) l c h / 8%);
+  transform: translateX(-4px);
+}
+
+.sidebar-menu-item:active {
+  transform: translateX(-2px) scale(0.98);
+}
+
+/* العنصر النشط */
+.sidebar-menu-item-active {
+  background: linear-gradient(90deg, oklch(from var(--primary) l c h / 12%) 0%, transparent 100%);
+}
+
+.sidebar-menu-item-active::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: linear-gradient(180deg, var(--primary) 0%, oklch(from var(--primary) calc(l - 0.1) c h) 100%);
+  border-radius: 3px 0 0 3px;
+  animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideIn {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: 100%;
+    opacity: 1;
+  }
+}
+
+/* تحسين أيقونات القائمة */
+.sidebar-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, background-color;
+}
+
+.sidebar-menu-item:hover .sidebar-icon-wrapper {
+  background: oklch(from var(--primary) l c h / 15%);
+  transform: scale(1.05);
+}
+
+.sidebar-menu-item-active .sidebar-icon-wrapper {
+  background: oklch(from var(--primary) l c h / 20%);
+}
+
+/* تحسين القوائم الفرعية */
+.sidebar-submenu {
+  overflow: hidden;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: max-height, opacity;
+}
+
+.sidebar-submenu-item {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px 0 16px;
+  margin: 2px 0;
+  border-radius: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, background-color;
+  opacity: 0;
+  transform: translateX(10px);
+  animation: fadeSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.sidebar-submenu-item:nth-child(1) { animation-delay: 0.05s; }
+.sidebar-submenu-item:nth-child(2) { animation-delay: 0.1s; }
+.sidebar-submenu-item:nth-child(3) { animation-delay: 0.15s; }
+.sidebar-submenu-item:nth-child(4) { animation-delay: 0.2s; }
+.sidebar-submenu-item:nth-child(5) { animation-delay: 0.25s; }
+.sidebar-submenu-item:nth-child(6) { animation-delay: 0.3s; }
+.sidebar-submenu-item:nth-child(7) { animation-delay: 0.35s; }
+.sidebar-submenu-item:nth-child(8) { animation-delay: 0.4s; }
+.sidebar-submenu-item:nth-child(9) { animation-delay: 0.45s; }
+.sidebar-submenu-item:nth-child(10) { animation-delay: 0.5s; }
+.sidebar-submenu-item:nth-child(11) { animation-delay: 0.55s; }
+.sidebar-submenu-item:nth-child(12) { animation-delay: 0.6s; }
+
+@keyframes fadeSlideIn {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.sidebar-submenu-item:hover {
+  background: oklch(from var(--primary) l c h / 8%);
+  transform: translateX(-3px);
+}
+
+.sidebar-submenu-item-active {
+  background: oklch(from var(--primary) l c h / 12%);
+}
+
+/* تحسين سهم القائمة الفرعية */
+.sidebar-chevron {
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.sidebar-chevron-open {
+  transform: rotate(180deg);
+}
+
+/* تحسين التمرير */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(from var(--primary) l c h / 20%) transparent;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: oklch(from var(--primary) l c h / 20%);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: oklch(from var(--primary) l c h / 40%);
+}
+
+/* تحسين الهيدر */
+.sidebar-header-enhanced {
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-header-enhanced::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, oklch(from var(--primary) l c h / 20%) 50%, transparent 100%);
+}
+
+/* تحسين الفوتر */
+.sidebar-footer-enhanced {
+  position: relative;
+}
+
+.sidebar-footer-enhanced::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, oklch(from var(--primary) l c h / 20%) 50%, transparent 100%);
+}
+
+/* تحسين زر المستخدم */
+.sidebar-user-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, background-color;
+}
+
+.sidebar-user-button:hover {
+  background: oklch(from var(--primary) l c h / 8%);
+  transform: scale(1.02);
+}
+
+.sidebar-user-button:active {
+  transform: scale(0.98);
+}
+
+/* تحسين Avatar */
+.sidebar-avatar {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, box-shadow;
+}
+
+.sidebar-user-button:hover .sidebar-avatar {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px oklch(from var(--primary) l c h / 30%);
+}
+
+/* تحسين زر تبديل القائمة */
+.sidebar-toggle-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, background-color;
+}
+
+.sidebar-toggle-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, oklch(from var(--primary) l c h / 20%) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.sidebar-toggle-btn:hover::before {
+  opacity: 1;
+}
+
+.sidebar-toggle-btn:hover {
+  transform: scale(1.1);
+}
+
+.sidebar-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+/* تحسين الشعار */
+.sidebar-logo {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, filter;
+}
+
+.sidebar-logo:hover {
+  transform: scale(1.05) rotate(-2deg);
+  filter: drop-shadow(0 4px 12px oklch(from var(--primary) l c h / 40%));
+}
+
+/* تحسين النص */
+.sidebar-text {
+  transition: all 0.2s ease;
+  will-change: opacity, transform;
+}
+
+/* تحسين حالة الطي */
+[data-state="collapsed"] .sidebar-text {
+  opacity: 0;
+  transform: translateX(10px);
+}
+
+[data-state="expanded"] .sidebar-text {
+  opacity: 1;
+  transform: translateX(0);
+  transition-delay: 0.1s;
+}
+
+/* تحسين الـ Tooltip */
+[data-sidebar="menu-button"][data-state="closed"]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px oklch(0 0 0 / 20%);
+  z-index: 100;
+  animation: tooltipFadeIn 0.2s ease;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+/* تحسينات الموبايل للقوائم */
+@media (max-width: 767px) {
+  .sidebar-menu-item {
+    height: 48px;
+    margin: 3px 6px;
+    padding: 0 10px;
+  }
+  
+  .sidebar-submenu-item {
+    height: 44px;
+    padding: 0 10px 0 14px;
+  }
+  
+  .sidebar-icon-wrapper {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .sidebar-user-button {
+    padding: 10px;
+  }
+}
+
+/* تحسين الأداء للأجهزة الضعيفة */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-menu-item,
+  .sidebar-submenu-item,
+  .sidebar-icon-wrapper,
+  .sidebar-chevron,
+  .sidebar-user-button,
+  .sidebar-avatar,
+  .sidebar-toggle-btn,
+  .sidebar-logo {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* تحسين التركيز للوصولية */
+.sidebar-menu-item:focus-visible,
+.sidebar-submenu-item:focus-visible,
+.sidebar-user-button:focus-visible,
+.sidebar-toggle-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* تحسين حالة التحميل */
+.sidebar-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, oklch(from var(--primary) l c h / 10%) 50%, transparent 100%);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+
+/* ==================== حركات القوائم الفرعية المحسنة ==================== */
+
+/* حركة فتح القائمة الفرعية */
+@keyframes collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+/* حركة إغلاق القائمة الفرعية */
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+/* تطبيق الحركات */
+.animate-collapsible-down {
+  animation: collapsible-down 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-collapsible-up {
+  animation: collapsible-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* تحسين حركة العناصر الفرعية عند الفتح */
+[data-state="open"] .sidebar-submenu-item {
+  animation: submenuItemSlide 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes submenuItemSlide {
+  from {
+    opacity: 0;
+    transform: translateX(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* تأخير متدرج للعناصر الفرعية */
+[data-state="open"] .sidebar-submenu-item:nth-child(1) { animation-delay: 0.03s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(2) { animation-delay: 0.06s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(3) { animation-delay: 0.09s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(4) { animation-delay: 0.12s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(5) { animation-delay: 0.15s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(6) { animation-delay: 0.18s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(7) { animation-delay: 0.21s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(8) { animation-delay: 0.24s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(9) { animation-delay: 0.27s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(10) { animation-delay: 0.30s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(11) { animation-delay: 0.33s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(12) { animation-delay: 0.36s; }
+[data-state="open"] .sidebar-submenu-item:nth-child(13) { animation-delay: 0.39s; }
+
+/* حركة hover محسنة للعناصر */
+.sidebar-menu-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-menu-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), oklch(from var(--primary) l c h / 8%) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.sidebar-menu-item:hover::after {
+  opacity: 1;
+}
+
+/* تحسين حركة الأيقونات */
+.sidebar-icon-wrapper svg {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-menu-item:hover .sidebar-icon-wrapper svg {
+  transform: scale(1.1);
+}
+
+.sidebar-menu-item:active .sidebar-icon-wrapper svg {
+  transform: scale(0.95);
+}
+
+/* حركة ripple عند النقر */
+@keyframes ripple {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.sidebar-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: oklch(from var(--primary) l c h / 20%);
+  transform: scale(0);
+  animation: ripple 0.6s linear;
+  pointer-events: none;
+}
+
+/* تحسين حركة الهيدر */
+.sidebar-header-enhanced {
+  position: relative;
+}
+
+.sidebar-header-enhanced .sidebar-logo {
+  animation: logoFloat 3s ease-in-out infinite;
+}
+
+@keyframes logoFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* تحسين حركة زر التبديل */
+.sidebar-toggle-btn svg {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-toggle-btn:hover svg {
+  transform: rotate(180deg);
+}
+
+/* تحسين حركة المستخدم */
+.sidebar-user-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-user-button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, oklch(from var(--primary) l c h / 5%) 50%, transparent 100%);
+  transform: translateX(-100%);
+  transition: transform 0.5s ease;
+}
+
+.sidebar-user-button:hover::before {
+  transform: translateX(100%);
+}
+
+/* تحسين حركة الـ scrollbar */
+.sidebar-scroll {
+  --scrollbar-thumb: oklch(from var(--primary) l c h / 20%);
+  --scrollbar-thumb-hover: oklch(from var(--primary) l c h / 40%);
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  transition: background 0.2s ease;
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* تحسين حركة الظهور عند التحميل */
+@keyframes sidebarFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.sidebar-optimized {
+  animation: sidebarFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* تحسين حركة الطي والفتح للقائمة الجانبية */
+[data-sidebar="sidebar"] {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-sidebar="sidebar"][data-state="collapsed"] .sidebar-text {
+  opacity: 0;
+  transform: translateX(10px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+[data-sidebar="sidebar"][data-state="expanded"] .sidebar-text {
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 0.25s ease 0.1s, transform 0.25s ease 0.1s;
+}
+
+/* تحسين حركة العنصر النشط */
+.sidebar-menu-item-active {
+  position: relative;
+}
+
+.sidebar-menu-item-active::before {
+  animation: activeIndicator 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes activeIndicator {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: calc(100% - 16px);
+    opacity: 1;
+  }
+}
+
+/* تحسين حركة القائمة الفرعية النشطة */
+.sidebar-submenu-item-active {
+  position: relative;
+}
+
+.sidebar-submenu-item-active::before {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  background: var(--primary);
+  border-radius: 50%;
+  animation: activeDot 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes activeDot {
+  from {
+    transform: translateY(-50%) scale(0);
+  }
+  to {
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+
+/* ==================== تحسينات الأداء والسلاسة ==================== */
+
+/* تحسين الأداء باستخدام GPU */
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+  will-change: transform;
+}
+
+/* تحسين will-change للعناصر المتحركة */
+.sidebar-menu-item,
+.sidebar-submenu-item,
+.sidebar-icon-wrapper,
+.sidebar-chevron,
+.sidebar-user-button,
+.sidebar-toggle-btn {
+  will-change: transform, background-color, opacity;
+}
+
+/* تحسين contain للعناصر */
+.sidebar-optimized {
+  contain: layout style;
+}
+
+.sidebar-menu-item {
+  contain: layout;
+}
+
+/* تحسين الرسم */
+.sidebar-scroll {
+  contain: strict;
+  content-visibility: auto;
+}
+
+/* تحسين طبقات الرسم */
+.sidebar-header-enhanced,
+.sidebar-footer-enhanced {
+  isolation: isolate;
+}
+
+/* تحسين التمرير السلس */
+.sidebar-scroll {
+  overscroll-behavior: contain;
+  scroll-snap-type: y proximity;
+}
+
+.sidebar-menu-item {
+  scroll-snap-align: start;
+}
+
+/* تحسين الاستجابة للمس */
+.sidebar-menu-item,
+.sidebar-submenu-item,
+.sidebar-user-button,
+.sidebar-toggle-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* تحسين الخطوط */
+.sidebar-text {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* تحسين الصور */
+.sidebar-logo {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* تحسين الظلال */
+.sidebar-avatar {
+  box-shadow: 0 2px 8px oklch(0 0 0 / 10%);
+}
+
+/* تحسين الحدود */
+.sidebar-menu-item,
+.sidebar-submenu-item {
+  border: 1px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.sidebar-menu-item:hover,
+.sidebar-submenu-item:hover {
+  border-color: oklch(from var(--primary) l c h / 10%);
+}
+
+/* تحسين التركيز */
+.sidebar-menu-item:focus-visible,
+.sidebar-submenu-item:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  border-radius: 10px;
+}
+
+/* تحسين الأداء للأجهزة الضعيفة */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .sidebar-logo {
+    animation: none !important;
+  }
+}
+
+/* تحسين الأداء للشاشات عالية الدقة */
+@media (min-resolution: 2dppx) {
+  .sidebar-logo {
+    image-rendering: auto;
+  }
+}
+
+/* تحسين الأداء للشاشات الكبيرة */
+@media (min-width: 1920px) {
+  .sidebar-menu-item {
+    height: 48px;
+  }
+  
+  .sidebar-submenu-item {
+    height: 44px;
+  }
+  
+  .sidebar-icon-wrapper {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* تحسين التحميل الكسول */
+.sidebar-lazy-load {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 44px;
+}
+
+/* تحسين إعادة الرسم */
+.sidebar-paint-optimized {
+  will-change: contents;
+  contain: paint;
+}
+
+/* تحسين الطبقات */
+.sidebar-layer-optimized {
+  transform: translateZ(0);
+  isolation: isolate;
+}
+
+/* تحسين الذاكرة */
+.sidebar-memory-optimized {
+  contain: size layout style paint;
+}
+
+/* تحسين التفاعل */
+.sidebar-interactive {
+  pointer-events: auto;
+  user-select: none;
+}
+
+/* تحسين الوصولية */
+@media (forced-colors: active) {
+  .sidebar-menu-item-active::before {
+    background: CanvasText;
+  }
+  
+  .sidebar-submenu-item-active::before {
+    background: CanvasText;
+  }
+}
+
+/* تحسين طباعة */
+@media print {
+  .sidebar-optimized {
+    display: none;
+  }
+}
+
+/* تحسين الوضع المظلم */
+.dark .sidebar-menu-item:hover {
+  background: oklch(1 0 0 / 6%);
+}
+
+.dark .sidebar-submenu-item:hover {
+  background: oklch(1 0 0 / 5%);
+}
+
+.dark .sidebar-menu-item-active {
+  background: linear-gradient(90deg, oklch(from var(--primary) l c h / 15%) 0%, transparent 100%);
+}
+
+.dark .sidebar-submenu-item-active {
+  background: oklch(from var(--primary) l c h / 15%);
+}
+
+/* تحسين التباين */
+.high-contrast .sidebar-menu-item-active::before {
+  width: 4px;
+}
+
+.high-contrast .sidebar-text {
+  font-weight: 500;
+}
+
+/* تحسين الشفافية */
+@supports (backdrop-filter: blur(10px)) {
+  .sidebar-header-enhanced {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  
+  .sidebar-footer-enhanced {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+/* تحسين الألوان */
+@supports (color: oklch(0 0 0)) {
+  .sidebar-menu-item:hover {
+    background: oklch(from var(--primary) l c h / 8%);
+  }
+}
+
+/* Fallback للمتصفحات القديمة */
+@supports not (color: oklch(0 0 0)) {
+  .sidebar-menu-item:hover {
+    background: rgba(59, 130, 246, 0.08);
+  }
+  
+  .sidebar-menu-item-active {
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.12) 0%, transparent 100%);
+  }
+}

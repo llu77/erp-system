@@ -480,15 +480,15 @@ function DashboardLayoutContent({
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
-          className="border-l-0 border-r"
+          className="border-l-0 border-r sidebar-optimized"
           side="right"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-20 justify-center border-b bg-gradient-to-l from-primary/5 to-transparent">
+          <SidebarHeader className="h-20 justify-center border-b bg-gradient-to-l from-primary/5 to-transparent sidebar-header-enhanced">
             <div className="flex items-center gap-3 px-3 transition-all w-full">
               <button
                 onClick={toggleSidebar}
-                className="h-9 w-9 flex items-center justify-center hover:bg-accent rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0 hover:scale-105"
+                className="h-10 w-10 flex items-center justify-center hover:bg-accent rounded-xl shrink-0 sidebar-toggle-btn"
                 aria-label="تبديل القائمة"
               >
                 <PanelRight className="h-5 w-5 text-muted-foreground" />
@@ -496,7 +496,7 @@ function DashboardLayoutContent({
               {!isCollapsed ? (
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="relative">
-                    <img src="/symbol-ai-logo.png" alt="Symbol AI" className="h-12 w-12 object-contain shrink-0 drop-shadow-lg" />
+                    <img src="/symbol-ai-logo.png" alt="Symbol AI" className="h-12 w-12 object-contain shrink-0 drop-shadow-lg sidebar-logo" />
                     <div className="absolute inset-0 bg-primary/10 rounded-full blur-xl -z-10"></div>
                   </div>
                   <div className="flex flex-col">
@@ -516,7 +516,7 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0 overflow-y-auto">
+          <SidebarContent className="gap-0 overflow-y-auto sidebar-scroll">
             <SidebarMenu className="px-2 py-2">
               {finalMenu.map((item) => {
                 // عنصر بدون أطفال (رابط مباشر)
@@ -528,14 +528,14 @@ function DashboardLayoutContent({
                         isActive={isActive}
                         onClick={() => navigateTo(item.path!)}
                         tooltip={item.label}
-                        className={`h-10 transition-all font-normal sidebar-item-hover ${isActive ? "sidebar-item-active" : ""}`}
+                        className={`h-11 font-normal sidebar-menu-item ${isActive ? "sidebar-menu-item-active" : ""}`}
                       >
-                        <div className={`p-1.5 rounded-lg transition-colors ${isActive ? "bg-primary/15" : "bg-transparent"}`}>
+                        <div className={`sidebar-icon-wrapper ${isActive ? "bg-primary/15" : "bg-transparent"}`}>
                           <item.icon
-                            className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+                            className={`h-4.5 w-4.5 ${isActive ? "text-primary" : "text-muted-foreground"}`}
                           />
                         </div>
-                        <span className={isActive ? "font-medium text-primary" : ""}>{item.label}</span>
+                        <span className={`sidebar-text ${isActive ? "font-medium text-primary" : ""}`}>{item.label}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
@@ -556,23 +556,23 @@ function DashboardLayoutContent({
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton
                           tooltip={item.label}
-                          className={`h-10 transition-all font-normal sidebar-item-hover ${hasActiveChild ? "bg-primary/5" : ""}`}
+                          className={`h-11 font-normal sidebar-menu-item ${hasActiveChild ? "sidebar-menu-item-active" : ""}`}
                         >
-                          <div className={`p-1.5 rounded-lg transition-colors ${hasActiveChild ? "bg-primary/15" : "bg-transparent"}`}>
+                          <div className={`sidebar-icon-wrapper ${hasActiveChild ? "bg-primary/15" : "bg-transparent"}`}>
                             <item.icon
-                              className={`h-4 w-4 ${hasActiveChild ? "text-primary" : "text-muted-foreground"}`}
+                              className={`h-4.5 w-4.5 ${hasActiveChild ? "text-primary" : "text-muted-foreground"}`}
                             />
                           </div>
-                          <span className={hasActiveChild ? "font-medium text-primary" : ""}>{item.label}</span>
+                          <span className={`sidebar-text ${hasActiveChild ? "font-medium text-primary" : ""}`}>{item.label}</span>
                           <ChevronDown
-                            className={`mr-auto h-4 w-4 transition-transform duration-300 ${hasActiveChild ? "text-primary" : "text-muted-foreground"} ${
-                              isOpen ? "rotate-180" : ""
+                            className={`mr-auto h-4 w-4 sidebar-chevron ${hasActiveChild ? "text-primary" : "text-muted-foreground"} ${
+                              isOpen ? "sidebar-chevron-open" : ""
                             }`}
                           />
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <SidebarMenuSub className="mr-4 border-r border-border/50 pr-2">
+                        <SidebarMenuSub className="mr-4 border-r border-border/50 pr-2 sidebar-submenu">
                           {item.children.map((child) => {
                             const isChildActive = location === child.path;
                             return (
@@ -580,9 +580,9 @@ function DashboardLayoutContent({
                                 <SidebarMenuSubButton
                                   onClick={() => navigateTo(child.path!)}
                                   isActive={isChildActive}
-                                  className={`h-9 transition-all ${isChildActive ? "bg-primary/10 text-primary font-medium" : ""}`}
+                                  className={`h-10 sidebar-submenu-item ${isChildActive ? "sidebar-submenu-item-active text-primary font-medium" : ""}`}
                                 >
-                                  <child.icon className={`h-3.5 w-3.5 ${isChildActive ? "text-primary" : "text-muted-foreground"}`} />
+                                  <child.icon className={`h-4 w-4 ${isChildActive ? "text-primary" : "text-muted-foreground"}`} />
                                   <span>{child.label}</span>
                                 </SidebarMenuSubButton>
                               </SidebarMenuSubItem>
@@ -597,11 +597,11 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3 border-t bg-muted/30">
+          <SidebarFooter className="p-3 border-t bg-muted/30 sidebar-footer-enhanced">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-right group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
+                <button className="flex items-center gap-3 rounded-xl px-2 py-2 w-full text-right group-data-[collapsible=icon]:justify-center sidebar-user-button">
+                  <Avatar className="h-10 w-10 border shrink-0 sidebar-avatar">
                     <AvatarFallback className="bg-primary/10 text-primary">
                       {user?.name?.charAt(0).toUpperCase() || "م"}
                     </AvatarFallback>
