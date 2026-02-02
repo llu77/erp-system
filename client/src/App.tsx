@@ -98,6 +98,7 @@ const LoyaltyDeletionRequests = lazy(() => import("./pages/LoyaltyDeletionReques
 
 // POS System
 const POSDailyReport = lazy(() => import("./pages/POSDailyReport"));
+const POSEmployeeRanking = lazy(() => import("./pages/POSEmployeeRanking"));
 const POSSettings = lazy(() => import("./pages/POSSettings"));
 const POSServicesManagement = lazy(() => import("./pages/POSServicesManagement"));
 const POSCategoriesManagement = lazy(() => import("./pages/POSCategoriesManagement"));
@@ -179,6 +180,9 @@ function Router() {
       </Route>
       <Route path="/pos-employee-stats">
         <LazyPage component={POSEmployeeStats} />
+      </Route>
+      <Route path="/pos-employee-ranking">
+        <LazyPage component={POSEmployeeRanking} />
       </Route>
       <Route path="/service-performance-report">
         <DashboardLayout>

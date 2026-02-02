@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -178,44 +178,46 @@ export default function POS() {
     }
   }, [loyaltyDiscount, paymentMethod, subtotal]);
   
-  // Functions
-  const addToCart = (service: typeof services[0]) => {
-    const existingItem = cart.find(item => item.serviceId === service.id);
-    
-    if (existingItem) {
-      setCart(cart.map(item => 
-        item.serviceId === service.id
-          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.price }
-          : item
-      ));
-    } else {
-      setCart([...cart, {
-        serviceId: service.id,
-        serviceName: service.name,
-        serviceNameAr: service.nameAr,
-        price: Number(service.price),
-        quantity: 1,
-        total: Number(service.price),
-      }]);
-    }
+  // Functions - Optimized with useCallback
+  const addToCart = useCallback((service: typeof services[0]) => {
+    setCart(prevCart => {
+      const existingItem = prevCart.find(item => item.serviceId === service.id);
+      
+      if (existingItem) {
+        return prevCart.map(item => 
+          item.serviceId === service.id
+            ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.price }
+            : item
+        );
+      } else {
+        return [...prevCart, {
+          serviceId: service.id,
+          serviceName: service.name,
+          serviceNameAr: service.nameAr,
+          price: Number(service.price),
+          quantity: 1,
+          total: Number(service.price),
+        }];
+      }
+    });
     toast.success(`تمت إضافة ${service.nameAr}`);
-  };
+  }, []);
   
-  const updateQuantity = (serviceId: number, delta: number) => {
-    setCart(cart.map(item => {
+  const updateQuantity = useCallback((serviceId: number, delta: number) => {
+    setCart(prevCart => prevCart.map(item => {
       if (item.serviceId === serviceId) {
         const newQuantity = Math.max(1, item.quantity + delta);
         return { ...item, quantity: newQuantity, total: newQuantity * item.price };
       }
       return item;
     }));
-  };
+  }, []);
   
-  const removeFromCart = (serviceId: number) => {
-    setCart(cart.filter(item => item.serviceId !== serviceId));
-  };
+  const removeFromCart = useCallback((serviceId: number) => {
+    setCart(prevCart => prevCart.filter(item => item.serviceId !== serviceId));
+  }, []);
   
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setCart([]);
     setDiscountAmount(0);
     setDiscountReason('');
@@ -224,15 +226,15 @@ export default function POS() {
     setPaymentMethod('cash');
     setCashAmount(0);
     setCardAmount(0);
-  };
+  }, []);
   
-  const selectLoyaltyCustomer = (customer: LoyaltyCustomer) => {
+  const selectLoyaltyCustomer = useCallback((customer: LoyaltyCustomer) => {
     setLoyaltyCustomer(customer);
     setShowLoyaltyDialog(false);
     setLoyaltySearchQuery('');
-  };
+  }, []);
   
-  const handleCheckout = () => {
+  const handleCheckout = useCallback(() => {
     if (!selectedBranchId) {
       toast.error('يرجى اختيار الفرع');
       return;
@@ -247,7 +249,7 @@ export default function POS() {
     }
     
     setShowPaymentDialog(true);
-  };
+  }, [selectedBranchId, selectedEmployeeId, cart.length]);
   
   const handlePayment = () => {
     if (paymentMethod === 'split' && (cashAmount + cardAmount) !== total) {
@@ -927,10 +929,55 @@ export default function POS() {
           </div>
         </div>
         
-        {/* Employee Ranking Sidebar */}
-        {showEmployeeSidebar && selectedBranchId && (
-          <div className="w-[280px] bg-card border-r flex flex-col shrink-0">
+        {/* Employee Ranking Quick Link */}
+        {selectedBranchId && (
+          <div className="w-[200px] bg-card border-r flex flex-col shrink-0">
             {/* Sidebar Header */}
+            <div className="h-14 px-3 border-b flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-amber-500" />
+                <span className="font-bold text-sm">الموظفين</span>
+              </div>
+              <Link href="/pos-employee-ranking">
+                <Button variant="ghost" size="sm" className="h-7 text-xs">
+                  عرض الكل
+                </Button>
+              </Link>
+            </div>
+            
+            {/* Top 3 Employees Quick View */}
+            <ScrollArea className="flex-1 p-2">
+              <div className="space-y-2">
+                {employeesRanking.slice(0, 5).map((emp, index) => (
+                  <div key={emp.employeeId} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                      index === 0 ? 'bg-amber-500 text-white' :
+                      index === 1 ? 'bg-gray-400 text-white' :
+                      index === 2 ? 'bg-amber-700 text-white' :
+                      'bg-muted text-muted-foreground'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-xs truncate">{emp.employeeName}</p>
+                      <p className="text-xs text-primary font-bold">{Number(emp.totalRevenue).toFixed(0)} ر.س</p>
+                    </div>
+                  </div>
+                ))}
+                
+                {employeesRanking.length === 0 && (
+                  <div className="text-center py-4 text-muted-foreground text-xs">
+                    لا توجد بيانات
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+        
+        {/* Hidden toggle for employee sidebar - removed old complex sidebar */}
+        {false && showEmployeeSidebar && selectedBranchId && (
+          <div className="w-[280px] bg-card border-r flex flex-col shrink-0 hidden">
             <div className="h-16 px-4 border-b flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-amber-500/10 rounded-full flex items-center justify-center">
@@ -1087,146 +1134,135 @@ export default function POS() {
           </Button>
         )}
         
-        {/* Right Panel - Cart */}
-        <div className="w-[380px] bg-card border-r border-border/50 flex flex-col shrink-0">
-          {/* Cart Header */}
-          <div className="h-14 px-3 border-b border-border/50 flex items-center justify-between shrink-0">
+        {/* Right Panel - Cart - Compact */}
+        <div className="w-[320px] bg-card border-r border-border/50 flex flex-col shrink-0">
+          {/* Cart Header - Compact */}
+          <div className="h-12 px-2.5 border-b border-border/50 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center border border-primary/20">
-                <ShoppingCart className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <h2 className="font-bold text-base">السلة</h2>
-                <p className="text-sm text-muted-foreground">{cart.length} عنصر</p>
-              </div>
+              <ShoppingCart className="h-4 w-4 text-primary" />
+              <span className="font-bold text-sm">السلة</span>
+              <Badge variant="secondary" className="h-5 px-1.5 text-xs">{cart.length}</Badge>
             </div>
             {cart.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearCart} className="text-destructive hover:text-destructive">
-                <Trash2 className="h-4 w-4 ml-1" />
+              <Button variant="ghost" size="sm" onClick={clearCart} className="h-7 px-2 text-xs text-destructive hover:text-destructive">
+                <Trash2 className="h-3 w-3 ml-1" />
                 مسح
               </Button>
             )}
           </div>
           
-          {/* Cart Items */}
+          {/* Cart Items - Compact */}
           <ScrollArea className="flex-1">
-            <div className="p-2.5 space-y-1.5">
+            <div className="p-2 space-y-1">
               {cart.map(item => (
-                <Card key={item.serviceId} className="overflow-hidden border-border/60">
-                  <CardContent className="p-2.5">
-                    <div className="flex items-start justify-between mb-1.5">
-                      <span className="font-semibold text-sm">{item.serviceNameAr}</span>
+                <div key={item.serviceId} className="bg-muted/30 rounded-lg p-2 border border-border/40">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm truncate flex-1 ml-2">{item.serviceNameAr}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 text-destructive/70 hover:text-destructive"
+                      onClick={() => removeFromCart(item.serviceId)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between mt-1.5">
+                    <div className="flex items-center gap-0.5">
                       <Button 
-                        variant="ghost" 
+                        variant="outline" 
                         size="icon" 
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => removeFromCart(item.serviceId)}
+                        className="h-6 w-6"
+                        onClick={() => updateQuantity(item.serviceId, -1)}
                       >
-                        <X className="h-4 w-4" />
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="h-6 w-6"
+                        onClick={() => updateQuantity(item.serviceId, 1)}
+                      >
+                        <Plus className="h-3 w-3" />
                       </Button>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <Button 
-                          variant="outline" 
-                          size="icon" 
-                          className="h-8 w-8"
-                          onClick={() => updateQuantity(item.serviceId, -1)}
-                        >
-                          <Minus className="h-3.5 w-3.5" />
-                        </Button>
-                        <span className="w-8 text-center font-bold text-base">{item.quantity}</span>
-                        <Button 
-                          variant="outline" 
-                          size="icon" 
-                          className="h-8 w-8"
-                          onClick={() => updateQuantity(item.serviceId, 1)}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                      <div className="text-left">
-                        <div className="text-xs text-muted-foreground">{item.price.toFixed(0)} × {item.quantity}</div>
-                        <div className="font-bold text-base text-primary">{item.total.toFixed(2)} ر.س</div>
-                      </div>
+                    <div className="text-left">
+                      <span className="text-xs text-muted-foreground">{item.price.toFixed(0)} × {item.quantity}</span>
+                      <span className="font-bold text-sm text-primary mr-1">{item.total.toFixed(2)} ر.س</span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
               
               {cart.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <ShoppingCart className="h-14 w-14 mb-3 opacity-30" />
-                  <p className="text-base">السلة فارغة</p>
-                  <p className="text-sm">اضغط على الخدمات لإضافتها</p>
+                <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                  <ShoppingCart className="h-10 w-10 mb-2 opacity-30" />
+                  <p className="text-sm">السلة فارغة</p>
                 </div>
               )}
             </div>
           </ScrollArea>
           
-          {/* Loyalty Customer */}
+          {/* Loyalty Customer - Compact */}
           {loyaltyCustomer && (
-            <div className="px-4 py-3 border-t bg-green-500/10">
+            <div className="px-2.5 py-2 border-t bg-green-500/10">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
-                    <Gift className="h-5 w-5 text-green-500" />
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Gift className="h-4 w-4 text-green-500" />
                   <div>
-                    <div className="font-semibold">{loyaltyCustomer.name}</div>
-                    <div className="text-sm text-muted-foreground">{loyaltyCustomer.phone}</div>
+                    <span className="font-medium text-sm">{loyaltyCustomer.name}</span>
+                    <span className="text-xs text-muted-foreground mr-2">{loyaltyCustomer.phone}</span>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setLoyaltyCustomer(null)}>
-                  <X className="h-4 w-4" />
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setLoyaltyCustomer(null)}>
+                  <X className="h-3 w-3" />
                 </Button>
               </div>
               {loyaltyDiscount && (
-                <div className={`mt-2 text-sm font-medium ${loyaltyDiscount.eligible ? 'text-green-600' : 'text-yellow-600'}`}>
+                <p className={`text-xs font-medium mt-1 ${loyaltyDiscount.eligible ? 'text-green-600' : 'text-yellow-600'}`}>
                   {loyaltyDiscount.message}
-                </div>
+                </p>
               )}
             </div>
           )}
           
-          {/* Cart Summary & Payment */}
-          <div className="border-t border-border/50 bg-muted/30 p-3 space-y-2 shrink-0">
-            <div className="flex justify-between text-sm">
+          {/* Cart Summary & Payment - Compact */}
+          <div className="border-t border-border/50 bg-muted/30 p-2.5 space-y-1.5 shrink-0">
+            <div className="flex justify-between text-xs">
               <span>المجموع الفرعي</span>
               <span className="font-semibold">{subtotal.toFixed(2)} ر.س</span>
             </div>
             
             {discountAmount > 0 && (
-              <div className="flex justify-between text-green-600 text-sm">
+              <div className="flex justify-between text-green-600 text-xs">
                 <span>الخصم</span>
                 <span className="font-semibold">- {discountAmount.toFixed(2)} ر.س</span>
               </div>
             )}
             
-            <Separator className="my-1.5" />
-            
-            <div className="flex justify-between items-center">
-              <span className="text-lg font-bold">الإجمالي</span>
-              <span className="text-2xl font-bold text-primary">{total.toFixed(2)} ر.س</span>
+            <div className="flex justify-between items-center pt-1 border-t border-border/30">
+              <span className="text-base font-bold">الإجمالي</span>
+              <span className="text-xl font-bold text-primary">{total.toFixed(2)} ر.س</span>
             </div>
             
-            {/* Loyalty Button */}
+            {/* Loyalty Button - Small */}
             <Button 
               variant="outline" 
-              className="w-full h-10 gap-2 text-sm"
+              className="w-full h-8 gap-1.5 text-xs"
               onClick={() => setShowLoyaltyDialog(true)}
             >
-              <Gift className="h-4 w-4" />
-              {loyaltyCustomer ? 'تغيير عميل الولاء' : 'إضافة عميل ولاء'}
+              <Gift className="h-3.5 w-3.5" />
+              {loyaltyCustomer ? 'تغيير عميل' : 'إضافة عميل ولاء'}
             </Button>
             
             {/* Checkout Button */}
             <Button 
-              className="w-full h-12 text-lg gap-2 shadow-lg"
+              className="w-full h-10 text-base gap-2 shadow-lg"
               disabled={cart.length === 0 || !selectedBranchId || !selectedEmployeeId}
               onClick={handleCheckout}
             >
-              <CreditCard className="h-5 w-5" />
+              <CreditCard className="h-4 w-4" />
               الدفع
             </Button>
           </div>
@@ -1299,92 +1335,89 @@ export default function POS() {
       
       {/* Payment Dialog */}
       <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-xl">
-              <CreditCard className="h-6 w-6 text-primary" />
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <CreditCard className="h-5 w-5 text-primary" />
               إتمام الدفع
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-6">
-            {/* Payment Method - Large Buttons */}
-            <div className="space-y-3">
-              <Label className="text-base">طريقة الدفع</Label>
-              <div className="grid grid-cols-4 gap-3">
-                <Button
-                  variant={paymentMethod === 'cash' ? 'default' : 'outline'}
-                  className="h-20 flex-col gap-2"
-                  onClick={() => setPaymentMethod('cash')}
-                >
-                  <Banknote className="h-8 w-8" />
-                  <span className="text-base">كاش</span>
-                </Button>
-                <Button
-                  variant={paymentMethod === 'card' ? 'default' : 'outline'}
-                  className="h-20 flex-col gap-2"
-                  onClick={() => setPaymentMethod('card')}
-                >
-                  <CreditCard className="h-8 w-8" />
-                  <span className="text-base">شبكة</span>
-                </Button>
-                <Button
-                  variant={paymentMethod === 'split' ? 'default' : 'outline'}
-                  className="h-20 flex-col gap-2"
-                  onClick={() => setPaymentMethod('split')}
-                >
-                  <Split className="h-8 w-8" />
-                  <span className="text-base">تقسيم</span>
-                </Button>
-                <Button
-                  variant={paymentMethod === 'loyalty' ? 'default' : 'outline'}
-                  className="h-20 flex-col gap-2"
-                  onClick={() => setPaymentMethod('loyalty')}
-                  disabled={!loyaltyCustomer}
-                >
-                  <Gift className="h-8 w-8" />
-                  <span className="text-base">ولاء</span>
-                </Button>
-              </div>
+          <div className="space-y-4">
+            {/* Payment Method - Compact Buttons */}
+            <div className="grid grid-cols-4 gap-2">
+              <Button
+                variant={paymentMethod === 'cash' ? 'default' : 'outline'}
+                className="h-16 flex-col gap-1"
+                onClick={() => setPaymentMethod('cash')}
+              >
+                <Banknote className="h-6 w-6" />
+                <span className="text-sm">كاش</span>
+              </Button>
+              <Button
+                variant={paymentMethod === 'card' ? 'default' : 'outline'}
+                className="h-16 flex-col gap-1"
+                onClick={() => setPaymentMethod('card')}
+              >
+                <CreditCard className="h-6 w-6" />
+                <span className="text-sm">شبكة</span>
+              </Button>
+              <Button
+                variant={paymentMethod === 'split' ? 'default' : 'outline'}
+                className="h-16 flex-col gap-1"
+                onClick={() => setPaymentMethod('split')}
+              >
+                <Split className="h-6 w-6" />
+                <span className="text-sm">تقسيم</span>
+              </Button>
+              <Button
+                variant={paymentMethod === 'loyalty' ? 'default' : 'outline'}
+                className="h-16 flex-col gap-1"
+                onClick={() => setPaymentMethod('loyalty')}
+                disabled={!loyaltyCustomer}
+              >
+                <Gift className="h-6 w-6" />
+                <span className="text-sm">ولاء</span>
+              </Button>
             </div>
             
             {/* Split Payment Amounts */}
             {paymentMethod === 'split' && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-base">مبلغ الكاش</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-sm">مبلغ الكاش</Label>
                   <Input
                     type="number"
                     value={cashAmount}
                     onChange={(e) => setCashAmount(Number(e.target.value))}
                     min={0}
                     max={total}
-                    className="h-12 text-lg"
+                    className="h-10"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-base">مبلغ الشبكة</Label>
+                <div className="space-y-1">
+                  <Label className="text-sm">مبلغ الشبكة</Label>
                   <Input
                     type="number"
                     value={cardAmount}
                     onChange={(e) => setCardAmount(Number(e.target.value))}
                     min={0}
                     max={total}
-                    className="h-12 text-lg"
+                    className="h-10"
                   />
                 </div>
                 {(cashAmount + cardAmount) !== total && (
-                  <div className="col-span-2 text-destructive text-sm bg-destructive/10 p-3 rounded-lg">
-                    المجموع ({(cashAmount + cardAmount).toFixed(2)}) يجب أن يساوي الإجمالي ({total.toFixed(2)})
+                  <div className="col-span-2 text-destructive text-xs bg-destructive/10 p-2 rounded">
+                    المجموع ({(cashAmount + cardAmount).toFixed(2)}) ≠ الإجمالي ({total.toFixed(2)})
                   </div>
                 )}
               </div>
             )}
             
-            {/* Discount */}
-            <div className="space-y-2">
-              <Label className="text-base">الخصم (اختياري)</Label>
-              <div className="flex gap-3">
+            {/* Discount - Compact */}
+            <div className="space-y-1">
+              <Label className="text-sm">الخصم (اختياري)</Label>
+              <div className="flex gap-2">
                 <Input
                   type="number"
                   value={discountAmount}
@@ -1392,64 +1425,61 @@ export default function POS() {
                   min={0}
                   max={subtotal}
                   placeholder="0.00"
-                  className="flex-1 h-12 text-lg"
+                  className="w-24 h-10"
                 />
                 <Input
                   value={discountReason}
                   onChange={(e) => setDiscountReason(e.target.value)}
                   placeholder="سبب الخصم"
-                  className="flex-1 h-12"
+                  className="flex-1 h-10"
                 />
               </div>
             </div>
             
-            {/* Notes */}
-            <div className="space-y-2">
-              <Label className="text-base">ملاحظات (اختياري)</Label>
+            {/* Notes - Compact */}
+            <div className="space-y-1">
+              <Label className="text-sm">ملاحظات (اختياري)</Label>
               <Input
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="أي ملاحظات إضافية..."
-                className="h-12"
+                className="h-10"
               />
             </div>
             
-            {/* Summary */}
-            <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex justify-between text-base">
-                  <span>المجموع الفرعي</span>
-                  <span className="font-semibold">{subtotal.toFixed(2)} ر.س</span>
+            {/* Summary - Compact */}
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-1">
+              <div className="flex justify-between text-sm">
+                <span>المجموع الفرعي</span>
+                <span className="font-semibold">{subtotal.toFixed(2)} ر.س</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-green-600 text-sm">
+                  <span>الخصم</span>
+                  <span className="font-semibold">- {discountAmount.toFixed(2)} ر.س</span>
                 </div>
-                {discountAmount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>الخصم</span>
-                    <span className="font-semibold">- {discountAmount.toFixed(2)} ر.س</span>
-                  </div>
-                )}
-                <Separator />
-                <div className="flex justify-between items-center pt-2">
-                  <span className="text-xl font-bold">الإجمالي</span>
-                  <span className="text-3xl font-bold text-primary">{total.toFixed(2)} ر.س</span>
-                </div>
-              </CardContent>
-            </Card>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t border-primary/20">
+                <span className="text-lg font-bold">الإجمالي</span>
+                <span className="text-2xl font-bold text-primary">{total.toFixed(2)} ر.س</span>
+              </div>
+            </div>
           </div>
           
-          <DialogFooter className="gap-3">
-            <Button variant="outline" onClick={() => setShowPaymentDialog(false)} className="h-12 px-6">
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowPaymentDialog(false)} className="h-10 px-4">
               إلغاء
             </Button>
             <Button 
               onClick={handlePayment}
               disabled={createInvoiceMutation.isPending}
-              className="h-12 px-8 text-lg gap-2"
+              className="h-10 px-6 gap-2"
             >
               {createInvoiceMutation.isPending ? (
                 <>جاري المعالجة...</>
               ) : (
                 <>
-                  <Check className="h-5 w-5" />
+                  <Check className="h-4 w-4" />
                   تأكيد الدفع
                 </>
               )}

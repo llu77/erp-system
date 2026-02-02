@@ -9736,7 +9736,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           return await db.getEmployeesByBranchForPos(input.branchId);
         }),
       
-      // ترتيب موظفي الفرع حسب الإيرادات الشهرية
+      // ترتيب موظفي الفرع حسب الإيرادات الشهرية (مباشرة من الفواتير)
       rankingByRevenue: protectedProcedure
         .input(z.object({
           branchId: z.number(),
@@ -9747,7 +9747,27 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           const now = new Date();
           const year = input.year || now.getFullYear();
           const month = input.month || (now.getMonth() + 1);
-          return await db.getBranchEmployeesWithMonthlyRevenue(input.branchId, year, month);
+          
+          // حساب بداية ونهاية الشهر
+          const startDate = new Date(year, month - 1, 1);
+          const endDate = new Date(year, month, 0, 23, 59, 59);
+          
+          // جلب الإيرادات مباشرة من posInvoices (أدق)
+          const result = await db.getEmployeePerformanceReport(startDate, endDate, input.branchId, 50);
+          
+          // تحويل النتيجة للصيغة المطلوبة
+          return result.map((emp, index) => ({
+            rank: index + 1,
+            employeeId: emp.employeeId,
+            employeeName: emp.employeeName || 'غير محدد',
+            employeeCode: '',
+            position: emp.employeePosition || null,
+            photoUrl: emp.employeePhoto || null,
+            totalRevenue: emp.totalRevenue,
+            invoiceCount: emp.invoiceCount,
+            previousRevenue: 0, // يمكن إضافته لاحقاً
+            changePercentage: 0,
+          }));
         }),
       
       // تحديث اسم الموظف (متاح للمشرفين والأدمن)
