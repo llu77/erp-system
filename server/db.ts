@@ -11282,3 +11282,682 @@ export async function getApprovedAdvancesForCashFlow(
     return { total: 0, count: 0, advances: [] };
   }
 }
+
+
+// ==================== بوابة الكاشير (POS System) ====================
+
+import {
+  posCategories,
+  posServices,
+  posInvoices,
+  posInvoiceItems,
+  posDailySummary,
+  posEmployeePerformance,
+} from "../drizzle/schema";
+
+// Types for POS
+type InsertPosCategory = typeof posCategories.$inferInsert;
+type InsertPosService = typeof posServices.$inferInsert;
+type InsertPosInvoice = typeof posInvoices.$inferInsert;
+type InsertPosInvoiceItem = typeof posInvoiceItems.$inferInsert;
+
+// ==================== إدارة الأقسام ====================
+
+export async function getPosCategories() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(posCategories)
+    .where(eq(posCategories.isActive, true))
+    .orderBy(asc(posCategories.sortOrder));
+}
+
+export async function createPosCategory(data: Omit<InsertPosCategory, 'id' | 'createdAt' | 'updatedAt'>) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  const result = await db.insert(posCategories).values(data);
+  return { id: result[0].insertId, ...data };
+}
+
+export async function updatePosCategory(id: number, data: Partial<InsertPosCategory>) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  await db.update(posCategories).set(data).where(eq(posCategories.id, id));
+  return { success: true };
+}
+
+export async function deletePosCategory(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  // Soft delete - تعطيل بدلاً من الحذف
+  await db.update(posCategories).set({ isActive: false }).where(eq(posCategories.id, id));
+  return { success: true };
+}
+
+// ==================== إدارة الخدمات ====================
+
+export async function getPosServices() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select({
+    id: posServices.id,
+    categoryId: posServices.categoryId,
+    name: posServices.name,
+    nameAr: posServices.nameAr,
+    description: posServices.description,
+    price: posServices.price,
+    duration: posServices.duration,
+    sortOrder: posServices.sortOrder,
+    isActive: posServices.isActive,
+    categoryName: posCategories.nameAr,
+  })
+    .from(posServices)
+    .leftJoin(posCategories, eq(posServices.categoryId, posCategories.id))
+    .where(eq(posServices.isActive, true))
+    .orderBy(asc(posServices.sortOrder));
+}
+
+export async function getPosServicesByCategory(categoryId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(posServices)
+    .where(and(
+      eq(posServices.categoryId, categoryId),
+      eq(posServices.isActive, true)
+    ))
+    .orderBy(asc(posServices.sortOrder));
+}
+
+export async function createPosService(data: { categoryId: number; name: string; nameAr: string; price: number; description?: string; duration?: number; sortOrder?: number }) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  const result = await db.insert(posServices).values({
+    ...data,
+    price: data.price.toString(),
+  });
+  return { id: result[0].insertId, ...data };
+}
+
+export async function updatePosService(id: number, data: { categoryId?: number; name?: string; nameAr?: string; price?: number; description?: string; duration?: number; sortOrder?: number; isActive?: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  const updateData: Record<string, unknown> = { ...data };
+  if (data.price !== undefined) {
+    updateData.price = data.price.toString();
+  }
+  
+  await db.update(posServices).set(updateData).where(eq(posServices.id, id));
+  return { success: true };
+}
+
+export async function deletePosService(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  // Soft delete
+  await db.update(posServices).set({ isActive: false }).where(eq(posServices.id, id));
+  return { success: true };
+}
+
+// ==================== إدارة الفواتير ====================
+
+export async function createPosInvoice(data: {
+  branchId: number;
+  employeeId: number;
+  loyaltyCustomerId?: number;
+  items: { serviceId: number; quantity: number }[];
+  paymentMethod: 'cash' | 'card' | 'split' | 'loyalty';
+  cashAmount?: number;
+  cardAmount?: number;
+  discountAmount?: number;
+  discountPercentage?: number;
+  discountReason?: string;
+  notes?: string;
+  createdBy: number;
+  createdByName: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  // جلب بيانات الفرع
+  const branchData = await db.select().from(branches).where(eq(branches.id, data.branchId)).limit(1);
+  const branch = branchData[0];
+  
+  // جلب بيانات الموظف
+  const employeeData = await db.select().from(employees).where(eq(employees.id, data.employeeId)).limit(1);
+  const employee = employeeData[0];
+  
+  // جلب بيانات عميل الولاء إذا وجد
+  let loyaltyCustomer = null;
+  if (data.loyaltyCustomerId) {
+    const customerData = await db.select().from(loyaltyCustomers).where(eq(loyaltyCustomers.id, data.loyaltyCustomerId)).limit(1);
+    loyaltyCustomer = customerData[0];
+  }
+  
+  // جلب بيانات الخدمات
+  const serviceIds = data.items.map(item => item.serviceId);
+  const servicesData = await db.select().from(posServices).where(inArray(posServices.id, serviceIds));
+  
+  // حساب الإجمالي
+  let subtotal = 0;
+  const invoiceItems: { serviceId: number; serviceName: string; serviceNameAr: string; price: number; quantity: number; total: number }[] = [];
+  
+  for (const item of data.items) {
+    const service = servicesData.find(s => s.id === item.serviceId);
+    if (service) {
+      const itemTotal = Number(service.price) * item.quantity;
+      subtotal += itemTotal;
+      invoiceItems.push({
+        serviceId: service.id,
+        serviceName: service.name,
+        serviceNameAr: service.nameAr,
+        price: Number(service.price),
+        quantity: item.quantity,
+        total: itemTotal,
+      });
+    }
+  }
+  
+  // حساب الخصم والإجمالي النهائي
+  const discountAmount = data.discountAmount || 0;
+  const total = subtotal - discountAmount;
+  
+  // تحديد تاريخ الفاتورة (يوم العمل)
+  const now = new Date();
+  const invoiceDate = getWorkingDate(now);
+  
+  // إنشاء رقم الفاتورة
+  const invoiceNumber = await generatePosInvoiceNumber(data.branchId, invoiceDate);
+  
+  // إنشاء الفاتورة
+  const invoiceResult = await db.insert(posInvoices).values({
+    invoiceNumber,
+    branchId: data.branchId,
+    branchName: branch?.nameAr || '',
+    employeeId: data.employeeId,
+    employeeName: employee?.name || '',
+    loyaltyCustomerId: data.loyaltyCustomerId || null,
+    loyaltyCustomerName: loyaltyCustomer?.name || null,
+    loyaltyCustomerPhone: loyaltyCustomer?.phone || null,
+    subtotal: subtotal.toString(),
+    discountAmount: discountAmount.toString(),
+    discountPercentage: (data.discountPercentage || 0).toString(),
+    discountReason: data.discountReason || null,
+    total: total.toString(),
+    paymentMethod: data.paymentMethod,
+    cashAmount: (data.cashAmount || (data.paymentMethod === 'cash' ? total : 0)).toString(),
+    cardAmount: (data.cardAmount || (data.paymentMethod === 'card' ? total : 0)).toString(),
+    status: 'completed',
+    notes: data.notes || null,
+    createdBy: data.createdBy,
+    createdByName: data.createdByName,
+    invoiceDate,
+  });
+  
+  const invoiceId = invoiceResult[0].insertId;
+  
+  // إضافة بنود الفاتورة
+  for (const item of invoiceItems) {
+    await db.insert(posInvoiceItems).values({
+      invoiceId,
+      serviceId: item.serviceId,
+      serviceName: item.serviceName,
+      serviceNameAr: item.serviceNameAr,
+      price: item.price.toString(),
+      quantity: item.quantity,
+      total: item.total.toString(),
+    });
+  }
+  
+  // تحديث ملخص اليوم
+  await updatePosDailySummary(data.branchId, invoiceDate);
+  
+  // تحديث أداء الموظف
+  await updatePosEmployeePerformance(data.employeeId, data.branchId, invoiceDate);
+  
+  return {
+    id: invoiceId,
+    invoiceNumber,
+    total,
+    items: invoiceItems,
+  };
+}
+
+// دالة لتحديد يوم العمل (بعد منتصف الليل = يوم جديد)
+function getWorkingDate(date: Date): Date {
+  const hours = date.getHours();
+  // إذا كان الوقت قبل منتصف الليل، نستخدم نفس اليوم
+  // إذا كان بعد منتصف الليل، نستخدم اليوم الجديد
+  const workingDate = new Date(date);
+  workingDate.setHours(0, 0, 0, 0);
+  return workingDate;
+}
+
+// دالة لإنشاء رقم فاتورة فريد
+async function generatePosInvoiceNumber(branchId: number, date: Date): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  // عد الفواتير اليوم لهذا الفرع
+  const todayInvoices = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(posInvoices)
+    .where(and(
+      eq(posInvoices.branchId, branchId),
+      gte(posInvoices.invoiceDate, startOfDay),
+      lte(posInvoices.invoiceDate, endOfDay)
+    ));
+  
+  const count = todayInvoices[0]?.count || 0;
+  const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
+  
+  return `POS-${branchId}-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+}
+
+export async function getTodayPosInvoices(branchId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const today = getWorkingDate(new Date());
+  const startOfDay = new Date(today);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(today);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  return await db.select()
+    .from(posInvoices)
+    .where(and(
+      eq(posInvoices.branchId, branchId),
+      gte(posInvoices.invoiceDate, startOfDay),
+      lte(posInvoices.invoiceDate, endOfDay)
+    ))
+    .orderBy(desc(posInvoices.createdAt));
+}
+
+export async function getPosInvoicesByDateRange(branchId: number, startDate: Date, endDate: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(posInvoices)
+    .where(and(
+      eq(posInvoices.branchId, branchId),
+      gte(posInvoices.invoiceDate, startDate),
+      lte(posInvoices.invoiceDate, endDate)
+    ))
+    .orderBy(desc(posInvoices.createdAt));
+}
+
+export async function getPosInvoiceDetails(invoiceId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const invoice = await db.select()
+    .from(posInvoices)
+    .where(eq(posInvoices.id, invoiceId))
+    .limit(1);
+  
+  if (!invoice[0]) return null;
+  
+  const items = await db.select()
+    .from(posInvoiceItems)
+    .where(eq(posInvoiceItems.invoiceId, invoiceId));
+  
+  return {
+    ...invoice[0],
+    items,
+  };
+}
+
+export async function cancelPosInvoice(invoiceId: number, reason?: string) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  
+  const invoice = await db.select()
+    .from(posInvoices)
+    .where(eq(posInvoices.id, invoiceId))
+    .limit(1);
+  
+  if (!invoice[0]) throw new Error('Invoice not found');
+  
+  await db.update(posInvoices)
+    .set({ 
+      status: 'cancelled',
+      notes: reason ? `${invoice[0].notes || ''}\n[ملغاة]: ${reason}` : invoice[0].notes,
+    })
+    .where(eq(posInvoices.id, invoiceId));
+  
+  // تحديث ملخص اليوم
+  await updatePosDailySummary(invoice[0].branchId, new Date(invoice[0].invoiceDate));
+  
+  return { success: true };
+}
+
+// ==================== تقرير اليوم ====================
+
+async function updatePosDailySummary(branchId: number, date: Date) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  // جلب جميع فواتير اليوم
+  const invoicesData = await db.select()
+    .from(posInvoices)
+    .where(and(
+      eq(posInvoices.branchId, branchId),
+      gte(posInvoices.invoiceDate, startOfDay),
+      lte(posInvoices.invoiceDate, endOfDay)
+    ));
+  
+  // حساب الإحصائيات
+  let totalAmount = 0;
+  let cashTotal = 0;
+  let cardTotal = 0;
+  let loyaltyTotal = 0;
+  let totalDiscounts = 0;
+  let cancelledCount = 0;
+  let cancelledAmount = 0;
+  let completedCount = 0;
+  
+  for (const inv of invoicesData) {
+    if (inv.status === 'cancelled') {
+      cancelledCount++;
+      cancelledAmount += Number(inv.total);
+    } else {
+      completedCount++;
+      totalAmount += Number(inv.total);
+      totalDiscounts += Number(inv.discountAmount);
+      
+      if (inv.paymentMethod === 'cash') {
+        cashTotal += Number(inv.total);
+      } else if (inv.paymentMethod === 'card') {
+        cardTotal += Number(inv.total);
+      } else if (inv.paymentMethod === 'split') {
+        cashTotal += Number(inv.cashAmount);
+        cardTotal += Number(inv.cardAmount);
+      } else if (inv.paymentMethod === 'loyalty') {
+        loyaltyTotal += Number(inv.total);
+      }
+    }
+  }
+  
+  // جلب بيانات الفرع
+  const branchData = await db.select().from(branches).where(eq(branches.id, branchId)).limit(1);
+  const branch = branchData[0];
+  
+  // التحقق من وجود ملخص لهذا اليوم
+  const existingSummary = await db.select()
+    .from(posDailySummary)
+    .where(and(
+      eq(posDailySummary.branchId, branchId),
+      gte(posDailySummary.summaryDate, startOfDay),
+      lte(posDailySummary.summaryDate, endOfDay)
+    ))
+    .limit(1);
+  
+  if (existingSummary[0]) {
+    // تحديث الملخص الموجود
+    await db.update(posDailySummary)
+      .set({
+        totalInvoices: completedCount,
+        totalAmount: totalAmount.toString(),
+        cashTotal: cashTotal.toString(),
+        cardTotal: cardTotal.toString(),
+        loyaltyTotal: loyaltyTotal.toString(),
+        totalDiscounts: totalDiscounts.toString(),
+        cancelledCount,
+        cancelledAmount: cancelledAmount.toString(),
+      })
+      .where(eq(posDailySummary.id, existingSummary[0].id));
+  } else {
+    // إنشاء ملخص جديد
+    await db.insert(posDailySummary).values({
+      branchId,
+      branchName: branch?.nameAr || '',
+      summaryDate: startOfDay,
+      totalInvoices: completedCount,
+      totalAmount: totalAmount.toString(),
+      cashTotal: cashTotal.toString(),
+      cardTotal: cardTotal.toString(),
+      loyaltyTotal: loyaltyTotal.toString(),
+      totalDiscounts: totalDiscounts.toString(),
+      cancelledCount,
+      cancelledAmount: cancelledAmount.toString(),
+    });
+  }
+}
+
+export async function getPosDailyReport(branchId: number, date: Date) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  // جلب ملخص اليوم
+  const summary = await db.select()
+    .from(posDailySummary)
+    .where(and(
+      eq(posDailySummary.branchId, branchId),
+      gte(posDailySummary.summaryDate, startOfDay),
+      lte(posDailySummary.summaryDate, endOfDay)
+    ))
+    .limit(1);
+  
+  // جلب فواتير اليوم
+  const invoicesData = await db.select()
+    .from(posInvoices)
+    .where(and(
+      eq(posInvoices.branchId, branchId),
+      gte(posInvoices.invoiceDate, startOfDay),
+      lte(posInvoices.invoiceDate, endOfDay),
+      eq(posInvoices.status, 'completed')
+    ))
+    .orderBy(desc(posInvoices.createdAt));
+  
+  return {
+    summary: summary[0] || {
+      totalInvoices: 0,
+      totalAmount: '0',
+      cashTotal: '0',
+      cardTotal: '0',
+      loyaltyTotal: '0',
+      totalDiscounts: '0',
+      cancelledCount: 0,
+      cancelledAmount: '0',
+    },
+    invoices: invoicesData,
+  };
+}
+
+// ==================== أداء الموظفين ====================
+
+async function updatePosEmployeePerformance(employeeId: number, branchId: number, date: Date) {
+  const db = await getDb();
+  if (!db) return;
+  
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  // جلب فواتير الموظف لهذا اليوم
+  const employeeInvoicesData = await db.select()
+    .from(posInvoices)
+    .where(and(
+      eq(posInvoices.employeeId, employeeId),
+      eq(posInvoices.branchId, branchId),
+      gte(posInvoices.invoiceDate, startOfDay),
+      lte(posInvoices.invoiceDate, endOfDay),
+      eq(posInvoices.status, 'completed')
+    ));
+  
+  const invoiceCount = employeeInvoicesData.length;
+  const totalRevenue = employeeInvoicesData.reduce((sum, inv) => sum + Number(inv.total), 0);
+  const averageInvoice = invoiceCount > 0 ? totalRevenue / invoiceCount : 0;
+  
+  // جلب بيانات الموظف
+  const employeeData = await db.select().from(employees).where(eq(employees.id, employeeId)).limit(1);
+  const employee = employeeData[0];
+  
+  // التحقق من وجود سجل أداء لهذا اليوم
+  const existingPerformance = await db.select()
+    .from(posEmployeePerformance)
+    .where(and(
+      eq(posEmployeePerformance.employeeId, employeeId),
+      eq(posEmployeePerformance.branchId, branchId),
+      gte(posEmployeePerformance.performanceDate, startOfDay),
+      lte(posEmployeePerformance.performanceDate, endOfDay)
+    ))
+    .limit(1);
+  
+  if (existingPerformance[0]) {
+    await db.update(posEmployeePerformance)
+      .set({
+        invoiceCount,
+        totalRevenue: totalRevenue.toString(),
+        averageInvoice: averageInvoice.toString(),
+      })
+      .where(eq(posEmployeePerformance.id, existingPerformance[0].id));
+  } else {
+    await db.insert(posEmployeePerformance).values({
+      employeeId,
+      employeeName: employee?.name || '',
+      branchId,
+      performanceDate: startOfDay,
+      invoiceCount,
+      totalRevenue: totalRevenue.toString(),
+      averageInvoice: averageInvoice.toString(),
+    });
+  }
+}
+
+export async function getPosEmployeePerformance(branchId: number, date: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  return await db.select()
+    .from(posEmployeePerformance)
+    .where(and(
+      eq(posEmployeePerformance.branchId, branchId),
+      gte(posEmployeePerformance.performanceDate, startOfDay),
+      lte(posEmployeePerformance.performanceDate, endOfDay)
+    ))
+    .orderBy(desc(posEmployeePerformance.totalRevenue));
+}
+
+// ==================== عملاء الولاء ====================
+
+export async function searchLoyaltyCustomersForPos(query: string) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(loyaltyCustomers)
+    .where(or(
+      like(loyaltyCustomers.name, `%${query}%`),
+      like(loyaltyCustomers.phone, `%${query}%`)
+    ))
+    .limit(10);
+}
+
+export async function checkLoyaltyCustomerDiscount(customerId: number) {
+  const db = await getDb();
+  if (!db) return { eligible: false, message: 'قاعدة البيانات غير متاحة' };
+  
+  const customer = await db.select()
+    .from(loyaltyCustomers)
+    .where(eq(loyaltyCustomers.id, customerId))
+    .limit(1);
+  
+  if (!customer[0]) {
+    return { eligible: false, message: 'العميل غير موجود' };
+  }
+  
+  // جلب زيارات الشهر الحالي
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  
+  const monthlyVisits = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(loyaltyVisits)
+    .where(and(
+      eq(loyaltyVisits.customerId, customerId),
+      gte(loyaltyVisits.visitDate, startOfMonth),
+      lte(loyaltyVisits.visitDate, endOfMonth)
+    ));
+  
+  const visitCount = monthlyVisits[0]?.count || 0;
+  const requiredVisits = 3; // عدد الزيارات المطلوبة للخصم
+  
+  if (visitCount >= requiredVisits) {
+    return {
+      eligible: true,
+      message: `العميل مؤهل للخصم (${visitCount} زيارات هذا الشهر)`,
+      visitCount,
+      customer: customer[0],
+    };
+  }
+  
+  return {
+    eligible: false,
+    message: `العميل غير مؤهل للخصم (${visitCount}/${requiredVisits} زيارات)`,
+    visitCount,
+    requiredVisits,
+    customer: customer[0],
+  };
+}
+
+// ==================== الموظفين والفروع ====================
+
+export async function getEmployeesByBranchForPos(branchId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select({
+    id: employees.id,
+    name: employees.name,
+    position: employees.position,
+  })
+    .from(employees)
+    .where(eq(employees.branchId, branchId))
+    .orderBy(asc(employees.name));
+}
+
+export async function getBranchesForPos() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select({
+    id: branches.id,
+    name: branches.name,
+    nameAr: branches.nameAr,
+  })
+    .from(branches)
+    .where(eq(branches.isActive, true))
+    .orderBy(asc(branches.name));
+}

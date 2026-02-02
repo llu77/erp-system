@@ -9506,6 +9506,233 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         return { active: monitor.isActive() };
       }),
   }),
+
+  // ==================== بوابة الكاشير (POS System) ====================
+  pos: router({
+    // ==================== إدارة الأقسام ====================
+    categories: router({
+      // جلب جميع الأقسام
+      list: protectedProcedure.query(async () => {
+        return await db.getPosCategories();
+      }),
+
+      // إضافة قسم جديد
+      create: adminProcedure
+        .input(z.object({
+          name: z.string().min(1),
+          nameAr: z.string().min(1),
+          icon: z.string().optional(),
+          color: z.string().optional(),
+          sortOrder: z.number().optional(),
+        }))
+        .mutation(async ({ input }) => {
+          return await db.createPosCategory(input);
+        }),
+
+      // تحديث قسم
+      update: adminProcedure
+        .input(z.object({
+          id: z.number(),
+          name: z.string().optional(),
+          nameAr: z.string().optional(),
+          icon: z.string().optional(),
+          color: z.string().optional(),
+          sortOrder: z.number().optional(),
+          isActive: z.boolean().optional(),
+        }))
+        .mutation(async ({ input }) => {
+          const { id, ...data } = input;
+          return await db.updatePosCategory(id, data);
+        }),
+
+      // حذف قسم
+      delete: adminProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ input }) => {
+          return await db.deletePosCategory(input.id);
+        }),
+    }),
+
+    // ==================== إدارة الخدمات ====================
+    services: router({
+      // جلب جميع الخدمات
+      list: protectedProcedure.query(async () => {
+        return await db.getPosServices();
+      }),
+
+      // جلب خدمات قسم معين
+      byCategory: protectedProcedure
+        .input(z.object({ categoryId: z.number() }))
+        .query(async ({ input }) => {
+          return await db.getPosServicesByCategory(input.categoryId);
+        }),
+
+      // إضافة خدمة جديدة
+      create: adminProcedure
+        .input(z.object({
+          categoryId: z.number(),
+          name: z.string().min(1),
+          nameAr: z.string().min(1),
+          description: z.string().optional(),
+          price: z.number().min(0),
+          duration: z.number().optional(),
+          sortOrder: z.number().optional(),
+        }))
+        .mutation(async ({ input }) => {
+          return await db.createPosService(input);
+        }),
+
+      // تحديث خدمة
+      update: adminProcedure
+        .input(z.object({
+          id: z.number(),
+          categoryId: z.number().optional(),
+          name: z.string().optional(),
+          nameAr: z.string().optional(),
+          description: z.string().optional(),
+          price: z.number().min(0).optional(),
+          duration: z.number().optional(),
+          sortOrder: z.number().optional(),
+          isActive: z.boolean().optional(),
+        }))
+        .mutation(async ({ input }) => {
+          const { id, ...data } = input;
+          return await db.updatePosService(id, data);
+        }),
+
+      // حذف خدمة
+      delete: adminProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ input }) => {
+          return await db.deletePosService(input.id);
+        }),
+    }),
+
+    // ==================== إدارة الفواتير ====================
+    invoices: router({
+      // إنشاء فاتورة جديدة
+      create: protectedProcedure
+        .input(z.object({
+          branchId: z.number(),
+          employeeId: z.number(),
+          loyaltyCustomerId: z.number().optional(),
+          items: z.array(z.object({
+            serviceId: z.number(),
+            quantity: z.number().min(1).default(1),
+          })),
+          paymentMethod: z.enum(['cash', 'card', 'split', 'loyalty']),
+          cashAmount: z.number().optional(),
+          cardAmount: z.number().optional(),
+          discountAmount: z.number().optional(),
+          discountPercentage: z.number().optional(),
+          discountReason: z.string().optional(),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          return await db.createPosInvoice({
+            ...input,
+            createdBy: ctx.user.id,
+            createdByName: ctx.user.name || '',
+          });
+        }),
+
+      // جلب فواتير اليوم
+      today: protectedProcedure
+        .input(z.object({ branchId: z.number() }))
+        .query(async ({ input }) => {
+          return await db.getTodayPosInvoices(input.branchId);
+        }),
+
+      // جلب فواتير بفترة محددة
+      byDateRange: protectedProcedure
+        .input(z.object({
+          branchId: z.number(),
+          startDate: z.string(),
+          endDate: z.string(),
+        }))
+        .query(async ({ input }) => {
+          return await db.getPosInvoicesByDateRange(
+            input.branchId,
+            new Date(input.startDate),
+            new Date(input.endDate)
+          );
+        }),
+
+      // جلب تفاصيل فاتورة
+      details: protectedProcedure
+        .input(z.object({ invoiceId: z.number() }))
+        .query(async ({ input }) => {
+          return await db.getPosInvoiceDetails(input.invoiceId);
+        }),
+
+      // إلغاء فاتورة
+      cancel: adminProcedure
+        .input(z.object({ invoiceId: z.number(), reason: z.string().optional() }))
+        .mutation(async ({ input }) => {
+          return await db.cancelPosInvoice(input.invoiceId, input.reason);
+        }),
+    }),
+
+    // ==================== تقرير اليوم ====================
+    dailyReport: router({
+      // جلب تقرير اليوم
+      get: protectedProcedure
+        .input(z.object({
+          branchId: z.number(),
+          date: z.string().optional(), // إذا لم يحدد، يستخدم اليوم
+        }))
+        .query(async ({ input }) => {
+          const date = input.date ? new Date(input.date) : new Date();
+          return await db.getPosDailyReport(input.branchId, date);
+        }),
+
+      // جلب أداء الموظفين لليوم
+      employeePerformance: protectedProcedure
+        .input(z.object({
+          branchId: z.number(),
+          date: z.string().optional(),
+        }))
+        .query(async ({ input }) => {
+          const date = input.date ? new Date(input.date) : new Date();
+          return await db.getPosEmployeePerformance(input.branchId, date);
+        }),
+    }),
+
+    // ==================== عملاء الولاء ====================
+    loyaltyCustomers: router({
+      // البحث عن عميل ولاء
+      search: protectedProcedure
+        .input(z.object({ query: z.string() }))
+        .query(async ({ input }) => {
+          return await db.searchLoyaltyCustomersForPos(input.query);
+        }),
+
+      // التحقق من استحقاق الخصم
+      checkDiscount: protectedProcedure
+        .input(z.object({ customerId: z.number() }))
+        .query(async ({ input }) => {
+          return await db.checkLoyaltyCustomerDiscount(input.customerId);
+        }),
+    }),
+
+    // ==================== الموظفين ====================
+    employees: router({
+      // جلب موظفي فرع معين
+      byBranch: protectedProcedure
+        .input(z.object({ branchId: z.number() }))
+        .query(async ({ input }) => {
+          return await db.getEmployeesByBranchForPos(input.branchId);
+        }),
+    }),
+
+    // ==================== الفروع ====================
+    branches: router({
+      // جلب جميع الفروع
+      list: protectedProcedure.query(async () => {
+        return await db.getBranchesForPos();
+      }),
+    }),
+  }),
 });
 
 // دالة مساعدة للحصول على اسم نوع الطلب بالعربية

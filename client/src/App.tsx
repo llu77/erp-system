@@ -74,6 +74,9 @@ import CashFlowReport from "./pages/CashFlowReport";
 import ReportAssistant from "./components/ReportAssistant";
 import AICommandCenter from "./pages/AICommandCenter";
 import AIMonitorSettings from "./pages/AIMonitorSettings";
+import POS from "./pages/POS";
+import POSDailyReport from "./pages/POSDailyReport";
+import POSSettings from "./pages/POSSettings";
 
 function Router() {
   return (
@@ -413,6 +416,11 @@ function Router() {
       <Route path="/ai-monitor-settings">
         <AIMonitorSettings />
       </Route>
+      
+      {/* بوابة الكاشير (POS) */}
+      <Route path="/pos" component={POS} />
+      <Route path="/pos/daily-report" component={POSDailyReport} />
+      <Route path="/pos/settings" component={POSSettings} />
       
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

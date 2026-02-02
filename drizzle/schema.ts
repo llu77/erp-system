@@ -2828,3 +2828,194 @@ export const portalNotifications = mysqlTable("portalNotifications", {
 
 export type PortalNotification = typeof portalNotifications.$inferSelect;
 export type InsertPortalNotification = typeof portalNotifications.$inferInsert;
+
+
+// ==================== بوابة الكاشير (POS System) ====================
+
+/**
+ * POS Categories - أقسام الخدمات في الكاشير
+ * مثل: قسم الحلاقة، قسم الخدمات، قسم العناية بالبشرة
+ */
+export const posCategories = mysqlTable("posCategories", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  nameAr: varchar("nameAr", { length: 100 }).notNull(),
+  icon: varchar("icon", { length: 50 }), // أيقونة القسم (اختياري)
+  color: varchar("color", { length: 20 }), // لون القسم للعرض
+  sortOrder: int("sortOrder").default(0).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PosCategory = typeof posCategories.$inferSelect;
+export type InsertPosCategory = typeof posCategories.$inferInsert;
+
+/**
+ * POS Services - الخدمات المتاحة في الكاشير
+ * مثل: حلاقة رأس ودقن، تنظيف بشرة بالبخار، شمع للوجه
+ */
+export const posServices = mysqlTable("posServices", {
+  id: int("id").autoincrement().primaryKey(),
+  categoryId: int("categoryId").notNull(), // القسم التابع له
+  name: varchar("name", { length: 150 }).notNull(),
+  nameAr: varchar("nameAr", { length: 150 }).notNull(),
+  description: text("description"),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  duration: int("duration"), // مدة الخدمة بالدقائق (اختياري)
+  sortOrder: int("sortOrder").default(0).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PosService = typeof posServices.$inferSelect;
+export type InsertPosService = typeof posServices.$inferInsert;
+
+/**
+ * POS Invoices - فواتير الكاشير
+ * كل فاتورة مرتبطة بفرع وموظف وطريقة دفع
+ */
+export const posInvoices = mysqlTable("posInvoices", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // رقم الفاتورة (تسلسلي لكل فرع)
+  invoiceNumber: varchar("invoiceNumber", { length: 50 }).notNull(),
+  
+  // الفرع والموظف
+  branchId: int("branchId").notNull(),
+  branchName: varchar("branchName", { length: 100 }),
+  employeeId: int("employeeId").notNull(), // الموظف الذي قدم الخدمة
+  employeeName: varchar("employeeName", { length: 100 }),
+  
+  // عميل الولاء (اختياري)
+  loyaltyCustomerId: int("loyaltyCustomerId"),
+  loyaltyCustomerName: varchar("loyaltyCustomerName", { length: 100 }),
+  loyaltyCustomerPhone: varchar("loyaltyCustomerPhone", { length: 20 }),
+  
+  // المبالغ
+  subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(), // الإجمالي قبل الخصم
+  discountAmount: decimal("discountAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  discountPercentage: decimal("discountPercentage", { precision: 5, scale: 2 }).default("0.00").notNull(),
+  discountReason: varchar("discountReason", { length: 100 }), // سبب الخصم (ولاء، عرض، إلخ)
+  total: decimal("total", { precision: 12, scale: 2 }).notNull(), // الإجمالي النهائي
+  
+  // طريقة الدفع
+  paymentMethod: mysqlEnum("paymentMethod", [
+    "cash",      // كاش
+    "card",      // شبكة
+    "split",     // تقسيم (كاش + شبكة)
+    "loyalty"    // عميل ولاء
+  ]).notNull(),
+  
+  // مبالغ الدفع المقسم
+  cashAmount: decimal("cashAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  cardAmount: decimal("cardAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  
+  // حالة الفاتورة
+  status: mysqlEnum("status", [
+    "completed",   // مكتملة
+    "cancelled",   // ملغاة
+    "refunded"     // مسترجعة
+  ]).default("completed").notNull(),
+  
+  // ملاحظات
+  notes: text("notes"),
+  
+  // الكاشير الذي أنشأ الفاتورة
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 100 }),
+  
+  // التاريخ والوقت
+  invoiceDate: timestamp("invoiceDate").notNull(), // تاريخ الفاتورة (يوم العمل)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PosInvoice = typeof posInvoices.$inferSelect;
+export type InsertPosInvoice = typeof posInvoices.$inferInsert;
+
+/**
+ * POS Invoice Items - تفاصيل بنود الفاتورة
+ * كل بند يمثل خدمة واحدة في الفاتورة
+ */
+export const posInvoiceItems = mysqlTable("posInvoiceItems", {
+  id: int("id").autoincrement().primaryKey(),
+  invoiceId: int("invoiceId").notNull(),
+  serviceId: int("serviceId").notNull(),
+  serviceName: varchar("serviceName", { length: 150 }).notNull(),
+  serviceNameAr: varchar("serviceNameAr", { length: 150 }).notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  quantity: int("quantity").default(1).notNull(),
+  total: decimal("total", { precision: 12, scale: 2 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PosInvoiceItem = typeof posInvoiceItems.$inferSelect;
+export type InsertPosInvoiceItem = typeof posInvoiceItems.$inferInsert;
+
+/**
+ * POS Daily Summary - ملخص اليوم للكاشير
+ * إحصائيات يومية لكل فرع
+ */
+export const posDailySummary = mysqlTable("posDailySummary", {
+  id: int("id").autoincrement().primaryKey(),
+  branchId: int("branchId").notNull(),
+  branchName: varchar("branchName", { length: 100 }),
+  summaryDate: timestamp("summaryDate").notNull(), // تاريخ اليوم
+  
+  // إحصائيات الفواتير
+  totalInvoices: int("totalInvoices").default(0).notNull(),
+  totalAmount: decimal("totalAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  
+  // تفصيل طرق الدفع
+  cashTotal: decimal("cashTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  cardTotal: decimal("cardTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  loyaltyTotal: decimal("loyaltyTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  
+  // الخصومات
+  totalDiscounts: decimal("totalDiscounts", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  
+  // الفواتير الملغاة/المسترجعة
+  cancelledCount: int("cancelledCount").default(0).notNull(),
+  cancelledAmount: decimal("cancelledAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  
+  // حالة الإغلاق
+  isClosed: boolean("isClosed").default(false).notNull(),
+  closedBy: int("closedBy"),
+  closedAt: timestamp("closedAt"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PosDailySummary = typeof posDailySummary.$inferSelect;
+export type InsertPosDailySummary = typeof posDailySummary.$inferInsert;
+
+/**
+ * POS Employee Performance - أداء الموظفين في الكاشير
+ * إحصائيات يومية لكل موظف
+ */
+export const posEmployeePerformance = mysqlTable("posEmployeePerformance", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  employeeName: varchar("employeeName", { length: 100 }),
+  branchId: int("branchId").notNull(),
+  performanceDate: timestamp("performanceDate").notNull(),
+  
+  // إحصائيات
+  invoiceCount: int("invoiceCount").default(0).notNull(),
+  totalRevenue: decimal("totalRevenue", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  averageInvoice: decimal("averageInvoice", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  
+  // تفصيل الخدمات
+  servicesCount: int("servicesCount").default(0).notNull(),
+  topServiceId: int("topServiceId"), // الخدمة الأكثر طلباً
+  topServiceName: varchar("topServiceName", { length: 150 }),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PosEmployeePerformance = typeof posEmployeePerformance.$inferSelect;
+export type InsertPosEmployeePerformance = typeof posEmployeePerformance.$inferInsert;
