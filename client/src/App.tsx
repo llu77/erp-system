@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
@@ -155,6 +155,10 @@ function Router() {
       </Route>
       
       {/* نظام الكاشير POS */}
+      {/* دعم المسارات البديلة للكاشير */}
+      <Route path="/pos/login">
+        <Redirect to="/pos-login" />
+      </Route>
       <Route path="/pos-login" component={POSLogin} />
       <Route path="/pos" component={POS} />
       <Route path="/pos-daily-report">
