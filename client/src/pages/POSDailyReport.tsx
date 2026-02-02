@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,12 +24,32 @@ import {
   Settings,
 } from 'lucide-react';
 import { Link } from 'wouter';
+import { useAuth } from '@/_core/hooks/useAuth';
 
 export default function POSDailyReport() {
+  const { user } = useAuth();
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   
+  // Filter branches based on user permissions
+  const userBranchId = user?.branchId;
+  const isAdmin = user?.role === 'admin';
+  
   // Queries
-  const { data: branches = [] } = trpc.pos.branches.list.useQuery();
+  const { data: allBranches = [] } = trpc.pos.branches.list.useQuery();
+  
+  // Filter branches: Admin sees all, supervisors see only their branch
+  const branches = useMemo(() => {
+    if (isAdmin) return allBranches;
+    if (userBranchId) return allBranches.filter(b => b.id === userBranchId);
+    return allBranches;
+  }, [allBranches, isAdmin, userBranchId]);
+  
+  // Auto-select branch for supervisors
+  useEffect(() => {
+    if (!isAdmin && userBranchId && !selectedBranchId) {
+      setSelectedBranchId(userBranchId);
+    }
+  }, [isAdmin, userBranchId, selectedBranchId]);
   const { data: todayInvoices = [] } = trpc.pos.invoices.today.useQuery(
     { branchId: selectedBranchId! },
     { enabled: !!selectedBranchId }
@@ -224,18 +244,24 @@ export default function POSDailyReport() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-xl border">
             <Store className="h-5 w-5 text-primary" />
-            <Select value={selectedBranchId?.toString() || ''} onValueChange={(v) => setSelectedBranchId(Number(v))}>
-              <SelectTrigger className="w-[180px] border-0 bg-transparent h-10 text-base">
-                <SelectValue placeholder="اختر الفرع" />
-              </SelectTrigger>
-              <SelectContent>
-                {branches.map(branch => (
-                  <SelectItem key={branch.id} value={branch.id.toString()} className="text-base">
-                    {branch.nameAr}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isAdmin ? (
+              <Select value={selectedBranchId?.toString() || ''} onValueChange={(v) => setSelectedBranchId(Number(v))}>
+                <SelectTrigger className="w-[180px] border-0 bg-transparent h-10 text-base">
+                  <SelectValue placeholder="اختر الفرع" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map(branch => (
+                    <SelectItem key={branch.id} value={branch.id.toString()} className="text-base">
+                      {branch.nameAr}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="text-base font-medium px-2">
+                {branches.find(b => b.id === selectedBranchId)?.nameAr || 'الفرع'}
+              </span>
+            )}
           </div>
           
           {/* Actions */}

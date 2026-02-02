@@ -77,6 +77,7 @@ import AIMonitorSettings from "./pages/AIMonitorSettings";
 import POS from "./pages/POS";
 import POSDailyReport from "./pages/POSDailyReport";
 import POSSettings from "./pages/POSSettings";
+import POSLogin from "./pages/POSLogin";
 
 function Router() {
   return (
@@ -418,6 +419,7 @@ function Router() {
       </Route>
       
       {/* بوابة الكاشير (POS) */}
+      <Route path="/pos/login" component={POSLogin} />
       <Route path="/pos" component={POS} />
       <Route path="/pos/daily-report" component={POSDailyReport} />
       <Route path="/pos/settings" component={POSSettings} />
