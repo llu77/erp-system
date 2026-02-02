@@ -9743,6 +9743,34 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           return await db.checkPosConfirmationStatus(input.branchId, targetDate);
         }),
 
+      // رفع صورة الموازنة
+      uploadBalanceImage: protectedProcedure
+        .input(z.object({
+          branchId: z.number(),
+          imageData: z.string(), // Base64 encoded image
+          fileName: z.string(),
+          mimeType: z.string(),
+        }))
+        .mutation(async ({ input }) => {
+          const { branchId, imageData, fileName, mimeType } = input;
+          
+          // تحويل Base64 إلى Buffer
+          const base64Data = imageData.replace(/^data:[^;]+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          
+          // إنشاء اسم ملف فريد
+          const timestamp = Date.now();
+          const randomSuffix = Math.random().toString(36).substring(2, 8);
+          const extension = fileName.split('.').pop() || 'jpg';
+          const fileKey = `pos-balance/${branchId}/${timestamp}-${randomSuffix}.${extension}`;
+          
+          // رفع الصورة إلى S3
+          const { storagePut } = await import('./storage');
+          const { url, key } = await storagePut(fileKey, buffer, mimeType);
+          
+          return { success: true, url, key };
+        }),
+
       // تأكيد وإرسال فواتير اليوم للإيرادات
       submit: protectedProcedure
         .input(z.object({

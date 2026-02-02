@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import DailyConfirmationDialog from '@/components/DailyConfirmationDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +23,8 @@ import {
   FileDown,
   ShoppingCart,
   Settings,
+  CheckCircle2,
+  Send,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useAuth } from '@/_core/hooks/useAuth';
@@ -29,6 +32,7 @@ import { useAuth } from '@/_core/hooks/useAuth';
 export default function POSDailyReport() {
   const { user } = useAuth();
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   
   // Filter branches based on user permissions
   const userBranchId = user?.branchId;
@@ -265,6 +269,17 @@ export default function POSDailyReport() {
           </div>
           
           {/* Actions */}
+          <Button 
+            variant="default" 
+            size="lg" 
+            className="gap-2 h-12 bg-green-600 hover:bg-green-700" 
+            onClick={() => setShowConfirmationDialog(true)} 
+            disabled={!selectedBranchId || !dailyReport || dailyReport.totalInvoices === 0}
+          >
+            <Send className="h-5 w-5" />
+            تأكيد وإرسال للإيرادات
+          </Button>
+          
           <Button variant="outline" size="lg" className="gap-2 h-12" onClick={handlePrint} disabled={!selectedBranchId}>
             <Printer className="h-5 w-5" />
             طباعة التقرير
@@ -463,6 +478,20 @@ export default function POSDailyReport() {
           </div>
         )}
       </div>
+      
+      {/* Daily Confirmation Dialog */}
+      {selectedBranchId && (
+        <DailyConfirmationDialog
+          open={showConfirmationDialog}
+          onOpenChange={setShowConfirmationDialog}
+          branchId={selectedBranchId}
+          branchName={branches.find(b => b.id === selectedBranchId)?.nameAr || 'الفرع'}
+          dailyReport={dailyReport}
+          onSuccess={() => {
+            // Refresh data after confirmation
+          }}
+        />
+      )}
     </div>
   );
 }
