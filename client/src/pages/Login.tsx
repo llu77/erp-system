@@ -130,7 +130,7 @@ export default function Login() {
               <Button
                 variant="outline"
                 className="border-amber-600/50 text-amber-400 hover:bg-amber-600/20 hover:text-amber-300 hover:border-amber-500 h-12"
-                onClick={() => setLocation('/pos/login')}
+                onClick={() => setLocation('/pos-login')}
               >
                 <Store className="ml-2 h-4 w-4" />
                 بوابة الكاشير
