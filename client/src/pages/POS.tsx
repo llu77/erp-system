@@ -301,7 +301,7 @@ export default function POS() {
     if (!lastInvoice) return;
     
     const branchName = branches.find(b => b.id === selectedBranchId)?.nameAr || 'غير محدد';
-    const branchPhone = '0500000000'; // سيتم إضافة رقم الهاتف للفروع لاحقاً
+    const branchPhone = ''; // سيتم إضافة رقم الهاتف للفروع لاحقاً
     const employeeName = employees.find(e => e.id === selectedEmployeeId)?.name || 'غير محدد';
     
     // تنسيق التاريخ بالميلادي
