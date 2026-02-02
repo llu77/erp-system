@@ -22,6 +22,7 @@ import {
   ArrowRight,
   ShoppingCart,
   BarChart3,
+  Printer,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -218,6 +219,12 @@ export default function POSSettings() {
             <Button variant="outline" size="lg" className="gap-2 h-12">
               <BarChart3 className="h-5 w-5" />
               تقرير اليوم
+            </Button>
+          </Link>
+          <Link href="/pos-print-settings">
+            <Button variant="outline" size="lg" className="gap-2 h-12">
+              <Printer className="h-5 w-5" />
+              إعدادات الطباعة
             </Button>
           </Link>
         </div>

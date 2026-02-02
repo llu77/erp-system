@@ -3022,3 +3022,46 @@ export const posEmployeePerformance = mysqlTable("posEmployeePerformance", {
 
 export type PosEmployeePerformance = typeof posEmployeePerformance.$inferSelect;
 export type InsertPosEmployeePerformance = typeof posEmployeePerformance.$inferInsert;
+
+
+/**
+ * POS Print Settings - إعدادات الطباعة الحرارية
+ * إعدادات مخصصة لكل فرع
+ */
+export const posPrintSettings = mysqlTable("posPrintSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  branchId: int("branchId").notNull(),
+  
+  // إعدادات الورق
+  paperWidth: mysqlEnum("paperWidth", ["58mm", "80mm"]).default("80mm").notNull(),
+  fontSize: mysqlEnum("fontSize", ["small", "medium", "large"]).default("medium").notNull(),
+  
+  // إعدادات العرض
+  showLogo: boolean("showLogo").default(true).notNull(),
+  showQRCode: boolean("showQRCode").default(true).notNull(),
+  showBranchPhone: boolean("showBranchPhone").default(true).notNull(),
+  showEmployeeName: boolean("showEmployeeName").default(true).notNull(),
+  
+  // معلومات المتجر
+  storeName: varchar("storeName", { length: 100 }).default("Symbol AI"),
+  storePhone: varchar("storePhone", { length: 20 }),
+  storeAddress: varchar("storeAddress", { length: 200 }),
+  
+  // الرسائل
+  headerMessage: varchar("headerMessage", { length: 200 }),
+  footerMessage: varchar("footerMessage", { length: 200 }).default("شكراً لزيارتكم ❤"),
+  welcomeMessage: varchar("welcomeMessage", { length: 200 }).default("نتشرف بخدمتكم دائماً"),
+  
+  // إعدادات الطباعة
+  autoPrint: boolean("autoPrint").default(true).notNull(),
+  printCopies: int("printCopies").default(1).notNull(),
+  
+  // الشعار (URL أو Base64)
+  logoUrl: text("logoUrl"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PosPrintSettings = typeof posPrintSettings.$inferSelect;
+export type InsertPosPrintSettings = typeof posPrintSettings.$inferInsert;

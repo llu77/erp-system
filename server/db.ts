@@ -13125,3 +13125,96 @@ export async function recordLoyaltyDiscountUsage(data: {
     return { success: false, newCycleStarted: false, error: 'حدث خطأ أثناء تسجيل استخدام الخصم' };
   }
 }
+
+
+// ============================================
+// POS Print Settings - إعدادات الطباعة الحرارية
+// ============================================
+
+import { posPrintSettings, PosPrintSettings, InsertPosPrintSettings } from '../drizzle/schema';
+
+/**
+ * جلب إعدادات الطباعة للفرع
+ */
+export async function getPrintSettings(branchId: number): Promise<PosPrintSettings | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select()
+    .from(posPrintSettings)
+    .where(eq(posPrintSettings.branchId, branchId))
+    .limit(1);
+
+  return result[0] || null;
+}
+
+/**
+ * حفظ أو تحديث إعدادات الطباعة
+ */
+export async function savePrintSettings(data: InsertPosPrintSettings): Promise<{ success: boolean; settings?: PosPrintSettings; error?: string }> {
+  const db = await getDb();
+  if (!db) return { success: false, error: 'قاعدة البيانات غير متاحة' };
+
+  try {
+    // التحقق من وجود إعدادات سابقة
+    const existing = await getPrintSettings(data.branchId);
+
+    if (existing) {
+      // تحديث الإعدادات الموجودة
+      await db.update(posPrintSettings)
+        .set({
+          paperWidth: data.paperWidth,
+          fontSize: data.fontSize,
+          showLogo: data.showLogo,
+          showQRCode: data.showQRCode,
+          showBranchPhone: data.showBranchPhone,
+          showEmployeeName: data.showEmployeeName,
+          storeName: data.storeName,
+          storePhone: data.storePhone,
+          storeAddress: data.storeAddress,
+          headerMessage: data.headerMessage,
+          footerMessage: data.footerMessage,
+          welcomeMessage: data.welcomeMessage,
+          autoPrint: data.autoPrint,
+          printCopies: data.printCopies,
+          logoUrl: data.logoUrl,
+        })
+        .where(eq(posPrintSettings.id, existing.id));
+
+      const updated = await getPrintSettings(data.branchId);
+      return { success: true, settings: updated || undefined };
+    } else {
+      // إنشاء إعدادات جديدة
+      await db.insert(posPrintSettings).values(data);
+      const created = await getPrintSettings(data.branchId);
+      return { success: true, settings: created || undefined };
+    }
+  } catch (error) {
+    console.error('Error saving print settings:', error);
+    return { success: false, error: 'حدث خطأ أثناء حفظ إعدادات الطباعة' };
+  }
+}
+
+/**
+ * جلب إعدادات الطباعة الافتراضية
+ */
+export function getDefaultPrintSettings(branchId: number): InsertPosPrintSettings {
+  return {
+    branchId,
+    paperWidth: '80mm',
+    fontSize: 'medium',
+    showLogo: true,
+    showQRCode: true,
+    showBranchPhone: true,
+    showEmployeeName: true,
+    storeName: 'Symbol AI',
+    storePhone: '',
+    storeAddress: '',
+    headerMessage: '',
+    footerMessage: 'شكراً لزيارتكم ❤',
+    welcomeMessage: 'نتشرف بخدمتكم دائماً',
+    autoPrint: true,
+    printCopies: 1,
+    logoUrl: null,
+  };
+}

@@ -9966,6 +9966,44 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
     }),
 
+    // ==================== إعدادات الطباعة الحرارية ====================
+    printSettings: router({
+      // جلب إعدادات الطباعة للفرع
+      get: protectedProcedure
+        .input(z.object({ branchId: z.number() }))
+        .query(async ({ input }) => {
+          const settings = await db.getPrintSettings(input.branchId);
+          if (!settings) {
+            return db.getDefaultPrintSettings(input.branchId);
+          }
+          return settings;
+        }),
+
+      // حفظ إعدادات الطباعة
+      save: adminProcedure
+        .input(z.object({
+          branchId: z.number(),
+          paperWidth: z.enum(['58mm', '80mm']).optional(),
+          fontSize: z.enum(['small', 'medium', 'large']).optional(),
+          showLogo: z.boolean().optional(),
+          showQRCode: z.boolean().optional(),
+          showBranchPhone: z.boolean().optional(),
+          showEmployeeName: z.boolean().optional(),
+          storeName: z.string().optional(),
+          storePhone: z.string().optional(),
+          storeAddress: z.string().optional(),
+          headerMessage: z.string().optional(),
+          footerMessage: z.string().optional(),
+          welcomeMessage: z.string().optional(),
+          autoPrint: z.boolean().optional(),
+          printCopies: z.number().optional(),
+          logoUrl: z.string().nullable().optional(),
+        }))
+        .mutation(async ({ input }) => {
+          return await db.savePrintSettings(input);
+        }),
+    }),
+
     // ==================== تقارير أداء الخدمات ====================
     servicePerformance: router({
       // جلب تقرير الخدمات الأكثر طلباً

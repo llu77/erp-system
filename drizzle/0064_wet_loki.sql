@@ -1,0 +1,22 @@
+CREATE TABLE `posPrintSettings` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`branchId` int NOT NULL,
+	`paperWidth` enum('58mm','80mm') NOT NULL DEFAULT '80mm',
+	`fontSize` enum('small','medium','large') NOT NULL DEFAULT 'medium',
+	`showLogo` boolean NOT NULL DEFAULT true,
+	`showQRCode` boolean NOT NULL DEFAULT true,
+	`showBranchPhone` boolean NOT NULL DEFAULT true,
+	`showEmployeeName` boolean NOT NULL DEFAULT true,
+	`storeName` varchar(100) DEFAULT 'Symbol AI',
+	`storePhone` varchar(20),
+	`storeAddress` varchar(200),
+	`headerMessage` varchar(200),
+	`footerMessage` varchar(200) DEFAULT 'شكراً لزيارتكم ❤',
+	`welcomeMessage` varchar(200) DEFAULT 'نتشرف بخدمتكم دائماً',
+	`autoPrint` boolean NOT NULL DEFAULT true,
+	`printCopies` int NOT NULL DEFAULT 1,
+	`logoUrl` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `posPrintSettings_id` PRIMARY KEY(`id`)
+);

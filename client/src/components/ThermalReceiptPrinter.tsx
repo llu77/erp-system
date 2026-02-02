@@ -1,18 +1,23 @@
 /**
- * ThermalReceiptPrinter - مكون طباعة الفواتير الحرارية
+ * ThermalReceiptPrinter - مكون طباعة الفواتير الحرارية المتقدم
  * 
- * يدعم:
- * - طباعة حرارية مباشرة (80mm)
- * - طباعة تلقائية بعد إنشاء الفاتورة
+ * المميزات:
+ * - تصميم احترافي أبيض وأسود متقدم
+ * - دعم طابعات 80mm و 58mm
+ * - إظهار الشعار والخدمات والأسعار بوضوح
  * - QR Code للتحقق
  * - دعم RTL للعربية
- * - تصميم احترافي أبيض وأسود
+ * - طباعة تلقائية
+ * - إعدادات قابلة للتخصيص
  */
 
 import { useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 
+// ============================================
 // Types
+// ============================================
+
 export interface ReceiptItem {
   serviceName: string;
   serviceNameAr: string;
@@ -48,19 +53,40 @@ export interface PrinterSettings {
   paperWidth: '58mm' | '80mm';
   fontSize: 'small' | 'medium' | 'large';
   showLogo: boolean;
-  customMessage?: string;
+  showBranchPhone: boolean;
+  showEmployeeName: boolean;
+  storeName: string;
+  storePhone?: string;
+  storeAddress?: string;
+  headerMessage?: string;
+  footerMessage: string;
+  welcomeMessage: string;
+  logoUrl?: string | null;
+  printCopies: number;
 }
 
-const DEFAULT_SETTINGS: PrinterSettings = {
+export const DEFAULT_SETTINGS: PrinterSettings = {
   autoPrint: true,
   showQRCode: true,
   paperWidth: '80mm',
   fontSize: 'medium',
   showLogo: true,
-  customMessage: 'شكراً لزيارتكم ❤',
+  showBranchPhone: true,
+  showEmployeeName: true,
+  storeName: 'Symbol AI',
+  storePhone: '',
+  storeAddress: '',
+  headerMessage: '',
+  footerMessage: 'شكراً لزيارتكم ❤',
+  welcomeMessage: 'نتشرف بخدمتكم دائماً',
+  logoUrl: null,
+  printCopies: 1,
 };
 
-// Helper functions
+// ============================================
+// Helper Functions
+// ============================================
+
 const formatDate = (date: Date): string => {
   return date.toLocaleDateString('en-GB', { 
     day: '2-digit', 
@@ -89,10 +115,13 @@ const getPaymentMethodAr = (method: string): string => {
 
 const generateQRCodeUrl = (data: object): string => {
   const jsonData = JSON.stringify(data);
-  return `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(jsonData)}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(jsonData)}&bgcolor=ffffff&color=000000`;
 };
 
-// Generate receipt HTML
+// ============================================
+// Generate Receipt HTML - تصميم احترافي متقدم
+// ============================================
+
 const generateReceiptHTML = (
   data: ReceiptData, 
   settings: PrinterSettings = DEFAULT_SETTINGS
@@ -109,7 +138,28 @@ const generateReceiptHTML = (
   const qrCodeUrl = generateQRCodeUrl(qrData);
   
   const paperWidth = settings.paperWidth === '58mm' ? '58mm' : '80mm';
-  const baseFontSize = settings.fontSize === 'small' ? '10px' : settings.fontSize === 'large' ? '13px' : '11px';
+  const contentWidth = settings.paperWidth === '58mm' ? '54mm' : '76mm';
+  
+  // أحجام الخطوط حسب الإعداد
+  const fontSizes = {
+    small: { base: '9px', title: '14px', total: '16px', header: '11px' },
+    medium: { base: '10px', title: '16px', total: '18px', header: '12px' },
+    large: { base: '11px', title: '18px', total: '20px', header: '13px' },
+  };
+  const fonts = fontSizes[settings.fontSize];
+  
+  // الشعار - إما URL مخصص أو شعار افتراضي
+  const logoHTML = settings.showLogo ? (
+    settings.logoUrl 
+      ? `<img src="${settings.logoUrl}" alt="Logo" class="logo-img" />`
+      : `<div class="logo-default">
+           <svg viewBox="0 0 100 100" width="50" height="50">
+             <circle cx="50" cy="50" r="45" fill="none" stroke="#000" stroke-width="4"/>
+             <circle cx="50" cy="50" r="35" fill="none" stroke="#000" stroke-width="2"/>
+             <text x="50" y="58" text-anchor="middle" font-size="24" font-weight="bold" fill="#000">S</text>
+           </svg>
+         </div>`
+  ) : '';
   
   return `
     <!DOCTYPE html>
@@ -119,7 +169,9 @@ const generateReceiptHTML = (
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>فاتورة - ${data.invoiceNumber}</title>
       <style>
-        /* إعدادات الطباعة الحرارية */
+        /* ═══════════════════════════════════════════════════════════════
+           إعدادات الطباعة الحرارية
+           ═══════════════════════════════════════════════════════════════ */
         @page {
           size: ${paperWidth} auto;
           margin: 0;
@@ -127,24 +179,28 @@ const generateReceiptHTML = (
         @media print {
           html, body {
             width: ${paperWidth};
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           .no-print { display: none !important; }
         }
+        
+        /* ═══════════════════════════════════════════════════════════════
+           الأساسيات
+           ═══════════════════════════════════════════════════════════════ */
         * {
           margin: 0;
           padding: 0;
           box-sizing: border-box;
         }
         body {
-          font-family: 'Courier New', 'Lucida Console', monospace;
+          font-family: 'Courier New', 'Lucida Console', 'Monaco', monospace;
           width: ${paperWidth};
           max-width: ${paperWidth};
           margin: 0 auto;
-          padding: 3mm;
-          font-size: ${baseFontSize};
-          line-height: 1.4;
+          padding: 2mm;
+          font-size: ${fonts.base};
+          line-height: 1.5;
           direction: rtl;
           background: #fff;
           color: #000;
@@ -152,127 +208,173 @@ const generateReceiptHTML = (
           print-color-adjust: exact;
         }
         .receipt {
-          width: 100%;
+          width: ${contentWidth};
+          margin: 0 auto;
         }
         
         /* ═══════════════════════════════════════════════════════════════
-           الهيدر والشعار
+           الهيدر والشعار - تصميم احترافي
            ═══════════════════════════════════════════════════════════════ */
         .header {
           text-align: center;
-          padding-bottom: 8px;
+          padding-bottom: 10px;
           border-bottom: 3px double #000;
-          margin-bottom: 8px;
+          margin-bottom: 10px;
         }
-        .logo {
-          width: 55px;
-          height: 55px;
-          margin: 0 auto 6px;
-          border: 3px solid #000;
-          border-radius: 50%;
+        .logo-img {
+          width: 60px;
+          height: 60px;
+          margin: 0 auto 8px;
+          display: block;
+          object-fit: contain;
+        }
+        .logo-default {
+          margin: 0 auto 8px;
           display: flex;
-          align-items: center;
           justify-content: center;
-          font-size: 24px;
-          font-weight: bold;
-          background: #000;
-          color: #fff;
         }
-        .header h1 {
-          font-size: 20px;
+        .store-name {
+          font-size: ${fonts.title};
           font-weight: bold;
           margin-bottom: 4px;
-          letter-spacing: 3px;
+          letter-spacing: 2px;
+          text-transform: uppercase;
         }
-        .header .branch {
-          font-size: 14px;
+        .branch-name {
+          font-size: ${fonts.header};
           font-weight: bold;
-          margin-bottom: 3px;
-        }
-        .header .phone {
-          font-size: 11px;
-          margin-bottom: 6px;
-        }
-        .header .invoice-num {
-          font-size: 12px;
-          font-weight: bold;
+          margin-bottom: 4px;
+          padding: 4px 8px;
           background: #000;
           color: #fff;
-          padding: 4px 12px;
           display: inline-block;
-          margin-top: 4px;
+        }
+        .branch-phone {
+          font-size: ${fonts.base};
+          margin-bottom: 6px;
+        }
+        .store-address {
+          font-size: 9px;
+          color: #333;
+          margin-bottom: 6px;
+        }
+        .header-message {
+          font-size: 9px;
+          font-style: italic;
+          margin-bottom: 6px;
+        }
+        .invoice-box {
+          margin-top: 8px;
+          padding: 6px 12px;
+          border: 2px solid #000;
+          display: inline-block;
+        }
+        .invoice-label {
+          font-size: 9px;
+          margin-bottom: 2px;
+        }
+        .invoice-number {
+          font-size: 14px;
+          font-weight: bold;
           letter-spacing: 1px;
-          border-radius: 3px;
         }
         
         /* ═══════════════════════════════════════════════════════════════
-           قسم المعلومات
+           معلومات الفاتورة
            ═══════════════════════════════════════════════════════════════ */
         .info-section {
           padding: 8px 0;
           border-bottom: 1px dashed #000;
         }
-        .info-row {
+        .info-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 4px;
+        }
+        .info-item {
           display: flex;
           justify-content: space-between;
-          margin: 5px 0;
-          font-size: 11px;
+          font-size: ${fonts.base};
         }
-        .info-row span:first-child {
+        .info-item.full {
+          grid-column: 1 / -1;
+        }
+        .info-label {
           font-weight: bold;
         }
         
         /* ═══════════════════════════════════════════════════════════════
-           قسم الخدمات
+           جدول الخدمات - تصميم واضح ومحترف
            ═══════════════════════════════════════════════════════════════ */
-        .items-section {
-          padding: 8px 0;
+        .services-section {
+          padding: 10px 0;
           border-bottom: 2px solid #000;
         }
-        .items-header {
-          display: flex;
-          justify-content: space-between;
+        .services-title {
+          text-align: center;
           font-weight: bold;
-          font-size: 11px;
+          font-size: ${fonts.header};
+          margin-bottom: 8px;
+          padding: 4px;
+          background: #f0f0f0;
+          border: 1px solid #000;
+        }
+        .services-header {
+          display: flex;
+          font-weight: bold;
+          font-size: 9px;
           background: #000;
           color: #fff;
-          padding: 5px 4px;
+          padding: 6px 4px;
           margin-bottom: 6px;
         }
-        .item {
+        .services-header .col-name { flex: 1; text-align: right; }
+        .services-header .col-qty { width: 30px; text-align: center; }
+        .services-header .col-price { width: 45px; text-align: center; }
+        .services-header .col-total { width: 55px; text-align: left; }
+        
+        .service-item {
           display: flex;
-          justify-content: space-between;
           align-items: center;
-          margin: 6px 0;
-          font-size: 11px;
-          padding: 3px 0;
+          padding: 6px 4px;
           border-bottom: 1px dotted #999;
+          font-size: ${fonts.base};
         }
-        .item:last-child {
+        .service-item:last-child {
           border-bottom: none;
         }
-        .item-name {
+        .service-item:nth-child(even) {
+          background: #fafafa;
+        }
+        .service-name {
           flex: 1;
           text-align: right;
           font-weight: 500;
-          padding-left: 5px;
+          padding-left: 4px;
         }
-        .item-qty {
-          width: 35px;
+        .service-qty {
+          width: 30px;
           text-align: center;
           font-weight: bold;
-          background: #f0f0f0;
+          background: #e0e0e0;
           padding: 2px;
           border-radius: 3px;
+          margin: 0 2px;
         }
-        .item-price {
-          width: 60px;
+        .service-price {
+          width: 45px;
+          text-align: center;
+          font-size: 9px;
+          color: #555;
+        }
+        .service-total {
+          width: 55px;
           text-align: left;
           font-weight: bold;
         }
         
         /* ═══════════════════════════════════════════════════════════════
-           قسم المجاميع
+           المجاميع - تصميم بارز
            ═══════════════════════════════════════════════════════════════ */
         .totals-section {
           padding: 10px 0;
@@ -280,38 +382,72 @@ const generateReceiptHTML = (
         .total-row {
           display: flex;
           justify-content: space-between;
-          margin: 5px 0;
-          font-size: 12px;
+          padding: 4px 0;
+          font-size: ${fonts.header};
+        }
+        .total-row.subtotal {
+          border-bottom: 1px dashed #999;
+          padding-bottom: 6px;
+          margin-bottom: 4px;
         }
         .total-row.discount {
           color: #000;
           font-style: italic;
         }
+        .total-row.discount .amount {
+          font-weight: bold;
+        }
         .total-row.grand-total {
-          font-size: 18px;
+          font-size: ${fonts.total};
           font-weight: bold;
           border: 3px solid #000;
-          padding: 10px 8px;
+          padding: 12px 8px;
           margin-top: 8px;
           background: #f5f5f5;
+        }
+        .total-row.grand-total .currency {
+          font-size: 12px;
+          vertical-align: middle;
         }
         
         /* ═══════════════════════════════════════════════════════════════
            طريقة الدفع
            ═══════════════════════════════════════════════════════════════ */
-        .payment-method {
+        .payment-section {
           text-align: center;
           margin: 10px 0;
-          padding: 8px;
+          padding: 10px;
           border: 2px solid #000;
-          font-size: 13px;
-          font-weight: bold;
           background: #f9f9f9;
         }
+        .payment-title {
+          font-size: 9px;
+          margin-bottom: 4px;
+        }
+        .payment-method {
+          font-size: ${fonts.header};
+          font-weight: bold;
+        }
         .payment-details {
-          font-size: 10px;
-          margin-top: 4px;
-          font-weight: normal;
+          font-size: 9px;
+          margin-top: 6px;
+          padding-top: 6px;
+          border-top: 1px dashed #999;
+        }
+        .payment-split {
+          display: flex;
+          justify-content: center;
+          gap: 15px;
+        }
+        .payment-split-item {
+          text-align: center;
+        }
+        .payment-split-label {
+          font-size: 8px;
+          color: #666;
+        }
+        .payment-split-amount {
+          font-weight: bold;
         }
         
         /* ═══════════════════════════════════════════════════════════════
@@ -320,14 +456,39 @@ const generateReceiptHTML = (
         .loyalty-section {
           text-align: center;
           margin: 8px 0;
-          padding: 6px;
+          padding: 8px;
           border: 2px dashed #000;
-          font-size: 11px;
           background: #fffef0;
         }
-        .loyalty-section .title {
+        .loyalty-icon {
+          font-size: 18px;
+          margin-bottom: 4px;
+        }
+        .loyalty-title {
           font-weight: bold;
-          margin-bottom: 3px;
+          font-size: ${fonts.base};
+          margin-bottom: 4px;
+        }
+        .loyalty-info {
+          font-size: 9px;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════
+           الملاحظات
+           ═══════════════════════════════════════════════════════════════ */
+        .notes-section {
+          margin: 8px 0;
+          padding: 8px;
+          border: 1px solid #000;
+          background: #fafafa;
+        }
+        .notes-title {
+          font-weight: bold;
+          font-size: 9px;
+          margin-bottom: 4px;
+        }
+        .notes-content {
+          font-size: 9px;
         }
         
         /* ═══════════════════════════════════════════════════════════════
@@ -335,18 +496,20 @@ const generateReceiptHTML = (
            ═══════════════════════════════════════════════════════════════ */
         .qr-section {
           text-align: center;
-          padding: 10px 0;
+          padding: 12px 0;
           border-top: 1px dashed #000;
-          margin-top: 8px;
+          margin-top: 10px;
         }
-        .qr-section img {
-          width: 80px;
-          height: 80px;
-          margin: 6px auto;
-          border: 1px solid #000;
+        .qr-code {
+          width: 90px;
+          height: 90px;
+          margin: 8px auto;
+          border: 2px solid #000;
+          padding: 4px;
+          background: #fff;
         }
-        .qr-section p {
-          font-size: 9px;
+        .qr-text {
+          font-size: 8px;
           color: #666;
         }
         
@@ -355,41 +518,29 @@ const generateReceiptHTML = (
            ═══════════════════════════════════════════════════════════════ */
         .footer {
           text-align: center;
-          padding-top: 10px;
+          padding-top: 12px;
           border-top: 3px double #000;
-          font-size: 10px;
         }
-        .footer .thanks {
-          font-size: 16px;
+        .footer-message {
+          font-size: 14px;
           font-weight: bold;
           margin-bottom: 6px;
         }
-        .footer .welcome {
-          font-size: 12px;
+        .footer-welcome {
+          font-size: ${fonts.base};
           margin: 4px 0;
           font-style: italic;
         }
-        .footer .brand {
-          font-size: 9px;
-          margin-top: 8px;
-          padding-top: 6px;
-          border-top: 1px dashed #000;
-          color: #666;
-        }
-        
-        /* ═══════════════════════════════════════════════════════════════
-           الملاحظات
-           ═══════════════════════════════════════════════════════════════ */
-        .notes-section {
+        .footer-separator {
           margin: 8px 0;
-          padding: 6px;
-          border: 1px solid #000;
-          font-size: 10px;
-          background: #fafafa;
+          font-size: 8px;
+          color: #999;
         }
-        .notes-section .title {
-          font-weight: bold;
-          margin-bottom: 3px;
+        .footer-brand {
+          font-size: 8px;
+          color: #666;
+          padding-top: 6px;
+          border-top: 1px dashed #ccc;
         }
         
         /* ═══════════════════════════════════════════════════════════════
@@ -397,21 +548,26 @@ const generateReceiptHTML = (
            ═══════════════════════════════════════════════════════════════ */
         .print-controls {
           position: fixed;
-          bottom: 15px;
+          bottom: 20px;
           left: 50%;
           transform: translateX(-50%);
           display: flex;
-          gap: 12px;
+          gap: 15px;
           z-index: 1000;
+          background: #fff;
+          padding: 15px;
+          border-radius: 12px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.2);
         }
         .print-btn {
           padding: 14px 28px;
-          font-size: 15px;
+          font-size: 14px;
           font-weight: bold;
           border: none;
-          border-radius: 10px;
+          border-radius: 8px;
           cursor: pointer;
           transition: all 0.2s;
+          font-family: inherit;
         }
         .print-btn:hover {
           transform: scale(1.05);
@@ -425,63 +581,66 @@ const generateReceiptHTML = (
           color: #000;
           border: 2px solid #000;
         }
-        
-        /* ═══════════════════════════════════════════════════════════════
-           خط فاصل مزخرف
-           ═══════════════════════════════════════════════════════════════ */
-        .separator {
-          text-align: center;
-          margin: 8px 0;
-          font-size: 10px;
-          color: #999;
-        }
       </style>
     </head>
     <body>
       <div class="receipt">
         <!-- ═══════════════════════════════════════════════════════════════
-             Header مع الشعار
+             الهيدر مع الشعار
              ═══════════════════════════════════════════════════════════════ -->
         <div class="header">
-          ${settings.showLogo ? '<div class="logo">✂</div>' : ''}
-          <h1>Symbol AI</h1>
-          <div class="branch">${data.branchName}</div>
-          ${data.branchPhone ? `<div class="phone">هاتف: ${data.branchPhone}</div>` : ''}
-          <div class="invoice-num"># ${data.invoiceNumber}</div>
+          ${logoHTML}
+          <div class="store-name">${settings.storeName || 'Symbol AI'}</div>
+          <div class="branch-name">${data.branchName}</div>
+          ${settings.showBranchPhone && (data.branchPhone || settings.storePhone) ? 
+            `<div class="branch-phone">📞 ${data.branchPhone || settings.storePhone}</div>` : ''}
+          ${settings.storeAddress ? `<div class="store-address">📍 ${settings.storeAddress}</div>` : ''}
+          ${settings.headerMessage ? `<div class="header-message">${settings.headerMessage}</div>` : ''}
+          <div class="invoice-box">
+            <div class="invoice-label">رقم الفاتورة</div>
+            <div class="invoice-number">${data.invoiceNumber}</div>
+          </div>
         </div>
         
         <!-- ═══════════════════════════════════════════════════════════════
              معلومات الفاتورة
              ═══════════════════════════════════════════════════════════════ -->
         <div class="info-section">
-          <div class="info-row">
-            <span>التاريخ:</span>
-            <span>${dateStr}</span>
-          </div>
-          <div class="info-row">
-            <span>الوقت:</span>
-            <span>${timeStr}</span>
-          </div>
-          <div class="info-row">
-            <span>الموظف:</span>
-            <span>${data.employeeName}</span>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">التاريخ:</span>
+              <span>${dateStr}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">الوقت:</span>
+              <span>${timeStr}</span>
+            </div>
+            ${settings.showEmployeeName ? `
+              <div class="info-item full">
+                <span class="info-label">الموظف:</span>
+                <span>${data.employeeName}</span>
+              </div>
+            ` : ''}
           </div>
         </div>
         
         <!-- ═══════════════════════════════════════════════════════════════
-             الخدمات
+             جدول الخدمات
              ═══════════════════════════════════════════════════════════════ -->
-        <div class="items-section">
-          <div class="items-header">
-            <span style="flex:1;text-align:right;">الخدمة</span>
-            <span style="width:35px;text-align:center;">الكمية</span>
-            <span style="width:60px;text-align:left;">السعر</span>
+        <div class="services-section">
+          <div class="services-title">═══ الخدمات ═══</div>
+          <div class="services-header">
+            <span class="col-name">الخدمة</span>
+            <span class="col-qty">الكمية</span>
+            <span class="col-price">السعر</span>
+            <span class="col-total">المجموع</span>
           </div>
-          ${data.items.map(item => `
-            <div class="item">
-              <span class="item-name">${item.serviceNameAr || item.serviceName}</span>
-              <span class="item-qty">${item.quantity}</span>
-              <span class="item-price">${item.total.toFixed(0)} ر.س</span>
+          ${data.items.map((item, index) => `
+            <div class="service-item" style="${index % 2 === 1 ? 'background: #fafafa;' : ''}">
+              <span class="service-name">${item.serviceNameAr || item.serviceName}</span>
+              <span class="service-qty">${item.quantity}</span>
+              <span class="service-price">${item.price.toFixed(0)}</span>
+              <span class="service-total">${item.total.toFixed(0)} ر.س</span>
             </div>
           `).join('')}
         </div>
@@ -490,30 +649,40 @@ const generateReceiptHTML = (
              المجاميع
              ═══════════════════════════════════════════════════════════════ -->
         <div class="totals-section">
-          <div class="total-row">
+          <div class="total-row subtotal">
             <span>المجموع الفرعي:</span>
             <span>${data.subtotal.toFixed(2)} ر.س</span>
           </div>
           ${data.discountAmount > 0 ? `
             <div class="total-row discount">
-              <span>الخصم${data.loyaltyCustomer ? ' (ولاء)' : ''}:</span>
-              <span>- ${data.discountAmount.toFixed(2)} ر.س</span>
+              <span>الخصم${data.loyaltyCustomer ? ' (برنامج الولاء)' : ''}:</span>
+              <span class="amount">- ${data.discountAmount.toFixed(2)} ر.س</span>
             </div>
           ` : ''}
           <div class="total-row grand-total">
-            <span>الإجمالي:</span>
-            <span>${data.total.toFixed(2)} ر.س</span>
+            <span>الإجمالي المستحق:</span>
+            <span>${data.total.toFixed(2)} <span class="currency">ر.س</span></span>
           </div>
         </div>
         
         <!-- ═══════════════════════════════════════════════════════════════
              طريقة الدفع
              ═══════════════════════════════════════════════════════════════ -->
-        <div class="payment-method">
-          طريقة الدفع: ${getPaymentMethodAr(data.paymentMethod)}
-          ${data.paymentMethod === 'split' && data.cashAmount && data.cardAmount ? `
+        <div class="payment-section">
+          <div class="payment-title">طريقة الدفع</div>
+          <div class="payment-method">${getPaymentMethodAr(data.paymentMethod)}</div>
+          ${data.paymentMethod === 'split' && data.cashAmount !== undefined && data.cardAmount !== undefined ? `
             <div class="payment-details">
-              كاش: ${data.cashAmount.toFixed(2)} ر.س | شبكة: ${data.cardAmount.toFixed(2)} ر.س
+              <div class="payment-split">
+                <div class="payment-split-item">
+                  <div class="payment-split-label">نقدي</div>
+                  <div class="payment-split-amount">${data.cashAmount.toFixed(2)} ر.س</div>
+                </div>
+                <div class="payment-split-item">
+                  <div class="payment-split-label">شبكة</div>
+                  <div class="payment-split-amount">${data.cardAmount.toFixed(2)} ر.س</div>
+                </div>
+              </div>
             </div>
           ` : ''}
         </div>
@@ -523,9 +692,12 @@ const generateReceiptHTML = (
              ═══════════════════════════════════════════════════════════════ -->
         ${data.loyaltyCustomer ? `
           <div class="loyalty-section">
-            <div class="title">🎁 عميل برنامج الولاء</div>
-            <div>${data.loyaltyCustomer.name}</div>
-            <div>هاتف: ${data.loyaltyCustomer.phone}</div>
+            <div class="loyalty-icon">🎁</div>
+            <div class="loyalty-title">عميل برنامج الولاء</div>
+            <div class="loyalty-info">
+              <div>${data.loyaltyCustomer.name}</div>
+              <div>📱 ${data.loyaltyCustomer.phone}</div>
+            </div>
           </div>
         ` : ''}
         
@@ -534,8 +706,8 @@ const generateReceiptHTML = (
              ═══════════════════════════════════════════════════════════════ -->
         ${data.notes ? `
           <div class="notes-section">
-            <div class="title">ملاحظات:</div>
-            <div>${data.notes}</div>
+            <div class="notes-title">📝 ملاحظات:</div>
+            <div class="notes-content">${data.notes}</div>
           </div>
         ` : ''}
         
@@ -544,8 +716,8 @@ const generateReceiptHTML = (
              ═══════════════════════════════════════════════════════════════ -->
         ${settings.showQRCode ? `
           <div class="qr-section">
-            <img src="${qrCodeUrl}" alt="QR Code" />
-            <p>امسح للتحقق من الفاتورة</p>
+            <img src="${qrCodeUrl}" alt="QR Code" class="qr-code" />
+            <div class="qr-text">امسح للتحقق من الفاتورة</div>
           </div>
         ` : ''}
         
@@ -553,10 +725,15 @@ const generateReceiptHTML = (
              الفوتر
              ═══════════════════════════════════════════════════════════════ -->
         <div class="footer">
-          <p class="thanks">${settings.customMessage || 'شكراً لزيارتكم ❤'}</p>
-          <p class="welcome">نتشرف بخدمتكم دائماً</p>
-          <p class="welcome">نتمنى لكم يوماً سعيداً</p>
-          <p class="brand">Symbol AI - نظام نقاط البيع الذكي</p>
+          <div class="footer-message">${settings.footerMessage}</div>
+          <div class="footer-welcome">${settings.welcomeMessage}</div>
+          <div class="footer-welcome">نتمنى لكم يوماً سعيداً</div>
+          <div class="footer-separator">═══════════════════════</div>
+          <div class="footer-brand">
+            ${settings.storeName || 'Symbol AI'} - نظام نقاط البيع الذكي
+            <br/>
+            Powered by Symbol AI ERP
+          </div>
         </div>
       </div>
       
@@ -574,7 +751,7 @@ const generateReceiptHTML = (
           ${settings.autoPrint ? `
             setTimeout(function() {
               window.print();
-            }, 500);
+            }, 600);
           ` : ''}
         };
         
@@ -582,7 +759,7 @@ const generateReceiptHTML = (
         window.onafterprint = function() {
           setTimeout(function() {
             window.close();
-          }, 100);
+          }, 200);
         };
       </script>
     </body>
@@ -590,7 +767,10 @@ const generateReceiptHTML = (
   `;
 };
 
-// Custom hook for thermal printing
+// ============================================
+// Custom Hook for Thermal Printing
+// ============================================
+
 export function useThermalPrinter(settings: PrinterSettings = DEFAULT_SETTINGS) {
   const printWindowRef = useRef<Window | null>(null);
   
@@ -603,10 +783,11 @@ export function useThermalPrinter(settings: PrinterSettings = DEFAULT_SETTINGS) 
     }
     
     // Open new print window
+    const windowWidth = settings.paperWidth === '58mm' ? 280 : 340;
     const printWindow = window.open(
       '', 
       '_blank', 
-      `width=${settings.paperWidth === '58mm' ? 280 : 320},height=700,scrollbars=yes`
+      `width=${windowWidth},height=800,scrollbars=yes,resizable=yes`
     );
     
     if (printWindow) {
@@ -633,5 +814,8 @@ export function useThermalPrinter(settings: PrinterSettings = DEFAULT_SETTINGS) 
   };
 }
 
-// Export utilities
-export { generateReceiptHTML, DEFAULT_SETTINGS };
+// ============================================
+// Exports
+// ============================================
+
+export { generateReceiptHTML };
