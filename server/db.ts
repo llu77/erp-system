@@ -12120,3 +12120,45 @@ export async function markPosInvoicesAsConfirmed(invoiceIds: number[]) {
     .set({ status: 'completed' })
     .where(inArray(posInvoices.id, invoiceIds));
 }
+
+
+// ==================== ترتيب موظفي الفرع حسب الإيرادات ====================
+export async function getBranchEmployeesWithMonthlyRevenue(branchId: number, year: number, month: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // حساب بداية ونهاية الشهر
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0);
+  
+  // جلب موظفي الفرع مع إيراداتهم الشهرية
+  const result = await db.select({
+    employeeId: employees.id,
+    employeeName: employees.name,
+    employeeCode: employees.code,
+    position: employees.position,
+    photoUrl: employees.photoUrl,
+    totalRevenue: sql<number>`COALESCE(SUM(${employeeRevenues.total}), 0)`.as('totalRevenue'),
+    invoiceCount: sql<number>`COUNT(DISTINCT ${employeeRevenues.id})`.as('invoiceCount'),
+  })
+  .from(employees)
+  .leftJoin(employeeRevenues, eq(employees.id, employeeRevenues.employeeId))
+  .leftJoin(dailyRevenues, and(
+    eq(employeeRevenues.dailyRevenueId, dailyRevenues.id),
+    gte(dailyRevenues.date, startDate),
+    lte(dailyRevenues.date, endDate)
+  ))
+  .where(and(
+    eq(employees.branchId, branchId),
+    eq(employees.isActive, true)
+  ))
+  .groupBy(employees.id, employees.name, employees.code, employees.position, employees.photoUrl)
+  .orderBy(desc(sql`totalRevenue`));
+  
+  return result.map((emp, index) => ({
+    ...emp,
+    rank: index + 1,
+    totalRevenue: Number(emp.totalRevenue || 0),
+    invoiceCount: Number(emp.invoiceCount || 0),
+  }));
+}

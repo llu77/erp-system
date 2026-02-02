@@ -32,6 +32,13 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Trophy,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  Crown,
+  Medal,
+  Award,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -71,6 +78,9 @@ export default function POS() {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [lastInvoice, setLastInvoice] = useState<{ invoiceNumber: string; total: number } | null>(null);
+  const [showEmployeeSidebar, setShowEmployeeSidebar] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   
   // Filter branches based on user permissions
   const userBranchId = user?.branchId;
@@ -105,6 +115,12 @@ export default function POS() {
   const { data: loyaltyDiscount } = trpc.pos.loyaltyCustomers.checkDiscount.useQuery(
     { customerId: loyaltyCustomer?.id! },
     { enabled: !!loyaltyCustomer }
+  );
+  
+  // Query for employee ranking by revenue
+  const { data: employeesRanking = [] } = trpc.pos.employees.rankingByRevenue.useQuery(
+    { branchId: selectedBranchId!, year: selectedYear, month: selectedMonth },
+    { enabled: !!selectedBranchId }
   );
   
   // Mutations
@@ -693,7 +709,7 @@ export default function POS() {
     <div className="h-screen flex flex-col bg-background overflow-hidden" dir="rtl">
       {/* Header - Full Width with Logo */}
       <header className="h-20 bg-gradient-to-l from-primary/10 via-background to-background border-b flex items-center justify-between px-6 shrink-0">
-        {/* Logo & Title */}
+        {/* Logo & Title with Welcome Message */}
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center">
             <img 
@@ -709,6 +725,31 @@ export default function POS() {
             <h1 className="text-2xl font-bold text-foreground">بوابة الكاشير</h1>
             <p className="text-sm text-muted-foreground">Symbol AI - نظام نقاط البيع</p>
           </div>
+          
+          {/* Welcome Message for Supervisor */}
+          {user && (
+            <div className="mr-6 pr-6 border-r flex items-center gap-3">
+              {(user as any).photoUrl ? (
+                <img 
+                  src={(user as any).photoUrl} 
+                  alt={user.name || ''}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-primary/30 shadow-md"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center border-2 border-primary/30">
+                  <User className="h-6 w-6 text-primary" />
+                </div>
+              )}
+              <div>
+                <p className="text-lg font-bold text-primary">
+                  هلا {user.name?.split(' ')[0] || 'بك'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {branches.find(b => b.id === selectedBranchId)?.nameAr || 'مرحباً بك'}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Clock - Large & Prominent */}
@@ -865,6 +906,152 @@ export default function POS() {
             <span><kbd className="px-2 py-1 bg-background rounded border text-xs">F4</kbd> عميل ولاء</span>
           </div>
         </div>
+        
+        {/* Employee Ranking Sidebar */}
+        {showEmployeeSidebar && selectedBranchId && (
+          <div className="w-[280px] bg-card border-r flex flex-col shrink-0">
+            {/* Sidebar Header */}
+            <div className="h-16 px-4 border-b flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-amber-500/10 rounded-full flex items-center justify-center">
+                  <Trophy className="h-4 w-4 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">ترتيب الموظفين</h3>
+                  <p className="text-xs text-muted-foreground">حسب الإيرادات</p>
+                </div>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7"
+                onClick={() => setShowEmployeeSidebar(false)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            {/* Month Selector */}
+            <div className="px-3 py-2 border-b bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(Number(v))}>
+                  <SelectTrigger className="h-8 text-xs flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      { value: 1, label: 'يناير' },
+                      { value: 2, label: 'فبراير' },
+                      { value: 3, label: 'مارس' },
+                      { value: 4, label: 'أبريل' },
+                      { value: 5, label: 'مايو' },
+                      { value: 6, label: 'يونيو' },
+                      { value: 7, label: 'يوليو' },
+                      { value: 8, label: 'أغسطس' },
+                      { value: 9, label: 'سبتمبر' },
+                      { value: 10, label: 'أكتوبر' },
+                      { value: 11, label: 'نوفمبر' },
+                      { value: 12, label: 'ديسمبر' },
+                    ].map(m => (
+                      <SelectItem key={m.value} value={m.value.toString()}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(Number(v))}>
+                  <SelectTrigger className="h-8 text-xs w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[2024, 2025, 2026].map(y => (
+                      <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            {/* Employee List */}
+            <ScrollArea className="flex-1">
+              <div className="p-2 space-y-1">
+                {employeesRanking.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">لا توجد بيانات</p>
+                  </div>
+                ) : (
+                  employeesRanking.map((emp, index) => (
+                    <div 
+                      key={emp.employeeId}
+                      className={`p-2 rounded-lg flex items-center gap-2 transition-colors ${
+                        index === 0 ? 'bg-amber-500/10 border border-amber-500/30' :
+                        index === 1 ? 'bg-slate-400/10 border border-slate-400/30' :
+                        index === 2 ? 'bg-orange-600/10 border border-orange-600/30' :
+                        'bg-muted/30 hover:bg-muted/50'
+                      }`}
+                    >
+                      {/* Rank Badge */}
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                        index === 0 ? 'bg-amber-500 text-white' :
+                        index === 1 ? 'bg-slate-400 text-white' :
+                        index === 2 ? 'bg-orange-600 text-white' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {index === 0 ? <Crown className="h-4 w-4" /> :
+                         index === 1 ? <Medal className="h-4 w-4" /> :
+                         index === 2 ? <Award className="h-4 w-4" /> :
+                         <span className="text-xs font-bold">{emp.rank}</span>}
+                      </div>
+                      
+                      {/* Employee Photo */}
+                      {emp.photoUrl ? (
+                        <img 
+                          src={emp.photoUrl} 
+                          alt={emp.employeeName}
+                          className="w-8 h-8 rounded-full object-cover border-2 border-background"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <User className="h-4 w-4 text-primary" />
+                        </div>
+                      )}
+                      
+                      {/* Employee Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{emp.employeeName}</p>
+                        <p className="text-xs text-muted-foreground">{emp.invoiceCount} فاتورة</p>
+                      </div>
+                      
+                      {/* Revenue */}
+                      <div className="text-left">
+                        <p className={`font-bold text-sm ${
+                          index === 0 ? 'text-amber-500' :
+                          index === 1 ? 'text-slate-500' :
+                          index === 2 ? 'text-orange-600' :
+                          'text-foreground'
+                        }`}>
+                          {emp.totalRevenue.toLocaleString()}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">ر.س</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+        
+        {/* Toggle Sidebar Button (when hidden) */}
+        {!showEmployeeSidebar && selectedBranchId && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute left-0 top-1/2 -translate-y-1/2 h-20 w-6 rounded-r-lg bg-card border border-l-0 hover:bg-muted z-10"
+            onClick={() => setShowEmployeeSidebar(true)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        )}
         
         {/* Right Panel - Cart */}
         <div className="w-[420px] bg-card border-r flex flex-col shrink-0">

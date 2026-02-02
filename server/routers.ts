@@ -9724,6 +9724,20 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         .query(async ({ input }) => {
           return await db.getEmployeesByBranchForPos(input.branchId);
         }),
+      
+      // ترتيب موظفي الفرع حسب الإيرادات الشهرية
+      rankingByRevenue: protectedProcedure
+        .input(z.object({
+          branchId: z.number(),
+          year: z.number().optional(),
+          month: z.number().min(1).max(12).optional(),
+        }))
+        .query(async ({ input }) => {
+          const now = new Date();
+          const year = input.year || now.getFullYear();
+          const month = input.month || (now.getMonth() + 1);
+          return await db.getBranchEmployeesWithMonthlyRevenue(input.branchId, year, month);
+        }),
     }),
 
     // ==================== الفروع ====================
