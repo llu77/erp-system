@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,7 +8,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
@@ -31,8 +29,9 @@ import {
   Sparkles,
   Check,
   X,
-  Receipt,
   BarChart3,
+  Settings,
+  LogOut,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -53,7 +52,7 @@ interface LoyaltyCustomer {
 }
 
 export default function POS() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   
   // State
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
@@ -163,6 +162,7 @@ export default function POS() {
         total: Number(service.price),
       }]);
     }
+    toast.success(`تمت إضافة ${service.nameAr}`);
   };
   
   const updateQuantity = (serviceId: number, delta: number) => {
@@ -244,11 +244,9 @@ export default function POS() {
   const handlePrint = () => {
     if (!lastInvoice) return;
     
-    // Get branch and employee names
     const branchName = branches.find(b => b.id === selectedBranchId)?.nameAr || 'غير محدد';
     const employeeName = employees.find(e => e.id === selectedEmployeeId)?.name || 'غير محدد';
     
-    // Create thermal receipt HTML
     const receiptHTML = `
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
@@ -266,6 +264,7 @@ export default function POS() {
             direction: rtl;
           }
           .header { text-align: center; margin-bottom: 10px; }
+          .logo { width: 50px; height: 50px; margin: 0 auto 10px; }
           .header h1 { font-size: 18px; margin: 0; }
           .header p { margin: 5px 0; color: #666; }
           .divider { border-top: 1px dashed #000; margin: 10px 0; }
@@ -290,7 +289,8 @@ export default function POS() {
       </head>
       <body>
         <div class="header">
-          <h1>صالون سمبول</h1>
+          <img src="/logo.png" alt="Logo" class="logo" onerror="this.style.display='none'" />
+          <h1>Symbol AI</h1>
           <p>${branchName}</p>
           <p>رقم الفاتورة: ${lastInvoice.invoiceNumber}</p>
         </div>
@@ -309,12 +309,6 @@ export default function POS() {
           <span>الموظف:</span>
           <span>${employeeName}</span>
         </div>
-        ${loyaltyCustomer ? `
-        <div class="info-row">
-          <span>العميل:</span>
-          <span>${loyaltyCustomer.name}</span>
-        </div>
-        ` : ''}
         
         <div class="divider"></div>
         
@@ -322,7 +316,7 @@ export default function POS() {
           ${cart.map(item => `
             <div class="item">
               <span class="item-name">${item.serviceNameAr}</span>
-              <span class="item-qty">x${item.quantity}</span>
+              <span class="item-qty">×${item.quantity}</span>
               <span class="item-price">${item.total.toFixed(2)}</span>
             </div>
           `).join('')}
@@ -332,32 +326,29 @@ export default function POS() {
         
         <div class="total-section">
           <div class="total-row">
-            <span>المجموع:</span>
+            <span>المجموع الفرعي:</span>
             <span>${subtotal.toFixed(2)} ر.س</span>
           </div>
           ${discountAmount > 0 ? `
-          <div class="total-row" style="color: green;">
-            <span>الخصم:</span>
-            <span>-${discountAmount.toFixed(2)} ر.س</span>
-          </div>
+            <div class="total-row" style="color: green;">
+              <span>الخصم:</span>
+              <span>- ${discountAmount.toFixed(2)} ر.س</span>
+            </div>
           ` : ''}
           <div class="total-row grand-total">
             <span>الإجمالي:</span>
             <span>${lastInvoice.total.toFixed(2)} ر.س</span>
           </div>
-        </div>
-        
-        <div style="text-align: center; margin-top: 10px;">
-          <span class="payment-badge">
-            ${paymentMethod === 'cash' ? 'كاش' : 
-              paymentMethod === 'card' ? 'شبكة' : 
-              paymentMethod === 'split' ? 'تقسيم' : 'ولاء'}
-          </span>
+          <div style="text-align: center; margin-top: 10px;">
+            <span class="payment-badge">
+              ${paymentMethod === 'cash' ? 'كاش' : paymentMethod === 'card' ? 'شبكة' : paymentMethod === 'split' ? 'تقسيم' : 'ولاء'}
+            </span>
+          </div>
         </div>
         
         <div class="footer">
           <p>شكراً لزيارتكم</p>
-          <p>نتمنى لكم يوماً سعيداً</p>
+          <p>نتطلع لخدمتكم مرة أخرى</p>
         </div>
         
         <script>
@@ -370,7 +361,6 @@ export default function POS() {
       </html>
     `;
     
-    // Open print window
     const printWindow = window.open('', '_blank', 'width=350,height=600');
     if (printWindow) {
       printWindow.document.write(receiptHTML);
@@ -388,294 +378,370 @@ export default function POS() {
   }, []);
   
   const getCategoryIcon = (categoryName: string) => {
-    if (categoryName.includes('حلاقة') || categoryName.includes('Haircut')) return <Scissors className="h-5 w-5" />;
-    if (categoryName.includes('خدمات') || categoryName.includes('Services')) return <Sparkles className="h-5 w-5" />;
-    return <Store className="h-5 w-5" />;
+    if (categoryName.includes('حلاقة') || categoryName.includes('Haircut')) return <Scissors className="h-6 w-6" />;
+    if (categoryName.includes('خدمات') || categoryName.includes('Services')) return <Sparkles className="h-6 w-6" />;
+    return <Store className="h-6 w-6" />;
   };
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        handleCheckout();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        clearCart();
+      } else if (e.key === 'F4') {
+        e.preventDefault();
+        setShowLoyaltyDialog(true);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cart, selectedBranchId, selectedEmployeeId]);
+
   return (
-    <DashboardLayout>
-      <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-card">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <ShoppingCart className="h-6 w-6 text-primary" />
-              بوابة الكاشير
-            </h1>
-            <Badge variant="outline" className="text-lg px-3 py-1">
-              <Clock className="h-4 w-4 ml-2" />
-              {currentTime.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-            </Badge>
+    <div className="h-screen flex flex-col bg-background overflow-hidden" dir="rtl">
+      {/* Header - Full Width with Logo */}
+      <header className="h-20 bg-gradient-to-l from-primary/10 via-background to-background border-b flex items-center justify-between px-6 shrink-0">
+        {/* Logo & Title */}
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center">
+            <img 
+              src="/logo.png" 
+              alt="Symbol AI" 
+              className="w-10 h-10 object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
           </div>
-          
-          <div className="flex items-center gap-4">
-            {/* Branch Selection */}
-            <div className="flex items-center gap-2">
-              <Store className="h-5 w-5 text-muted-foreground" />
-              <Select value={selectedBranchId?.toString() || ''} onValueChange={(v) => setSelectedBranchId(Number(v))}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="اختر الفرع" />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map(branch => (
-                    <SelectItem key={branch.id} value={branch.id.toString()}>
-                      {branch.nameAr}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {/* Employee Selection */}
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-muted-foreground" />
-              <Select 
-                value={selectedEmployeeId?.toString() || ''} 
-                onValueChange={(v) => setSelectedEmployeeId(Number(v))}
-                disabled={!selectedBranchId}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="اختر الموظف" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map(emp => (
-                    <SelectItem key={emp.id} value={emp.id.toString()}>
-                      {emp.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {/* Daily Report Link */}
-            <Link href="/pos/daily-report">
-              <Button variant="outline" className="gap-2">
-                <BarChart3 className="h-4 w-4" />
-                تقرير اليوم
-              </Button>
-            </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">بوابة الكاشير</h1>
+            <p className="text-sm text-muted-foreground">Symbol AI - نظام نقاط البيع</p>
           </div>
         </div>
         
-        {/* Main Content */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Services Panel */}
-          <div className="flex-1 flex flex-col border-l overflow-hidden">
-            {/* Categories Tabs */}
-            <Tabs 
-              value={selectedCategoryId?.toString() || 'all'} 
-              onValueChange={(v) => setSelectedCategoryId(v === 'all' ? null : Number(v))}
-              className="flex flex-col h-full"
-            >
-              <TabsList className="w-full justify-start rounded-none border-b bg-muted/50 p-1 h-auto flex-wrap">
-                <TabsTrigger value="all" className="gap-2">
-                  <Store className="h-4 w-4" />
-                  الكل
-                </TabsTrigger>
-                {categories.map(cat => (
-                  <TabsTrigger key={cat.id} value={cat.id.toString()} className="gap-2">
-                    {getCategoryIcon(cat.nameAr)}
-                    {cat.nameAr}
-                  </TabsTrigger>
+        {/* Clock - Large & Prominent */}
+        <div className="flex items-center gap-3 bg-card px-6 py-3 rounded-xl border shadow-sm">
+          <Clock className="h-8 w-8 text-primary" />
+          <div className="text-right">
+            <div className="text-3xl font-bold font-mono tracking-wider">
+              {currentTime.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {currentTime.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
+          </div>
+        </div>
+        
+        {/* Branch & Employee Selection */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-xl border">
+            <Store className="h-5 w-5 text-primary" />
+            <Select value={selectedBranchId?.toString() || ''} onValueChange={(v) => setSelectedBranchId(Number(v))}>
+              <SelectTrigger className="w-[160px] border-0 bg-transparent h-10 text-base">
+                <SelectValue placeholder="اختر الفرع" />
+              </SelectTrigger>
+              <SelectContent>
+                {branches.map(branch => (
+                  <SelectItem key={branch.id} value={branch.id.toString()} className="text-base">
+                    {branch.nameAr}
+                  </SelectItem>
                 ))}
-              </TabsList>
-              
-              <TabsContent value={selectedCategoryId?.toString() || 'all'} className="flex-1 m-0 overflow-hidden">
-                <ScrollArea className="h-full p-4">
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {filteredServices.map(service => (
-                      <Card 
-                        key={service.id}
-                        className="cursor-pointer hover:border-primary transition-colors"
-                        onClick={() => addToCart(service)}
-                      >
-                        <CardContent className="p-4 text-center">
-                          <div className="font-semibold text-lg mb-1">{service.nameAr}</div>
-                          <div className="text-primary font-bold text-xl">
-                            {Number(service.price).toFixed(2)} ر.س
-                          </div>
-                          {service.categoryName && (
-                            <Badge variant="secondary" className="mt-2 text-xs">
-                              {service.categoryName}
-                            </Badge>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                  
-                  {filteredServices.length === 0 && (
-                    <div className="text-center text-muted-foreground py-12">
-                      لا توجد خدمات في هذا القسم
-                    </div>
-                  )}
-                </ScrollArea>
-              </TabsContent>
-            </Tabs>
+              </SelectContent>
+            </Select>
           </div>
           
-          {/* Cart Panel */}
-          <div className="w-[400px] flex flex-col bg-card">
-            {/* Cart Header */}
-            <div className="p-4 border-b flex items-center justify-between">
-              <h2 className="font-bold flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                السلة ({cart.length})
-              </h2>
-              {cart.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={clearCart} className="text-destructive">
-                  <Trash2 className="h-4 w-4 ml-1" />
-                  مسح
-                </Button>
-              )}
-            </div>
-            
-            {/* Cart Items */}
-            <ScrollArea className="flex-1">
-              <div className="p-4 space-y-3">
-                {cart.map(item => (
-                  <Card key={item.serviceId}>
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">{item.serviceNameAr}</span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6 text-destructive"
-                          onClick={() => removeFromCart(item.serviceId)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className="h-8 w-8"
-                            onClick={() => updateQuantity(item.serviceId, -1)}
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                          <span className="w-8 text-center font-bold">{item.quantity}</span>
-                          <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className="h-8 w-8"
-                            onClick={() => updateQuantity(item.serviceId, 1)}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="text-left">
-                          <div className="text-sm text-muted-foreground">{item.price.toFixed(2)} × {item.quantity}</div>
-                          <div className="font-bold text-primary">{item.total.toFixed(2)} ر.س</div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+          <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-xl border">
+            <User className="h-5 w-5 text-primary" />
+            <Select 
+              value={selectedEmployeeId?.toString() || ''} 
+              onValueChange={(v) => setSelectedEmployeeId(Number(v))}
+              disabled={!selectedBranchId}
+            >
+              <SelectTrigger className="w-[160px] border-0 bg-transparent h-10 text-base">
+                <SelectValue placeholder="اختر الموظف" />
+              </SelectTrigger>
+              <SelectContent>
+                {employees.map(emp => (
+                  <SelectItem key={emp.id} value={emp.id.toString()} className="text-base">
+                    {emp.name}
+                  </SelectItem>
                 ))}
-                
-                {cart.length === 0 && (
-                  <div className="text-center text-muted-foreground py-12">
-                    <ShoppingCart className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    السلة فارغة
-                  </div>
-                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        
+        {/* Quick Actions */}
+        <div className="flex items-center gap-2">
+          <Link href="/pos/daily-report">
+            <Button variant="outline" size="lg" className="gap-2 h-12">
+              <BarChart3 className="h-5 w-5" />
+              تقرير اليوم
+            </Button>
+          </Link>
+          <Link href="/pos/settings">
+            <Button variant="outline" size="icon" className="h-12 w-12">
+              <Settings className="h-5 w-5" />
+            </Button>
+          </Link>
+          <Button variant="ghost" size="icon" className="h-12 w-12 text-muted-foreground" onClick={() => logout()}>
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </div>
+      </header>
+      
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Categories & Services */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Categories - Horizontal Scrollable */}
+          <div className="h-24 bg-card border-b px-4 py-3 shrink-0">
+            <ScrollArea className="h-full">
+              <div className="flex gap-3 h-full">
+                <button
+                  onClick={() => setSelectedCategoryId(null)}
+                  className={`h-full px-6 rounded-xl flex flex-col items-center justify-center gap-1 transition-all min-w-[120px] ${
+                    selectedCategoryId === null 
+                      ? 'bg-primary text-primary-foreground shadow-lg scale-105' 
+                      : 'bg-muted hover:bg-muted/80'
+                  }`}
+                >
+                  <Store className="h-7 w-7" />
+                  <span className="text-sm font-medium">الكل</span>
+                </button>
+                {categories.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategoryId(cat.id)}
+                    className={`h-full px-6 rounded-xl flex flex-col items-center justify-center gap-1 transition-all min-w-[120px] ${
+                      selectedCategoryId === cat.id 
+                        ? 'bg-primary text-primary-foreground shadow-lg scale-105' 
+                        : 'bg-muted hover:bg-muted/80'
+                    }`}
+                  >
+                    {getCategoryIcon(cat.nameAr)}
+                    <span className="text-sm font-medium">{cat.nameAr}</span>
+                  </button>
+                ))}
               </div>
             </ScrollArea>
+          </div>
+          
+          {/* Services Grid */}
+          <ScrollArea className="flex-1 p-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+              {filteredServices.map(service => (
+                <button
+                  key={service.id}
+                  onClick={() => addToCart(service)}
+                  className="group bg-card hover:bg-primary/5 border-2 border-transparent hover:border-primary rounded-2xl p-4 transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-95 min-h-[140px] flex flex-col items-center justify-center text-center"
+                >
+                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
+                    {getCategoryIcon(service.categoryName || '')}
+                  </div>
+                  <div className="font-bold text-lg mb-1 line-clamp-2">{service.nameAr}</div>
+                  <div className="text-2xl font-bold text-primary">
+                    {Number(service.price).toFixed(0)} <span className="text-base">ر.س</span>
+                  </div>
+                </button>
+              ))}
+            </div>
             
-            {/* Loyalty Customer */}
-            {loyaltyCustomer && (
-              <div className="p-4 border-t bg-green-500/10">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Gift className="h-5 w-5 text-green-500" />
-                    <div>
-                      <div className="font-medium">{loyaltyCustomer.name}</div>
-                      <div className="text-sm text-muted-foreground">{loyaltyCustomer.phone}</div>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setLoyaltyCustomer(null)}>
-                    <X className="h-4 w-4" />
+            {filteredServices.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                <Store className="h-16 w-16 mb-4 opacity-50" />
+                <p className="text-xl">لا توجد خدمات في هذا القسم</p>
+                <Link href="/pos/settings">
+                  <Button variant="link" className="mt-2">
+                    إضافة خدمات جديدة
                   </Button>
+                </Link>
+              </div>
+            )}
+          </ScrollArea>
+          
+          {/* Keyboard Shortcuts Bar */}
+          <div className="h-12 bg-muted/50 border-t px-4 flex items-center gap-6 text-sm text-muted-foreground shrink-0">
+            <span><kbd className="px-2 py-1 bg-background rounded border text-xs">F2</kbd> الدفع</span>
+            <span><kbd className="px-2 py-1 bg-background rounded border text-xs">F3</kbd> مسح السلة</span>
+            <span><kbd className="px-2 py-1 bg-background rounded border text-xs">F4</kbd> عميل ولاء</span>
+          </div>
+        </div>
+        
+        {/* Right Panel - Cart */}
+        <div className="w-[420px] bg-card border-r flex flex-col shrink-0">
+          {/* Cart Header */}
+          <div className="h-16 px-4 border-b flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                <ShoppingCart className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-bold text-lg">السلة</h2>
+                <p className="text-sm text-muted-foreground">{cart.length} عنصر</p>
+              </div>
+            </div>
+            {cart.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearCart} className="text-destructive hover:text-destructive">
+                <Trash2 className="h-4 w-4 ml-1" />
+                مسح
+              </Button>
+            )}
+          </div>
+          
+          {/* Cart Items */}
+          <ScrollArea className="flex-1">
+            <div className="p-3 space-y-2">
+              {cart.map(item => (
+                <Card key={item.serviceId} className="overflow-hidden">
+                  <CardContent className="p-3">
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="font-semibold text-base">{item.serviceNameAr}</span>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => removeFromCart(item.serviceId)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          className="h-9 w-9"
+                          onClick={() => updateQuantity(item.serviceId, -1)}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="w-10 text-center font-bold text-lg">{item.quantity}</span>
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          className="h-9 w-9"
+                          onClick={() => updateQuantity(item.serviceId, 1)}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="text-left">
+                        <div className="text-xs text-muted-foreground">{item.price.toFixed(0)} × {item.quantity}</div>
+                        <div className="font-bold text-lg text-primary">{item.total.toFixed(2)} ر.س</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              
+              {cart.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <ShoppingCart className="h-16 w-16 mb-4 opacity-30" />
+                  <p className="text-lg">السلة فارغة</p>
+                  <p className="text-sm">اضغط على الخدمات لإضافتها</p>
                 </div>
-                {loyaltyDiscount && (
-                  <div className={`mt-2 text-sm ${loyaltyDiscount.eligible ? 'text-green-500' : 'text-yellow-500'}`}>
-                    {loyaltyDiscount.message}
+              )}
+            </div>
+          </ScrollArea>
+          
+          {/* Loyalty Customer */}
+          {loyaltyCustomer && (
+            <div className="px-4 py-3 border-t bg-green-500/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
+                    <Gift className="h-5 w-5 text-green-500" />
                   </div>
-                )}
+                  <div>
+                    <div className="font-semibold">{loyaltyCustomer.name}</div>
+                    <div className="text-sm text-muted-foreground">{loyaltyCustomer.phone}</div>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setLoyaltyCustomer(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              {loyaltyDiscount && (
+                <div className={`mt-2 text-sm font-medium ${loyaltyDiscount.eligible ? 'text-green-600' : 'text-yellow-600'}`}>
+                  {loyaltyDiscount.message}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Cart Summary & Payment */}
+          <div className="border-t bg-muted/30 p-4 space-y-3 shrink-0">
+            <div className="flex justify-between text-base">
+              <span>المجموع الفرعي</span>
+              <span className="font-semibold">{subtotal.toFixed(2)} ر.س</span>
+            </div>
+            
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-green-600">
+                <span>الخصم</span>
+                <span className="font-semibold">- {discountAmount.toFixed(2)} ر.س</span>
               </div>
             )}
             
-            {/* Cart Summary */}
-            <div className="p-4 border-t space-y-3">
-              <div className="flex justify-between text-lg">
-                <span>المجموع الفرعي</span>
-                <span>{subtotal.toFixed(2)} ر.س</span>
-              </div>
-              
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-green-500">
-                  <span>الخصم</span>
-                  <span>- {discountAmount.toFixed(2)} ر.س</span>
-                </div>
-              )}
-              
-              <Separator />
-              
-              <div className="flex justify-between text-xl font-bold">
-                <span>الإجمالي</span>
-                <span className="text-primary">{total.toFixed(2)} ر.س</span>
-              </div>
-              
-              {/* Loyalty Button */}
-              <Button 
-                variant="outline" 
-                className="w-full gap-2"
-                onClick={() => setShowLoyaltyDialog(true)}
-              >
-                <Gift className="h-4 w-4" />
-                {loyaltyCustomer ? 'تغيير عميل الولاء' : 'إضافة عميل ولاء'}
-              </Button>
-              
-              {/* Checkout Button */}
-              <Button 
-                className="w-full h-14 text-lg gap-2"
-                disabled={cart.length === 0 || !selectedBranchId || !selectedEmployeeId}
-                onClick={handleCheckout}
-              >
-                <CreditCard className="h-5 w-5" />
-                الدفع
-              </Button>
+            <Separator />
+            
+            <div className="flex justify-between items-center">
+              <span className="text-xl font-bold">الإجمالي</span>
+              <span className="text-3xl font-bold text-primary">{total.toFixed(2)} ر.س</span>
             </div>
+            
+            {/* Loyalty Button */}
+            <Button 
+              variant="outline" 
+              className="w-full h-12 gap-2 text-base"
+              onClick={() => setShowLoyaltyDialog(true)}
+            >
+              <Gift className="h-5 w-5" />
+              {loyaltyCustomer ? 'تغيير عميل الولاء' : 'إضافة عميل ولاء'}
+            </Button>
+            
+            {/* Checkout Button */}
+            <Button 
+              className="w-full h-16 text-xl gap-3 shadow-lg"
+              disabled={cart.length === 0 || !selectedBranchId || !selectedEmployeeId}
+              onClick={handleCheckout}
+            >
+              <CreditCard className="h-6 w-6" />
+              الدفع
+            </Button>
           </div>
         </div>
       </div>
       
       {/* Loyalty Search Dialog */}
       <Dialog open={showLoyaltyDialog} onOpenChange={setShowLoyaltyDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Gift className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Gift className="h-6 w-6 text-primary" />
               البحث عن عميل ولاء
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
             <div className="relative">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
                 placeholder="ابحث بالاسم أو رقم الجوال..."
                 value={loyaltySearchQuery}
                 onChange={(e) => setLoyaltySearchQuery(e.target.value)}
-                className="pr-10"
+                className="pr-12 h-12 text-lg"
+                autoFocus
               />
             </div>
             
-            <ScrollArea className="h-[300px]">
+            <ScrollArea className="h-[350px]">
               <div className="space-y-2">
                 {loyaltySearchResults.map(customer => (
                   <Card 
@@ -683,10 +749,15 @@ export default function POS() {
                     className="cursor-pointer hover:border-primary transition-colors"
                     onClick={() => selectLoyaltyCustomer(customer)}
                   >
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div>
-                        <div className="font-medium">{customer.name}</div>
-                        <div className="text-sm text-muted-foreground">{customer.phone}</div>
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                          <User className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-lg">{customer.name}</div>
+                          <div className="text-muted-foreground">{customer.phone}</div>
+                        </div>
                       </div>
                       <Check className="h-5 w-5 text-primary opacity-0 group-hover:opacity-100" />
                     </CardContent>
@@ -694,14 +765,16 @@ export default function POS() {
                 ))}
                 
                 {loyaltySearchQuery.length >= 2 && loyaltySearchResults.length === 0 && (
-                  <div className="text-center text-muted-foreground py-8">
-                    لا توجد نتائج
+                  <div className="text-center text-muted-foreground py-12">
+                    <User className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-lg">لا توجد نتائج</p>
                   </div>
                 )}
                 
                 {loyaltySearchQuery.length < 2 && (
-                  <div className="text-center text-muted-foreground py-8">
-                    أدخل حرفين على الأقل للبحث
+                  <div className="text-center text-muted-foreground py-12">
+                    <Search className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-lg">أدخل حرفين على الأقل للبحث</p>
                   </div>
                 )}
               </div>
@@ -712,51 +785,51 @@ export default function POS() {
       
       {/* Payment Dialog */}
       <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <CreditCard className="h-6 w-6 text-primary" />
               إتمام الدفع
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-4">
-            {/* Payment Method */}
-            <div className="space-y-2">
-              <Label>طريقة الدفع</Label>
-              <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-6">
+            {/* Payment Method - Large Buttons */}
+            <div className="space-y-3">
+              <Label className="text-base">طريقة الدفع</Label>
+              <div className="grid grid-cols-4 gap-3">
                 <Button
                   variant={paymentMethod === 'cash' ? 'default' : 'outline'}
-                  className="gap-2"
+                  className="h-20 flex-col gap-2"
                   onClick={() => setPaymentMethod('cash')}
                 >
-                  <Banknote className="h-4 w-4" />
-                  كاش
+                  <Banknote className="h-8 w-8" />
+                  <span className="text-base">كاش</span>
                 </Button>
                 <Button
                   variant={paymentMethod === 'card' ? 'default' : 'outline'}
-                  className="gap-2"
+                  className="h-20 flex-col gap-2"
                   onClick={() => setPaymentMethod('card')}
                 >
-                  <CreditCard className="h-4 w-4" />
-                  شبكة
+                  <CreditCard className="h-8 w-8" />
+                  <span className="text-base">شبكة</span>
                 </Button>
                 <Button
                   variant={paymentMethod === 'split' ? 'default' : 'outline'}
-                  className="gap-2"
+                  className="h-20 flex-col gap-2"
                   onClick={() => setPaymentMethod('split')}
                 >
-                  <Split className="h-4 w-4" />
-                  تقسيم
+                  <Split className="h-8 w-8" />
+                  <span className="text-base">تقسيم</span>
                 </Button>
                 <Button
                   variant={paymentMethod === 'loyalty' ? 'default' : 'outline'}
-                  className="gap-2"
+                  className="h-20 flex-col gap-2"
                   onClick={() => setPaymentMethod('loyalty')}
                   disabled={!loyaltyCustomer}
                 >
-                  <Gift className="h-4 w-4" />
-                  ولاء
+                  <Gift className="h-8 w-8" />
+                  <span className="text-base">ولاء</span>
                 </Button>
               </div>
             </div>
@@ -765,27 +838,29 @@ export default function POS() {
             {paymentMethod === 'split' && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>مبلغ الكاش</Label>
+                  <Label className="text-base">مبلغ الكاش</Label>
                   <Input
                     type="number"
                     value={cashAmount}
                     onChange={(e) => setCashAmount(Number(e.target.value))}
                     min={0}
                     max={total}
+                    className="h-12 text-lg"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>مبلغ الشبكة</Label>
+                  <Label className="text-base">مبلغ الشبكة</Label>
                   <Input
                     type="number"
                     value={cardAmount}
                     onChange={(e) => setCardAmount(Number(e.target.value))}
                     min={0}
                     max={total}
+                    className="h-12 text-lg"
                   />
                 </div>
                 {(cashAmount + cardAmount) !== total && (
-                  <div className="col-span-2 text-destructive text-sm">
+                  <div className="col-span-2 text-destructive text-sm bg-destructive/10 p-3 rounded-lg">
                     المجموع ({(cashAmount + cardAmount).toFixed(2)}) يجب أن يساوي الإجمالي ({total.toFixed(2)})
                   </div>
                 )}
@@ -794,8 +869,8 @@ export default function POS() {
             
             {/* Discount */}
             <div className="space-y-2">
-              <Label>الخصم (اختياري)</Label>
-              <div className="flex gap-2">
+              <Label className="text-base">الخصم (اختياري)</Label>
+              <div className="flex gap-3">
                 <Input
                   type="number"
                   value={discountAmount}
@@ -803,63 +878,64 @@ export default function POS() {
                   min={0}
                   max={subtotal}
                   placeholder="0.00"
-                  className="flex-1"
+                  className="flex-1 h-12 text-lg"
                 />
                 <Input
                   value={discountReason}
                   onChange={(e) => setDiscountReason(e.target.value)}
                   placeholder="سبب الخصم"
-                  className="flex-1"
+                  className="flex-1 h-12"
                 />
               </div>
             </div>
             
             {/* Notes */}
             <div className="space-y-2">
-              <Label>ملاحظات (اختياري)</Label>
+              <Label className="text-base">ملاحظات (اختياري)</Label>
               <Input
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="أي ملاحظات إضافية..."
+                className="h-12"
               />
             </div>
             
             {/* Summary */}
-            <Card className="bg-muted/50">
+            <Card className="bg-primary/5 border-primary/20">
               <CardContent className="p-4 space-y-2">
-                <div className="flex justify-between">
+                <div className="flex justify-between text-base">
                   <span>المجموع الفرعي</span>
-                  <span>{subtotal.toFixed(2)} ر.س</span>
+                  <span className="font-semibold">{subtotal.toFixed(2)} ر.س</span>
                 </div>
                 {discountAmount > 0 && (
-                  <div className="flex justify-between text-green-500">
+                  <div className="flex justify-between text-green-600">
                     <span>الخصم</span>
-                    <span>- {discountAmount.toFixed(2)} ر.س</span>
+                    <span className="font-semibold">- {discountAmount.toFixed(2)} ر.س</span>
                   </div>
                 )}
                 <Separator />
-                <div className="flex justify-between text-xl font-bold">
-                  <span>الإجمالي</span>
-                  <span className="text-primary">{total.toFixed(2)} ر.س</span>
+                <div className="flex justify-between items-center pt-2">
+                  <span className="text-xl font-bold">الإجمالي</span>
+                  <span className="text-3xl font-bold text-primary">{total.toFixed(2)} ر.س</span>
                 </div>
               </CardContent>
             </Card>
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPaymentDialog(false)}>
+          <DialogFooter className="gap-3">
+            <Button variant="outline" onClick={() => setShowPaymentDialog(false)} className="h-12 px-6">
               إلغاء
             </Button>
             <Button 
               onClick={handlePayment}
               disabled={createInvoiceMutation.isPending}
-              className="gap-2"
+              className="h-12 px-8 text-lg gap-2"
             >
               {createInvoiceMutation.isPending ? (
                 <>جاري المعالجة...</>
               ) : (
                 <>
-                  <Check className="h-4 w-4" />
+                  <Check className="h-5 w-5" />
                   تأكيد الدفع
                 </>
               )}
@@ -870,34 +946,34 @@ export default function POS() {
       
       {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-        <DialogContent className="max-w-sm text-center">
-          <div className="py-6">
-            <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Check className="h-8 w-8 text-white" />
+        <DialogContent className="max-w-md text-center">
+          <div className="py-8">
+            <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+              <Check className="h-10 w-10 text-white" />
             </div>
-            <h2 className="text-2xl font-bold mb-2">تم بنجاح!</h2>
-            <p className="text-muted-foreground mb-4">
+            <h2 className="text-3xl font-bold mb-3">تم بنجاح!</h2>
+            <p className="text-muted-foreground text-lg mb-4">
               تم إنشاء الفاتورة رقم
             </p>
-            <Badge variant="outline" className="text-lg px-4 py-2">
+            <Badge variant="outline" className="text-xl px-6 py-2 font-mono">
               {lastInvoice?.invoiceNumber}
             </Badge>
-            <p className="text-2xl font-bold text-primary mt-4">
+            <p className="text-4xl font-bold text-primary mt-6">
               {lastInvoice?.total.toFixed(2)} ر.س
             </p>
           </div>
           
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <Button onClick={handlePrint} className="w-full gap-2">
-              <Printer className="h-4 w-4" />
+          <DialogFooter className="flex-col gap-3 sm:flex-col">
+            <Button onClick={handlePrint} className="w-full h-14 text-lg gap-2">
+              <Printer className="h-5 w-5" />
               طباعة الفاتورة
             </Button>
-            <Button variant="outline" onClick={() => setShowSuccessDialog(false)} className="w-full">
+            <Button variant="outline" onClick={() => setShowSuccessDialog(false)} className="w-full h-12">
               فاتورة جديدة
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </div>
   );
 }
