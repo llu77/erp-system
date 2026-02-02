@@ -683,9 +683,9 @@ export default function POS() {
   }, []);
   
   const getCategoryIcon = (categoryName: string) => {
-    if (categoryName.includes('حلاقة') || categoryName.includes('Haircut')) return <Scissors className="h-6 w-6" />;
-    if (categoryName.includes('خدمات') || categoryName.includes('Services')) return <Sparkles className="h-6 w-6" />;
-    return <Store className="h-6 w-6" />;
+    if (categoryName.includes('حلاقة') || categoryName.includes('Haircut')) return <Scissors className="h-8 w-8" />;
+    if (categoryName.includes('خدمات') || categoryName.includes('Services')) return <Sparkles className="h-8 w-8" />;
+    return <Store className="h-8 w-8" />;
   };
 
   // Keyboard shortcuts
@@ -710,40 +710,40 @@ export default function POS() {
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden" dir="rtl">
       {/* Header - Full Width with Logo */}
-      <header className="h-20 bg-gradient-to-l from-primary/10 via-background to-background border-b flex items-center justify-between px-6 shrink-0">
+      <header className="h-[72px] bg-gradient-to-l from-primary/10 via-background to-background border-b border-border/50 flex items-center justify-between px-5 shrink-0 shadow-sm">
         {/* Logo & Title with Welcome Message */}
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center">
+          <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center border border-primary/20">
             <img 
               src="/logo.png" 
               alt="Symbol AI" 
-              className="w-10 h-10 object-contain"
+              className="w-8 h-8 object-contain"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = 'none';
               }}
             />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">بوابة الكاشير</h1>
+            <h1 className="text-xl font-bold text-foreground">بوابة الكاشير</h1>
             <p className="text-sm text-muted-foreground">Symbol AI - نظام نقاط البيع</p>
           </div>
           
           {/* Welcome Message for Supervisor */}
           {user && (
-            <div className="mr-6 pr-6 border-r flex items-center gap-3">
+            <div className="mr-4 pr-4 border-r border-border/50 flex items-center gap-2">
               {(user as any).photoUrl ? (
                 <img 
                   src={(user as any).photoUrl} 
                   alt={user.name || ''}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-primary/30 shadow-md"
+                  className="w-10 h-10 rounded-full object-cover border-2 border-primary/30 shadow-sm"
                 />
               ) : (
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center border-2 border-primary/30">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center border-2 border-primary/30">
                   <User className="h-6 w-6 text-primary" />
                 </div>
               )}
               <div>
-                <p className="text-lg font-bold text-primary">
+                <p className="text-base font-bold text-primary">
                   هلا {user.name?.split(' ')[0] || 'بك'}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -755,10 +755,10 @@ export default function POS() {
         </div>
         
         {/* Clock - Large & Prominent */}
-        <div className="flex items-center gap-3 bg-card px-6 py-3 rounded-xl border shadow-sm">
-          <Clock className="h-8 w-8 text-primary" />
+        <div className="flex items-center gap-2 bg-card px-4 py-2 rounded-xl border border-border/60 shadow-sm">
+          <Clock className="h-6 w-6 text-primary" />
           <div className="text-right">
-            <div className="text-3xl font-bold font-mono tracking-wider">
+            <div className="text-2xl font-bold font-mono tracking-wider">
               {currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
             </div>
             <div className="text-sm text-muted-foreground">
@@ -769,7 +769,7 @@ export default function POS() {
         
         {/* Branch & Employee Selection */}
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-xl border">
+          <div className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-xl border border-border/60">
             <Store className="h-5 w-5 text-primary" />
             {isAdmin ? (
               <Select value={selectedBranchId?.toString() || ''} onValueChange={(v) => setSelectedBranchId(Number(v))}>
@@ -791,7 +791,7 @@ export default function POS() {
             )}
           </div>
           
-          <div className="flex items-center gap-3 bg-card px-4 py-2 rounded-xl border">
+          <div className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-xl border border-border/60">
             {/* صورة الموظف المحدد */}
             {selectedEmployeeId && employees.find(e => e.id === selectedEmployeeId)?.photoUrl ? (
               <img 
@@ -854,32 +854,32 @@ export default function POS() {
         {/* Left Panel - Categories & Services */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Categories - Horizontal Scrollable */}
-          <div className="h-24 bg-card border-b px-4 py-3 shrink-0">
+          <div className="h-[88px] bg-card/80 border-b border-border/50 px-4 py-2.5 shrink-0">
             <ScrollArea className="h-full">
               <div className="flex gap-3 h-full">
                 <button
                   onClick={() => setSelectedCategoryId(null)}
-                  className={`h-full px-6 rounded-xl flex flex-col items-center justify-center gap-1 transition-all min-w-[120px] ${
+                  className={`h-full px-5 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all duration-200 min-w-[110px] border ${
                     selectedCategoryId === null 
-                      ? 'bg-primary text-primary-foreground shadow-lg scale-105' 
-                      : 'bg-muted hover:bg-muted/80'
+                      ? 'bg-primary text-primary-foreground shadow-lg scale-[1.02] border-primary' 
+                      : 'bg-muted/60 hover:bg-muted border-border/50 hover:border-border'
                   }`}
                 >
-                  <Store className="h-7 w-7" />
-                  <span className="text-sm font-medium">الكل</span>
+                  <Store className="h-8 w-8" />
+                  <span className="text-sm font-semibold">الكل</span>
                 </button>
                 {categories.map(cat => (
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategoryId(cat.id)}
-                    className={`h-full px-6 rounded-xl flex flex-col items-center justify-center gap-1 transition-all min-w-[120px] ${
+                    className={`h-full px-5 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all duration-200 min-w-[110px] border ${
                       selectedCategoryId === cat.id 
-                        ? 'bg-primary text-primary-foreground shadow-lg scale-105' 
-                        : 'bg-muted hover:bg-muted/80'
+                        ? 'bg-primary text-primary-foreground shadow-lg scale-[1.02] border-primary' 
+                        : 'bg-muted/60 hover:bg-muted border-border/50 hover:border-border'
                     }`}
                   >
                     {getCategoryIcon(cat.nameAr)}
-                    <span className="text-sm font-medium">{cat.nameAr}</span>
+                    <span className="text-sm font-semibold">{cat.nameAr}</span>
                   </button>
                 ))}
               </div>
@@ -888,19 +888,19 @@ export default function POS() {
           
           {/* Services Grid */}
           <ScrollArea className="flex-1 p-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
               {filteredServices.map(service => (
                 <button
                   key={service.id}
                   onClick={() => addToCart(service)}
-                  className="group bg-card hover:bg-primary/5 border-2 border-transparent hover:border-primary rounded-2xl p-4 transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-95 min-h-[140px] flex flex-col items-center justify-center text-center"
+                  className="group bg-card hover:bg-primary/5 border border-border/60 hover:border-primary rounded-xl p-3 transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-95 min-h-[150px] flex flex-col items-center justify-center text-center"
                 >
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
+                  <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-2.5 group-hover:bg-primary/20 transition-colors border border-primary/20">
                     {getCategoryIcon(service.categoryName || '')}
                   </div>
-                  <div className="font-bold text-lg mb-1 line-clamp-2">{service.nameAr}</div>
-                  <div className="text-2xl font-bold text-primary">
-                    {Number(service.price).toFixed(0)} <span className="text-base">ر.س</span>
+                  <div className="font-bold text-base mb-1 line-clamp-2">{service.nameAr}</div>
+                  <div className="text-xl font-bold text-primary">
+                    {Number(service.price).toFixed(0)} <span className="text-sm">ر.س</span>
                   </div>
                 </button>
               ))}
@@ -1088,15 +1088,15 @@ export default function POS() {
         )}
         
         {/* Right Panel - Cart */}
-        <div className="w-[420px] bg-card border-r flex flex-col shrink-0">
+        <div className="w-[380px] bg-card border-r border-border/50 flex flex-col shrink-0">
           {/* Cart Header */}
-          <div className="h-16 px-4 border-b flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                <ShoppingCart className="h-5 w-5 text-primary" />
+          <div className="h-14 px-3 border-b border-border/50 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center border border-primary/20">
+                <ShoppingCart className="h-4 w-4 text-primary" />
               </div>
               <div>
-                <h2 className="font-bold text-lg">السلة</h2>
+                <h2 className="font-bold text-base">السلة</h2>
                 <p className="text-sm text-muted-foreground">{cart.length} عنصر</p>
               </div>
             </div>
@@ -1110,12 +1110,12 @@ export default function POS() {
           
           {/* Cart Items */}
           <ScrollArea className="flex-1">
-            <div className="p-3 space-y-2">
+            <div className="p-2.5 space-y-1.5">
               {cart.map(item => (
-                <Card key={item.serviceId} className="overflow-hidden">
-                  <CardContent className="p-3">
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="font-semibold text-base">{item.serviceNameAr}</span>
+                <Card key={item.serviceId} className="overflow-hidden border-border/60">
+                  <CardContent className="p-2.5">
+                    <div className="flex items-start justify-between mb-1.5">
+                      <span className="font-semibold text-sm">{item.serviceNameAr}</span>
                       <Button 
                         variant="ghost" 
                         size="icon" 
@@ -1130,24 +1130,24 @@ export default function POS() {
                         <Button 
                           variant="outline" 
                           size="icon" 
-                          className="h-9 w-9"
+                          className="h-8 w-8"
                           onClick={() => updateQuantity(item.serviceId, -1)}
                         >
-                          <Minus className="h-4 w-4" />
+                          <Minus className="h-3.5 w-3.5" />
                         </Button>
-                        <span className="w-10 text-center font-bold text-lg">{item.quantity}</span>
+                        <span className="w-8 text-center font-bold text-base">{item.quantity}</span>
                         <Button 
                           variant="outline" 
                           size="icon" 
-                          className="h-9 w-9"
+                          className="h-8 w-8"
                           onClick={() => updateQuantity(item.serviceId, 1)}
                         >
-                          <Plus className="h-4 w-4" />
+                          <Plus className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                       <div className="text-left">
                         <div className="text-xs text-muted-foreground">{item.price.toFixed(0)} × {item.quantity}</div>
-                        <div className="font-bold text-lg text-primary">{item.total.toFixed(2)} ر.س</div>
+                        <div className="font-bold text-base text-primary">{item.total.toFixed(2)} ر.س</div>
                       </div>
                     </div>
                   </CardContent>
@@ -1155,9 +1155,9 @@ export default function POS() {
               ))}
               
               {cart.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                  <ShoppingCart className="h-16 w-16 mb-4 opacity-30" />
-                  <p className="text-lg">السلة فارغة</p>
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <ShoppingCart className="h-14 w-14 mb-3 opacity-30" />
+                  <p className="text-base">السلة فارغة</p>
                   <p className="text-sm">اضغط على الخدمات لإضافتها</p>
                 </div>
               )}
@@ -1190,43 +1190,43 @@ export default function POS() {
           )}
           
           {/* Cart Summary & Payment */}
-          <div className="border-t bg-muted/30 p-4 space-y-3 shrink-0">
-            <div className="flex justify-between text-base">
+          <div className="border-t border-border/50 bg-muted/30 p-3 space-y-2 shrink-0">
+            <div className="flex justify-between text-sm">
               <span>المجموع الفرعي</span>
               <span className="font-semibold">{subtotal.toFixed(2)} ر.س</span>
             </div>
             
             {discountAmount > 0 && (
-              <div className="flex justify-between text-green-600">
+              <div className="flex justify-between text-green-600 text-sm">
                 <span>الخصم</span>
                 <span className="font-semibold">- {discountAmount.toFixed(2)} ر.س</span>
               </div>
             )}
             
-            <Separator />
+            <Separator className="my-1.5" />
             
             <div className="flex justify-between items-center">
-              <span className="text-xl font-bold">الإجمالي</span>
-              <span className="text-3xl font-bold text-primary">{total.toFixed(2)} ر.س</span>
+              <span className="text-lg font-bold">الإجمالي</span>
+              <span className="text-2xl font-bold text-primary">{total.toFixed(2)} ر.س</span>
             </div>
             
             {/* Loyalty Button */}
             <Button 
               variant="outline" 
-              className="w-full h-12 gap-2 text-base"
+              className="w-full h-10 gap-2 text-sm"
               onClick={() => setShowLoyaltyDialog(true)}
             >
-              <Gift className="h-5 w-5" />
+              <Gift className="h-4 w-4" />
               {loyaltyCustomer ? 'تغيير عميل الولاء' : 'إضافة عميل ولاء'}
             </Button>
             
             {/* Checkout Button */}
             <Button 
-              className="w-full h-16 text-xl gap-3 shadow-lg"
+              className="w-full h-12 text-lg gap-2 shadow-lg"
               disabled={cart.length === 0 || !selectedBranchId || !selectedEmployeeId}
               onClick={handleCheckout}
             >
-              <CreditCard className="h-6 w-6" />
+              <CreditCard className="h-5 w-5" />
               الدفع
             </Button>
           </div>
