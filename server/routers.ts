@@ -84,6 +84,16 @@ const viewerProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+// إجراء للمشرفين - تعديل الأسماء والأسعار فقط (بدون حذف)
+const supervisorEditProcedure = protectedProcedure.use(({ ctx, next }) => {
+  // المشرف والأدمن يمكنهم تعديل الأسماء والأسعار
+  const allowedRoles = ['admin', 'manager', 'supervisor'];
+  if (!allowedRoles.includes(ctx.user.role)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'تعديل الأسماء والأسعار متاح للمشرفين والمسؤول فقط' });
+  }
+  return next({ ctx });
+});
+
 // دالة للتحقق من صلاحية الوصول للفرع
 function checkBranchAccess(userBranchId: number | null, targetBranchId: number): boolean {
   // إذا كان المستخدم غير مرتبط بفرع محدد (كل الفروع)
@@ -1698,7 +1708,8 @@ export const appRouter = router({
         return { success: true, message: 'تم إنشاء الموظف بنجاح' };
       }),
 
-    update: managerProcedure
+    // تحديث موظف (متاح للمشرفين والأدمن)
+    update: supervisorEditProcedure
       .input(z.object({
         id: z.number(),
         code: z.string().min(1),
@@ -9583,8 +9594,8 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           return await db.createPosService(input);
         }),
 
-      // تحديث خدمة
-      update: adminProcedure
+      // تحديث خدمة (متاح للمشرفين والأدمن)
+      update: supervisorEditProcedure
         .input(z.object({
           id: z.number(),
           categoryId: z.number().optional(),
@@ -9737,6 +9748,24 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           const year = input.year || now.getFullYear();
           const month = input.month || (now.getMonth() + 1);
           return await db.getBranchEmployeesWithMonthlyRevenue(input.branchId, year, month);
+        }),
+      
+      // تحديث اسم الموظف (متاح للمشرفين والأدمن)
+      updateName: supervisorEditProcedure
+        .input(z.object({
+          employeeId: z.number(),
+          name: z.string().min(1, 'اسم الموظف مطلوب'),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          await db.updateEmployee(input.employeeId, { name: input.name });
+          await db.createActivityLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name || 'مستخدم',
+            action: 'update',
+            entityType: 'employee',
+            details: `تم تحديث اسم الموظف رقم ${input.employeeId} إلى: ${input.name}`,
+          });
+          return { success: true, message: 'تم تحديث اسم الموظف بنجاح' };
         }),
     }),
 
