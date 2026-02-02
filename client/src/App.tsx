@@ -79,6 +79,9 @@ import POSDailyReport from "./pages/POSDailyReport";
 import POSSettings from "./pages/POSSettings";
 import POSLogin from "./pages/POSLogin";
 import POSServicesManagement from "./pages/POSServicesManagement";
+import POSCategoriesManagement from "./pages/POSCategoriesManagement";
+import POSServicesOnly from "./pages/POSServicesOnly";
+import POSEmployeeStats from "./pages/POSEmployeeStats";
 import ServicePerformanceReport from "./pages/ServicePerformanceReport";
 import EmployeePerformanceReport from "./pages/EmployeePerformanceReport";
 
@@ -428,6 +431,9 @@ function Router() {
           <POSServicesManagement />
         </DashboardLayout>
       </Route>
+      <Route path="/pos/categories-management" component={POSCategoriesManagement} />
+      <Route path="/pos/services-only" component={POSServicesOnly} />
+      <Route path="/pos/employee-stats" component={POSEmployeeStats} />
       <Route path="/pos/service-performance" component={ServicePerformanceReport} />
       <Route path="/pos/employee-performance" component={EmployeePerformanceReport} />
       <Route path="/pos" component={POS} />

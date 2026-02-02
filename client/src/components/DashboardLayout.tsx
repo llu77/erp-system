@@ -217,12 +217,16 @@ const menuStructure: MenuItem[] = [
     roles: ["admin", "manager"],
   },
   
-  // إدارة خدمات الكاشير (للأدمن فقط)
+  // إدارة الكاشير (للأدمن فقط)
   {
     icon: Store,
-    label: "إدارة خدمات الكاشير",
-    path: "/pos/services-management",
+    label: "إدارة الكاشير",
     roles: ["admin"],
+    children: [
+      { icon: Boxes, label: "إدارة الأقسام", path: "/pos/categories-management", roles: ["admin"] },
+      { icon: Package, label: "إدارة الخدمات", path: "/pos/services-only", roles: ["admin"] },
+      { icon: Users, label: "إحصائيات الموظفين", path: "/pos/employee-stats", roles: ["admin"] },
+    ]
   },
   // تقرير أداء الخدمات
   {
