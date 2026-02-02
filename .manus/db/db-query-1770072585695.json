@@ -1,0 +1,22 @@
+{
+  "query": "SELECT \n  'posInvoices' as tbl, \n  COUNT(*) as total,\n  COUNT(DISTINCT branchId) as branches,\n  COUNT(DISTINCT employeeId) as employees\nFROM posInvoices\nUNION ALL\nSELECT \n  'posInvoiceItems',\n  COUNT(*),\n  0,\n  0\nFROM posInvoiceItems;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT \n  'posInvoices' as tbl, \n  COUNT(*) as total,\n  COUNT(DISTINCT branchId) as branches,\n  COUNT(DISTINCT employeeId) as employees\nFROM posInvoices\nUNION ALL\nSELECT \n  'posInvoiceItems',\n  COUNT(*),\n  0,\n  0\nFROM posInvoiceItems;",
+  "rows": [
+    {
+      "tbl": "posInvoices",
+      "total": "47",
+      "branches": "3",
+      "employees": "7"
+    },
+    {
+      "tbl": "posInvoiceItems",
+      "total": "21",
+      "branches": "0",
+      "employees": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "tbl\ttotal\tbranches\temployees\nposInvoices\t47\t3\t7\nposInvoiceItems\t21\t0\t0\n",
+  "stderr": "",
+  "execution_time_ms": 1503
+}

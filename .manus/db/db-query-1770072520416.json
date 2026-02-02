@@ -1,0 +1,34 @@
+{
+  "query": "SELECT TABLE_NAME, TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_NAME LIKE 'pos%' AND TABLE_SCHEMA = DATABASE();",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT TABLE_NAME, TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_NAME LIKE 'pos%' AND TABLE_SCHEMA = DATABASE();",
+  "rows": [
+    {
+      "TABLE_NAME": "posCategories",
+      "TABLE_ROWS": "7"
+    },
+    {
+      "TABLE_NAME": "posServices",
+      "TABLE_ROWS": "49"
+    },
+    {
+      "TABLE_NAME": "posInvoices",
+      "TABLE_ROWS": "47"
+    },
+    {
+      "TABLE_NAME": "posInvoiceItems",
+      "TABLE_ROWS": "21"
+    },
+    {
+      "TABLE_NAME": "posDailySummary",
+      "TABLE_ROWS": "2"
+    },
+    {
+      "TABLE_NAME": "posEmployeePerformance",
+      "TABLE_ROWS": "6"
+    }
+  ],
+  "messages": [],
+  "stdout": "TABLE_NAME\tTABLE_ROWS\nposCategories\t7\nposServices\t49\nposInvoices\t47\nposInvoiceItems\t21\nposDailySummary\t2\nposEmployeePerformance\t6\n",
+  "stderr": "",
+  "execution_time_ms": 1582
+}
