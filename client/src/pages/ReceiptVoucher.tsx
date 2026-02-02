@@ -281,13 +281,23 @@ export default function ReceiptVoucher() {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">سندات القبض</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">إدارة سندات تسليم المبالغ النقدية</p>
           </div>
-          <Button
-            onClick={() => setShowCreateDialog(true)}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            سند قبض جديد
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => window.location.href = '/vouchers-report'}
+              className="border-orange-500 text-orange-500 hover:bg-orange-500/10"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              تقرير السندات
+            </Button>
+            <Button
+              onClick={() => setShowCreateDialog(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              سند قبض جديد
+            </Button>
+          </div>
         </div>
 
         {/* جدول السندات */}
@@ -349,6 +359,39 @@ export default function ReceiptVoucher() {
                               title="معاينة"
                             >
                               <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-blue-500 hover:text-blue-600"
+                              onClick={async () => {
+                                try {
+                                  toast.loading('جاري تحميل السند...', { id: `pdf-${voucher.voucherId}` });
+                                  const result = await generatePDFMutation.mutateAsync({ voucherId: voucher.voucherId });
+                                  const byteCharacters = atob(result.pdf);
+                                  const byteNumbers = new Array(byteCharacters.length);
+                                  for (let i = 0; i < byteCharacters.length; i++) {
+                                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                  }
+                                  const byteArray = new Uint8Array(byteNumbers);
+                                  const blob = new Blob([byteArray], { type: 'application/pdf' });
+                                  const url = URL.createObjectURL(blob);
+                                  const link = document.createElement('a');
+                                  link.href = url;
+                                  link.download = result.filename;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  URL.revokeObjectURL(url);
+                                  toast.success('تم تحميل السند بنجاح', { id: `pdf-${voucher.voucherId}` });
+                                } catch (error) {
+                                  toast.error('فشل في تحميل السند', { id: `pdf-${voucher.voucherId}` });
+                                }
+                              }}
+                              disabled={generatePDFMutation.isPending}
+                              title="تحميل PDF"
+                            >
+                              <Download className="w-4 h-4" />
                             </Button>
                             {user?.role === 'admin' && voucher.status === 'draft' && (
                               <Button
