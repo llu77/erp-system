@@ -72,6 +72,9 @@ const LOGO_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/
 export default function POSServicesOnly() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  // المشرف يمكنه تعديل الخدمات (الاسم والسعر) لكن لا يمكنه الحذف
+  const isSupervisor = user?.role === 'supervisor' || user?.role === 'manager';
+  const canEdit = isAdmin || isSupervisor;
   
   // State
   const [searchQuery, setSearchQuery] = useState('');
@@ -240,7 +243,7 @@ export default function POSServicesOnly() {
             </div>
           </div>
           
-          {isAdmin && (
+          {canEdit && (
             <Button
               onClick={() => {
                 resetServiceForm();
@@ -358,13 +361,13 @@ export default function POSServicesOnly() {
                     <TableHead className="text-right font-bold">السعر</TableHead>
                     <TableHead className="text-right font-bold">المدة</TableHead>
                     <TableHead className="text-center font-bold">الحالة</TableHead>
-                    {isAdmin && <TableHead className="text-center font-bold">الإجراءات</TableHead>}
+                    {canEdit && <TableHead className="text-center font-bold">الإجراءات</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredServices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={canEdit ? 6 : 5} className="text-center py-12 text-muted-foreground">
                         <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
                         <p>لا توجد خدمات مطابقة للبحث</p>
                       </TableCell>
@@ -410,7 +413,7 @@ export default function POSServicesOnly() {
                             </Badge>
                           )}
                         </TableCell>
-                        {isAdmin && (
+                        {canEdit && (
                           <TableCell>
                             <div className="flex items-center justify-center gap-2">
                               <Button
@@ -418,23 +421,27 @@ export default function POSServicesOnly() {
                                 size="icon"
                                 className="h-9 w-9 hover:bg-primary/10"
                                 onClick={() => openEditService(service)}
+                                title="تعديل الخدمة"
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => {
-                                  setDeleteTarget({
-                                    id: service.id,
-                                    name: service.nameAr,
-                                  });
-                                  setShowDeleteDialog(true);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              {isAdmin && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => {
+                                    setDeleteTarget({
+                                      id: service.id,
+                                      name: service.nameAr,
+                                    });
+                                    setShowDeleteDialog(true);
+                                  }}
+                                  title="حذف الخدمة"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         )}

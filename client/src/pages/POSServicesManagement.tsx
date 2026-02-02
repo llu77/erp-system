@@ -76,6 +76,9 @@ interface Service {
 export default function POSServicesManagement() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  // المشرف يمكنه تعديل الخدمات (الاسم والسعر) لكن لا يمكنه الحذف
+  const isSupervisor = user?.role === 'supervisor' || user?.role === 'manager';
+  const canEdit = isAdmin || isSupervisor;
   
   // State
   const [searchQuery, setSearchQuery] = useState('');
@@ -338,18 +341,20 @@ export default function POSServicesManagement() {
           <p className="text-muted-foreground mt-1">إدارة الأقسام والخدمات المتاحة في نظام نقاط البيع</p>
         </div>
         
-        {isAdmin && (
+        {canEdit && (
           <div className="flex gap-2">
-            <Button
-              onClick={() => {
-                resetCategoryForm();
-                setShowCategoryDialog(true);
-              }}
-              variant="outline"
-            >
-              <FolderPlus className="h-4 w-4 ml-2" />
-              قسم جديد
-            </Button>
+            {isAdmin && (
+              <Button
+                onClick={() => {
+                  resetCategoryForm();
+                  setShowCategoryDialog(true);
+                }}
+                variant="outline"
+              >
+                <FolderPlus className="h-4 w-4 ml-2" />
+                قسم جديد
+              </Button>
+            )}
             <Button
               onClick={() => {
                 resetServiceForm();
@@ -484,13 +489,13 @@ export default function POSServicesManagement() {
                       <TableHead className="text-right">السعر</TableHead>
                       <TableHead className="text-right">المدة</TableHead>
                       <TableHead className="text-center">الحالة</TableHead>
-                      {isAdmin && <TableHead className="text-center">الإجراءات</TableHead>}
+                      {canEdit && <TableHead className="text-center">الإجراءات</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredServices.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={canEdit ? 6 : 5} className="text-center py-8 text-muted-foreground">
                           لا توجد خدمات
                         </TableCell>
                       </TableRow>
@@ -527,31 +532,35 @@ export default function POSServicesManagement() {
                               </Badge>
                             )}
                           </TableCell>
-                          {isAdmin && (
+                          {canEdit && (
                             <TableCell>
                               <div className="flex items-center justify-center gap-2">
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => openEditService(service)}
+                                  title="تعديل الخدمة"
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => {
-                                    setDeleteTarget({
-                                      type: 'service',
-                                      id: service.id,
-                                      name: service.nameAr,
-                                    });
-                                    setShowDeleteDialog(true);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                {isAdmin && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={() => {
+                                      setDeleteTarget({
+                                        type: 'service',
+                                        id: service.id,
+                                        name: service.nameAr,
+                                      });
+                                      setShowDeleteDialog(true);
+                                    }}
+                                    title="حذف الخدمة"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
                               </div>
                             </TableCell>
                           )}
