@@ -96,11 +96,16 @@ export default function POSDailyReport() {
   }, [todayInvoices]);
   
   const currentDate = new Date();
-  const formattedDate = currentDate.toLocaleDateString('ar-SA', {
+  const formattedDate = currentDate.toLocaleDateString('ar-EG', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+  });
+  const formattedDateShort = currentDate.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
   });
   
   const handlePrint = () => {
@@ -190,7 +195,7 @@ export default function POSDailyReport() {
             ${todayInvoices.map(inv => `
               <tr>
                 <td>${inv.invoiceNumber}</td>
-                <td>${new Date(inv.createdAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: false })}</td>
+                <td>${new Date(inv.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}</td>
                 <td>${inv.employeeName}</td>
                 <td>${inv.paymentMethod === 'cash' ? 'كاش' : inv.paymentMethod === 'card' ? 'شبكة' : inv.paymentMethod === 'split' ? 'تقسيم' : 'ولاء'}</td>
                 <td>${Number(inv.total).toFixed(2)} ر.س</td>
@@ -443,7 +448,7 @@ export default function POSDailyReport() {
                             </div>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Clock className="h-4 w-4" />
-                              {new Date(invoice.createdAt).toLocaleTimeString('ar-SA', { 
+                              {new Date(invoice.createdAt).toLocaleTimeString('en-GB', { 
                                 hour: '2-digit', 
                                 minute: '2-digit',
                                 hour12: false 

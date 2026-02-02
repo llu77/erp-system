@@ -338,6 +338,9 @@ export const dailyRevenues = mysqlTable("dailyRevenues", {
   balanceImages: json("balanceImages").$type<Array<{ url: string; key: string; uploadedAt: string }>>(), // صور الموازنة (متعددة)
   imageVerificationStatus: mysqlEnum("imageVerificationStatus", ["pending", "verified", "needs_reupload", "unclear"]).default("pending"), // حالة التحقق من الصورة
   imageVerificationNote: text("imageVerificationNote"), // ملاحظة التحقق
+  posConfirmed: boolean("posConfirmed").default(false), // تأكيد من الكاشير
+  posConfirmedAt: timestamp("posConfirmedAt"), // تاريخ التأكيد
+  posConfirmedBy: varchar("posConfirmedBy", { length: 100 }), // اسم المؤكد
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

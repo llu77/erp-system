@@ -31,7 +31,8 @@ import {
   Image,
   X,
   Eye,
-  ImageIcon
+  ImageIcon,
+  Clock
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -1152,6 +1153,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                     <TableHead className="text-right">ولاء</TableHead>
                     <TableHead className="text-right">الإجمالي</TableHead>
                     <TableHead className="text-right">الموازنة</TableHead>
+                    <TableHead className="text-right">الكاشير</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
                     {userRole === 'admin' && <TableHead className="text-right">إجراءات</TableHead>}
                   </TableRow>
@@ -1252,6 +1254,19 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                             images={revenue.balanceImages || []}
                             date={revenue.date}
                           />
+                        </TableCell>
+                        <TableCell>
+                          {(revenue as any).posConfirmed ? (
+                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                              <CheckCircle className="h-3 w-3 ml-1" />
+                              مؤكد
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-gray-500/10 text-gray-500 border-gray-500/20">
+                              <Clock className="h-3 w-3 ml-1" />
+                              بانتظار
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell>
                           {revenue.isMatched ? (

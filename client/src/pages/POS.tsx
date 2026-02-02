@@ -265,127 +265,301 @@ export default function POS() {
     const branchName = branches.find(b => b.id === selectedBranchId)?.nameAr || 'غير محدد';
     const employeeName = employees.find(e => e.id === selectedEmployeeId)?.name || 'غير محدد';
     
+    // تنسيق التاريخ بالميلادي
+    const dateStr = currentTime.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+    
+    // تصميم فاتورة حرارية متوافقة مع طابعات 80mm (أبيض وأسود)
     const receiptHTML = `
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>فاتورة - ${lastInvoice.invoiceNumber}</title>
         <style>
-          @page { size: 80mm auto; margin: 0; }
-          body {
-            font-family: 'Arial', sans-serif;
-            width: 80mm;
-            margin: 0 auto;
-            padding: 5mm;
-            font-size: 12px;
-            direction: rtl;
+          /* إعدادات الطباعة الحرارية 80mm */
+          @page {
+            size: 80mm auto;
+            margin: 0;
           }
-          .header { text-align: center; margin-bottom: 10px; }
-          .logo { width: 50px; height: 50px; margin: 0 auto 10px; }
-          .header h1 { font-size: 18px; margin: 0; }
-          .header p { margin: 5px 0; color: #666; }
-          .divider { border-top: 1px dashed #000; margin: 10px 0; }
-          .info-row { display: flex; justify-content: space-between; margin: 5px 0; }
-          .items { margin: 10px 0; }
-          .item { display: flex; justify-content: space-between; margin: 5px 0; }
-          .item-name { flex: 1; }
-          .item-qty { width: 30px; text-align: center; }
-          .item-price { width: 60px; text-align: left; }
-          .total-section { margin-top: 10px; }
-          .total-row { display: flex; justify-content: space-between; margin: 5px 0; font-weight: bold; }
-          .grand-total { font-size: 16px; border-top: 2px solid #000; padding-top: 10px; }
-          .footer { text-align: center; margin-top: 15px; font-size: 10px; color: #666; }
-          .payment-badge { 
-            display: inline-block; 
-            padding: 3px 10px; 
-            background: #f0f0f0; 
-            border-radius: 3px; 
-            margin-top: 5px;
+          @media print {
+            html, body {
+              width: 80mm;
+              margin: 0;
+              padding: 0;
+            }
+            .no-print { display: none !important; }
+          }
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          body {
+            font-family: 'Courier New', 'Lucida Console', monospace;
+            width: 80mm;
+            max-width: 80mm;
+            margin: 0 auto;
+            padding: 3mm;
+            font-size: 11px;
+            line-height: 1.3;
+            direction: rtl;
+            background: #fff;
+            color: #000;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .receipt {
+            width: 100%;
+          }
+          .header {
+            text-align: center;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed #000;
+            margin-bottom: 8px;
+          }
+          .header h1 {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            letter-spacing: 1px;
+          }
+          .header .branch {
+            font-size: 12px;
+            margin-bottom: 2px;
+          }
+          .header .invoice-num {
+            font-size: 10px;
+            font-weight: bold;
+            background: #000;
+            color: #fff;
+            padding: 2px 8px;
+            display: inline-block;
+            margin-top: 4px;
+          }
+          .info-section {
+            padding: 6px 0;
+            border-bottom: 1px dashed #000;
+          }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+            font-size: 10px;
+          }
+          .info-row span:first-child {
+            font-weight: bold;
+          }
+          .items-section {
+            padding: 6px 0;
+            border-bottom: 1px dashed #000;
+          }
+          .items-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 10px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #000;
+            margin-bottom: 4px;
+          }
+          .item {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            font-size: 10px;
+          }
+          .item-name {
+            flex: 1;
+            text-align: right;
+          }
+          .item-qty {
+            width: 25px;
+            text-align: center;
+          }
+          .item-price {
+            width: 50px;
+            text-align: left;
+            font-weight: bold;
+          }
+          .totals-section {
+            padding: 8px 0;
+          }
+          .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            font-size: 11px;
+          }
+          .total-row.discount {
+            color: #000;
+          }
+          .total-row.grand-total {
+            font-size: 14px;
+            font-weight: bold;
+            border-top: 2px solid #000;
+            padding-top: 6px;
+            margin-top: 6px;
+          }
+          .payment-method {
+            text-align: center;
+            margin: 8px 0;
+            padding: 4px;
+            border: 1px solid #000;
+            font-size: 11px;
+            font-weight: bold;
+          }
+          .footer {
+            text-align: center;
+            padding-top: 8px;
+            border-top: 1px dashed #000;
+            font-size: 9px;
+          }
+          .footer p {
+            margin: 2px 0;
+          }
+          .footer .thanks {
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 4px;
+          }
+          /* أزرار التحكم - تظهر فقط على الشاشة */
+          .print-controls {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+          }
+          .print-btn {
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+          }
+          .print-btn.primary {
+            background: #000;
+            color: #fff;
+          }
+          .print-btn.secondary {
+            background: #f0f0f0;
+            color: #000;
+            border: 1px solid #000;
           }
         </style>
       </head>
       <body>
-        <div class="header">
-          <img src="/logo.png" alt="Logo" class="logo" onerror="this.style.display='none'" />
-          <h1>Symbol AI</h1>
-          <p>${branchName}</p>
-          <p>رقم الفاتورة: ${lastInvoice.invoiceNumber}</p>
-        </div>
-        
-        <div class="divider"></div>
-        
-        <div class="info-row">
-          <span>التاريخ:</span>
-          <span>${currentTime.toLocaleDateString('ar-SA')}</span>
-        </div>
-        <div class="info-row">
-          <span>الوقت:</span>
-          <span>${currentTime.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-        </div>
-        <div class="info-row">
-          <span>الموظف:</span>
-          <span>${employeeName}</span>
-        </div>
-        
-        <div class="divider"></div>
-        
-        <div class="items">
-          ${cart.map(item => `
-            <div class="item">
-              <span class="item-name">${item.serviceNameAr}</span>
-              <span class="item-qty">×${item.quantity}</span>
-              <span class="item-price">${item.total.toFixed(2)}</span>
+        <div class="receipt">
+          <!-- Header -->
+          <div class="header">
+            <h1>Symbol AI</h1>
+            <div class="branch">${branchName}</div>
+            <div class="invoice-num">${lastInvoice.invoiceNumber}</div>
+          </div>
+          
+          <!-- Info Section -->
+          <div class="info-section">
+            <div class="info-row">
+              <span>التاريخ:</span>
+              <span>${dateStr}</span>
             </div>
-          `).join('')}
-        </div>
-        
-        <div class="divider"></div>
-        
-        <div class="total-section">
-          <div class="total-row">
-            <span>المجموع الفرعي:</span>
-            <span>${subtotal.toFixed(2)} ر.س</span>
-          </div>
-          ${discountAmount > 0 ? `
-            <div class="total-row" style="color: green;">
-              <span>الخصم:</span>
-              <span>- ${discountAmount.toFixed(2)} ر.س</span>
+            <div class="info-row">
+              <span>الوقت:</span>
+              <span>${timeStr}</span>
             </div>
-          ` : ''}
-          <div class="total-row grand-total">
-            <span>الإجمالي:</span>
-            <span>${lastInvoice.total.toFixed(2)} ر.س</span>
+            <div class="info-row">
+              <span>الموظف:</span>
+              <span>${employeeName}</span>
+            </div>
           </div>
-          <div style="text-align: center; margin-top: 10px;">
-            <span class="payment-badge">
-              ${paymentMethod === 'cash' ? 'كاش' : paymentMethod === 'card' ? 'شبكة' : paymentMethod === 'split' ? 'تقسيم' : 'ولاء'}
-            </span>
+          
+          <!-- Items Section -->
+          <div class="items-section">
+            <div class="items-header">
+              <span style="flex:1;text-align:right;">البيان</span>
+              <span style="width:25px;text-align:center;">×</span>
+              <span style="width:50px;text-align:left;">السعر</span>
+            </div>
+            ${cart.map(item => `
+              <div class="item">
+                <span class="item-name">${item.serviceNameAr}</span>
+                <span class="item-qty">${item.quantity}</span>
+                <span class="item-price">${item.total.toFixed(0)}</span>
+              </div>
+            `).join('')}
+          </div>
+          
+          <!-- Totals Section -->
+          <div class="totals-section">
+            <div class="total-row">
+              <span>المجموع الفرعي:</span>
+              <span>${subtotal.toFixed(2)} ر.س</span>
+            </div>
+            ${discountAmount > 0 ? `
+              <div class="total-row discount">
+                <span>الخصم:</span>
+                <span>- ${discountAmount.toFixed(2)} ر.س</span>
+              </div>
+            ` : ''}
+            <div class="total-row grand-total">
+              <span>الإجمالي:</span>
+              <span>${lastInvoice.total.toFixed(2)} ر.س</span>
+            </div>
+          </div>
+          
+          <!-- Payment Method -->
+          <div class="payment-method">
+            طريقة الدفع: ${paymentMethod === 'cash' ? 'كاش' : paymentMethod === 'card' ? 'شبكة/Card' : paymentMethod === 'split' ? 'تقسيم' : 'ولاء'}
+          </div>
+          
+          <!-- Footer -->
+          <div class="footer">
+            <p class="thanks">شكراً لزيارتكم</p>
+            <p>نتطلع لخدمتكم مرة أخرى</p>
+            <p style="margin-top:6px;">Symbol AI - نظام نقاط البيع</p>
           </div>
         </div>
         
-        <div class="footer">
-          <p>شكراً لزيارتكم</p>
-          <p>نتطلع لخدمتكم مرة أخرى</p>
+        <!-- Print Controls (hidden when printing) -->
+        <div class="print-controls no-print">
+          <button class="print-btn primary" onclick="window.print();">طباعة</button>
+          <button class="print-btn secondary" onclick="window.close();">إغلاق</button>
         </div>
         
         <script>
+          // الطباعة التلقائية بعد تحميل الصفحة
           window.onload = function() {
-            window.print();
-            setTimeout(function() { window.close(); }, 500);
+            // انتظار قليل لضمان تحميل الخطوط
+            setTimeout(function() {
+              window.print();
+            }, 300);
+          };
+          
+          // إغلاق النافذة بعد الطباعة
+          window.onafterprint = function() {
+            setTimeout(function() {
+              window.close();
+            }, 100);
           };
         </script>
       </body>
       </html>
     `;
     
-    const printWindow = window.open('', '_blank', 'width=350,height=600');
+    // فتح نافذة الطباعة
+    const printWindow = window.open('', '_blank', 'width=320,height=600,scrollbars=yes');
     if (printWindow) {
       printWindow.document.write(receiptHTML);
       printWindow.document.close();
+      toast.success('تم فتح نافذة الطباعة');
+    } else {
+      toast.error('فشل فتح نافذة الطباعة - تأكد من السماح بالنوافذ المنبثقة');
     }
-    
-    toast.success('تم إرسال الفاتورة للطباعة');
   };
   
   // Current time
@@ -447,10 +621,10 @@ export default function POS() {
           <Clock className="h-8 w-8 text-primary" />
           <div className="text-right">
             <div className="text-3xl font-bold font-mono tracking-wider">
-              {currentTime.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+              {currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
             </div>
             <div className="text-sm text-muted-foreground">
-              {currentTime.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              {currentTime.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </div>
           </div>
         </div>
