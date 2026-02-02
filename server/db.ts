@@ -38,6 +38,10 @@ import {
   loyaltyVisitDeletionRequests,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { createLogger } from './utils/logger';
+
+// إنشاء logger لنظام الكاشير
+const posLogger = createLogger('POS');
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -11425,23 +11429,38 @@ export async function createPosInvoice(data: {
   createdBy: number;
   createdByName: string;
 }) {
+  const startTime = Date.now();
   const db = await getDb();
-  if (!db) throw new Error('Database not available');
-  
-  // جلب بيانات الفرع
-  const branchData = await db.select().from(branches).where(eq(branches.id, data.branchId)).limit(1);
-  const branch = branchData[0];
-  
-  // جلب بيانات الموظف
-  const employeeData = await db.select().from(employees).where(eq(employees.id, data.employeeId)).limit(1);
-  const employee = employeeData[0];
-  
-  // جلب بيانات عميل الولاء إذا وجد
-  let loyaltyCustomer = null;
-  if (data.loyaltyCustomerId) {
-    const customerData = await db.select().from(loyaltyCustomers).where(eq(loyaltyCustomers.id, data.loyaltyCustomerId)).limit(1);
-    loyaltyCustomer = customerData[0];
+  if (!db) {
+    posLogger.error('فشل إنشاء فاتورة: قاعدة البيانات غير متاحة', new Error('Database not available'), {
+      branchId: data.branchId,
+      employeeId: data.employeeId,
+      action: 'createPosInvoice'
+    });
+    throw new Error('قاعدة البيانات غير متاحة');
   }
+  
+  try {
+    // جلب بيانات الفرع
+    const branchData = await db.select().from(branches).where(eq(branches.id, data.branchId)).limit(1);
+    const branch = branchData[0];
+    if (!branch) {
+      posLogger.warn('محاولة إنشاء فاتورة لفرع غير موجود', { branchId: data.branchId });
+    }
+    
+    // جلب بيانات الموظف
+    const employeeData = await db.select().from(employees).where(eq(employees.id, data.employeeId)).limit(1);
+    const employee = employeeData[0];
+    if (!employee) {
+      posLogger.warn('محاولة إنشاء فاتورة لموظف غير موجود', { employeeId: data.employeeId });
+    }
+    
+    // جلب بيانات عميل الولاء إذا وجد
+    let loyaltyCustomer = null;
+    if (data.loyaltyCustomerId) {
+      const customerData = await db.select().from(loyaltyCustomers).where(eq(loyaltyCustomers.id, data.loyaltyCustomerId)).limit(1);
+      loyaltyCustomer = customerData[0];
+    }
   
   // جلب بيانات الخدمات
   const serviceIds = data.items.map(item => item.serviceId);
@@ -11524,12 +11543,38 @@ export async function createPosInvoice(data: {
   // تحديث أداء الموظف
   await updatePosEmployeePerformance(data.employeeId, data.branchId, invoiceDate);
   
-  return {
-    id: invoiceId,
-    invoiceNumber,
-    total,
-    items: invoiceItems,
-  };
+    // تسجيل نجاح إنشاء الفاتورة
+    const duration = Date.now() - startTime;
+    posLogger.info('تم إنشاء فاتورة بنجاح', {
+      invoiceId,
+      invoiceNumber,
+      branchId: data.branchId,
+      employeeId: data.employeeId,
+      total,
+      itemsCount: invoiceItems.length,
+      paymentMethod: data.paymentMethod,
+      duration,
+      action: 'createPosInvoice'
+    });
+    
+    return {
+      id: invoiceId,
+      invoiceNumber,
+      total,
+      items: invoiceItems,
+    };
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    posLogger.error('فشل إنشاء فاتورة', error, {
+      branchId: data.branchId,
+      employeeId: data.employeeId,
+      itemsCount: data.items.length,
+      paymentMethod: data.paymentMethod,
+      duration,
+      action: 'createPosInvoice'
+    });
+    throw error;
+  }
 }
 
 // دالة لتحديد يوم العمل (بعد منتصف الليل = يوم جديد)
@@ -11624,26 +11669,53 @@ export async function getPosInvoiceDetails(invoiceId: number) {
 
 export async function cancelPosInvoice(invoiceId: number, reason?: string) {
   const db = await getDb();
-  if (!db) throw new Error('Database not available');
+  if (!db) {
+    posLogger.error('فشل إلغاء فاتورة: قاعدة البيانات غير متاحة', new Error('Database not available'), {
+      invoiceId,
+      action: 'cancelPosInvoice'
+    });
+    throw new Error('قاعدة البيانات غير متاحة');
+  }
   
-  const invoice = await db.select()
-    .from(posInvoices)
-    .where(eq(posInvoices.id, invoiceId))
-    .limit(1);
-  
-  if (!invoice[0]) throw new Error('Invoice not found');
-  
-  await db.update(posInvoices)
-    .set({ 
-      status: 'cancelled',
-      notes: reason ? `${invoice[0].notes || ''}\n[ملغاة]: ${reason}` : invoice[0].notes,
-    })
-    .where(eq(posInvoices.id, invoiceId));
-  
-  // تحديث ملخص اليوم
-  await updatePosDailySummary(invoice[0].branchId, new Date(invoice[0].invoiceDate));
-  
-  return { success: true };
+  try {
+    const invoice = await db.select()
+      .from(posInvoices)
+      .where(eq(posInvoices.id, invoiceId))
+      .limit(1);
+    
+    if (!invoice[0]) {
+      posLogger.warn('محاولة إلغاء فاتورة غير موجودة', { invoiceId });
+      throw new Error('الفاتورة غير موجودة');
+    }
+    
+    await db.update(posInvoices)
+      .set({ 
+        status: 'cancelled',
+        notes: reason ? `${invoice[0].notes || ''}\n[ملغاة]: ${reason}` : invoice[0].notes,
+      })
+      .where(eq(posInvoices.id, invoiceId));
+    
+    // تحديث ملخص اليوم
+    await updatePosDailySummary(invoice[0].branchId, new Date(invoice[0].invoiceDate));
+    
+    posLogger.info('تم إلغاء فاتورة بنجاح', {
+      invoiceId,
+      invoiceNumber: invoice[0].invoiceNumber,
+      branchId: invoice[0].branchId,
+      total: invoice[0].total,
+      reason,
+      action: 'cancelPosInvoice'
+    });
+    
+    return { success: true };
+  } catch (error) {
+    posLogger.error('فشل إلغاء فاتورة', error, {
+      invoiceId,
+      reason,
+      action: 'cancelPosInvoice'
+    });
+    throw error;
+  }
 }
 
 // ==================== تقرير اليوم ====================

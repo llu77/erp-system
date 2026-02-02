@@ -5126,3 +5126,33 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] تحديث checkLoyaltyDiscountByPhone (رسائل مفصلة)
 - [x] تحديث recordLoyaltyDiscountUsage لبدء دورة جديدة
 - [x] جميع الاختبارات ناجحة (1064 اختبار)
+
+
+## فحص عميق لبوابة الكاشير وضمان الثبات ✅
+
+### Phase 1: الفهم العميق ✅
+- [x] تحليل بنية ملفات الكاشير (9 ملفات Frontend, 35 endpoint)
+- [x] تحديد نقاط الفشل المحتملة (2 TRPCError فقط)
+- [x] فحص تدفق البيانات والمصادقة (localLogin + JWT)
+
+### Phase 2: فحص معالجة الأخطاء ✅
+- [x] فحص try-catch في endpoints (ضعيف - تم التحسين)
+- [x] فحص معالجة أخطاء الشبكة (onError موجود)
+- [x] فحص معالجة أخطاء قاعدة البيانات (تم التحسين)
+- [x] فحص رسائل الخطأ للمستخدم (toast.error)
+
+### Phase 3: فحص التسجيل والمراقبة ✅
+- [x] فحص تسجيل الأحداث المهمة (تم إضافة posLogger)
+- [x] فحص تسجيل الأخطاء (تم التحسين)
+- [x] فحص معلومات التتبع (action, duration, context)
+
+### Phase 4: إصلاح المشاكل ✅
+- [x] إضافة posLogger لنظام الكاشير
+- [x] تحسين createPosInvoice بـ try-catch + logging
+- [x] تحسين cancelPosInvoice بـ try-catch + logging
+
+### Phase 5: اختبارات الثبات ✅
+- [x] إنشاء pos-stability.test.ts (23 اختبار)
+- [x] اختبار التحقق من المدخلات
+- [x] اختبار الحالات الحدية
+- [x] جميع الاختبارات ناجحة (1087 اختبار)
