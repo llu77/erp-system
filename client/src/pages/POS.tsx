@@ -867,42 +867,32 @@ export default function POS() {
             )}
           </div>
           
-          <div className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-xl border border-border/60">
-            {/* صورة الموظف المحدد */}
-            {selectedEmployeeId && employees.find(e => e.id === selectedEmployeeId)?.photoUrl ? (
-              <img 
-                src={employees.find(e => e.id === selectedEmployeeId)?.photoUrl || ''}
-                alt={employees.find(e => e.id === selectedEmployeeId)?.name || ''}
-                className="w-10 h-10 rounded-full object-cover border-2 border-primary/30 shadow-sm"
-              />
-            ) : (
-              <User className="h-5 w-5 text-primary" />
-            )}
-            <Select 
-              value={selectedEmployeeId?.toString() || ''} 
-              onValueChange={(v) => setSelectedEmployeeId(Number(v))}
-              disabled={!selectedBranchId}
-            >
-              <SelectTrigger className="w-[160px] border-0 bg-transparent h-10 text-base">
-                <SelectValue placeholder="اختر الموظف" />
-              </SelectTrigger>
-              <SelectContent>
-                {employees.map(emp => (
-                  <SelectItem key={emp.id} value={emp.id.toString()} className="text-base">
-                    <div className="flex items-center gap-2">
-                      {emp.photoUrl ? (
-                        <img src={emp.photoUrl} alt={emp.name} className="w-6 h-6 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                          <User className="h-3 w-3" />
-                        </div>
-                      )}
-                      {emp.name}
+          {/* اختيار الموظف - قائمة منزلقة أفقية */}
+          <div className="flex items-center gap-1 bg-card/80 px-2 py-1 rounded-xl border border-border/60 max-w-[300px] overflow-hidden">
+            <User className="h-4 w-4 text-primary flex-shrink-0" />
+            <div className="flex gap-1 overflow-x-auto scrollbar-none">
+              {employees.map(emp => (
+                <button
+                  key={emp.id}
+                  onClick={() => setSelectedEmployeeId(emp.id)}
+                  disabled={!selectedBranchId}
+                  className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg transition-all duration-150 text-xs ${
+                    selectedEmployeeId === emp.id
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-muted/50 hover:bg-muted text-foreground'
+                  } ${!selectedBranchId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {emp.photoUrl ? (
+                    <img src={emp.photoUrl} alt={emp.name} className="w-5 h-5 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center">
+                      <User className="h-2.5 w-2.5" />
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  )}
+                  <span className="whitespace-nowrap max-w-[60px] truncate">{emp.name.split(' ')[0]}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         
@@ -930,115 +920,109 @@ export default function POS() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Categories & Services */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Categories - Horizontal Scrollable */}
-          <div className="h-[88px] bg-card/80 border-b border-border/50 px-4 py-2.5 shrink-0">
+          {/* Categories - Compact Horizontal Scrollable */}
+          <div className="h-[56px] bg-card/80 border-b border-border/50 px-3 py-1.5 shrink-0">
             <ScrollArea className="h-full">
-              <div className="flex gap-3 h-full">
+              <div className="flex gap-2 h-full">
                 <button
                   onClick={() => setSelectedCategoryId(null)}
-                  className={`h-full px-5 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all duration-200 min-w-[110px] border ${
+                  className={`h-full px-3 rounded-lg flex items-center gap-1.5 transition-all duration-150 min-w-[70px] border text-xs ${
                     selectedCategoryId === null 
-                      ? 'bg-primary text-primary-foreground shadow-lg scale-[1.02] border-primary' 
+                      ? 'bg-primary text-primary-foreground shadow-md border-primary' 
                       : 'bg-muted/60 hover:bg-muted border-border/50 hover:border-border'
                   }`}
                 >
-                  <Store className="h-8 w-8" />
-                  <span className="text-sm font-semibold">الكل</span>
+                  <Store className="h-4 w-4" />
+                  <span className="font-semibold">الكل</span>
                 </button>
                 {categories.map(cat => (
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategoryId(cat.id)}
-                    className={`h-full px-5 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all duration-200 min-w-[110px] border ${
+                    className={`h-full px-3 rounded-lg flex items-center gap-1.5 transition-all duration-150 min-w-[70px] border text-xs ${
                       selectedCategoryId === cat.id 
-                        ? 'bg-primary text-primary-foreground shadow-lg scale-[1.02] border-primary' 
+                        ? 'bg-primary text-primary-foreground shadow-md border-primary' 
                         : 'bg-muted/60 hover:bg-muted border-border/50 hover:border-border'
                     }`}
                   >
                     {getCategoryIcon(cat.nameAr)}
-                    <span className="text-sm font-semibold">{cat.nameAr}</span>
+                    <span className="font-semibold">{cat.nameAr}</span>
                   </button>
                 ))}
               </div>
             </ScrollArea>
           </div>
           
-          {/* Services Grid - Improved Sliding Design */}
-          <ScrollArea className="flex-1">
-            <div className="p-4">
-              {/* Services Count Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Package className="h-5 w-5 text-primary" />
-                  <span className="font-semibold text-sm">الخدمات المتاحة</span>
-                  <Badge variant="secondary" className="text-xs">{filteredServices.length}</Badge>
-                </div>
-                {selectedCategoryId && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setSelectedCategoryId(null)}
-                    className="text-xs h-7"
-                  >
-                    عرض الكل
-                  </Button>
-                )}
+          {/* Services - Compact Horizontal Sliding Design */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Services Header */}
+            <div className="flex items-center justify-between px-4 py-2 bg-card/50 border-b border-border/30">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-xs">الخدمات</span>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{filteredServices.length}</Badge>
               </div>
-              
-              {/* Services Grid with Better Sizing */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3">
-                {filteredServices.map(service => (
-                  <button
-                    key={service.id}
-                    onClick={() => addToCart(service)}
-                    className="group bg-card hover:bg-primary/5 border border-border/60 hover:border-primary rounded-xl p-4 transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-95 min-h-[130px] flex flex-col items-center justify-center text-center relative overflow-hidden"
-                  >
-                    {/* Category Badge */}
-                    <div className="absolute top-2 right-2">
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/80">
-                        {service.categoryName || 'عام'}
-                      </Badge>
-                    </div>
-                    
-                    {/* Service Icon */}
-                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-2 group-hover:bg-primary/20 transition-colors border border-primary/20">
-                      {getCategoryIcon(service.categoryName || '')}
-                    </div>
-                    
-                    {/* Service Name */}
-                    <div className="font-bold text-sm mb-1 line-clamp-2 leading-tight">{service.nameAr}</div>
-                    
-                    {/* Price */}
-                    <div className="text-lg font-bold text-primary mt-auto">
-                      {Number(service.price).toFixed(0)} <span className="text-xs">ر.س</span>
-                    </div>
-                    
-                    {/* Hover Add Indicator */}
-                    <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-lg transform scale-0 group-hover:scale-100 transition-transform">
-                        <Plus className="h-5 w-5 text-primary-foreground" />
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              
-              {/* Empty State */}
-              {filteredServices.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-[350px] text-muted-foreground">
-                  <Store className="h-16 w-16 mb-4 opacity-50" />
-                  <p className="text-xl font-semibold mb-2">لا توجد خدمات</p>
-                  <p className="text-sm mb-4">لا توجد خدمات في هذا القسم</p>
-                  <Link href="/pos-settings">
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <Plus className="h-4 w-4" />
-                      إضافة خدمات
-                    </Button>
-                  </Link>
-                </div>
+              {selectedCategoryId && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setSelectedCategoryId(null)}
+                  className="text-[10px] h-6 px-2"
+                >
+                  عرض الكل
+                </Button>
               )}
             </div>
-          </ScrollArea>
+            
+            {/* Services Horizontal Scroll - Compact Cards */}
+            <ScrollArea className="flex-1">
+              <div className="p-3">
+                {/* تقسيم الخدمات إلى صفوف منزلقة */}
+                {Array.from({ length: Math.ceil(filteredServices.length / 8) }).map((_, rowIndex) => (
+                  <div key={rowIndex} className="mb-2">
+                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                      {filteredServices.slice(rowIndex * 8, (rowIndex + 1) * 8).map(service => (
+                        <button
+                          key={service.id}
+                          onClick={() => addToCart(service)}
+                          className="group flex-shrink-0 w-[90px] bg-card hover:bg-primary/10 border border-border/50 hover:border-primary rounded-lg p-2 transition-all duration-150 hover:shadow-md active:scale-95 flex flex-col items-center text-center"
+                        >
+                          {/* Service Icon - Smaller */}
+                          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center mb-1 group-hover:bg-primary/20 transition-colors">
+                            {getCategoryIcon(service.categoryName || '')}
+                          </div>
+                          
+                          {/* Service Name - Compact */}
+                          <div className="font-semibold text-[10px] mb-0.5 line-clamp-2 leading-tight h-[24px] flex items-center">
+                            {service.nameAr}
+                          </div>
+                          
+                          {/* Price - Compact */}
+                          <div className="text-xs font-bold text-primary">
+                            {Number(service.price).toFixed(0)} <span className="text-[8px]">ر.س</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Empty State - Compact */}
+                {filteredServices.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
+                    <Store className="h-10 w-10 mb-2 opacity-50" />
+                    <p className="text-sm font-semibold mb-1">لا توجد خدمات</p>
+                    <Link href="/pos-settings">
+                      <Button variant="outline" size="sm" className="gap-1 h-7 text-xs">
+                        <Plus className="h-3 w-3" />
+                        إضافة
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
           
           {/* Keyboard Shortcuts Bar */}
           <div className="h-12 bg-muted/50 border-t px-4 flex items-center gap-6 text-sm text-muted-foreground shrink-0">
