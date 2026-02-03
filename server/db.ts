@@ -3715,14 +3715,42 @@ export async function getDeletedRecordById(id: number) {
 
 
 // ==================== دوال إضافية للتقارير ====================
-export async function getEmployeeRevenuesByDateRange(startDate: Date, endDate: Date) {
+/**
+ * جلب إيرادات الموظفين حسب الفترة والفرع (محسّن)
+ * @param startDate تاريخ البداية
+ * @param endDate تاريخ النهاية
+ * @param branchId معرف الفرع (اختياري - إذا لم يُحدد يجلب كل الفروع)
+ */
+export async function getEmployeeRevenuesByDateRange(startDate: Date, endDate: Date, branchId?: number) {
   const db = await getDb();
   if (!db) return [];
+  
+  const conditions = [
+    gte(employeeRevenues.createdAt, startDate),
+    lte(employeeRevenues.createdAt, endDate)
+  ];
+  
+  // إذا تم تحديد فرع، نفلتر عبر dailyRevenues
+  if (branchId) {
+    return await db.select({
+      id: employeeRevenues.id,
+      dailyRevenueId: employeeRevenues.dailyRevenueId,
+      employeeId: employeeRevenues.employeeId,
+      cash: employeeRevenues.cash,
+      network: employeeRevenues.network,
+      total: employeeRevenues.total,
+      createdAt: employeeRevenues.createdAt,
+    })
+      .from(employeeRevenues)
+      .innerJoin(dailyRevenues, eq(employeeRevenues.dailyRevenueId, dailyRevenues.id))
+      .where(and(
+        ...conditions,
+        eq(dailyRevenues.branchId, branchId)
+      ));
+  }
+  
   return await db.select().from(employeeRevenues)
-    .where(and(
-      gte(employeeRevenues.createdAt, startDate),
-      lte(employeeRevenues.createdAt, endDate)
-    ));
+    .where(and(...conditions));
 }
 
 export async function getAllWeeklyBonusDetails() {

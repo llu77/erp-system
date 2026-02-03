@@ -9579,8 +9579,8 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           return await db.getPosServicesByCategory(input.categoryId);
         }),
 
-      // إضافة خدمة جديدة
-      create: adminProcedure
+      // إضافة خدمة جديدة (متاح للمشرفين والأدمن)
+      create: supervisorEditProcedure
         .input(z.object({
           categoryId: z.number(),
           name: z.string().min(1),
@@ -9590,8 +9590,17 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           duration: z.number().optional(),
           sortOrder: z.number().optional(),
         }))
-        .mutation(async ({ input }) => {
-          return await db.createPosService(input);
+        .mutation(async ({ input, ctx }) => {
+          const result = await db.createPosService(input);
+          // تسجيل النشاط
+          await db.createActivityLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name || 'مستخدم',
+            action: 'create',
+            entityType: 'pos_service',
+            details: `تم إضافة خدمة جديدة: ${input.nameAr} - السعر: ${input.price} ر.س`,
+          });
+          return result;
         }),
 
       // تحديث خدمة (متاح للمشرفين والأدمن)
@@ -9607,9 +9616,22 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           sortOrder: z.number().optional(),
           isActive: z.boolean().optional(),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
           const { id, ...data } = input;
-          return await db.updatePosService(id, data);
+          const result = await db.updatePosService(id, data);
+          // تسجيل النشاط
+          const changes = Object.entries(data)
+            .filter(([_, v]) => v !== undefined)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(', ');
+          await db.createActivityLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name || 'مستخدم',
+            action: 'update',
+            entityType: 'pos_service',
+            details: `تم تحديث الخدمة رقم ${id}: ${changes}`,
+          });
+          return result;
         }),
 
       // حذف خدمة
