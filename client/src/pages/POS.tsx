@@ -867,32 +867,45 @@ export default function POS() {
             )}
           </div>
           
-          {/* اختيار الموظف - قائمة منزلقة أفقية */}
-          <div className="flex items-center gap-1 bg-card/80 px-2 py-1 rounded-xl border border-border/60 max-w-[300px] overflow-hidden">
-            <User className="h-4 w-4 text-primary flex-shrink-0" />
-            <div className="flex gap-1 overflow-x-auto scrollbar-none">
-              {employees.map(emp => (
-                <button
-                  key={emp.id}
-                  onClick={() => setSelectedEmployeeId(emp.id)}
-                  disabled={!selectedBranchId}
-                  className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg transition-all duration-150 text-xs ${
-                    selectedEmployeeId === emp.id
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'bg-muted/50 hover:bg-muted text-foreground'
-                  } ${!selectedBranchId ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {emp.photoUrl ? (
-                    <img src={emp.photoUrl} alt={emp.name} className="w-5 h-5 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center">
-                      <User className="h-2.5 w-2.5" />
+          {/* اختيار الموظف - قائمة منسدلة بحدود واضحة */}
+          <div className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-xl border-2 border-primary/30 shadow-sm">
+            {/* صورة الموظف المحدد */}
+            {selectedEmployeeId && employees.find(e => e.id === selectedEmployeeId)?.photoUrl ? (
+              <img 
+                src={employees.find(e => e.id === selectedEmployeeId)?.photoUrl || ''}
+                alt={employees.find(e => e.id === selectedEmployeeId)?.name || ''}
+                className="w-9 h-9 rounded-full object-cover border-2 border-primary/40 shadow-sm"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/30">
+                <User className="h-5 w-5 text-primary" />
+              </div>
+            )}
+            <Select 
+              value={selectedEmployeeId?.toString() || ''} 
+              onValueChange={(v) => setSelectedEmployeeId(Number(v))}
+              disabled={!selectedBranchId}
+            >
+              <SelectTrigger className="w-[140px] border-2 border-border/80 bg-background h-9 text-sm font-medium rounded-lg">
+                <SelectValue placeholder="اختر الموظف" />
+              </SelectTrigger>
+              <SelectContent className="border-2 border-border shadow-lg">
+                {employees.map(emp => (
+                  <SelectItem key={emp.id} value={emp.id.toString()} className="text-sm py-2">
+                    <div className="flex items-center gap-2">
+                      {emp.photoUrl ? (
+                        <img src={emp.photoUrl} alt={emp.name} className="w-6 h-6 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                          <User className="h-3 w-3" />
+                        </div>
+                      )}
+                      <span>{emp.name}</span>
                     </div>
-                  )}
-                  <span className="whitespace-nowrap max-w-[60px] truncate">{emp.name.split(' ')[0]}</span>
-                </button>
-              ))}
-            </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         
