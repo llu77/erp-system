@@ -866,47 +866,6 @@ export default function POS() {
               </span>
             )}
           </div>
-          
-          {/* اختيار الموظف - قائمة منسدلة بحدود واضحة */}
-          <div className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-xl border-2 border-primary/30 shadow-sm">
-            {/* صورة الموظف المحدد */}
-            {selectedEmployeeId && employees.find(e => e.id === selectedEmployeeId)?.photoUrl ? (
-              <img 
-                src={employees.find(e => e.id === selectedEmployeeId)?.photoUrl || ''}
-                alt={employees.find(e => e.id === selectedEmployeeId)?.name || ''}
-                className="w-9 h-9 rounded-full object-cover border-2 border-primary/40 shadow-sm"
-              />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/30">
-                <User className="h-5 w-5 text-primary" />
-              </div>
-            )}
-            <Select 
-              value={selectedEmployeeId?.toString() || ''} 
-              onValueChange={(v) => setSelectedEmployeeId(Number(v))}
-              disabled={!selectedBranchId}
-            >
-              <SelectTrigger className="w-[140px] border-2 border-border/80 bg-background h-9 text-sm font-medium rounded-lg">
-                <SelectValue placeholder="اختر الموظف" />
-              </SelectTrigger>
-              <SelectContent className="border-2 border-border shadow-lg">
-                {employees.map(emp => (
-                  <SelectItem key={emp.id} value={emp.id.toString()} className="text-sm py-2">
-                    <div className="flex items-center gap-2">
-                      {emp.photoUrl ? (
-                        <img src={emp.photoUrl} alt={emp.name} className="w-6 h-6 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                          <User className="h-3 w-3" />
-                        </div>
-                      )}
-                      <span>{emp.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
         
         {/* Quick Actions */}
@@ -923,7 +882,16 @@ export default function POS() {
               <Settings className="h-5 w-5" />
             </Button>
           </Link>
-          <Button variant="ghost" size="icon" className="h-12 w-12 text-muted-foreground" onClick={() => logout()}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-12 w-12 text-destructive/70 hover:text-destructive hover:bg-destructive/10 transition-all duration-200" 
+            onClick={async () => {
+              await logout();
+              window.location.href = '/pos-login';
+            }}
+            title="تسجيل الخروج"
+          >
             <LogOut className="h-5 w-5" />
           </Button>
         </div>
@@ -939,7 +907,7 @@ export default function POS() {
               <div className="flex gap-2 h-full">
                 <button
                   onClick={() => setSelectedCategoryId(null)}
-                  className={`h-full px-3 rounded-lg flex items-center gap-1.5 transition-all duration-150 min-w-[70px] border text-xs ${
+                  className={`h-full px-4 rounded-lg flex items-center gap-2 transition-all duration-200 min-w-[80px] border-2 text-sm font-medium hover:scale-105 ${
                     selectedCategoryId === null 
                       ? 'bg-primary text-primary-foreground shadow-md border-primary' 
                       : 'bg-muted/60 hover:bg-muted border-border/50 hover:border-border'
@@ -952,7 +920,7 @@ export default function POS() {
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategoryId(cat.id)}
-                    className={`h-full px-3 rounded-lg flex items-center gap-1.5 transition-all duration-150 min-w-[70px] border text-xs ${
+                    className={`h-full px-4 rounded-lg flex items-center gap-2 transition-all duration-200 min-w-[80px] border-2 text-sm font-medium hover:scale-105 ${
                       selectedCategoryId === cat.id 
                         ? 'bg-primary text-primary-foreground shadow-md border-primary' 
                         : 'bg-muted/60 hover:bg-muted border-border/50 hover:border-border'
@@ -998,21 +966,21 @@ export default function POS() {
                         <button
                           key={service.id}
                           onClick={() => addToCart(service)}
-                          className="group flex-shrink-0 w-[90px] bg-card hover:bg-primary/10 border border-border/50 hover:border-primary rounded-lg p-2 transition-all duration-150 hover:shadow-md active:scale-95 flex flex-col items-center text-center"
+                          className="group flex-shrink-0 w-[110px] bg-card hover:bg-primary/10 border-2 border-border/60 hover:border-primary rounded-xl p-2.5 transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 flex flex-col items-center text-center"
                         >
-                          {/* Service Icon - Smaller */}
-                          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center mb-1 group-hover:bg-primary/20 transition-colors">
+                          {/* Service Icon */}
+                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center mb-1.5 group-hover:bg-primary/20 transition-colors">
                             {getCategoryIcon(service.categoryName || '')}
                           </div>
                           
-                          {/* Service Name - Compact */}
-                          <div className="font-semibold text-[10px] mb-0.5 line-clamp-2 leading-tight h-[24px] flex items-center">
+                          {/* Service Name */}
+                          <div className="font-semibold text-xs mb-1 line-clamp-2 leading-tight h-[28px] flex items-center">
                             {service.nameAr}
                           </div>
                           
-                          {/* Price - Compact */}
-                          <div className="text-xs font-bold text-primary">
-                            {Number(service.price).toFixed(0)} <span className="text-[8px]">ر.س</span>
+                          {/* Price */}
+                          <div className="text-sm font-bold text-primary">
+                            {Number(service.price).toFixed(0)} <span className="text-[10px]">ر.س</span>
                           </div>
                         </button>
                       ))}
@@ -1250,71 +1218,72 @@ export default function POS() {
           </Button>
         )}
         
-        {/* Right Panel - Cart - Compact */}
-        <div className="w-[320px] bg-card border-r border-border/50 flex flex-col shrink-0">
-          {/* Cart Header - Compact */}
-          <div className="h-12 px-2.5 border-b border-border/50 flex items-center justify-between shrink-0">
+        {/* Right Panel - Cart */}
+        <div className="w-[360px] bg-card border-r border-border/50 flex flex-col shrink-0">
+          {/* Cart Header */}
+          <div className="h-14 px-3 border-b border-border/50 flex items-center justify-between shrink-0 bg-card">
             <div className="flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4 text-primary" />
-              <span className="font-bold text-sm">السلة</span>
-              <Badge variant="secondary" className="h-5 px-1.5 text-xs">{cart.length}</Badge>
+              <ShoppingCart className="h-5 w-5 text-primary" />
+              <span className="font-bold text-base">السلة</span>
+              <Badge variant="secondary" className="h-6 px-2 text-sm font-bold">{cart.length}</Badge>
             </div>
             {cart.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearCart} className="h-7 px-2 text-xs text-destructive hover:text-destructive">
-                <Trash2 className="h-3 w-3 ml-1" />
+              <Button variant="ghost" size="sm" onClick={clearCart} className="h-8 px-3 text-sm text-destructive hover:text-destructive hover:bg-destructive/10 transition-colors">
+                <Trash2 className="h-4 w-4 ml-1" />
                 مسح
               </Button>
             )}
           </div>
           
-          {/* Cart Items - Compact */}
+          {/* Cart Items */}
           <ScrollArea className="flex-1">
-            <div className="p-2 space-y-1">
+            <div className="p-2.5 space-y-2">
               {cart.map(item => (
-                <div key={item.serviceId} className="bg-muted/30 rounded-lg p-2 border border-border/40">
+                <div key={item.serviceId} className="bg-muted/30 rounded-xl p-3 border-2 border-border/50 hover:border-primary/30 transition-colors">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm truncate flex-1 ml-2">{item.serviceNameAr}</span>
+                    <span className="font-semibold text-base truncate flex-1 ml-2">{item.serviceNameAr}</span>
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-6 w-6 text-destructive/70 hover:text-destructive"
+                      className="h-7 w-7 text-destructive/70 hover:text-destructive hover:bg-destructive/10 transition-colors"
                       onClick={() => removeFromCart(item.serviceId)}
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <X className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="flex items-center justify-between mt-1.5">
-                    <div className="flex items-center gap-0.5">
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center gap-1">
                       <Button 
                         variant="outline" 
                         size="icon" 
-                        className="h-6 w-6"
+                        className="h-7 w-7 hover:bg-primary/10 hover:border-primary transition-colors"
                         onClick={() => updateQuantity(item.serviceId, -1)}
                       >
-                        <Minus className="h-3 w-3" />
+                        <Minus className="h-3.5 w-3.5" />
                       </Button>
-                      <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
+                      <span className="w-8 text-center font-bold text-base">{item.quantity}</span>
                       <Button 
                         variant="outline" 
                         size="icon" 
-                        className="h-6 w-6"
+                        className="h-7 w-7 hover:bg-primary/10 hover:border-primary transition-colors"
                         onClick={() => updateQuantity(item.serviceId, 1)}
                       >
-                        <Plus className="h-3 w-3" />
+                        <Plus className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                     <div className="text-left">
-                      <span className="text-xs text-muted-foreground">{item.price.toFixed(0)} × {item.quantity}</span>
-                      <span className="font-bold text-sm text-primary mr-1">{item.total.toFixed(2)} ر.س</span>
+                      <span className="text-sm text-muted-foreground">{item.price.toFixed(0)} × {item.quantity}</span>
+                      <span className="font-bold text-base text-primary mr-2">{item.total.toFixed(2)} ر.س</span>
                     </div>
                   </div>
                 </div>
               ))}
               
               {cart.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                  <ShoppingCart className="h-10 w-10 mb-2 opacity-30" />
-                  <p className="text-sm">السلة فارغة</p>
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <ShoppingCart className="h-12 w-12 mb-3 opacity-30" />
+                  <p className="text-base">السلة فارغة</p>
+                  <p className="text-sm mt-1">اختر خدمة للبدء</p>
                 </div>
               )}
             </div>
@@ -1349,41 +1318,87 @@ export default function POS() {
           )}
           
           {/* Cart Summary & Payment - Compact */}
-          <div className="border-t border-border/50 bg-muted/30 p-2.5 space-y-1.5 shrink-0">
-            <div className="flex justify-between text-xs">
+          <div className="border-t border-border/50 bg-muted/30 p-3 space-y-2 shrink-0">
+            {/* Employee Selection - Moved to Cart */}
+            <div className="bg-card rounded-lg p-2.5 border-2 border-primary/20">
+              <Label className="text-xs font-semibold text-muted-foreground mb-2 block">الموظف المنفذ</Label>
+              <div className="flex items-center gap-2">
+                {/* صورة الموظف المحدد */}
+                {selectedEmployeeId && employees.find(e => e.id === selectedEmployeeId)?.photoUrl ? (
+                  <img 
+                    src={employees.find(e => e.id === selectedEmployeeId)?.photoUrl || ''}
+                    alt={employees.find(e => e.id === selectedEmployeeId)?.name || ''}
+                    className="w-10 h-10 rounded-full object-cover border-2 border-primary/40 shadow-sm"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/30">
+                    <User className="h-5 w-5 text-primary" />
+                  </div>
+                )}
+                <Select 
+                  value={selectedEmployeeId?.toString() || ''} 
+                  onValueChange={(v) => setSelectedEmployeeId(Number(v))}
+                  disabled={!selectedBranchId}
+                >
+                  <SelectTrigger className="flex-1 border-2 border-border/80 bg-background h-10 text-sm font-medium rounded-lg">
+                    <SelectValue placeholder="اختر الموظف" />
+                  </SelectTrigger>
+                  <SelectContent className="border-2 border-border shadow-lg">
+                    {employees.map(emp => (
+                      <SelectItem key={emp.id} value={emp.id.toString()} className="text-sm py-2.5">
+                        <div className="flex items-center gap-2">
+                          {emp.photoUrl ? (
+                            <img src={emp.photoUrl} alt={emp.name} className="w-7 h-7 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
+                              <User className="h-4 w-4" />
+                            </div>
+                          )}
+                          <span className="font-medium">{emp.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <Separator className="my-2" />
+            
+            <div className="flex justify-between text-sm">
               <span>المجموع الفرعي</span>
               <span className="font-semibold">{subtotal.toFixed(2)} ر.س</span>
             </div>
             
             {discountAmount > 0 && (
-              <div className="flex justify-between text-green-600 text-xs">
+              <div className="flex justify-between text-green-600 text-sm">
                 <span>الخصم</span>
                 <span className="font-semibold">- {discountAmount.toFixed(2)} ر.س</span>
               </div>
             )}
             
-            <div className="flex justify-between items-center pt-1 border-t border-border/30">
-              <span className="text-base font-bold">الإجمالي</span>
-              <span className="text-xl font-bold text-primary">{total.toFixed(2)} ر.س</span>
+            <div className="flex justify-between items-center pt-2 border-t border-border/30">
+              <span className="text-lg font-bold">الإجمالي</span>
+              <span className="text-2xl font-bold text-primary">{total.toFixed(2)} ر.س</span>
             </div>
             
             {/* Loyalty Button - Small */}
             <Button 
               variant="outline" 
-              className="w-full h-8 gap-1.5 text-xs"
+              className="w-full h-9 gap-2 text-sm"
               onClick={() => setShowLoyaltyDialog(true)}
             >
-              <Gift className="h-3.5 w-3.5" />
+              <Gift className="h-4 w-4" />
               {loyaltyCustomer ? 'تغيير عميل' : 'إضافة عميل ولاء'}
             </Button>
             
             {/* Checkout Button */}
             <Button 
-              className="w-full h-10 text-base gap-2 shadow-lg"
+              className="w-full h-12 text-lg gap-2 shadow-lg font-bold"
               disabled={cart.length === 0 || !selectedBranchId || !selectedEmployeeId}
               onClick={handleCheckout}
             >
-              <CreditCard className="h-4 w-4" />
+              <CreditCard className="h-5 w-5" />
               الدفع
             </Button>
           </div>
