@@ -1816,23 +1816,11 @@
   border-radius: 8px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform, background-color;
-  opacity: 0;
-  transform: translateX(10px);
-  animation: fadeSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 1;
+  transform: translateX(0);
 }
 
-.sidebar-submenu-item:nth-child(1) { animation-delay: 0.05s; }
-.sidebar-submenu-item:nth-child(2) { animation-delay: 0.1s; }
-.sidebar-submenu-item:nth-child(3) { animation-delay: 0.15s; }
-.sidebar-submenu-item:nth-child(4) { animation-delay: 0.2s; }
-.sidebar-submenu-item:nth-child(5) { animation-delay: 0.25s; }
-.sidebar-submenu-item:nth-child(6) { animation-delay: 0.3s; }
-.sidebar-submenu-item:nth-child(7) { animation-delay: 0.35s; }
-.sidebar-submenu-item:nth-child(8) { animation-delay: 0.4s; }
-.sidebar-submenu-item:nth-child(9) { animation-delay: 0.45s; }
-.sidebar-submenu-item:nth-child(10) { animation-delay: 0.5s; }
-.sidebar-submenu-item:nth-child(11) { animation-delay: 0.55s; }
-.sidebar-submenu-item:nth-child(12) { animation-delay: 0.6s; }
+/* تم إزالة animation delays لضمان ظهور العناصر فوراً */
 
 @keyframes fadeSlideIn {
   to {
