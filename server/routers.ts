@@ -9661,6 +9661,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           discountPercentage: z.number().optional(),
           discountReason: z.string().optional(),
           notes: z.string().optional(),
+          paidBy: z.string().optional(), // خانة مدفوع - اسم العميل
         }))
         .mutation(async ({ input, ctx }) => {
           return await db.createPosInvoice({
@@ -9675,6 +9676,16 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         .input(z.object({ branchId: z.number() }))
         .query(async ({ input }) => {
           return await db.getTodayPosInvoices(input.branchId);
+        }),
+
+      // جلب الفواتير المدفوعة (paidBy) للربط مع صفحة الإيرادات
+      paidByInvoices: supervisorInputProcedure
+        .input(z.object({ 
+          branchId: z.number(),
+          date: z.string(), // YYYY-MM-DD
+        }))
+        .query(async ({ input }) => {
+          return await db.getPaidByInvoices(input.branchId, new Date(input.date));
         }),
 
       // جلب فواتير بفترة محددة

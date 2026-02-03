@@ -456,6 +456,13 @@
       "when": 1770073704975,
       "tag": "0064_wet_loki",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "5",
+      "when": 1770078669246,
+      "tag": "0065_pale_doctor_spectrum",
+      "breakpoints": true
     }
   ]
 }

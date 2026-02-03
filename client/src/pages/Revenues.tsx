@@ -86,6 +86,12 @@ export default function Revenues() {
   const [balanceImages, setBalanceImages] = useState<Array<{ url: string; key: string; preview: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
 
+  // جلب الفواتير المدفوعة من الكاشير للربط مع صفحة الإيرادات
+  const { data: paidByInvoices, isLoading: paidByLoading } = trpc.pos.invoices.paidByInvoices.useQuery(
+    { branchId: selectedBranchId!, date: selectedDate },
+    { enabled: !!selectedBranchId }
+  );
+
   // حساب المطابقة التلقائية
   const calculateAutoMatch = () => {
     // إذا لم يكن هناك موظفين مسجلين، الإيرادات متطابقة تلقائياً
@@ -442,6 +448,33 @@ export default function Revenues() {
                   placeholder="0.00"
                   className="mt-2"
                 />
+                {/* عرض الفواتير المدفوعة من الكاشير */}
+                {paidByInvoices && paidByInvoices.length > 0 && (
+                  <div className="mt-3 p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-medium text-blue-600">فواتير مدفوعة من الكاشير ({paidByInvoices.length})</span>
+                    </div>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {paidByInvoices.map((inv) => (
+                        <div key={inv.id} className="flex justify-between items-center text-xs bg-background/50 p-2 rounded">
+                          <div>
+                            <span className="font-medium">{inv.invoiceNumber}</span>
+                            <span className="text-muted-foreground mx-2">|</span>
+                            <Badge variant="outline" className="text-xs">{inv.paidBy}</Badge>
+                          </div>
+                          <span className="font-bold text-blue-600">{parseFloat(inv.total).toFixed(2)} ر.س</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-blue-500/20 flex justify-between items-center">
+                      <span className="text-xs text-blue-600">إجمالي الفواتير المدفوعة:</span>
+                      <span className="font-bold text-blue-600">
+                        {paidByInvoices.reduce((sum, inv) => sum + parseFloat(inv.total), 0).toFixed(2)} ر.س
+                      </span>
+                    </div>
+                  </div>
+                )}
                 {/* خانة الملاحظة واسم العميل تظهر عند إدخال مبلغ */}
                 {branchRevenue.paidInvoices && parseFloat(branchRevenue.paidInvoices) > 0 && (
                   <div className="mt-3 space-y-3 p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">

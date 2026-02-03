@@ -2925,6 +2925,9 @@ export const posInvoices = mysqlTable("posInvoices", {
   // ملاحظات
   notes: text("notes"),
   
+  // خانة مدفوع - اسم العميل الذي دفع (عمر المطيري، سالم الوادعي، سعود الجريسي)
+  paidBy: varchar("paidBy", { length: 100 }),
+  
   // الكاشير الذي أنشأ الفاتورة
   createdBy: int("createdBy").notNull(),
   createdByName: varchar("createdByName", { length: 100 }),

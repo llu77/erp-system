@@ -1,0 +1,1 @@
+ALTER TABLE `posInvoices` ADD `paidBy` varchar(100);

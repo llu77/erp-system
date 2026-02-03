@@ -84,12 +84,23 @@ export default function POS() {
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [discountReason, setDiscountReason] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+  const [paidBy, setPaidBy] = useState<string>(''); // خانة مدفوع - اسم العميل
+  
+  // قائمة العملاء للفواتير المدفوعة
+  const PAID_INVOICE_CUSTOMERS = [
+    { id: 'omar', name: 'عمر المطيري' },
+    { id: 'salem', name: 'سالم الوادعي' },
+    { id: 'saud', name: 'سعود الجريسي' },
+  ];
   const [loyaltyCustomer, setLoyaltyCustomer] = useState<LoyaltyCustomer | null>(null);
   const [loyaltySearchQuery, setLoyaltySearchQuery] = useState<string>('');
   const [showLoyaltyDialog, setShowLoyaltyDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [lastInvoice, setLastInvoice] = useState<{ invoiceNumber: string; total: number } | null>(null);
+  const [lastCartItems, setLastCartItems] = useState<CartItem[]>([]);
+  const [lastSubtotal, setLastSubtotal] = useState<number>(0);
+  const [lastDiscountAmount, setLastDiscountAmount] = useState<number>(0);
   const [showEmployeeSidebar, setShowEmployeeSidebar] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
@@ -145,6 +156,10 @@ export default function POS() {
   // Mutations
   const createInvoiceMutation = trpc.pos.invoices.create.useMutation({
     onSuccess: (data) => {
+      // حفظ بيانات السلة قبل مسحها للطباعة
+      setLastCartItems([...cart]);
+      setLastSubtotal(subtotal);
+      setLastDiscountAmount(discountAmount);
       setLastInvoice({ invoiceNumber: data.invoiceNumber, total: data.total });
       setShowPaymentDialog(false);
       setShowSuccessDialog(true);
@@ -334,6 +349,7 @@ export default function POS() {
       discountAmount,
       discountReason: discountReason || undefined,
       notes: notes || undefined,
+      paidBy: paidBy && paidBy !== 'none' ? paidBy : undefined, // خانة مدفوع
     });
   };
   
@@ -645,7 +661,7 @@ export default function POS() {
               <span style="width:30px;text-align:center;">الكمية</span>
               <span style="width:55px;text-align:left;">السعر</span>
             </div>
-            ${cart.map(item => `
+            ${lastCartItems.map(item => `
               <div class="item">
                 <span class="item-name">${item.serviceNameAr}</span>
                 <span class="item-qty">${item.quantity}</span>
@@ -658,12 +674,12 @@ export default function POS() {
           <div class="totals-section">
             <div class="total-row">
               <span>المجموع الفرعي:</span>
-              <span>${subtotal.toFixed(2)} ر.س</span>
+              <span>${lastSubtotal.toFixed(2)} ر.س</span>
             </div>
-            ${discountAmount > 0 ? `
+            ${lastDiscountAmount > 0 ? `
               <div class="total-row discount">
                 <span>الخصم${loyaltyCustomer ? ' (ولاء)' : ''}:</span>
-                <span>- ${discountAmount.toFixed(2)} ر.س</span>
+                <span>- ${lastDiscountAmount.toFixed(2)} ر.س</span>
               </div>
             ` : ''}
             <div class="total-row grand-total">
@@ -1615,6 +1631,24 @@ export default function POS() {
                   className="flex-1 h-10"
                 />
               </div>
+            </div>
+            
+            {/* Paid By - خانة مدفوع */}
+            <div className="space-y-1">
+              <Label className="text-sm">مدفوع (اختياري)</Label>
+              <Select value={paidBy} onValueChange={setPaidBy}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="اختر اسم العميل..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون تحديد</SelectItem>
+                  {PAID_INVOICE_CUSTOMERS.map((customer) => (
+                    <SelectItem key={customer.id} value={customer.name}>
+                      {customer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
             {/* Notes - Compact */}

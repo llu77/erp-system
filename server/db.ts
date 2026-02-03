@@ -11454,6 +11454,7 @@ export async function createPosInvoice(data: {
   discountPercentage?: number;
   discountReason?: string;
   notes?: string;
+  paidBy?: string; // خانة مدفوع - اسم العميل
   createdBy: number;
   createdByName: string;
 }) {
@@ -11545,6 +11546,7 @@ export async function createPosInvoice(data: {
     cardAmount: (data.cardAmount || (data.paymentMethod === 'card' ? total : 0)).toString(),
     status: 'completed',
     notes: data.notes || null,
+    paidBy: data.paidBy || null, // خانة مدفوع
     createdBy: data.createdBy,
     createdByName: data.createdByName,
     invoiceDate,
@@ -11658,6 +11660,44 @@ export async function getTodayPosInvoices(branchId: number, date?: Date) {
       lte(posInvoices.invoiceDate, endOfDay)
     ))
     .orderBy(desc(posInvoices.createdAt));
+}
+
+// جلب الفواتير المدفوعة (paidBy) للربط مع صفحة الإيرادات
+export async function getPaidByInvoices(branchId: number, date: Date): Promise<Array<{
+  id: number;
+  invoiceNumber: string;
+  paidBy: string;
+  total: string;
+  employeeName: string;
+  createdAt: Date;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const workingDate = getWorkingDate(date);
+  const startOfDay = new Date(workingDate);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(workingDate);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  const results = await db.select({
+    id: posInvoices.id,
+    invoiceNumber: posInvoices.invoiceNumber,
+    paidBy: posInvoices.paidBy,
+    total: posInvoices.total,
+    employeeName: posInvoices.employeeName,
+    createdAt: posInvoices.createdAt,
+  })
+    .from(posInvoices)
+    .where(and(
+      eq(posInvoices.branchId, branchId),
+      gte(posInvoices.invoiceDate, startOfDay),
+      lte(posInvoices.invoiceDate, endOfDay),
+      isNotNull(posInvoices.paidBy)
+    ))
+    .orderBy(desc(posInvoices.createdAt));
+  
+  return results.filter(r => r.paidBy && r.paidBy.trim() !== '') as any;
 }
 
 export async function getPosInvoicesByDateRange(branchId: number, startDate: Date, endDate: Date) {
