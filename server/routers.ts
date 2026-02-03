@@ -9973,6 +9973,23 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           // تحديث حالة الفواتير إلى مؤكدة
           await db.markPosInvoicesAsConfirmed(todayInvoices.map(inv => inv.id));
 
+          // إرسال إشعار للمشرف إذا لم يتم رفع صورة الموازنة
+          if (!input.balanceImageUrl) {
+            const branch = await db.getBranchById(input.branchId);
+            const branchName = branch?.name || `فرع ${input.branchId}`;
+            const dateStr = targetDate.toLocaleDateString('ar-EG', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            });
+            
+            await notifyOwner({
+              title: '⚠️ تذكير: فواتير بدون صورة موازنة',
+              content: `تم تأكيد فواتير ${branchName} ليوم ${dateStr} بدون رفع صورة الموازنة.\n\nملخص الفواتير:\n- عدد الفواتير: ${todayInvoices.length}\n- الإجمالي: ${totalRevenue.toFixed(2)} ر.س\n- كاش: ${totalCash.toFixed(2)} ر.س\n- شبكة: ${totalCard.toFixed(2)} ر.س\n\nالرجاء رفع صورة الموازنة من صفحة الإيرادات.`,
+            });
+          }
+
           return {
             success: true,
             revenueId: revenueResult.id,

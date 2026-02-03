@@ -11652,14 +11652,43 @@ export async function getTodayPosInvoices(branchId: number, date?: Date) {
   const endOfDay = new Date(today);
   endOfDay.setHours(23, 59, 59, 999);
   
-  return await db.select()
+  // جلب الفواتير مع صورة الموظف
+  const results = await db.select({
+    id: posInvoices.id,
+    invoiceNumber: posInvoices.invoiceNumber,
+    branchId: posInvoices.branchId,
+    branchName: posInvoices.branchName,
+    employeeId: posInvoices.employeeId,
+    employeeName: posInvoices.employeeName,
+    employeePhotoUrl: employees.photoUrl,
+    loyaltyCustomerId: posInvoices.loyaltyCustomerId,
+    loyaltyCustomerName: posInvoices.loyaltyCustomerName,
+    loyaltyCustomerPhone: posInvoices.loyaltyCustomerPhone,
+    subtotal: posInvoices.subtotal,
+    discountAmount: posInvoices.discountAmount,
+    discountPercentage: posInvoices.discountPercentage,
+    discountReason: posInvoices.discountReason,
+    total: posInvoices.total,
+    paymentMethod: posInvoices.paymentMethod,
+    cashAmount: posInvoices.cashAmount,
+    cardAmount: posInvoices.cardAmount,
+    paidBy: posInvoices.paidBy,
+    status: posInvoices.status,
+    invoiceDate: posInvoices.invoiceDate,
+    notes: posInvoices.notes,
+    createdAt: posInvoices.createdAt,
+    updatedAt: posInvoices.updatedAt,
+  })
     .from(posInvoices)
+    .leftJoin(employees, eq(posInvoices.employeeId, employees.id))
     .where(and(
       eq(posInvoices.branchId, branchId),
       gte(posInvoices.invoiceDate, startOfDay),
       lte(posInvoices.invoiceDate, endOfDay)
     ))
     .orderBy(desc(posInvoices.createdAt));
+  
+  return results;
 }
 
 // جلب الفواتير المدفوعة (paidBy) للربط مع صفحة الإيرادات

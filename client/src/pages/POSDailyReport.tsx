@@ -73,12 +73,13 @@ export default function POSDailyReport() {
   const employeeStats = useMemo(() => {
     if (!todayInvoices.length) return [];
     
-    const stats: Record<number, { name: string; invoiceCount: number; totalRevenue: number }> = {};
+    const stats: Record<number, { name: string; photoUrl: string | null; invoiceCount: number; totalRevenue: number }> = {};
     
     todayInvoices.forEach(invoice => {
       if (!stats[invoice.employeeId]) {
         stats[invoice.employeeId] = {
           name: invoice.employeeName || 'غير معروف',
+          photoUrl: (invoice as any).employeePhotoUrl || null,
           invoiceCount: 0,
           totalRevenue: 0,
         };
@@ -354,8 +355,9 @@ export default function POSDailyReport() {
                   {employeeStats.length > 0 ? (
                     <div className="space-y-3">
                       {employeeStats.map((emp, index) => (
-                        <div key={emp.id} className="flex items-center gap-4 p-4 bg-muted/50 rounded-xl">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                        <div key={emp.id} className="flex items-center gap-4 p-4 bg-muted/50 rounded-xl hover:bg-muted/70 transition-colors">
+                          {/* رتبة الموظف */}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
                             index === 0 ? 'bg-yellow-500 text-white' :
                             index === 1 ? 'bg-gray-400 text-white' :
                             index === 2 ? 'bg-amber-700 text-white' :
@@ -363,11 +365,29 @@ export default function POSDailyReport() {
                           }`}>
                             {index + 1}
                           </div>
-                          <div className="flex-1">
-                            <div className="font-semibold text-lg">{emp.name}</div>
+                          {/* صورة الموظف */}
+                          {emp.photoUrl ? (
+                            <img 
+                              src={emp.photoUrl} 
+                              alt={emp.name}
+                              className="w-12 h-12 rounded-full object-cover border-2 border-primary/30 shrink-0"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div 
+                            className={`w-12 h-12 rounded-full bg-primary/20 items-center justify-center border-2 border-primary/30 shrink-0 ${emp.photoUrl ? 'hidden' : 'flex'}`}
+                          >
+                            <Users className="h-6 w-6 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-lg truncate">{emp.name}</div>
                             <div className="text-sm text-muted-foreground">{emp.invoiceCount} فاتورة</div>
                           </div>
-                          <div className="text-left">
+                          <div className="text-left shrink-0">
                             <div className="text-2xl font-bold text-primary">{emp.totalRevenue.toFixed(2)}</div>
                             <div className="text-sm text-muted-foreground">ر.س</div>
                           </div>
