@@ -9894,9 +9894,9 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         .input(z.object({
           branchId: z.number(),
           date: z.string().optional(),
-          // صورة الموازنة (إجباري)
-          balanceImageKey: z.string().min(1, 'صورة الموازنة مطلوبة'),
-          balanceImageUrl: z.string().min(1, 'صورة الموازنة مطلوبة'),
+          // صورة الموازنة (اختياري - سيتم رفعها من صفحة الإيرادات)
+          balanceImageKey: z.string().optional(),
+          balanceImageUrl: z.string().optional(),
           // فواتير المدفوع (اختياري)
           paidInvoices: z.array(z.object({
             customerName: z.string(),

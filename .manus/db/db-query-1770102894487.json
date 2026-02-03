@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, name, photoUrl FROM employees LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT id, name, photoUrl FROM employees LIMIT 10;",
+  "rows": [
+    {
+      "id": "30002",
+      "name": "علاء ناصر",
+      "photoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-002-1769550397927.jpeg"
+    },
+    {
+      "id": "30004",
+      "name": "عبدالحي جلال",
+      "photoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-004-1769708720505.jpeg"
+    },
+    {
+      "id": "30007",
+      "name": "السيد محمد",
+      "photoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-007-1769550451732.jpeg"
+    },
+    {
+      "id": "30012",
+      "name": "محمود عماره ",
+      "photoUrl": "https://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-012-1769550272017.jpeg"
+    },
+    {
+      "id": "60001",
+      "name": "محمد ناصر",
+      "photoUrl": "NULL"
+    },
+    {
+      "id": "90001",
+      "name": "فارس محمد ",
+      "photoUrl": "NULL"
+    },
+    {
+      "id": "90002",
+      "name": "عمرو",
+      "photoUrl": "NULL"
+    },
+    {
+      "id": "90003",
+      "name": "محمد اسماعيل",
+      "photoUrl": "https://files.manuscdn.com/user_upload_by_module/session_file/310419663030110188/vQGHEbfeZDqvqZTH.jpeg"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tphotoUrl\n30002\tعلاء ناصر\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-002-1769550397927.jpeg\n30004\tعبدالحي جلال\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-004-1769708720505.jpeg\n30007\tالسيد محمد\thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-007-1769550451732.jpeg\n30012\tمحمود عماره \thttps://d2xsxph8kpxj0f.cloudfront.net/310419663030110188/dsLtTk22LX4iB7jABiF6k8/employees/photos/EMP-012-1769550272017.jpeg\n60001\tمحمد ناصر\tNULL\n90001\tفارس محمد \tNULL\n90002\tعمرو\tNULL\n90003\tمحمد اسماعيل\thttps://files.manuscdn.com/user_upload_by_module/session_file/310419663030110188/vQGHEbfeZDqvqZTH.jpeg\n",
+  "stderr": "",
+  "execution_time_ms": 1554
+}

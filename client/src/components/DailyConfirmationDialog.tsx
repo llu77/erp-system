@@ -189,12 +189,7 @@ export default function DailyConfirmationDialog({
   };
   
   const handleSubmit = async () => {
-    // Validation
-    if (!balanceImageBase64) {
-      toast.error('صورة الموازنة مطلوبة');
-      return;
-    }
-    
+    // Validation - صورة الموازنة أصبحت اختيارية (سيتم رفعها من صفحة الإيرادات)
     if (!dailyReport || dailyReport.totalInvoices === 0) {
       toast.error('لا توجد فواتير للتأكيد');
       return;
@@ -206,19 +201,23 @@ export default function DailyConfirmationDialog({
     try {
       setIsUploading(true);
       
-      // Upload image first
-      const uploadResult = await uploadImageMutation.mutateAsync({
-        branchId,
-        imageData: balanceImageBase64,
-        fileName: balanceFileName,
-        mimeType: 'image/jpeg',
-      });
+      let uploadResult = { key: '', url: '' };
+      
+      // Upload image only if provided (optional now)
+      if (balanceImageBase64) {
+        uploadResult = await uploadImageMutation.mutateAsync({
+          branchId,
+          imageData: balanceImageBase64,
+          fileName: balanceFileName,
+          mimeType: 'image/jpeg',
+        });
+      }
       
       // Submit confirmation
       await submitMutation.mutateAsync({
         branchId,
-        balanceImageKey: uploadResult.key,
-        balanceImageUrl: uploadResult.url,
+        balanceImageKey: uploadResult.key || undefined,
+        balanceImageUrl: uploadResult.url || undefined,
         paidInvoices: validPaidInvoices.length > 0 ? validPaidInvoices : undefined,
         loyaltyInfo: loyaltyInvoiceCount > 0 || loyaltyDiscountAmount > 0 
           ? { invoiceCount: loyaltyInvoiceCount, discountAmount: loyaltyDiscountAmount }
@@ -304,13 +303,14 @@ export default function DailyConfirmationDialog({
               
               <Separator />
               
-              {/* Balance Image Upload - Required */}
+              {/* Balance Image Upload - Optional (will be uploaded from Revenues page) */}
               <div className="space-y-3">
                 <Label className="flex items-center gap-2 text-base font-semibold">
                   <Camera className="h-5 w-5 text-primary" />
                   صورة الموازنة
-                  <Badge variant="destructive" className="text-xs">إجباري</Badge>
+                  <Badge variant="secondary" className="text-xs">اختياري</Badge>
                 </Label>
+                <p className="text-xs text-muted-foreground">يمكنك رفع صورة الموازنة لاحقاً من صفحة الإيرادات</p>
                 
                 {balanceImagePreview ? (
                   <div className="relative">

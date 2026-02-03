@@ -1343,18 +1343,28 @@ export default function POS() {
                   <SelectTrigger className="flex-1 border-2 border-border/80 bg-background h-10 text-sm font-medium rounded-lg">
                     <SelectValue placeholder="اختر الموظف" />
                   </SelectTrigger>
-                  <SelectContent className="border-2 border-border shadow-lg">
+                  <SelectContent className="border-2 border-border shadow-lg max-h-[300px]">
                     {employees.map(emp => (
-                      <SelectItem key={emp.id} value={emp.id.toString()} className="text-sm py-2.5">
-                        <div className="flex items-center gap-2">
+                      <SelectItem key={emp.id} value={emp.id.toString()} className="text-sm py-3 cursor-pointer hover:bg-primary/10">
+                        <div className="flex items-center gap-3">
                           {emp.photoUrl ? (
-                            <img src={emp.photoUrl} alt={emp.name} className="w-7 h-7 rounded-full object-cover" />
-                          ) : (
-                            <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
-                              <User className="h-4 w-4" />
-                            </div>
-                          )}
-                          <span className="font-medium">{emp.name}</span>
+                            <img 
+                              src={emp.photoUrl} 
+                              alt={emp.name} 
+                              className="w-8 h-8 rounded-full object-cover border-2 border-primary/30 shrink-0" 
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div 
+                            className={`w-8 h-8 rounded-full bg-primary/20 items-center justify-center border-2 border-primary/30 shrink-0 ${emp.photoUrl ? 'hidden' : 'flex'}`}
+                          >
+                            <User className="h-4 w-4 text-primary" />
+                          </div>
+                          <span className="font-semibold text-base">{emp.name}</span>
                         </div>
                       </SelectItem>
                     ))}

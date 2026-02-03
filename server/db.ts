@@ -12161,8 +12161,8 @@ export async function createRevenueFromPOS(data: {
   totalAmount: number;
   cashAmount: number;
   cardAmount: number;
-  balanceImageKey: string;
-  balanceImageUrl: string;
+  balanceImageKey?: string;
+  balanceImageUrl?: string;
   paidInvoices: { customerName: string; amount: number }[];
   loyaltyInfo?: { invoiceCount: number; discountAmount: number };
   notes?: string;
@@ -12227,11 +12227,11 @@ export async function createRevenueFromPOS(data: {
     loyalty: String(data.loyaltyInfo?.discountAmount || 0),
     total: String(data.totalAmount),
     isMatched: true,
-    balanceImages: [{
+    balanceImages: data.balanceImageUrl && data.balanceImageKey ? [{
       url: data.balanceImageUrl,
       key: data.balanceImageKey,
       uploadedAt: new Date().toISOString(),
-    }],
+    }] : [],
     imageVerificationStatus: 'verified',
     createdBy: data.confirmedBy,
   });

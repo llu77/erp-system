@@ -1,0 +1,154 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'employees' ORDER BY ORDINAL_POSITION;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4FCVrv7uyUZp6pM.795ec0267000 --database dsLtTk22LX4iB7jABiF6k8 --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'employees' ORDER BY ORDINAL_POSITION;",
+  "rows": [
+    {
+      "COLUMN_NAME": "id"
+    },
+    {
+      "COLUMN_NAME": "code"
+    },
+    {
+      "COLUMN_NAME": "name"
+    },
+    {
+      "COLUMN_NAME": "branchId"
+    },
+    {
+      "COLUMN_NAME": "phone"
+    },
+    {
+      "COLUMN_NAME": "position"
+    },
+    {
+      "COLUMN_NAME": "isActive"
+    },
+    {
+      "COLUMN_NAME": "createdAt"
+    },
+    {
+      "COLUMN_NAME": "updatedAt"
+    },
+    {
+      "COLUMN_NAME": "email"
+    },
+    {
+      "COLUMN_NAME": "username"
+    },
+    {
+      "COLUMN_NAME": "password"
+    },
+    {
+      "COLUMN_NAME": "hasPortalAccess"
+    },
+    {
+      "COLUMN_NAME": "lastLogin"
+    },
+    {
+      "COLUMN_NAME": "emailVerified"
+    },
+    {
+      "COLUMN_NAME": "iqamaNumber"
+    },
+    {
+      "COLUMN_NAME": "iqamaExpiryDate"
+    },
+    {
+      "COLUMN_NAME": "healthCertExpiryDate"
+    },
+    {
+      "COLUMN_NAME": "contractExpiryDate"
+    },
+    {
+      "COLUMN_NAME": "iqamaImageUrl"
+    },
+    {
+      "COLUMN_NAME": "healthCertImageUrl"
+    },
+    {
+      "COLUMN_NAME": "contractImageUrl"
+    },
+    {
+      "COLUMN_NAME": "infoSubmittedAt"
+    },
+    {
+      "COLUMN_NAME": "infoSubmittedBy"
+    },
+    {
+      "COLUMN_NAME": "isSupervisor"
+    },
+    {
+      "COLUMN_NAME": "photoUrl"
+    },
+    {
+      "COLUMN_NAME": "driverLicenseNumber"
+    },
+    {
+      "COLUMN_NAME": "driverLicenseExpiryDate"
+    },
+    {
+      "COLUMN_NAME": "driverLicenseImageUrl"
+    },
+    {
+      "COLUMN_NAME": "passportNumber"
+    },
+    {
+      "COLUMN_NAME": "passportExpiryDate"
+    },
+    {
+      "COLUMN_NAME": "passportImageUrl"
+    },
+    {
+      "COLUMN_NAME": "insuranceNumber"
+    },
+    {
+      "COLUMN_NAME": "insuranceExpiryDate"
+    },
+    {
+      "COLUMN_NAME": "insuranceImageUrl"
+    },
+    {
+      "COLUMN_NAME": "workPermitNumber"
+    },
+    {
+      "COLUMN_NAME": "workPermitExpiryDate"
+    },
+    {
+      "COLUMN_NAME": "workPermitImageUrl"
+    },
+    {
+      "COLUMN_NAME": "nationality"
+    },
+    {
+      "COLUMN_NAME": "dateOfBirth"
+    },
+    {
+      "COLUMN_NAME": "hireDate"
+    },
+    {
+      "COLUMN_NAME": "bankName"
+    },
+    {
+      "COLUMN_NAME": "bankAccountNumber"
+    },
+    {
+      "COLUMN_NAME": "bankIban"
+    },
+    {
+      "COLUMN_NAME": "emergencyContactName"
+    },
+    {
+      "COLUMN_NAME": "emergencyContactPhone"
+    },
+    {
+      "COLUMN_NAME": "address"
+    },
+    {
+      "COLUMN_NAME": "notes"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nid\ncode\nname\nbranchId\nphone\nposition\nisActive\ncreatedAt\nupdatedAt\nemail\nusername\npassword\nhasPortalAccess\nlastLogin\nemailVerified\niqamaNumber\niqamaExpiryDate\nhealthCertExpiryDate\ncontractExpiryDate\niqamaImageUrl\nhealthCertImageUrl\ncontractImageUrl\ninfoSubmittedAt\ninfoSubmittedBy\nisSupervisor\nphotoUrl\ndriverLicenseNumber\ndriverLicenseExpiryDate\ndriverLicenseImageUrl\npassportNumber\npassportExpiryDate\npassportImageUrl\ninsuranceNumber\ninsuranceExpiryDate\ninsuranceImageUrl\nworkPermitNumber\nworkPermitExpiryDate\nworkPermitImageUrl\nnationality\ndateOfBirth\nhireDate\nbankName\nbankAccountNumber\nbankIban\nemergencyContactName\nemergencyContactPhone\naddress\nnotes\n",
+  "stderr": "",
+  "execution_time_ms": 1571
+}
