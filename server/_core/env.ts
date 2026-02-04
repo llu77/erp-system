@@ -3,17 +3,16 @@
  * Centralized and validated environment variable handling
  *
  * SECURITY: Never log or expose sensitive values!
+ *
+ * Manus Compatibility: Manus provides DATABASE_URL automatically
+ * for managed databases. The app should work gracefully if not set.
  */
 
-// Helper function to get required env variable
+// Helper function to get required env variable (warns but doesn't throw)
 function getRequiredEnv(key: string): string {
   const value = process.env[key];
   if (!value) {
-    console.error(`[ENV] Missing required environment variable: ${key}`);
-    // In production, throw error for missing critical vars
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(`Missing required environment variable: ${key}`);
-    }
+    console.warn(`[ENV] Warning: Environment variable ${key} is not set`);
   }
   return value ?? "";
 }

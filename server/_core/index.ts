@@ -62,28 +62,37 @@ async function startServer() {
   // Health Check Endpoint (Required by Manus)
   // ============================================
   app.get('/api/health', async (req, res) => {
-    let dbStatus = 'unknown';
-    try {
-      // Try to check database connection
-      const db = await import('../db');
-      if (db.db) {
-        dbStatus = 'connected';
+    let dbStatus = 'not_configured';
+    let dbError = null;
+
+    if (process.env.DATABASE_URL) {
+      try {
+        const { getDb } = await import('../db');
+        const db = await getDb();
+        dbStatus = db ? 'connected' : 'connection_failed';
+      } catch (error) {
+        dbStatus = 'error';
+        dbError = error instanceof Error ? error.message : 'unknown';
       }
-    } catch (error) {
-      dbStatus = `error: ${error instanceof Error ? error.message : 'unknown'}`;
     }
 
     res.status(200).json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version || '1.0.0',
+      version: '1.0.0',
       environment: process.env.NODE_ENV || 'development',
+      platform: 'manus',
       uptime: process.uptime(),
-      database: dbStatus,
+      database: {
+        status: dbStatus,
+        error: dbError,
+        configured: Boolean(process.env.DATABASE_URL),
+      },
       envCheck: {
-        hasDbUrl: Boolean(process.env.DATABASE_URL),
-        hasJwtSecret: Boolean(process.env.JWT_SECRET),
-        nodeEnv: process.env.NODE_ENV,
+        DATABASE_URL: Boolean(process.env.DATABASE_URL),
+        JWT_SECRET: Boolean(process.env.JWT_SECRET),
+        NODE_ENV: process.env.NODE_ENV || 'not_set',
+        PORT: process.env.PORT || '3000',
       },
     });
   });
@@ -96,16 +105,20 @@ async function startServer() {
   // Debug endpoint for deployment troubleshooting
   app.get('/api/debug', (req, res) => {
     res.status(200).json({
-      message: 'Server is running',
+      message: 'ERP System - Symbol AI',
+      platform: 'Manus',
       timestamp: new Date().toISOString(),
-      routes: {
-        health: '/api/health',
-        trpc: '/api/trpc/*',
-        manus: '/api/manus/*',
+      endpoints: {
+        health: 'GET /api/health',
+        debug: 'GET /api/debug',
+        trpc: 'POST /api/trpc/*',
+        manus_webhook: 'POST /api/manus/webhook',
+        manus_status: 'GET /api/manus/status',
       },
       environment: {
-        nodeEnv: process.env.NODE_ENV,
-        port: process.env.PORT || '3000',
+        NODE_ENV: process.env.NODE_ENV || 'not_set',
+        PORT: process.env.PORT || '3000',
+        hasDatabase: Boolean(process.env.DATABASE_URL),
       },
     });
   });
