@@ -101,6 +101,9 @@ export default function POS() {
   const [lastCartItems, setLastCartItems] = useState<CartItem[]>([]);
   const [lastSubtotal, setLastSubtotal] = useState<number>(0);
   const [lastDiscountAmount, setLastDiscountAmount] = useState<number>(0);
+  const [lastPaymentMethod, setLastPaymentMethod] = useState<'cash' | 'card' | 'split' | 'loyalty'>('cash');
+  const [lastCashAmount, setLastCashAmount] = useState<number>(0);
+  const [lastCardAmount, setLastCardAmount] = useState<number>(0);
   const [showEmployeeSidebar, setShowEmployeeSidebar] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
@@ -156,10 +159,13 @@ export default function POS() {
   // Mutations
   const createInvoiceMutation = trpc.pos.invoices.create.useMutation({
     onSuccess: (data) => {
-      // حفظ بيانات السلة قبل مسحها للطباعة
+      // حفظ بيانات السلة وطريقة الدفع قبل مسحها للطباعة
       setLastCartItems([...cart]);
       setLastSubtotal(subtotal);
       setLastDiscountAmount(discountAmount);
+      setLastPaymentMethod(paymentMethod);
+      setLastCashAmount(paymentMethod === 'cash' ? total : cashAmount);
+      setLastCardAmount(paymentMethod === 'card' ? total : cardAmount);
       setLastInvoice({ invoiceNumber: data.invoiceNumber, total: data.total });
       setShowPaymentDialog(false);
       setShowSuccessDialog(true);
@@ -690,8 +696,14 @@ export default function POS() {
           
           <!-- طريقة الدفع -->
           <div class="payment-method">
-            طريقة الدفع: ${paymentMethod === 'cash' ? 'نقدي (كاش)' : paymentMethod === 'card' ? 'شبكة (Card)' : paymentMethod === 'split' ? 'تقسيم' : 'برنامج الولاء'}
+            طريقة الدفع: ${lastPaymentMethod === 'cash' ? 'نقدي (كاش)' : lastPaymentMethod === 'card' ? 'شبكة (Card)' : lastPaymentMethod === 'split' ? 'تقسيم (كاش + شبكة)' : 'برنامج الولاء'}
           </div>
+          ${lastPaymentMethod === 'split' ? `
+            <div class="split-details" style="text-align:center;font-size:10px;margin-top:4px;padding:4px;border:1px dashed #000;">
+              <span>كاش: ${lastCashAmount.toFixed(2)} ر.س</span> |
+              <span>شبكة: ${lastCardAmount.toFixed(2)} ر.س</span>
+            </div>
+          ` : ''}
           
           ${loyaltyCustomer ? `
             <div class="loyalty-section">
