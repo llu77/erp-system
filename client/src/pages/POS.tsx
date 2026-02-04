@@ -42,6 +42,12 @@ import {
   TrendingUp,
   TrendingDown,
   Package,
+  Heart,
+  Gem,
+  Palette,
+  Wind,
+  Flower2,
+  Hand,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import usePOSKeyboard from '@/hooks/usePOSKeyboard';
@@ -770,10 +776,22 @@ export default function POS() {
     return () => clearInterval(timer);
   }, []);
   
-  const getCategoryIcon = (categoryName: string) => {
-    if (categoryName.includes('حلاقة') || categoryName.includes('Haircut')) return <Scissors className="h-8 w-8" />;
-    if (categoryName.includes('خدمات') || categoryName.includes('Services')) return <Sparkles className="h-8 w-8" />;
-    return <Store className="h-8 w-8" />;
+  const getCategoryIcon = (categoryName: string, size: 'sm' | 'md' | 'lg' = 'md') => {
+    const sizeClasses = {
+      sm: 'h-5 w-5',
+      md: 'h-8 w-8',
+      lg: 'h-10 w-10'
+    };
+    const className = sizeClasses[size];
+    if (categoryName.includes('حلاقة') || categoryName.includes('Haircut')) return <Scissors className={className} />;
+    if (categoryName.includes('خدمات') || categoryName.includes('Services')) return <Sparkles className={className} />;
+    if (categoryName.includes('عناية') || categoryName.includes('Care')) return <Heart className={className} />;
+    if (categoryName.includes('تجميل') || categoryName.includes('Beauty')) return <Gem className={className} />;
+    if (categoryName.includes('صبغة') || categoryName.includes('Color')) return <Palette className={className} />;
+    if (categoryName.includes('تصفيف') || categoryName.includes('Styling')) return <Wind className={className} />;
+    if (categoryName.includes('سبا') || categoryName.includes('Spa')) return <Flower2 className={className} />;
+    if (categoryName.includes('أظافر') || categoryName.includes('Nails')) return <Hand className={className} />;
+    return <Store className={className} />;
   };
 
   // Keyboard shortcuts
@@ -938,15 +956,15 @@ export default function POS() {
                         : 'bg-muted/60 hover:bg-muted border-border/50 hover:border-border'
                     }`}
                   >
-                    {getCategoryIcon(cat.nameAr)}
+                    {getCategoryIcon(cat.nameAr, 'sm')}
                     <span className="font-semibold">{cat.nameAr}</span>
                   </button>
                 ))}
               </div>
             </ScrollArea>
           </div>
-          
-          {/* Services - Compact Horizontal Sliding Design */}
+
+          {/* Services Grid with Vertical Scrolling */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Services Header */}
             <div className="flex items-center justify-between px-4 py-2 bg-card/50 border-b border-border/30">
@@ -967,48 +985,45 @@ export default function POS() {
               )}
             </div>
             
-            {/* Services Horizontal Scroll - Compact Cards */}
+            {/* Services Grid - Responsive with Vertical Scroll */}
             <ScrollArea className="flex-1">
-              <div className="p-3">
-                {/* تقسيم الخدمات إلى صفوف منزلقة */}
-                {Array.from({ length: Math.ceil(filteredServices.length / 8) }).map((_, rowIndex) => (
-                  <div key={rowIndex} className="mb-2">
-                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-                      {filteredServices.slice(rowIndex * 8, (rowIndex + 1) * 8).map(service => (
-                        <button
-                          key={service.id}
-                          onClick={() => addToCart(service)}
-                          className="group flex-shrink-0 w-[110px] bg-card hover:bg-primary/10 border-2 border-border/60 hover:border-primary rounded-xl p-2.5 transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 flex flex-col items-center text-center"
-                        >
-                          {/* Service Icon */}
-                          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center mb-1.5 group-hover:bg-primary/20 transition-colors">
-                            {getCategoryIcon(service.categoryName || '')}
-                          </div>
-                          
-                          {/* Service Name */}
-                          <div className="font-semibold text-xs mb-1 line-clamp-2 leading-tight h-[28px] flex items-center">
-                            {service.nameAr}
-                          </div>
-                          
-                          {/* Price */}
-                          <div className="text-sm font-bold text-primary">
-                            {Number(service.price).toFixed(0)} <span className="text-[10px]">ر.س</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Empty State - Compact */}
+              <div className="p-4">
+                {/* شبكة خدمات متجاوبة مع تمرير عمودي */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
+                  {filteredServices.map(service => (
+                    <button
+                      key={service.id}
+                      onClick={() => addToCart(service)}
+                      className="group bg-card hover:bg-primary/10 border-2 border-border/60 hover:border-primary rounded-2xl p-4 transition-all duration-200 hover:shadow-xl hover:scale-[1.02] active:scale-95 flex flex-col items-center text-center min-h-[140px]"
+                    >
+                      {/* Service Icon - Larger */}
+                      <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-primary/5 rounded-2xl flex items-center justify-center mb-3 group-hover:from-primary/30 group-hover:to-primary/10 transition-all shadow-sm">
+                        {getCategoryIcon(service.categoryName || '', 'lg')}
+                      </div>
+
+                      {/* Service Name */}
+                      <div className="font-bold text-sm mb-2 line-clamp-2 leading-snug min-h-[40px] flex items-center justify-center">
+                        {service.nameAr}
+                      </div>
+
+                      {/* Price - More Prominent */}
+                      <div className="text-base font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
+                        {Number(service.price).toFixed(0)} <span className="text-xs">ر.س</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Empty State */}
                 {filteredServices.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
-                    <Store className="h-10 w-10 mb-2 opacity-50" />
-                    <p className="text-sm font-semibold mb-1">لا توجد خدمات</p>
+                  <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                    <Store className="h-16 w-16 mb-4 opacity-50" />
+                    <p className="text-lg font-semibold mb-2">لا توجد خدمات</p>
+                    <p className="text-sm mb-4">أضف خدمات جديدة للبدء</p>
                     <Link href="/pos-settings">
-                      <Button variant="outline" size="sm" className="gap-1 h-7 text-xs">
-                        <Plus className="h-3 w-3" />
-                        إضافة
+                      <Button variant="outline" size="default" className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        إضافة خدمات
                       </Button>
                     </Link>
                   </div>
