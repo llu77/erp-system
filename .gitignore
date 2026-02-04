@@ -7,12 +7,54 @@ dist/
 build/
 *.dist
 
-# Environment variables
+# Environment variables - CRITICAL: Never commit these files!
 .env
+.env.*
 .env.local
+.env.development
 .env.development.local
+.env.test
 .env.test.local
+.env.production
 .env.production.local
+!.env.example
+
+# API Keys and Secrets - NEVER commit these!
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*secret*
+*credentials*
+*private*
+serviceAccountKey.json
+google-credentials.json
+firebase-adminsdk*.json
+.npmrc
+.yarnrc
+
+# Configuration files that may contain secrets
+config.local.js
+config.local.ts
+config.local.json
+secrets.json
+secrets.yaml
+secrets.yml
+
+# Script files with potential hardcoded credentials
+# WARNING: Review these files before committing!
+update_password.mjs
+reset-password-*.mjs
+**/reset-password*.ts
+**/reset-password*.mjs
+check_*.mjs
+test_*.mjs
+query_*.mjs
+run-sql.mjs
+recalc-*.mjs
+insert-settings.mjs
 
 # IDE and editor files
 .vscode/
@@ -105,3 +147,6 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+
+# Manus directory (contains sensitive data)
+.manus/
