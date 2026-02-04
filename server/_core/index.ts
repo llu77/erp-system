@@ -58,6 +58,58 @@ async function startServer() {
     console.error('[Server] Failed to ensure admin exists:', error);
   }
   
+  // ============================================
+  // Health Check Endpoint (Required by Manus)
+  // ============================================
+  app.get('/api/health', async (req, res) => {
+    let dbStatus = 'unknown';
+    try {
+      // Try to check database connection
+      const db = await import('../db');
+      if (db.db) {
+        dbStatus = 'connected';
+      }
+    } catch (error) {
+      dbStatus = `error: ${error instanceof Error ? error.message : 'unknown'}`;
+    }
+
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      version: process.env.npm_package_version || '1.0.0',
+      environment: process.env.NODE_ENV || 'development',
+      uptime: process.uptime(),
+      database: dbStatus,
+      envCheck: {
+        hasDbUrl: Boolean(process.env.DATABASE_URL),
+        hasJwtSecret: Boolean(process.env.JWT_SECRET),
+        nodeEnv: process.env.NODE_ENV,
+      },
+    });
+  });
+
+  // Root health check for Manus load balancer
+  app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+  });
+
+  // Debug endpoint for deployment troubleshooting
+  app.get('/api/debug', (req, res) => {
+    res.status(200).json({
+      message: 'Server is running',
+      timestamp: new Date().toISOString(),
+      routes: {
+        health: '/api/health',
+        trpc: '/api/trpc/*',
+        manus: '/api/manus/*',
+      },
+      environment: {
+        nodeEnv: process.env.NODE_ENV,
+        port: process.env.PORT || '3000',
+      },
+    });
+  });
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   
