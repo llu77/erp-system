@@ -291,22 +291,22 @@ async function startServer() {
   app.get('/api/reports/employee-performance', async (req: any, res: any) => {
     try {
       const { startDate, endDate, branchId, branchName, month, year } = req.query;
-      
+
       // Import database functions
       const db = await import('../db');
       const { generateEmployeePerformancePDF } = await import('../pdfService');
-      
+
       const start = new Date(startDate as string);
       const end = new Date(endDate as string);
       const branchIdNum = branchId ? parseInt(branchId as string) : undefined;
-      
+
       // Fetch data
       const [employees, summary, dailyData] = await Promise.all([
         db.getEmployeePerformanceReport(start, end, branchIdNum, 20),
         db.getEmployeePerformanceSummary(start, end, branchIdNum),
         db.getEmployeePerformanceDaily(start, end, branchIdNum),
       ]);
-      
+
       const pdfBuffer = await generateEmployeePerformancePDF({
         month: month as string || 'غير محدد',
         year: year as string || new Date().getFullYear().toString(),
@@ -315,13 +315,115 @@ async function startServer() {
         employees: employees || [],
         dailyData: dailyData || [],
       });
-      
+
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename=employee-performance-${month}-${year}.pdf`);
       res.send(pdfBuffer);
     } catch (error) {
       console.error('Employee Performance PDF export error:', error);
       res.status(500).json({ error: 'فشل تصدير التقرير' });
+    }
+  });
+
+  // ============================================
+  // Manus Deployment API Routes
+  // ============================================
+
+  // Manus Webhook endpoint - receives deployment events
+  app.post('/api/manus/webhook', async (req: any, res: any) => {
+    try {
+      const { createWebhookHandler } = await import('../services/manusDeployService');
+
+      // Create handler with custom event callback
+      const handler = createWebhookHandler((event, result) => {
+        console.log(`[Manus Webhook] Event: ${event.event_type}`);
+        console.log(`[Manus Webhook] Result:`, result);
+
+        // Store deployment status in memory for quick lookup
+        (global as any).lastManusDeployment = {
+          event,
+          result,
+          timestamp: new Date().toISOString(),
+        };
+      });
+
+      await handler(req, res);
+    } catch (error) {
+      console.error('[Manus Webhook] Error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Manus deployment status endpoint
+  app.get('/api/manus/status', async (req: any, res: any) => {
+    try {
+      const { getManusStatus, isManusConfigured } = await import('../services/manusDeployService');
+
+      const status = getManusStatus();
+      const lastDeployment = (global as any).lastManusDeployment || null;
+
+      res.json({
+        ...status,
+        lastDeployment,
+        serverTime: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('[Manus Status] Error:', error);
+      res.status(500).json({ error: 'Failed to get Manus status' });
+    }
+  });
+
+  // Trigger new deployment (protected - requires auth)
+  app.post('/api/manus/deploy', async (req: any, res: any) => {
+    try {
+      const { createDeployTask, isManusConfigured } = await import('../services/manusDeployService');
+
+      if (!isManusConfigured()) {
+        return res.status(400).json({
+          error: 'Manus not configured',
+          message: 'MANUS_API_KEY not found in environment variables'
+        });
+      }
+
+      const { webhookUrl, buildCommand, startCommand } = req.body;
+
+      const task = await createDeployTask({
+        buildCommand: buildCommand || 'pnpm build',
+        startCommand: startCommand || 'pnpm start',
+        webhookUrl: webhookUrl || `${req.protocol}://${req.get('host')}/api/manus/webhook`,
+      });
+
+      res.json({
+        success: true,
+        task,
+        message: 'Deployment task created',
+      });
+    } catch (error) {
+      console.error('[Manus Deploy] Error:', error);
+      res.status(500).json({
+        error: 'Deployment failed',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Get specific task status
+  app.get('/api/manus/tasks/:taskId', async (req: any, res: any) => {
+    try {
+      const { getTaskStatus, isManusConfigured } = await import('../services/manusDeployService');
+
+      if (!isManusConfigured()) {
+        return res.status(400).json({ error: 'Manus not configured' });
+      }
+
+      const task = await getTaskStatus(req.params.taskId);
+      res.json(task);
+    } catch (error) {
+      console.error('[Manus Task Status] Error:', error);
+      res.status(500).json({
+        error: 'Failed to get task status',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
