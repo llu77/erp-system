@@ -44,8 +44,8 @@
   },
 
   "domains": {
-    "production": "erp.yourdomain.com",
-    "staging": "erp-staging.yourdomain.com"
+    "production": "sym.manus.space",
+    "staging": "sym-staging.manus.space"
   },
 
   "notifications": {
