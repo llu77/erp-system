@@ -7,7 +7,16 @@ import { defineConfig } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime()];
+const plugins = [
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  vitePluginManusRuntime({
+    // Disable Cloudflare Workers deployment - this is a Node.js server
+    deployTarget: 'nodejs',
+    skipWrangler: true,
+  })
+];
 
 export default defineConfig({
   plugins,

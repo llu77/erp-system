@@ -10,8 +10,17 @@
     "output": "dist"
   },
 
+  "deploy": {
+    "type": "nodejs",
+    "provider": "manus",
+    "command": "echo 'Node.js server ready for deployment'",
+    "skipWrangler": true,
+    "staticAssets": "dist/public",
+    "serverEntry": "dist/index.js"
+  },
+
   "start": {
-    "command": "pnpm start",
+    "command": "NODE_ENV=production node dist/index.js",
     "port": 3000
   },
 
