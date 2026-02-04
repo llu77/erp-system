@@ -1,0 +1,56 @@
+{
+  "$schema": "https://manus.im/schemas/config.json",
+  "name": "erp-system",
+  "type": "fullstack",
+  "runtime": "node",
+  "version": "1.0.0",
+
+  "build": {
+    "command": "pnpm build",
+    "output": "dist"
+  },
+
+  "start": {
+    "command": "pnpm start",
+    "port": 3000
+  },
+
+  "env": {
+    "required": [
+      "DATABASE_URL",
+      "JWT_SECRET"
+    ],
+    "optional": [
+      "NODE_ENV",
+      "RESEND_API_KEY",
+      "RESEND_FROM_EMAIL",
+      "TWILIO_ACCOUNT_SID",
+      "TWILIO_AUTH_TOKEN",
+      "TWILIO_MESSAGING_SERVICE_SID",
+      "TWILIO_PHONE_NUMBER"
+    ]
+  },
+
+  "healthCheck": {
+    "path": "/api/health",
+    "interval": 30,
+    "timeout": 10
+  },
+
+  "scaling": {
+    "minInstances": 1,
+    "maxInstances": 3,
+    "cpuThreshold": 80
+  },
+
+  "domains": {
+    "production": "erp.yourdomain.com",
+    "staging": "erp-staging.yourdomain.com"
+  },
+
+  "notifications": {
+    "onDeploy": true,
+    "onError": true,
+    "channels": ["email", "webhook"]
+  }
+}
