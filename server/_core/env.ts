@@ -58,6 +58,12 @@ export const ENV = {
   twilioAuthToken: getOptionalEnv("TWILIO_AUTH_TOKEN"),
   twilioMessagingServiceSid: getOptionalEnv("TWILIO_MESSAGING_SERVICE_SID"),
   twilioPhoneNumber: getOptionalEnv("TWILIO_PHONE_NUMBER"),
+
+  // Manus Deployment API (Optional)
+  manusApiKey: getOptionalEnv("MANUS_API_KEY"),
+  manusApiUrl: getOptionalEnv("MANUS_API_URL", "https://api.manus.ai/v1"),
+  manusProjectId: getOptionalEnv("MANUS_PROJECT_ID"),
+  manusWebhookSecret: getOptionalEnv("MANUS_WEBHOOK_SECRET"),
 };
 
 // Validate critical environment variables on module load
@@ -94,6 +100,7 @@ export function logEnvStatus(): void {
   console.log(`  - JWT Secret: ${ENV.cookieSecret ? "Configured" : "Missing"}`);
   console.log(`  - Resend Email: ${ENV.resendApiKey ? "Configured" : "Not configured"}`);
   console.log(`  - Twilio SMS: ${ENV.twilioAccountSid ? "Configured" : "Not configured"}`);
+  console.log(`  - Manus API: ${ENV.manusApiKey ? "Configured" : "Not configured"}`);
 }
 
 // Export masked values for debugging (safe to log)
@@ -103,5 +110,6 @@ export function getMaskedEnvValues(): Record<string, string> {
     JWT_SECRET: ENV.cookieSecret ? maskSensitiveValue(ENV.cookieSecret) : "Not set",
     RESEND_API_KEY: ENV.resendApiKey ? maskSensitiveValue(ENV.resendApiKey) : "Not set",
     TWILIO_ACCOUNT_SID: ENV.twilioAccountSid ? maskSensitiveValue(ENV.twilioAccountSid) : "Not set",
+    MANUS_API_KEY: ENV.manusApiKey ? maskSensitiveValue(ENV.manusApiKey) : "Not set",
   };
 }

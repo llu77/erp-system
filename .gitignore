@@ -150,3 +150,6 @@ temp/
 
 # Manus directory (contains sensitive data)
 .manus/
+# Manus local config overrides (may contain secrets)
+manus.config.local.json
+manus.secrets.json
