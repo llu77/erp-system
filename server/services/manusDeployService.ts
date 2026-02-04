@@ -2,12 +2,17 @@
  * Manus Deployment Service
  * خدمة النشر عبر Manus API
  *
- * Docs: https://manus.im/docs/integrations/manus-api
+ * Docs: https://open.manus.im/docs/webhooks
+ * Security: RSA-SHA256 signature verification
  */
 
 import { ENV } from "../_core/env";
+import * as crypto from "crypto";
 
-// Types
+// ============================================
+// Types - API Responses
+// ============================================
+
 interface ManusTaskResponse {
   id: string;
   status: "pending" | "running" | "completed" | "failed";
@@ -30,6 +35,58 @@ interface ManusApiError {
   message: string;
   details?: unknown;
 }
+
+// ============================================
+// Types - Webhook Events
+// ============================================
+
+type ManusWebhookEventType = "task_created" | "task_progress" | "task_stopped";
+
+interface ManusWebhookPayload {
+  event_id: string;
+  event_type: ManusWebhookEventType;
+  task_id: string;
+  task_title?: string;
+  task_url?: string;
+}
+
+interface ManusTaskCreatedPayload extends ManusWebhookPayload {
+  event_type: "task_created";
+}
+
+interface ManusTaskProgressPayload extends ManusWebhookPayload {
+  event_type: "task_progress";
+  progress_detail: {
+    task_id: string;
+    progress_type: "plan_update" | "step_complete" | "status_change";
+    message: string;
+    progress_percentage?: number;
+  };
+}
+
+interface ManusTaskStoppedPayload extends ManusWebhookPayload {
+  event_type: "task_stopped";
+  stop_reason: "finish" | "ask" | "error";
+  message: string;
+  output?: unknown;
+}
+
+type ManusWebhookEvent =
+  | ManusTaskCreatedPayload
+  | ManusTaskProgressPayload
+  | ManusTaskStoppedPayload;
+
+// Webhook verification headers
+interface ManusWebhookHeaders {
+  "x-webhook-signature": string;
+  "x-webhook-timestamp": string;
+}
+
+// ============================================
+// Constants
+// ============================================
+
+const WEBHOOK_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000; // 5 minutes
 
 // Check if Manus is configured
 export function isManusConfigured(): boolean {
@@ -153,53 +210,234 @@ export async function cancelTask(taskId: string): Promise<boolean> {
 }
 
 /**
- * Verify webhook signature from Manus
+ * Verify webhook signature from Manus (RSA-SHA256)
+ *
+ * Manus uses RSA-SHA256 with 2048-bit keys
+ * Signed content format: {timestamp}.{url}.{sha256(body)}
+ *
+ * @param payload - Raw request body
+ * @param signature - X-Webhook-Signature header value
+ * @param timestamp - X-Webhook-Timestamp header value
+ * @param url - Request URL
+ * @param publicKey - Manus public key (optional, uses cached if not provided)
  */
 export function verifyWebhookSignature(
   payload: string,
-  signature: string
+  signature: string,
+  timestamp?: string,
+  url?: string,
+  publicKey?: string
 ): boolean {
-  if (!ENV.manusWebhookSecret) {
-    console.warn("[Manus] Webhook secret not configured");
+  if (!ENV.manusWebhookSecret && !publicKey) {
+    console.warn("[Manus] Webhook secret/public key not configured");
     return false;
   }
 
-  // Simple HMAC verification (Manus uses SHA-256)
-  const crypto = require("crypto");
-  const expectedSignature = crypto
-    .createHmac("sha256", ENV.manusWebhookSecret)
-    .update(payload)
-    .digest("hex");
+  try {
+    // Validate timestamp to prevent replay attacks (5 minute window)
+    if (timestamp) {
+      const timestampMs = parseInt(timestamp, 10) * 1000;
+      const now = Date.now();
+      if (Math.abs(now - timestampMs) > WEBHOOK_TIMESTAMP_TOLERANCE_MS) {
+        console.error("[Manus] Webhook timestamp outside tolerance window");
+        return false;
+      }
+    }
 
-  return signature === `sha256=${expectedSignature}`;
+    // Calculate body hash
+    const bodyHash = crypto
+      .createHash("sha256")
+      .update(payload)
+      .digest("hex");
+
+    // Build signed content: {timestamp}.{url}.{body_hash}
+    const signedContent = timestamp && url
+      ? `${timestamp}.${url}.${bodyHash}`
+      : payload;
+
+    // For RSA-SHA256 verification (if public key provided)
+    if (publicKey) {
+      const contentHash = crypto
+        .createHash("sha256")
+        .update(signedContent)
+        .digest();
+
+      const signatureBuffer = Buffer.from(signature.replace("sha256=", ""), "base64");
+
+      const isValid = crypto.verify(
+        "sha256",
+        contentHash,
+        {
+          key: publicKey,
+          padding: crypto.constants.RSA_PKCS1_PADDING,
+        },
+        signatureBuffer
+      );
+
+      return isValid;
+    }
+
+    // Fallback to HMAC-SHA256 verification
+    const expectedSignature = crypto
+      .createHmac("sha256", ENV.manusWebhookSecret)
+      .update(signedContent)
+      .digest("hex");
+
+    return signature === `sha256=${expectedSignature}` || signature === expectedSignature;
+  } catch (error) {
+    console.error("[Manus] Webhook signature verification error:", error);
+    return false;
+  }
+}
+
+/**
+ * Parse and validate webhook headers
+ */
+export function parseWebhookHeaders(headers: Record<string, string>): ManusWebhookHeaders | null {
+  const signature = headers["x-webhook-signature"] || headers["X-Webhook-Signature"];
+  const timestamp = headers["x-webhook-timestamp"] || headers["X-Webhook-Timestamp"];
+
+  if (!signature) {
+    console.error("[Manus] Missing X-Webhook-Signature header");
+    return null;
+  }
+
+  return {
+    "x-webhook-signature": signature,
+    "x-webhook-timestamp": timestamp || "",
+  };
 }
 
 /**
  * Handle webhook event from Manus
+ *
+ * Event Types:
+ * - task_created: Task was created
+ * - task_progress: Task is making progress (multiple events)
+ * - task_stopped: Task finished or needs input
  */
 export function handleWebhookEvent(
-  event: string,
-  data: unknown
-): { success: boolean; message: string } {
-  console.log(`[Manus] Webhook event received: ${event}`);
+  payload: ManusWebhookEvent
+): { success: boolean; message: string; requiresInput?: boolean; output?: unknown } {
+  console.log(`[Manus] Webhook event received: ${payload.event_type} (${payload.event_id})`);
 
-  switch (event) {
-    case "task.completed":
-      console.log("[Manus] Deployment completed successfully");
-      return { success: true, message: "Deployment completed" };
+  switch (payload.event_type) {
+    case "task_created": {
+      const event = payload as ManusTaskCreatedPayload;
+      console.log(`[Manus] Task created: ${event.task_id}`);
+      console.log(`  - Title: ${event.task_title || "N/A"}`);
+      console.log(`  - URL: ${event.task_url || "N/A"}`);
+      return {
+        success: true,
+        message: `Task ${event.task_id} created`
+      };
+    }
 
-    case "task.failed":
-      console.error("[Manus] Deployment failed:", data);
-      return { success: false, message: "Deployment failed" };
+    case "task_progress": {
+      const event = payload as ManusTaskProgressPayload;
+      const detail = event.progress_detail;
+      console.log(`[Manus] Task progress: ${detail.progress_type}`);
+      console.log(`  - Message: ${detail.message}`);
+      if (detail.progress_percentage !== undefined) {
+        console.log(`  - Progress: ${detail.progress_percentage}%`);
+      }
+      return {
+        success: true,
+        message: detail.message
+      };
+    }
 
-    case "task.started":
-      console.log("[Manus] Deployment started");
-      return { success: true, message: "Deployment started" };
+    case "task_stopped": {
+      const event = payload as ManusTaskStoppedPayload;
+      console.log(`[Manus] Task stopped: ${event.stop_reason}`);
+      console.log(`  - Message: ${event.message}`);
+
+      if (event.stop_reason === "finish") {
+        console.log("[Manus] ✅ Task completed successfully");
+        return {
+          success: true,
+          message: event.message,
+          output: event.output
+        };
+      }
+
+      if (event.stop_reason === "ask") {
+        console.log("[Manus] ⏳ Task requires user input");
+        return {
+          success: true,
+          message: event.message,
+          requiresInput: true
+        };
+      }
+
+      if (event.stop_reason === "error") {
+        console.error("[Manus] ❌ Task failed:", event.message);
+        return {
+          success: false,
+          message: event.message
+        };
+      }
+
+      return {
+        success: true,
+        message: event.message
+      };
+    }
 
     default:
-      console.log(`[Manus] Unknown event: ${event}`);
-      return { success: true, message: `Event ${event} received` };
+      console.log(`[Manus] Unknown event type: ${(payload as ManusWebhookPayload).event_type}`);
+      return {
+        success: true,
+        message: `Unknown event received`
+      };
   }
+}
+
+/**
+ * Express middleware for handling Manus webhooks
+ */
+export function createWebhookHandler(
+  onEvent?: (event: ManusWebhookEvent, result: ReturnType<typeof handleWebhookEvent>) => void
+) {
+  return async (req: { body: unknown; headers: Record<string, string>; url?: string }, res: { status: (code: number) => { json: (data: unknown) => void } }) => {
+    try {
+      // Parse headers
+      const headers = parseWebhookHeaders(req.headers);
+      if (!headers) {
+        return res.status(401).json({ error: "Missing webhook signature" });
+      }
+
+      // Get raw body
+      const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+
+      // Verify signature
+      const isValid = verifyWebhookSignature(
+        rawBody,
+        headers["x-webhook-signature"],
+        headers["x-webhook-timestamp"],
+        req.url
+      );
+
+      if (!isValid) {
+        console.error("[Manus] Invalid webhook signature");
+        return res.status(401).json({ error: "Invalid signature" });
+      }
+
+      // Parse and handle event
+      const payload = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      const result = handleWebhookEvent(payload as ManusWebhookEvent);
+
+      // Callback for custom handling
+      if (onEvent) {
+        onEvent(payload as ManusWebhookEvent, result);
+      }
+
+      return res.status(200).json({ received: true, ...result });
+    } catch (error) {
+      console.error("[Manus] Webhook handler error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  };
 }
 
 /**
@@ -219,12 +457,34 @@ export function getManusStatus(): {
   };
 }
 
+// ============================================
+// Exports
+// ============================================
+
 export default {
+  // Configuration
   isManusConfigured,
+  getManusStatus,
+
+  // Task Operations
   createDeployTask,
   getTaskStatus,
   cancelTask,
+
+  // Webhook Handling
   verifyWebhookSignature,
+  parseWebhookHeaders,
   handleWebhookEvent,
-  getManusStatus,
+  createWebhookHandler,
+};
+
+// Type exports for consumers
+export type {
+  ManusTaskResponse,
+  ManusDeployConfig,
+  ManusWebhookEvent,
+  ManusWebhookEventType,
+  ManusTaskCreatedPayload,
+  ManusTaskProgressPayload,
+  ManusTaskStoppedPayload,
 };
