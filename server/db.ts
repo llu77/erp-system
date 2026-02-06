@@ -1114,6 +1114,25 @@ export async function getDailyRevenueByDate(branchId: number, date: Date) {
   return result.length > 0 ? result[0] : null;
 }
 
+// الحصول على إيراد يومي بالمعرف (ID)
+export async function getDailyRevenueById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(dailyRevenues)
+    .where(eq(dailyRevenues.id, id))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+// تحديث صور الموازنة لإيراد يومي
+export async function updateDailyRevenueBalanceImages(id: number, balanceImages: Array<{ url: string; key: string; uploadedAt: string }>) {
+  const db = await getDb();
+  if (!db) return null;
+  return await db.update(dailyRevenues)
+    .set({ balanceImages: balanceImages })
+    .where(eq(dailyRevenues.id, id));
+}
+
 // ==================== دوال إيرادات الموظفين ====================
 export async function createEmployeeRevenue(data: InsertEmployeeRevenue) {
   const db = await getDb();
@@ -11810,6 +11829,39 @@ export async function cancelPosInvoice(invoiceId: number, reason?: string) {
       invoiceId,
       reason,
       action: 'cancelPosInvoice'
+    });
+    throw error;
+  }
+}
+
+// حذف فاتورة كاشير نهائياً
+export async function deletePosInvoice(invoiceId: number) {
+  const db = await getDb();
+  if (!db) {
+    posLogger.error('فشل حذف فاتورة: قاعدة البيانات غير متاحة', new Error('Database not available'), {
+      invoiceId,
+      action: 'deletePosInvoice'
+    });
+    throw new Error('قاعدة البيانات غير متاحة');
+  }
+  
+  try {
+    // حذف عناصر الفاتورة أولاً
+    await db.delete(posInvoiceItems).where(eq(posInvoiceItems.invoiceId, invoiceId));
+    
+    // حذف الفاتورة
+    await db.delete(posInvoices).where(eq(posInvoices.id, invoiceId));
+    
+    posLogger.info('تم حذف فاتورة كاشير بنجاح', {
+      invoiceId,
+      action: 'deletePosInvoice'
+    });
+    
+    return { success: true };
+  } catch (error) {
+    posLogger.error('فشل حذف فاتورة', error, {
+      invoiceId,
+      action: 'deletePosInvoice'
     });
     throw error;
   }

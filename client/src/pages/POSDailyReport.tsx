@@ -3,6 +3,7 @@ import DailyConfirmationDialog from '@/components/DailyConfirmationDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -30,6 +31,10 @@ export default function POSDailyReport() {
   const { user } = useAuth();
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // YYYY-MM-DD format
+  });
   
   // Filter branches based on user permissions
   const userBranchId = user?.branchId;

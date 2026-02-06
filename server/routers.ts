@@ -2368,6 +2368,46 @@ export const appRouter = router({
           },
         };
       }),
+    // تحديث صور الموازنة لسجل إيرادات موجود (لإكمال السجلات المرسلة من الكاشير)
+    updateBalanceImages: supervisorInputProcedure
+      .input(z.object({
+        revenueId: z.number(),
+        balanceImages: z.array(z.object({
+          url: z.string(),
+          key: z.string(),
+          uploadedAt: z.string(),
+        })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // التحقق من وجود السجل
+        const revenue = await db.getDailyRevenueById(input.revenueId);
+        if (!revenue) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'السجل غير موجود' });
+        }
+
+        // التحقق من صلاحية الوصول للفرع للمشرفين
+        if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null && ctx.user.branchId !== revenue.branchId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك تعديل إيرادات فرع آخر' });
+        }
+
+        // التحقق من وجود صور موازنة
+        if (!input.balanceImages || input.balanceImages.length === 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'يجب رفع صورة الموازنة على الأقل' });
+        }
+
+        // تحديث صور الموازنة
+        await db.updateDailyRevenueBalanceImages(input.revenueId, input.balanceImages);
+
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'update',
+          entityType: 'revenue',
+          details: `تم رفع صورة الموازنة للإيراد رقم ${input.revenueId}`,
+        });
+
+        return { success: true, message: 'تم رفع صورة الموازنة بنجاح' };
+      }),
   }),
 
   // ==================== إدارة البونص الأسبوعي ====================
@@ -9715,6 +9755,22 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         .input(z.object({ invoiceId: z.number(), reason: z.string().optional() }))
         .mutation(async ({ input }) => {
           return await db.cancelPosInvoice(input.invoiceId, input.reason);
+        }),
+
+      // حذف فاتورة نهائياً (للأدمن فقط)
+      delete: adminProcedure
+        .input(z.object({ invoiceId: z.number() }))
+        .mutation(async ({ input, ctx }) => {
+          await db.deletePosInvoice(input.invoiceId);
+          await db.createActivityLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name || 'مستخدم',
+            action: 'delete',
+            entityType: 'pos_invoice',
+            entityId: input.invoiceId,
+            details: `تم حذف فاتورة الكاشير`,
+          });
+          return { success: true, message: 'تم حذف الفاتورة بنجاح' };
         }),
     }),
 

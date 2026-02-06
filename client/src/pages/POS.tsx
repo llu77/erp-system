@@ -103,7 +103,7 @@ export default function POS() {
   const [showLoyaltyDialog, setShowLoyaltyDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [lastInvoice, setLastInvoice] = useState<{ invoiceNumber: string; total: number } | null>(null);
+  const [lastInvoice, setLastInvoice] = useState<{ invoiceNumber: string; total: number; paymentMethod: 'cash' | 'card' | 'split' | 'loyalty'; cashAmount?: number; cardAmount?: number } | null>(null);
   const [lastCartItems, setLastCartItems] = useState<CartItem[]>([]);
   const [lastSubtotal, setLastSubtotal] = useState<number>(0);
   const [lastDiscountAmount, setLastDiscountAmount] = useState<number>(0);
@@ -169,10 +169,13 @@ export default function POS() {
       setLastCartItems([...cart]);
       setLastSubtotal(subtotal);
       setLastDiscountAmount(discountAmount);
-      setLastPaymentMethod(paymentMethod);
-      setLastCashAmount(paymentMethod === 'cash' ? total : cashAmount);
-      setLastCardAmount(paymentMethod === 'card' ? total : cardAmount);
-      setLastInvoice({ invoiceNumber: data.invoiceNumber, total: data.total });
+setLastInvoice({ 
+        invoiceNumber: data.invoiceNumber, 
+        total: data.total, 
+        paymentMethod: paymentMethod,
+        cashAmount: paymentMethod === 'cash' ? data.total : cashAmount,
+        cardAmount: paymentMethod === 'card' ? data.total : cardAmount
+      });
       setShowPaymentDialog(false);
       setShowSuccessDialog(true);
       clearCart();
@@ -702,13 +705,13 @@ export default function POS() {
           
           <!-- طريقة الدفع -->
           <div class="payment-method">
-            طريقة الدفع: ${lastPaymentMethod === 'cash' ? 'نقدي (كاش)' : lastPaymentMethod === 'card' ? 'شبكة (Card)' : lastPaymentMethod === 'split' ? 'تقسيم (كاش + شبكة)' : 'برنامج الولاء'}
+            طريقة الدفع: ${lastInvoice.paymentMethod === 'cash' ? 'نقدي (كاش)' : lastInvoice.paymentMethod === 'card' ? 'شبكة (Card)' : lastInvoice.paymentMethod === 'split' ? 'تقسيم (كاش + شبكة)' : 'برنامج الولاء'}
           </div>
-          ${lastPaymentMethod === 'split' ? `
-            <div class="split-details" style="text-align:center;font-size:10px;margin-top:4px;padding:4px;border:1px dashed #000;">
-              <span>كاش: ${lastCashAmount.toFixed(2)} ر.س</span> |
-              <span>شبكة: ${lastCardAmount.toFixed(2)} ر.س</span>
-            </div>
+          ${lastInvoice.paymentMethod === 'split' && lastInvoice.cashAmount !== undefined && lastInvoice.cardAmount !== undefined ? `
+          <div style="text-align: center; font-size: 10px; margin-top: 4px; padding: 4px; border: 1px dashed #000;">
+            <span>كاش: ${lastInvoice.cashAmount.toFixed(2)} ر.س</span> | 
+            <span>شبكة: ${lastInvoice.cardAmount.toFixed(2)} ر.س</span>
+          </div>
           ` : ''}
           
           ${loyaltyCustomer ? `
