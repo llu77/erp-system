@@ -217,34 +217,33 @@ const generateReceiptHTML = (
            ═══════════════════════════════════════════════════════════════ */
         .header {
           text-align: center;
-          padding-bottom: 10px;
-          border-bottom: 3px double #000;
-          margin-bottom: 10px;
+          padding-bottom: 4px;
+          border-bottom: 2px solid #000;
+          margin-bottom: 4px;
         }
         .logo-img {
-          width: 60px;
-          height: 60px;
-          margin: 0 auto 8px;
+          width: 40px;
+          height: 40px;
+          margin: 0 auto 3px;
           display: block;
           object-fit: contain;
         }
         .logo-default {
-          margin: 0 auto 8px;
+          margin: 0 auto 3px;
           display: flex;
           justify-content: center;
         }
         .store-name {
-          font-size: ${fonts.title};
-          font-weight: bold;
-          margin-bottom: 4px;
-          letter-spacing: 2px;
-          text-transform: uppercase;
-        }
-        .branch-name {
           font-size: ${fonts.header};
           font-weight: bold;
-          margin-bottom: 4px;
-          padding: 4px 8px;
+          margin-bottom: 2px;
+          letter-spacing: 1px;
+        }
+        .branch-name {
+          font-size: ${fonts.base};
+          font-weight: bold;
+          margin-bottom: 2px;
+          padding: 2px 6px;
           background: #000;
           color: #fff;
           display: inline-block;
@@ -264,9 +263,9 @@ const generateReceiptHTML = (
           margin-bottom: 6px;
         }
         .invoice-box {
-          margin-top: 8px;
-          padding: 6px 12px;
-          border: 2px solid #000;
+          margin-top: 3px;
+          padding: 2px 8px;
+          border: 1px solid #000;
           display: inline-block;
         }
         .invoice-label {
@@ -283,7 +282,7 @@ const generateReceiptHTML = (
            معلومات الفاتورة
            ═══════════════════════════════════════════════════════════════ */
         .info-section {
-          padding: 8px 0;
+          padding: 3px 0;
           border-bottom: 1px dashed #000;
         }
         .info-grid {
@@ -307,17 +306,16 @@ const generateReceiptHTML = (
            جدول الخدمات - تصميم واضح ومحترف
            ═══════════════════════════════════════════════════════════════ */
         .services-section {
-          padding: 10px 0;
-          border-bottom: 2px solid #000;
+          padding: 3px 0;
+          border-bottom: 1px solid #000;
         }
         .services-title {
           text-align: center;
           font-weight: bold;
-          font-size: ${fonts.header};
-          margin-bottom: 8px;
-          padding: 4px;
-          background: #f0f0f0;
-          border: 1px solid #000;
+          font-size: ${fonts.base};
+          margin-bottom: 3px;
+          padding: 2px;
+          border-bottom: 1px dashed #000;
         }
         .services-header {
           display: flex;
@@ -325,8 +323,8 @@ const generateReceiptHTML = (
           font-size: 9px;
           background: #000;
           color: #fff;
-          padding: 6px 4px;
-          margin-bottom: 6px;
+          padding: 3px 4px;
+          margin-bottom: 3px;
         }
         .services-header .col-name { flex: 1; text-align: right; }
         .services-header .col-qty { width: 30px; text-align: center; }
@@ -336,8 +334,8 @@ const generateReceiptHTML = (
         .service-item {
           display: flex;
           align-items: center;
-          padding: 6px 4px;
-          border-bottom: 1px dotted #999;
+          padding: 2px 2px;
+          border-bottom: 1px dotted #ccc;
           font-size: ${fonts.base};
         }
         .service-item:last-child {
@@ -353,12 +351,9 @@ const generateReceiptHTML = (
           padding-left: 4px;
         }
         .service-qty {
-          width: 30px;
+          width: 25px;
           text-align: center;
           font-weight: bold;
-          background: #e0e0e0;
-          padding: 2px;
-          border-radius: 3px;
           margin: 0 2px;
         }
         .service-price {
@@ -377,18 +372,18 @@ const generateReceiptHTML = (
            المجاميع - تصميم بارز
            ═══════════════════════════════════════════════════════════════ */
         .totals-section {
-          padding: 10px 0;
+          padding: 3px 0;
         }
         .total-row {
           display: flex;
           justify-content: space-between;
-          padding: 4px 0;
-          font-size: ${fonts.header};
+          padding: 2px 0;
+          font-size: ${fonts.base};
         }
         .total-row.subtotal {
           border-bottom: 1px dashed #999;
-          padding-bottom: 6px;
-          margin-bottom: 4px;
+          padding-bottom: 3px;
+          margin-bottom: 2px;
         }
         .total-row.discount {
           color: #000;
@@ -398,12 +393,11 @@ const generateReceiptHTML = (
           font-weight: bold;
         }
         .total-row.grand-total {
-          font-size: ${fonts.total};
+          font-size: ${fonts.header};
           font-weight: bold;
-          border: 3px solid #000;
-          padding: 12px 8px;
-          margin-top: 8px;
-          background: #f5f5f5;
+          border: 2px solid #000;
+          padding: 4px;
+          margin-top: 3px;
         }
         .total-row.grand-total .currency {
           font-size: 12px;
@@ -415,10 +409,9 @@ const generateReceiptHTML = (
            ═══════════════════════════════════════════════════════════════ */
         .payment-section {
           text-align: center;
-          margin: 10px 0;
-          padding: 10px;
-          border: 2px solid #000;
-          background: #f9f9f9;
+          margin: 3px 0;
+          padding: 4px;
+          border: 1px solid #000;
         }
         .payment-title {
           font-size: 9px;
@@ -455,14 +448,12 @@ const generateReceiptHTML = (
            ═══════════════════════════════════════════════════════════════ */
         .loyalty-section {
           text-align: center;
-          margin: 8px 0;
-          padding: 8px;
-          border: 2px dashed #000;
-          background: #fffef0;
+          margin: 3px 0;
+          padding: 3px;
+          border: 1px dashed #000;
         }
         .loyalty-icon {
-          font-size: 18px;
-          margin-bottom: 4px;
+          display: none;
         }
         .loyalty-title {
           font-weight: bold;
@@ -477,10 +468,9 @@ const generateReceiptHTML = (
            الملاحظات
            ═══════════════════════════════════════════════════════════════ */
         .notes-section {
-          margin: 8px 0;
-          padding: 8px;
-          border: 1px solid #000;
-          background: #fafafa;
+          margin: 3px 0;
+          padding: 3px;
+          border: 1px dashed #000;
         }
         .notes-title {
           font-weight: bold;
@@ -496,16 +486,16 @@ const generateReceiptHTML = (
            ═══════════════════════════════════════════════════════════════ */
         .qr-section {
           text-align: center;
-          padding: 12px 0;
+          padding: 3px 0;
           border-top: 1px dashed #000;
-          margin-top: 10px;
+          margin-top: 3px;
         }
         .qr-code {
-          width: 90px;
-          height: 90px;
-          margin: 8px auto;
-          border: 2px solid #000;
-          padding: 4px;
+          width: 60px;
+          height: 60px;
+          margin: 3px auto;
+          border: 1px solid #000;
+          padding: 2px;
           background: #fff;
         }
         .qr-text {
@@ -518,29 +508,26 @@ const generateReceiptHTML = (
            ═══════════════════════════════════════════════════════════════ */
         .footer {
           text-align: center;
-          padding-top: 12px;
-          border-top: 3px double #000;
+          padding-top: 4px;
+          border-top: 1px solid #000;
         }
         .footer-message {
-          font-size: 14px;
+          font-size: 10px;
           font-weight: bold;
-          margin-bottom: 6px;
+          margin-bottom: 2px;
         }
         .footer-welcome {
-          font-size: ${fonts.base};
-          margin: 4px 0;
+          font-size: 9px;
+          margin: 2px 0;
           font-style: italic;
         }
         .footer-separator {
-          margin: 8px 0;
-          font-size: 8px;
-          color: #999;
+          display: none;
         }
         .footer-brand {
-          font-size: 8px;
-          color: #666;
-          padding-top: 6px;
-          border-top: 1px dashed #ccc;
+          font-size: 7px;
+          color: #999;
+          margin-top: 2px;
         }
         
         /* ═══════════════════════════════════════════════════════════════
@@ -726,14 +713,7 @@ const generateReceiptHTML = (
              ═══════════════════════════════════════════════════════════════ -->
         <div class="footer">
           <div class="footer-message">${settings.footerMessage}</div>
-          <div class="footer-welcome">${settings.welcomeMessage}</div>
-          <div class="footer-welcome">نتمنى لكم يوماً سعيداً</div>
-          <div class="footer-separator">═══════════════════════</div>
-          <div class="footer-brand">
-            ${settings.storeName || 'Symbol AI'} - نظام نقاط البيع الذكي
-            <br/>
-            Powered by Symbol AI ERP
-          </div>
+          <div class="footer-brand">Powered by Symbol AI</div>
         </div>
       </div>
       

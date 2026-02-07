@@ -13,8 +13,10 @@ import { toast } from "sonner";
 import { 
   Loader2, Search, Filter, CheckCircle, XCircle, Clock, Eye, 
   FileText, Calendar, DollarSign, AlertTriangle, LogOut, User,
-  Building, MessageSquare
+  Building, MessageSquare, Trash2
 } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const requestTypes = [
   { value: "advance", label: "سلفة", icon: DollarSign },
@@ -49,6 +51,9 @@ export default function ManageRequests() {
   const [actionType, setActionType] = useState<"approve" | "reject" | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
+  const [deleteRequestId, setDeleteRequestId] = useState<number | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   // جلب البيانات
   const { data: requests, isLoading, refetch } = trpc.employeeRequests.list.useQuery({
@@ -65,6 +70,17 @@ export default function ManageRequests() {
     { requestId: selectedRequest! },
     { enabled: !!selectedRequest }
   );
+
+  const deleteMutation = trpc.employeeRequests.delete.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      setDeleteRequestId(null);
+      refetch();
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error.message || "فشل حذف الطلب");
+    },
+  });
 
   const updateStatusMutation = trpc.employeeRequests.updateStatus.useMutation({
     onSuccess: (data) => {
@@ -339,6 +355,17 @@ export default function ManageRequests() {
                                   <XCircle className="h-4 w-4" />
                                 </Button>
                               </>
+                            )}
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:text-red-500 hover:bg-red-500/10"
+                                onClick={() => setDeleteRequestId(request.id)}
+                                title="حذف الطلب"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             )}
                           </div>
                         </td>
@@ -689,6 +716,36 @@ export default function ManageRequests() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* نافذة تأكيد الحذف */}
+      <AlertDialog open={deleteRequestId !== null} onOpenChange={(open) => !open && setDeleteRequestId(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف الطلب</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذا الطلب؟ هذا الإجراء لا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (deleteRequestId) {
+                  deleteMutation.mutate({ id: deleteRequestId });
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 ml-2" />
+              )}
+              حذف نهائي
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

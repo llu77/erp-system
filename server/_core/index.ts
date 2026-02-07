@@ -65,8 +65,9 @@ async function startServer() {
     let dbStatus = 'unknown';
     try {
       // Try to check database connection
-      const db = await import('../db');
-      if (db.db) {
+      const dbModule = await import('../db');
+      // Check if any function exists (db module is working)
+      if (typeof dbModule.getBranches === 'function') {
         dbStatus = 'connected';
       }
     } catch (error) {

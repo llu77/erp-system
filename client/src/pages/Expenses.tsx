@@ -57,6 +57,7 @@ import {
   Download,
   FileSpreadsheet,
 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 // تصنيفات المصاريف
 const expenseCategories = [
@@ -194,6 +195,7 @@ export default function Expenses() {
   const [advancesDateFrom, setAdvancesDateFrom] = useState('');
   const [advancesDateTo, setAdvancesDateTo] = useState('');
   const [advancesStatusFilter, setAdvancesStatusFilter] = useState<'all' | 'deducted' | 'pending'>('all');
+  const [deleteAdvanceId, setDeleteAdvanceId] = useState<number | null>(null);
 
   // Mutations
   const createMutation = trpc.expenses.create.useMutation({
@@ -237,6 +239,18 @@ export default function Expenses() {
     },
     onError: (error) => {
       toast.error(error.message);
+    },
+  });
+
+  // حذف سلفة
+  const deleteAdvanceMutation = trpc.expenses.deleteAdvance.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      setDeleteAdvanceId(null);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "فشل حذف السلفة");
     },
   });
 
@@ -1591,6 +1605,7 @@ export default function Expenses() {
                         <TableHead>الموافق</TableHead>
                         <TableHead>حالة الخصم</TableHead>
                         <TableHead>تاريخ الخصم</TableHead>
+                        {canDelete && <TableHead>إجراءات</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1646,6 +1661,19 @@ export default function Expenses() {
                               : '-'
                             }
                           </TableCell>
+                          {canDelete && (
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:text-red-500 hover:bg-red-500/10"
+                                onClick={() => setDeleteAdvanceId(advance.id)}
+                                title="حذف السلفة"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1784,6 +1812,36 @@ export default function Expenses() {
             </form>
           </DialogContent>
         </Dialog>
+        {/* نافذة تأكيد حذف السلفة */}
+        <AlertDialog open={deleteAdvanceId !== null} onOpenChange={(open) => !open && setDeleteAdvanceId(null)}>
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>تأكيد حذف السلفة</AlertDialogTitle>
+              <AlertDialogDescription>
+                هل أنت متأكد من حذف هذه السلفة؟ هذا الإجراء لا يمكن التراجع عنه.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex gap-2">
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => {
+                  if (deleteAdvanceId) {
+                    deleteAdvanceMutation.mutate({ id: deleteAdvanceId });
+                  }
+                }}
+                disabled={deleteAdvanceMutation.isPending}
+              >
+                {deleteAdvanceMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                ) : (
+                  <Trash2 className="h-4 w-4 ml-2" />
+                )}
+                حذف نهائي
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   );

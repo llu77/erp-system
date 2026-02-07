@@ -56,9 +56,14 @@ export default function POSDailyReport() {
       setSelectedBranchId(userBranchId);
     }
   }, [isAdmin, userBranchId, selectedBranchId]);
-  const { data: todayInvoices = [] } = trpc.pos.invoices.today.useQuery(
-    { branchId: selectedBranchId! },
-    { enabled: !!selectedBranchId }
+  // جلب فواتير التاريخ المحدد (اليوم أو تاريخ سابق)
+  const { data: todayInvoices = [] } = trpc.pos.invoices.byDateRange.useQuery(
+    { 
+      branchId: selectedBranchId!, 
+      startDate: selectedDate,
+      endDate: selectedDate,
+    },
+    { enabled: !!selectedBranchId && !!selectedDate }
   );
   
   // Daily report will be calculated from invoices
@@ -98,14 +103,16 @@ export default function POSDailyReport() {
       .sort((a, b) => b.totalRevenue - a.totalRevenue);
   }, [todayInvoices]);
   
-  const currentDate = new Date();
-  const formattedDate = currentDate.toLocaleDateString('ar-EG', {
+  // استخدام التاريخ المحدد بدلاً من اليوم الحالي
+  const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+  const isToday = selectedDate === new Date().toISOString().split('T')[0];
+  const formattedDate = selectedDateObj.toLocaleDateString('ar-EG', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
-  const formattedDateShort = currentDate.toLocaleDateString('en-GB', {
+  const formattedDateShort = selectedDateObj.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -223,7 +230,7 @@ export default function POSDailyReport() {
     <div className="h-screen flex flex-col bg-background overflow-hidden" dir="rtl">
       {/* POS Navigation Header */}
       <POSNavHeader 
-        title="تقرير اليوم" 
+        title={isToday ? "تقرير اليوم" : "تقرير تاريخي"} 
         subtitle={formattedDate}
         icon={<BarChart3 className="h-5 w-5 text-primary" />}
       />
@@ -231,6 +238,20 @@ export default function POSDailyReport() {
       {/* Sub Header with Branch Selection & Actions */}
       <div className="h-14 bg-card/50 border-b flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-3">
+          {/* اختيار التاريخ */}
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-[150px] h-9"
+              max={new Date().toISOString().split('T')[0]}
+            />
+          </div>
+          
+          <Separator orientation="vertical" className="h-6" />
+          
           <Store className="h-5 w-5 text-primary" />
           {isAdmin ? (
             <Select value={selectedBranchId?.toString() || ''} onValueChange={(v) => setSelectedBranchId(Number(v))}>

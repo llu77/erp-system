@@ -4216,6 +4216,14 @@ ${discrepancyRows}
       }
       return await db.getAdvancesStats();
     }),
+
+    // حذف سلفة (للأدمن فقط)
+    deleteAdvance: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteEmployeeRequest(input.id);
+        return { success: true, message: 'تم حذف السلفة بنجاح' };
+      }),
   }),
 
   // ==================== إجراءات الإعدادات ====================
