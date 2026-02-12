@@ -5034,21 +5034,21 @@ export async function generateLoyaltyCustomerId(): Promise<string> {
   const db = await getDb();
   if (!db) return `LC-${Date.now()}`;
   
-  const lastCustomer = await db.select({ customerId: loyaltyCustomers.customerId })
-    .from(loyaltyCustomers)
-    .orderBy(desc(loyaltyCustomers.id))
-    .limit(1);
+  // استخدام SQL مباشر للحصول على أعلى رقم في customerId
+  // بدلاً من ORDER BY id DESC الذي قد لا يتطابق مع أعلى customerId
+  const result = await db.select({ customerId: loyaltyCustomers.customerId })
+    .from(loyaltyCustomers);
   
-  let nextNumber = 1;
-  if (lastCustomer.length > 0) {
-    const lastId = lastCustomer[0].customerId;
-    const match = lastId.match(/LC-(\d+)/);
+  let maxNumber = 0;
+  for (const row of result) {
+    const match = row.customerId.match(/LC-(\d+)/);
     if (match) {
-      nextNumber = parseInt(match[1]) + 1;
+      const num = parseInt(match[1]);
+      if (num > maxNumber) maxNumber = num;
     }
   }
   
-  return `LC-${nextNumber.toString().padStart(4, '0')}`;
+  return `LC-${(maxNumber + 1).toString().padStart(4, '0')}`;
 }
 
 // توليد معرف فريد للزيارة
@@ -5056,21 +5056,21 @@ export async function generateLoyaltyVisitId(): Promise<string> {
   const db = await getDb();
   if (!db) return `LV-${Date.now()}`;
   
-  const lastVisit = await db.select({ visitId: loyaltyVisits.visitId })
-    .from(loyaltyVisits)
-    .orderBy(desc(loyaltyVisits.id))
-    .limit(1);
+  // استخدام فحص جميع السجلات للحصول على أعلى رقم في visitId
+  // بدلاً من ORDER BY id DESC الذي قد لا يتطابق مع أعلى visitId
+  const result = await db.select({ visitId: loyaltyVisits.visitId })
+    .from(loyaltyVisits);
   
-  let nextNumber = 1;
-  if (lastVisit.length > 0) {
-    const lastId = lastVisit[0].visitId;
-    const match = lastId.match(/LV-(\d+)/);
+  let maxNumber = 0;
+  for (const row of result) {
+    const match = row.visitId.match(/LV-(\d+)/);
     if (match) {
-      nextNumber = parseInt(match[1]) + 1;
+      const num = parseInt(match[1]);
+      if (num > maxNumber) maxNumber = num;
     }
   }
   
-  return `LV-${nextNumber.toString().padStart(6, '0')}`;
+  return `LV-${(maxNumber + 1).toString().padStart(6, '0')}`;
 }
 
 // تسجيل عميل جديد في برنامج الولاء
