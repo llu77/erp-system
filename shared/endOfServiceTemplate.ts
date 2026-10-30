@@ -609,7 +609,7 @@ const STYLES = (fontFace: string) => `
   .sheet { position: relative; display: flex; flex-direction: column; min-height: 276mm; }
   @media screen {
     html, body { background: #e9ecf1; }
-    .sheet { width: 210mm; min-height: 297mm; margin: 12px auto; padding: 10mm 11mm; background: #ffffff; box-shadow: 0 2px 14px rgba(15, 23, 42, 0.18); }
+    .sheet { width: 210mm; max-width: 100%; min-height: 297mm; margin: 12px auto; padding: 10mm 11mm; background: #ffffff; box-shadow: 0 2px 14px rgba(15, 23, 42, 0.18); }
   }
 
   .watermark {
@@ -684,6 +684,7 @@ const STYLES = (fontFace: string) => `
   /* فاصل مرن يدفع التذييل لأسفل الصفحة مع مسافة دنيا عن المحتوى */
   .push { flex: 1 0 10px; }
   .doc-footer { padding-top: 5px; border-top: 1px solid #cfd6df; display: flex; justify-content: space-between; gap: 10px; font-size: 9px; color: #5b6573; }
+  .doc-footer .ltr { white-space: nowrap; }
 
   /* المخالصة: مضغوطة لتتسع في صفحة واحدة للحالات المعتادة */
   .doc-settlement .lh-logo img { width: 50px; height: 50px; }
