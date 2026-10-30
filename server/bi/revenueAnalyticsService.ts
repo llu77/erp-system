@@ -10,7 +10,7 @@ import {
   monthlyRecords
 } from "../../drizzle/schema";
 import { sql, eq, and, gte, lte, desc, asc } from "drizzle-orm";
-import { TOTAL_FIXED_COSTS, FIXED_COSTS_PER_BRANCH, BRANCHES_COUNT } from "./financialForecastService";
+import { TOTAL_FIXED_COSTS, FIXED_COSTS_PER_BRANCH, BRANCHES_COUNT, excludeFixedCostCategories } from "./financialForecastService";
 
 // ==================== أنواع البيانات ====================
 
@@ -311,8 +311,8 @@ export async function analyzeExpenses(
   const conditions = [
     gte(expenses.expenseDate, startDate),
     lte(expenses.expenseDate, endDate),
-    // استبعاد الفئات المكررة مع التكاليف الثابتة
-    sql`${expenses.category} NOT IN ('shop_rent', 'housing_rent', 'electricity', 'internet')`
+    // استبعاد الفئات المكررة مع التكاليف الثابتة (ومنها رواتب المسير المعتمد)
+    excludeFixedCostCategories()
   ];
   if (branchId) conditions.push(eq(expenses.branchId, branchId));
 
@@ -353,8 +353,8 @@ export async function analyzeExpenses(
   const previousConditions = [
     gte(expenses.expenseDate, previousStart),
     lte(expenses.expenseDate, previousEnd),
-    // استبعاد الفئات المكررة مع التكاليف الثابتة
-    sql`${expenses.category} NOT IN ('shop_rent', 'housing_rent', 'electricity', 'internet')`
+    // استبعاد الفئات المكررة مع التكاليف الثابتة (ومنها رواتب المسير المعتمد)
+    excludeFixedCostCategories()
   ];
   if (branchId) previousConditions.push(eq(expenses.branchId, branchId));
 
@@ -999,7 +999,7 @@ export async function generateMonthlyComparisonReport(
           eq(expenses.branchId, branch.id),
           gte(expenses.expenseDate, month.start),
           lte(expenses.expenseDate, month.end),
-          sql`${expenses.category} NOT IN ('shop_rent', 'housing_rent', 'electricity', 'internet')`
+          excludeFixedCostCategories()
         ));
       
       const recordedExpenses = Number(expenseData?.total || 0);

@@ -15,6 +15,7 @@ import * as db from "../db";
 import { sendAdvancedNotification, NotificationType } from "../notifications/advancedNotificationService";
 import { checkAndSendScheduledReminders, checkAndSendDocumentExpiryReminders } from "../notifications/scheduledNotificationService";
 import { sendPerformanceAlerts } from "../notifications/performanceAlerts";
+import { runAutoExpensesMaintenance } from "../expenses/autoExpenses";
 
 // ==================== أنواع البيانات ====================
 
@@ -385,11 +386,33 @@ function createScheduledJobs(): void {
     task: null,
   };
   
+  // مهمة المصاريف الثابتة الشهرية (إيجار المحل والسكن والإنترنت) - أول يوم من كل شهر 12:05 صباحاً
+  const monthlyFixedExpensesJob: ScheduledJob = {
+    id: 'monthly_fixed_expenses',
+    name: 'Monthly Fixed Expenses',
+    nameAr: 'المصاريف الثابتة الشهرية',
+    description: 'إضافة المصاريف الثابتة لكل فرع (إيجار محل، إيجار سكن، إنترنت) تلقائياً في بداية الشهر',
+    cronExpression: '5 0 1 * *', // أول يوم من كل شهر الساعة 00:05
+    timezone: TIMEZONE,
+    isActive: true,
+    runCount: 0,
+    failCount: 0,
+    task: null,
+  };
+
   jobs.set(dailyRevenueJob.id, dailyRevenueJob);
   jobs.set(weeklyReportJob.id, weeklyReportJob);
   jobs.set(monthlyRemindersJob.id, monthlyRemindersJob);
   jobs.set(documentExpiryJob.id, documentExpiryJob);
   jobs.set(performanceAlertsJob.id, performanceAlertsJob);
+  jobs.set(monthlyFixedExpensesJob.id, monthlyFixedExpensesJob);
+}
+
+/** المصاريف الثابتة للشهر الحالي (آمنة للتكرار: لا تُضاف مرتين) */
+async function addMonthlyFixedExpenses() {
+  const result = await runAutoExpensesMaintenance();
+  console.log(`[CronScheduler] 🧾 المصاريف الثابتة ${result.fixed.year}-${String(result.fixed.month).padStart(2, '0')}: أُضيف ${result.fixed.created}، موجود ${result.fixed.existing}، تُرك لوجود إدخال يدوي ${result.fixed.skippedManual}`);
+  return result;
 }
 
 /**
@@ -452,6 +475,9 @@ export function startScheduler(): void {
     console.log(`✅ [CronScheduler] تم إرسال ${result.alertsSent} تنبيه`);
     return result;
   });
+
+  const monthlyFixedExpensesJob = jobs.get('monthly_fixed_expenses')!;
+  scheduleJob(monthlyFixedExpensesJob, addMonthlyFixedExpenses);
   
   isSchedulerRunning = true;
   
@@ -560,6 +586,9 @@ export async function runJobManually(jobId: string): Promise<{ success: boolean;
         break;
       case 'monthly_reminders':
         result = await checkAndSendScheduledReminders();
+        break;
+      case 'monthly_fixed_expenses':
+        result = await addMonthlyFixedExpenses();
         break;
       default:
         return { success: false, error: 'مهمة غير معروفة' };

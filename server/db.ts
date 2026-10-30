@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte, lte, lt, like, or, isNotNull, isNull, inArray, asc } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte, lt, like, or, isNotNull, isNull, inArray, asc, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import type { SQL } from "drizzle-orm";
 import {
@@ -38,6 +38,7 @@ import {
   loyaltyVisitDeletionRequests,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import type { ExpenseCategory } from '../shared/expenses';
 import { createLogger } from './utils/logger';
 
 // إنشاء logger لنظام الكاشير
@@ -1763,26 +1764,8 @@ export async function deleteEmployeeSalarySetting(employeeId: number) {
 
 // ==================== دوال المصاريف ====================
 
-// توليد رقم المصروف
-export async function generateExpenseNumber() {
-  const db = await getDb();
-  if (!db) return `EXP-${Date.now()}`;
-  
-  const lastExpense = await db.select({ expenseNumber: expenses.expenseNumber })
-    .from(expenses)
-    .orderBy(desc(expenses.id))
-    .limit(1);
-
-  const year = new Date().getFullYear();
-  if (lastExpense.length === 0) {
-    return `EXP-${year}-0001`;
-  }
-
-  const lastNumber = lastExpense[0].expenseNumber;
-  const parts = lastNumber.split('-');
-  const sequence = parseInt(parts[2] || '0') + 1;
-  return `EXP-${year}-${sequence.toString().padStart(4, '0')}`;
-}
+// رقم المصروف يُولّد عند الإدراج بـ insertExpenseWithNumber (server/expenses/autoExpenses.ts)
+// حتى لا يتعارض الإدخال اليدوي مع المصاريف التلقائية
 
 // الحصول على جميع المصاريف
 export async function getAllExpenses() {
@@ -1817,7 +1800,7 @@ export async function getExpensesByCategory(category: string) {
   const db = await getDb();
   if (!db) return [];
   return await db.select().from(expenses)
-    .where(eq(expenses.category, category as "shop_supplies" | "printing" | "carpet_cleaning" | "small_needs" | "residency" | "medical_exam" | "transportation" | "electricity" | "internet" | "license_renewal" | "visa" | "residency_renewal" | "health_cert_renewal" | "maintenance" | "health_cert" | "violation" | "emergency" | "shop_rent" | "housing_rent" | "improvements" | "bonus" | "other"))
+    .where(eq(expenses.category, category as ExpenseCategory))
     .orderBy(desc(expenses.expenseDate));
 }
 
@@ -3575,19 +3558,23 @@ export async function getActualRevenues(startDate: Date, endDate: Date, branchId
 }
 
 // حساب إجمالي المصاريف الفعلية (جميع الحالات في الفترة)
-export async function getActualExpenses(startDate: Date, endDate: Date, branchId?: number) {
+// excludePayroll: بدون صفوف مسيرات الرواتب، لمن يضيف الرواتب من المسيرات منفصلة (حتى لا تُحسب مرتين)
+export async function getActualExpenses(startDate: Date, endDate: Date, branchId?: number, options: { excludePayroll?: boolean } = {}) {
   const db = await getDb();
   if (!db) return { totalExpenses: 0, expensesCount: 0 };
-  
+
   const conditions = [
     gte(expenses.expenseDate, startDate),
     lte(expenses.expenseDate, endDate)
   ];
-  
+
   if (branchId) {
     conditions.push(eq(expenses.branchId, branchId));
   }
-  
+  if (options.excludePayroll) {
+    conditions.push(ne(expenses.source, 'payroll'));
+  }
+
   const result = await db.select({
     totalExpenses: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`,
     expensesCount: sql<number>`COUNT(*)`,
@@ -3746,7 +3733,8 @@ export async function getLatestPayrollForPeriod(startDate: Date, endDate: Date, 
 // حساب مؤشرات الأداء الفعلية للوحة التنفيذية
 export async function calculateExecutiveKPIs(startDate: Date, endDate: Date, branchId?: number) {
   const revenues = await getActualRevenues(startDate, endDate, branchId);
-  const expensesData = await getActualExpenses(startDate, endDate, branchId);
+  // الرواتب تُضاف من المسيرات أدناه، فتُستبعد صفوف المسير من المصاريف
+  const expensesData = await getActualExpenses(startDate, endDate, branchId, { excludePayroll: true });
   const employeesPerformance = await getEmployeesPerformance(startDate, endDate, branchId);
   
   // جلب بيانات آخر مسيرة رواتب للفترة المحددة

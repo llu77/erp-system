@@ -6,6 +6,9 @@ import { getTierDisplayName, getTierColorHex } from '../../shared/bonusHelpers';
 import type { Establishment } from '../../shared/branding';
 import { escapeHtml } from '../../shared/vouchers';
 import { REPORT_SIGNATORIES, establishmentDetailsLine, getReportEstablishment, reportFooterHtml } from '../../shared/reportBranding';
+import { expenseCategoryLabel } from '../../shared/expenses';
+import { getBranchMonthlyFinancials } from '../finance/branchFinancials';
+import { ensureCurrentMonthFixedExpenses } from '../expenses/autoExpenses';
 
 // ==================== دوال المساعدة ====================
 
@@ -44,17 +47,8 @@ const formatDate = (date: Date | string): string => {
   return d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
-const getCategoryLabel = (category: string): string => {
-  const labels: Record<string, string> = {
-    'salaries': 'الرواتب', 'rent': 'الإيجار', 'utilities': 'المرافق',
-    'supplies': 'المستلزمات', 'maintenance': 'الصيانة', 'marketing': 'التسويق',
-    'transportation': 'النقل', 'communication': 'الاتصالات', 'insurance': 'التأمين',
-    'taxes': 'الضرائب', 'licenses': 'التراخيص', 'equipment': 'المعدات',
-    'cleaning': 'النظافة', 'security': 'الأمن', 'training': 'التدريب',
-    'hospitality': 'الضيافة', 'miscellaneous': 'متنوعة', 'other': 'أخرى'
-  };
-  return labels[category] || category;
-};
+// أسماء التصنيفات من المصدر المشترك (نفس أسماء صفحة المصاريف)
+const getCategoryLabel = (category: string): string => expenseCategoryLabel(category);
 
 const getStatusLabel = (status: string): string => {
   const labels: Record<string, string> = {
@@ -902,51 +896,23 @@ export async function generateProfitLossReport(month: number, year: number, bran
   const db = await getDb();
   if (!db) throw new Error('Database connection failed');
   const reportEst = (await resolveReportBranch(branchId)).establishment;
-  
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0);
-  
-  // 1. جلب إجمالي الإيرادات
-  const revenuesQuery = db.select({
-    totalCash: sql<number>`COALESCE(SUM(${dailyRevenues.cash}), 0)`,
-    totalNetwork: sql<number>`COALESCE(SUM(${dailyRevenues.network}), 0)`,
-  }).from(dailyRevenues).where(
-    and(
-      gte(dailyRevenues.date, startDate),
-      lte(dailyRevenues.date, endDate),
-      branchId ? eq(dailyRevenues.branchId, branchId) : sql`1=1`
-    )
-  );
-  const revenueData = await revenuesQuery || [{ totalCash: 0, totalNetwork: 0 }];
-  const totalRevenue = Number(revenueData[0]?.totalCash || 0) + Number(revenueData[0]?.totalNetwork || 0);
-  
-  // 2. جلب إجمالي المصاريف (المعتمدة والمدفوعة فقط)
-  const expensesQuery = db.select({
-    category: expenses.category,
-    total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
-  }).from(expenses).where(
-    and(
-      gte(expenses.expenseDate, startDate),
-      lte(expenses.expenseDate, endDate),
-      sql`${expenses.status} IN ('approved', 'paid')`,
-      branchId ? eq(expenses.branchId, branchId) : sql`1=1`
-    )
-  ).groupBy(expenses.category);
-  const expensesByCategory = await expensesQuery || [];
-  
-  let totalExpenses = 0;
-  const expenseCategories: Array<{category: string, label: string, amount: number}> = [];
-  for (const e of expensesByCategory) {
-    const amount = Number(e.total || 0);
-    totalExpenses += amount;
-    expenseCategories.push({
-      category: e.category || 'other',
-      label: getCategoryLabel(e.category || 'other'),
-      amount
-    });
-  }
-  
-  // 3. جلب إجمالي الرواتب (المعتمدة والمدفوعة)
+
+  // المصاريف الثابتة للشهر الحالي تُضاف قبل الحساب (إن لم تُضف بعد)
+  await ensureCurrentMonthFixedExpenses();
+
+  // الأرقام من نفس مصدر أرباح الشركاء (getBranchMonthlyFinancials) حتى يتطابق التقريران:
+  // الإيرادات نقدي + شبكة، المصاريف المعتمدة والمدفوعة بدون صفوف المسير، والرواتب = صافي المسيرات + السلف المستردة
+  const financials = await getBranchMonthlyFinancials(year, month, branchId ?? null);
+  const revenueData = [{ totalCash: financials.revenue.cash, totalNetwork: financials.revenue.network }];
+  const totalRevenue = financials.revenue.total;
+  const totalExpenses = financials.expenses.total;
+  const expenseCategories: Array<{category: string, label: string, amount: number}> = financials.expenses.byCategory.map(c => ({
+    category: c.category,
+    label: getCategoryLabel(c.category),
+    amount: c.amount,
+  }));
+
+  // 3. تفصيل الرواتب للعرض (المعتمدة والمدفوعة)
   const { payrolls } = await import('../../drizzle/schema');
   const payrollsQuery = db.select({
     totalNet: sql<number>`COALESCE(SUM(${payrolls.totalNetSalary}), 0)`,
@@ -963,11 +929,12 @@ export async function generateProfitLossReport(month: number, year: number, bran
     )
   );
   const payrollData = await payrollsQuery || [{ totalNet: 0, totalBase: 0, totalOvertime: 0, totalIncentives: 0, totalDeductions: 0 }];
-  const totalSalaries = Number(payrollData[0]?.totalNet || 0);
-  
+  // تكلفة الرواتب = صافي المسيرات + السلف المستردة فيها (صُرفت نقداً قبل المسير)
+  const totalSalaries = financials.payroll.cost;
+
   // 4. حساب الربح الصافي
   const grossProfit = totalRevenue - totalExpenses;
-  const netProfit = totalRevenue - totalExpenses - totalSalaries;
+  const netProfit = financials.profit;
   const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0;
   
   // إنشاء HTML
@@ -1046,7 +1013,9 @@ export async function generateProfitLossReport(month: number, year: number, bran
     <tr><td>ساعات إضافية</td><td>${formatCurrency(Number(payrollData[0]?.totalOvertime || 0))}</td></tr>
     <tr><td>حوافز</td><td>${formatCurrency(Number(payrollData[0]?.totalIncentives || 0))}</td></tr>
     <tr><td>خصومات (-)</td><td>${formatCurrency(Number(payrollData[0]?.totalDeductions || 0))}</td></tr>
-    <tr style="background:#fff3e0;font-weight:bold;"><td>صافي الرواتب</td><td>${formatCurrency(totalSalaries)}</td></tr>
+    <tr><td>صافي الرواتب</td><td>${formatCurrency(financials.payroll.netSalary)}</td></tr>
+    <tr><td>السلف المستردة في المسيرات (صُرفت سابقاً)</td><td>${formatCurrency(financials.payroll.recoveredAdvances)}</td></tr>
+    <tr style="background:#fff3e0;font-weight:bold;"><td>تكلفة الرواتب</td><td>${formatCurrency(totalSalaries)}</td></tr>
     
     <tr class="${netProfit >= 0 ? 'profit-row' : 'loss-row'}"><td><strong>صافي الربح النهائي</strong></td><td><strong>${formatCurrency(netProfit)}</strong></td></tr>
     <tr><td>هامش الربح</td><td>${profitMargin.toFixed(1)}%</td></tr>

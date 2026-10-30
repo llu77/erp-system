@@ -18,7 +18,7 @@
 
 import { getDb } from "../db";
 import { dailyRevenues, companySettings, expenses } from "../../drizzle/schema";
-import { eq, sql, and, gte, lte } from "drizzle-orm";
+import { eq, sql, and, gte, lte, notInArray } from "drizzle-orm";
 
 // ==================== التكاليف الثابتة الحقيقية ====================
 // التكاليف الثابتة لكل فرع (لبن أو طريق)
@@ -36,6 +36,17 @@ export const FIXED_COSTS = FIXED_COSTS_PER_BRANCH_BREAKDOWN;
 export const FIXED_COSTS_PER_BRANCH = Object.values(FIXED_COSTS_PER_BRANCH_BREAKDOWN).reduce((a, b) => a + b, 0); // 17,700
 export const BRANCHES_COUNT = 2;
 export const TOTAL_FIXED_COSTS = FIXED_COSTS_PER_BRANCH * BRANCHES_COUNT; // 35,400
+
+/**
+ * تصنيفات المصاريف المغطاة بالتكاليف الثابتة أعلاه فلا تُحسب مرتين:
+ * الإيجارات والكهرباء والإنترنت (تُسجل الآن مصاريف ثابتة تلقائية) والرواتب (مصروف المسير المعتمد)
+ */
+export const FIXED_COST_EXPENSE_CATEGORIES = ['shop_rent', 'housing_rent', 'electricity', 'internet', 'salaries'] as const;
+
+/** شرط: المصاريف المتغيرة فقط (بدون تصنيفات التكاليف الثابتة) */
+export function excludeFixedCostCategories() {
+  return notInArray(expenses.category, [...FIXED_COST_EXPENSE_CATEGORIES]);
+}
 
 // ==================== الحصول على إعدادات التكاليف ====================
 export async function getFinancialSettings() {
@@ -158,9 +169,12 @@ export async function getOtherExpenses(branchId?: number, startDate?: string, en
     })
     .from(expenses)
     .where(
-      branchId
-        ? sql`DATE(${expenses.expenseDate}) >= ${start} AND DATE(${expenses.expenseDate}) <= ${end} AND ${expenses.branchId} = ${branchId} AND ${expenses.category} NOT IN ('shop_rent', 'housing_rent', 'electricity', 'internet')`
-        : sql`DATE(${expenses.expenseDate}) >= ${start} AND DATE(${expenses.expenseDate}) <= ${end} AND ${expenses.category} NOT IN ('shop_rent', 'housing_rent', 'electricity', 'internet')`
+      and(
+        branchId
+          ? sql`DATE(${expenses.expenseDate}) >= ${start} AND DATE(${expenses.expenseDate}) <= ${end} AND ${expenses.branchId} = ${branchId}`
+          : sql`DATE(${expenses.expenseDate}) >= ${start} AND DATE(${expenses.expenseDate}) <= ${end}`,
+        excludeFixedCostCategories()
+      )
     )
     .groupBy(expenses.category);
 
