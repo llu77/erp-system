@@ -35,43 +35,11 @@ export const PDF_COLORS = {
 };
 
 // =====================================================
-// معلومات التوقيعات والختم
+// معلومات التوقيعات والختم + معلومات الشركة
+// (نُقلت إلى shared/branding.ts ليستخدمها الخادم أيضاً في PDF السندات)
 // =====================================================
-export const SIGNATURES = {
-  supervisor: {
-    name: 'سالم الوادعي',
-    nameEn: 'Salem Alwadai',
-    title: 'المشرف العام',
-    titleEn: 'General Supervisor',
-    image: '/signatures/supervisor_signature.png'
-  },
-  manager: {
-    name: 'عمر المطيري',
-    nameEn: 'Omar Al-Mutairi',
-    title: 'المدير العام',
-    titleEn: 'General Manager',
-    image: '/signatures/manager_signature.png'
-  },
-  stamp: {
-    image: '/signatures/company_stamp.png',
-    label: 'ختم الإدارة'
-  }
-};
-
-// =====================================================
-// معلومات الشركة
-// =====================================================
-export const COMPANY_INFO = {
-  name: 'Symbol AI',
-  nameAr: 'سيمبول للذكاء الاصطناعي',
-  subtitle: 'صالونات قصه وتخفيف وفروعها',
-  address: 'المملكة العربية السعودية - الرياض',
-  phone: '+966 XX XXX XXXX',
-  email: 'info@symbol-ai.com',
-  logo: '/symbol-ai-logo.png',
-  cr: 'س.ت: XXXXXXXXXX',
-  vat: 'الرقم الضريبي: XXXXXXXXXXXXXXX'
-};
+import { SIGNATURES, COMPANY_INFO } from '@shared/branding';
+export { SIGNATURES, COMPANY_INFO };
 
 // =====================================================
 // الأنماط الأساسية للـ PDF

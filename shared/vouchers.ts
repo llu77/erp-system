@@ -182,3 +182,384 @@ export function amountToEnglishWords(amount: number): string {
   if (halalas > 0) text += ` and ${integerToEnglishWords(halalas)} Halalas`;
   return `${text} Only`;
 }
+
+// ==================== أنواع وحالات السندات ====================
+
+export type VoucherStatus = "draft" | "approved" | "paid" | "cancelled";
+export type VoucherPaymentMethod = "cash" | "bank_transfer" | "check" | "credit_card" | "mixed" | "other";
+export type VoucherPartyType = "branch" | "employee" | "supplier" | "customer" | "owner" | "other";
+
+export const VOUCHER_TYPES: VoucherType[] = ["receipt", "payment"];
+export const VOUCHER_STATUSES: VoucherStatus[] = ["draft", "approved", "paid", "cancelled"];
+export const VOUCHER_PARTY_TYPES: VoucherPartyType[] = ["branch", "employee", "supplier", "customer", "owner", "other"];
+
+export const VOUCHER_PARTY_TYPE_LABELS: Record<VoucherPartyType, { ar: string; en: string }> = {
+  branch: { ar: "فرع", en: "Branch" },
+  employee: { ar: "موظف", en: "Employee" },
+  supplier: { ar: "مورد", en: "Supplier" },
+  customer: { ar: "عميل", en: "Customer" },
+  owner: { ar: "الإدارة / المالك", en: "Owner" },
+  other: { ar: "أخرى", en: "Other" },
+};
+
+/** تسميات الحالة ثنائية اللغة حسب نوع السند */
+export function getVoucherStatusLabel(status: string | null | undefined, type: VoucherType = "receipt"): { ar: string; en: string } {
+  switch (status) {
+    case "draft":
+      return { ar: "مسودة - بانتظار الاعتماد", en: "Draft - Pending Approval" };
+    case "approved":
+      return type === "receipt"
+        ? { ar: "معتمد - تم الاستلام", en: "Approved - Received" }
+        : { ar: "معتمد - بانتظار الصرف", en: "Approved" };
+    case "paid":
+      return type === "payment" ? { ar: "تم الصرف", en: "Paid" } : { ar: "مدفوع", en: "Paid" };
+    case "cancelled":
+      return { ar: "ملغي", en: "Cancelled" };
+    default:
+      return { ar: String(status ?? "-"), en: String(status ?? "-") };
+  }
+}
+
+/**
+ * آلة حالات السند:
+ * - مسودة ← معتمد | ملغي
+ * - معتمد ← مدفوع (سند الصرف فقط) | ملغي
+ * - مدفوع / ملغي: حالات نهائية
+ * سند القبض: "معتمد" يعني تم الاستلام والتأكيد، ولا يوجد له حالة "مدفوع".
+ */
+const VOUCHER_TRANSITIONS: Record<VoucherType, Record<VoucherStatus, VoucherStatus[]>> = {
+  receipt: {
+    draft: ["approved", "cancelled"],
+    approved: ["cancelled"],
+    paid: [],
+    cancelled: [],
+  },
+  payment: {
+    draft: ["approved", "cancelled"],
+    approved: ["paid", "cancelled"],
+    paid: [],
+    cancelled: [],
+  },
+};
+
+export function getAllowedVoucherTransitions(type: VoucherType, from: VoucherStatus): VoucherStatus[] {
+  return VOUCHER_TRANSITIONS[type]?.[from] ?? [];
+}
+
+export function canTransitionVoucher(type: VoucherType, from: VoucherStatus, to: VoucherStatus): boolean {
+  return getAllowedVoucherTransitions(type, from).includes(to);
+}
+
+/** هل تظهر التوقيعات والختم؟ (فقط بعد اعتماد المدير) */
+export function isVoucherSigned(status: string | null | undefined): boolean {
+  return status === "approved" || status === "paid";
+}
+
+// ==================== أدوات HTML والأرقام ====================
+
+/** تهريب النص قبل إدراجه في HTML (منع حقن الوسوم والسكربتات) */
+export function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** تحويل مبلغ إلى هللات (عدد صحيح) لتجنب أخطاء الفاصلة العائمة */
+export function toHalalas(value: unknown): number {
+  const n = typeof value === "number" ? value : parseFloat(String(value ?? ""));
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100);
+}
+
+/** تقريب المبلغ إلى خانتين عشريتين */
+export function roundMoney(value: unknown): number {
+  return toHalalas(value) / 100;
+}
+
+/** تنسيق المبلغ بالأرقام اللاتينية: 2,000.00 */
+export function formatVoucherAmount(value: unknown): string {
+  return roundMoney(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ==================== التواريخ (توقيت الرياض) ====================
+
+export const VOUCHER_TIMEZONE = "Asia/Riyadh";
+
+function riyadhParts(d: Date): { year: string; month: string; day: string; hour: string; minute: string } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: VOUCHER_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? "";
+  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour"), minute: get("minute") };
+}
+
+/**
+ * تحويل قيمة تاريخ إلى نص YYYY-MM-DD حسب توقيت الرياض
+ * - النص بصيغة YYYY-MM-DD يُستخدم كما هو
+ * - كائن Date يُحوّل إلى يوم الرياض (لا يتأثر بمنطقة الخادم أو المتصفح)
+ */
+export function toVoucherDateString(value?: Date | string | null): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string") {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return null;
+  const p = riyadhParts(d);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+/** تاريخ اليوم في الرياض بصيغة YYYY-MM-DD */
+export function todayVoucherDate(now: Date = new Date()): string {
+  return toVoucherDateString(now) as string;
+}
+
+/** تنسيق التاريخ: DD/MM/YYYY */
+export function formatVoucherDate(value?: Date | string | null): string {
+  const ymd = toVoucherDateString(value ?? null);
+  if (!ymd) return "-";
+  const [y, m, d] = ymd.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/** تنسيق التاريخ والوقت: DD/MM/YYYY HH:mm (توقيت الرياض) */
+export function formatVoucherDateTime(value?: Date | string | null): string {
+  if (!value) return "-";
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return "-";
+  const p = riyadhParts(d);
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
+}
+
+// ==================== الترقيم ====================
+
+/** سنة السند من تاريخه (YYYY-MM-DD) */
+export function voucherYear(voucherDate: string): number {
+  const y = parseInt(String(voucherDate).slice(0, 4), 10);
+  return Number.isFinite(y) ? y : new Date().getFullYear();
+}
+
+/** رقم السند التالي بناءً على أعلى تسلسل موجود لنفس النوع والسنة */
+export function nextVoucherNumber(type: VoucherType, year: number, currentMaxSequence?: number | string | null): string {
+  const current = Math.max(0, Math.floor(Number(currentMaxSequence) || 0));
+  return formatVoucherNumber(type, year, current + 1);
+}
+
+/** أعلى تسلسل ضمن قائمة أرقام سندات (يدعم الصيغ القديمة ذات 3 خانات) */
+export function maxVoucherSequence(voucherNumbers: Array<string | null | undefined>): number {
+  return voucherNumbers.reduce<number>((max, n) => Math.max(max, parseVoucherSequence(n)), 0);
+}
+
+// ==================== البنود والإجماليات ====================
+
+export interface VoucherItemInput {
+  description: string;
+  amount?: number | string | null;
+  quantity?: number | string | null;
+  unitPrice?: number | string | null;
+  notes?: string | null;
+}
+
+export interface NormalizedVoucherItem {
+  itemNumber: number;
+  description: string;
+  quantity: number;
+  unitPrice: number | null;
+  amount: number;
+  notes: string | null;
+}
+
+export type ComputeItemsResult =
+  | { ok: true; items: NormalizedVoucherItem[]; total: number }
+  | { ok: false; error: string };
+
+function isProvided(v: unknown): boolean {
+  return v !== null && v !== undefined && v !== "";
+}
+
+/**
+ * حساب البنود والإجمالي على الخادم (بالهللات)
+ * - المبلغ = الكمية × سعر الوحدة عند إدخال سعر الوحدة
+ * - وإلا يُستخدم المبلغ المُدخل مباشرة
+ */
+export function computeVoucherItems(items: VoucherItemInput[] | null | undefined): ComputeItemsResult {
+  if (!items || items.length === 0) return { ok: false, error: "يجب إضافة بند واحد على الأقل" };
+  const normalized: NormalizedVoucherItem[] = [];
+  let totalHalalas = 0;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const description = String(item.description ?? "").trim();
+    if (!description) return { ok: false, error: `يرجى إدخال وصف البند رقم ${i + 1}` };
+    const quantity = isProvided(item.quantity) ? Number(item.quantity) : 1;
+    if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, error: `الكمية غير صحيحة في البند رقم ${i + 1}` };
+    const qty = Math.round(quantity * 100) / 100;
+
+    let amountHalalas: number;
+    let unitPrice: number | null = null;
+    if (isProvided(item.unitPrice)) {
+      const up = Number(item.unitPrice);
+      if (!Number.isFinite(up) || up < 0) return { ok: false, error: `سعر الوحدة غير صحيح في البند رقم ${i + 1}` };
+      unitPrice = roundMoney(up);
+      amountHalalas = Math.round(qty * toHalalas(up));
+    } else {
+      const amount = Number(item.amount);
+      if (!isProvided(item.amount) || !Number.isFinite(amount)) return { ok: false, error: `يرجى إدخال مبلغ البند رقم ${i + 1}` };
+      amountHalalas = toHalalas(amount);
+    }
+    if (amountHalalas <= 0) return { ok: false, error: `مبلغ البند رقم ${i + 1} يجب أن يكون أكبر من صفر` };
+
+    totalHalalas += amountHalalas;
+    const notes = item.notes ? String(item.notes).trim() : "";
+    normalized.push({
+      itemNumber: i + 1,
+      description,
+      quantity: qty,
+      unitPrice,
+      amount: amountHalalas / 100,
+      notes: notes || null,
+    });
+  }
+  return { ok: true, items: normalized, total: totalHalalas / 100 };
+}
+
+// ==================== توزيع الدفع ====================
+
+export interface VoucherPaymentInput {
+  paymentMethod?: VoucherPaymentMethod | null;
+  cashAmount?: number | string | null;
+  bankAmount?: number | string | null;
+  checkAmount?: number | string | null;
+}
+
+export interface ResolvedPaymentSplit {
+  paymentMethod: VoucherPaymentMethod;
+  cashAmount: number;
+  bankAmount: number;
+  checkAmount: number;
+}
+
+export type ResolvePaymentSplitResult = { ok: true; split: ResolvedPaymentSplit } | { ok: false; error: string };
+
+/** هل أُرسل توزيع صريح للمبالغ؟ */
+export function hasExplicitSplit(input: VoucherPaymentInput): boolean {
+  return [input.cashAmount, input.bankAmount, input.checkAmount].some(v => toHalalas(v) !== 0);
+}
+
+/**
+ * التحقق من توزيع الدفع وإكماله:
+ * - بدون توزيع صريح: يُوضع كامل المبلغ في طريقة الدفع المختارة (الافتراضي نقداً)
+ * - مع توزيع صريح: يجب أن يساوي مجموع (نقداً + حوالة + شيك) إجمالي السند تماماً،
+ *   وتُستنتج طريقة الدفع (أو "مختلط" عند استخدام أكثر من طريقة)
+ * - البطاقة / أخرى: طرق لا تُوزّع، يبقى التوزيع صفراً
+ */
+export function resolvePaymentSplit(total: number, input: VoucherPaymentInput): ResolvePaymentSplitResult {
+  const totalH = toHalalas(total);
+  if (totalH <= 0) return { ok: false, error: "إجمالي السند يجب أن يكون أكبر من صفر" };
+
+  const cashH = toHalalas(input.cashAmount);
+  const bankH = toHalalas(input.bankAmount);
+  const checkH = toHalalas(input.checkAmount);
+  if (cashH < 0 || bankH < 0 || checkH < 0) return { ok: false, error: "مبالغ طرق الدفع لا يمكن أن تكون سالبة" };
+
+  if (!hasExplicitSplit(input)) {
+    const method = input.paymentMethod ?? "cash";
+    const all = totalH / 100;
+    switch (method) {
+      case "cash":
+        return { ok: true, split: { paymentMethod: "cash", cashAmount: all, bankAmount: 0, checkAmount: 0 } };
+      case "bank_transfer":
+        return { ok: true, split: { paymentMethod: "bank_transfer", cashAmount: 0, bankAmount: all, checkAmount: 0 } };
+      case "check":
+        return { ok: true, split: { paymentMethod: "check", cashAmount: 0, bankAmount: 0, checkAmount: all } };
+      case "credit_card":
+      case "other":
+        return { ok: true, split: { paymentMethod: method, cashAmount: 0, bankAmount: 0, checkAmount: 0 } };
+      case "mixed":
+      default:
+        return { ok: false, error: "يرجى توزيع المبلغ على طرق الدفع (نقداً / حوالة / شيك)" };
+    }
+  }
+
+  const sumH = cashH + bankH + checkH;
+  if (sumH !== totalH) {
+    return {
+      ok: false,
+      error: `مجموع طرق الدفع (${formatVoucherAmount(sumH / 100)}) لا يساوي إجمالي السند (${formatVoucherAmount(totalH / 100)})`,
+    };
+  }
+  const split = { cashAmount: cashH / 100, bankAmount: bankH / 100, checkAmount: checkH / 100 };
+  const method = derivePaymentMethod(split) ?? "cash";
+  return { ok: true, split: { paymentMethod: method, ...split } };
+}
+
+export interface VoucherPaymentDetails {
+  bankName?: string | null;
+  bankReference?: string | null;
+  checkNumber?: string | null;
+  checkDate?: Date | string | null;
+  checkBank?: string | null;
+}
+
+/** التحقق من تفاصيل الشيك (يُطبّق عند إرسال توزيع صريح) */
+export function validatePaymentDetails(split: ResolvedPaymentSplit, details: VoucherPaymentDetails): string | null {
+  if (split.checkAmount > 0) {
+    if (!String(details.checkNumber ?? "").trim()) return "رقم الشيك مطلوب عند الدفع بشيك";
+    if (!details.checkDate) return "تاريخ الشيك مطلوب عند الدفع بشيك";
+  }
+  return null;
+}
+
+export interface PaymentSplitLine {
+  method: "cash" | "bank_transfer" | "check" | "credit_card" | "other";
+  ar: string;
+  en: string;
+  amount: number;
+}
+
+export interface PaymentSplitSource {
+  paymentMethod?: string | null;
+  totalAmount?: number | string | null;
+  cashAmount?: number | string | null;
+  bankAmount?: number | string | null;
+  checkAmount?: number | string | null;
+}
+
+/** أسطر توزيع الدفع (للعرض والطباعة) */
+export function getPaymentSplitLines(v: PaymentSplitSource): PaymentSplitLine[] {
+  const lines: PaymentSplitLine[] = [];
+  const cash = roundMoney(v.cashAmount);
+  const bank = roundMoney(v.bankAmount);
+  const check = roundMoney(v.checkAmount);
+  if (cash > 0) lines.push({ method: "cash", ...PAYMENT_METHOD_LABELS.cash, amount: cash });
+  if (bank > 0) lines.push({ method: "bank_transfer", ...PAYMENT_METHOD_LABELS.bank_transfer, amount: bank });
+  if (check > 0) lines.push({ method: "check", ...PAYMENT_METHOD_LABELS.check, amount: check });
+  if (lines.length === 0) {
+    // سندات قديمة أو طرق غير موزعة: كامل المبلغ بطريقة الدفع المسجلة
+    const method = (v.paymentMethod && v.paymentMethod !== "mixed" ? v.paymentMethod : "cash") as PaymentSplitLine["method"];
+    const label = PAYMENT_METHOD_LABELS[method] ?? PAYMENT_METHOD_LABELS.other;
+    const total = roundMoney(v.totalAmount);
+    if (total > 0) lines.push({ method, ar: label.ar, en: label.en, amount: total });
+  }
+  return lines;
+}
+
+/** نص مختصر لتوزيع الدفع: "نقداً 500 ريال، حوالة بنكية 1,500 ريال" */
+export function formatPaymentSplitText(v: PaymentSplitSource): string {
+  return getPaymentSplitLines(v)
+    .map(line => {
+      const amount = Number.isInteger(line.amount) ? line.amount.toLocaleString("en-US") : formatVoucherAmount(line.amount);
+      return `${line.ar} ${amount} ريال`;
+    })
+    .join("، ");
+}
