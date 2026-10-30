@@ -1,7 +1,7 @@
 import { sendEmail, type EmailAttachment } from './email/emailService';
 import { getDb } from './db';
 import { users } from '../drizzle/schema';
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   VOUCHER_TITLES,
   amountToArabicWords,
@@ -119,9 +119,18 @@ async function buildVoucherAttachment(v: VoucherEmailData): Promise<EmailAttachm
  * 3. المديرون
  * 4. المسؤولون
  */
-export async function sendVoucherEmail(v: VoucherEmailData): Promise<{ success: boolean; sentTo: string[]; error?: string }> {
+/** نتيجة إرسال السند: failed يذكر المستقبلين الذين فشل الإرسال إليهم، وpartial عند نجاح البعض وفشل البعض */
+export type VoucherEmailResult = {
+  success: boolean;
+  sentTo: string[];
+  failed: Array<{ email: string; error: string }>;
+  partial: boolean;
+  error?: string;
+};
+
+export async function sendVoucherEmail(v: VoucherEmailData): Promise<VoucherEmailResult> {
   const db = await getDb();
-  if (!db) return { success: false, sentTo: [], error: 'خطأ في الاتصال بقاعدة البيانات' };
+  if (!db) return { success: false, sentTo: [], failed: [], partial: false, error: 'خطأ في الاتصال بقاعدة البيانات' };
 
   try {
     const type = typeOf(v);
@@ -129,7 +138,8 @@ export async function sendVoucherEmail(v: VoucherEmailData): Promise<{ success: 
     const staff = await db
       .select({ id: users.id, name: users.name, username: users.username, email: users.email, role: users.role, branchId: users.branchId })
       .from(users)
-      .where(inArray(users.role, ['admin', 'manager', 'supervisor']));
+      // الحسابات المعطلة لا تستقبل بريد السندات
+      .where(and(inArray(users.role, ['admin', 'manager', 'supervisor']), eq(users.isActive, true)));
 
     const recipients: Array<{ email: string; label: string; intro?: string }> = [];
     const seen = new Set<string>();
@@ -147,17 +157,19 @@ export async function sendVoucherEmail(v: VoucherEmailData): Promise<{ success: 
         add(s.email, `مشرف الفرع: ${s.name || s.username || ''}`);
       }
     }
-    const reviewIntro = isVoucherSigned(v.status) ? undefined : `${titles.ar} جديد بانتظار مراجعتك واعتمادك.`;
+    // طلب المراجعة للمسودات فقط (الملغي والمعتمد لا ينتظران اعتماداً)
+    const reviewIntro = v.status === 'draft' ? `${titles.ar} جديد بانتظار مراجعتك واعتمادك.` : undefined;
     for (const m of staff.filter(u => u.role === 'manager')) add(m.email, `المدير: ${m.name || m.username || ''}`, reviewIntro);
     for (const a of staff.filter(u => u.role === 'admin')) add(a.email, `المسؤول: ${a.name || a.username || ''}`, reviewIntro);
 
     if (recipients.length === 0) {
-      return { success: false, sentTo: [], error: 'لا يوجد مستقبلون لديهم بريد إلكتروني' };
+      return { success: false, sentTo: [], failed: [], partial: false, error: 'لا يوجد مستقبلون لديهم بريد إلكتروني' };
     }
 
     const attachment = await buildVoucherAttachment(v);
     const subject = `${titles.ar} رقم ${v.voucherId}${partyLabel ? ` - ${partyLabel}` : ''}`.replace(/[\r\n]+/g, ' ');
     const sentTo: string[] = [];
+    const failed: VoucherEmailResult['failed'] = [];
     for (const r of recipients) {
       const result = await sendEmail({
         to: r.email,
@@ -166,17 +178,23 @@ export async function sendVoucherEmail(v: VoucherEmailData): Promise<{ success: 
         attachments: attachment ? [attachment] : undefined,
       });
       if (result.success) sentTo.push(`${r.label} (${r.email})`);
-      else console.error(`فشل إرسال السند إلى ${r.email}: ${result.error}`);
+      else {
+        const reason = result.error || 'خطأ غير معروف';
+        failed.push({ email: r.email, error: reason });
+        console.error(`فشل إرسال السند إلى ${r.email}: ${reason}`);
+      }
     }
 
     return {
       success: sentTo.length > 0,
       sentTo,
+      failed,
+      partial: sentTo.length > 0 && failed.length > 0,
       error: sentTo.length === 0 ? 'لم يتم إرسال البريد لأي مستقبل' : undefined,
     };
   } catch (error) {
     console.error('خطأ في إرسال البريد:', error);
-    return { success: false, sentTo: [], error: 'حدث خطأ أثناء إرسال البريد' };
+    return { success: false, sentTo: [], failed: [], partial: false, error: 'حدث خطأ أثناء إرسال البريد' };
   }
 }
 
@@ -187,8 +205,8 @@ export async function sendReceiptVoucherEmail(data: {
   voucherId: string;
   voucherNumber?: string;
   [key: string]: unknown;
-}): Promise<{ success: boolean; sentTo: string[]; error?: string }> {
+}): Promise<VoucherEmailResult> {
   const voucher = await getVoucherWithItems(data.voucherNumber || data.voucherId);
-  if (!voucher) return { success: false, sentTo: [], error: 'السند غير موجود' };
+  if (!voucher) return { success: false, sentTo: [], failed: [], partial: false, error: 'السند غير موجود' };
   return sendVoucherEmail(voucher);
 }
