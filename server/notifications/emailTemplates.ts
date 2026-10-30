@@ -324,6 +324,7 @@ export const REQUEST_TYPE_NAMES: Record<string, string> = {
   permission: 'استئذان',
   objection: 'اعتراض',
   resignation: 'استقالة',
+  end_of_service: 'إنهاء خدمة',
 };
 
 export const REQUEST_TYPE_ICONS: Record<string, string> = {
@@ -333,6 +334,7 @@ export const REQUEST_TYPE_ICONS: Record<string, string> = {
   permission: '🕐',
   objection: '⚠️',
   resignation: '📝',
+  end_of_service: '📄',
 };
 
 export const PRIORITY_NAMES: Record<string, string> = {

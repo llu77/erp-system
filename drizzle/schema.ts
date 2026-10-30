@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, json, date } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, json, date, index } from "drizzle-orm/mysql-core";
 
 // ==================== جدول المستخدمين ====================
 export const users = mysqlTable("users", {
@@ -291,6 +291,9 @@ export const employees = mysqlTable("employees", {
   healthCertImageUrl: varchar("healthCertImageUrl", { length: 500 }),
   contractExpiryDate: timestamp("contractExpiryDate"),
   contractImageUrl: varchar("contractImageUrl", { length: 500 }),
+  // تاريخ مباشرة العمل (YYYY-MM-DD) والجنسية - لخطاب إنهاء الخدمة والمخالصة النهائية
+  hireDate: date("hireDate", { mode: "string" }),
+  nationality: varchar("nationality", { length: 100 }),
   // حقل تسجيل المعلومات من الموظف (لمرة واحدة فقط)
   infoSubmittedAt: timestamp("infoSubmittedAt"),
   infoSubmittedBy: int("infoSubmittedBy"), // null = الموظف نفسه، أو ID الأدمن
@@ -488,7 +491,8 @@ export const employeeRequests = mysqlTable("employeeRequests", {
     "arrears",      // صرف متأخرات
     "permission",   // استئذان
     "objection",    // اعتراض على مخالفة
-    "resignation"   // استقالة
+    "resignation",  // استقالة
+    "end_of_service" // إنهاء خدمة (انتهاء العقد وعدم التجديد) - يُدار من صفحة إنهاء الخدمة
   ]).notNull(),
   
   // حالة الطلب
@@ -553,7 +557,8 @@ export const employeeRequests = mysqlTable("employeeRequests", {
   isDeductedFromSalary: boolean("isDeductedFromSalary").default(false).notNull(), // هل تم خصمها من الراتب
   deductedInPayrollId: int("deductedInPayrollId"), // معرف مسيرة الراتب التي تم الخصم فيها
   deductedAt: timestamp("deductedAt"), // تاريخ الخصم
-  
+  settledInEndOfServiceId: int("settledInEndOfServiceId"), // المخالصة النهائية التي خُصمت فيها السلفة
+
   // التتبع
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -764,12 +769,118 @@ export const employeeViolations = mysqlTable("employeeViolations", {
   isDeductedFromSalary: boolean("isDeductedFromSalary").default(false).notNull(),
   deductedInPayrollId: int("deductedInPayrollId"),
   deductedAt: timestamp("deductedAt"),
+  settledInEndOfServiceId: int("settledInEndOfServiceId"), // المخالصة النهائية التي خُصمت فيها المخالفة
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type EmployeeViolation = typeof employeeViolations.$inferSelect;
 export type InsertEmployeeViolation = typeof employeeViolations.$inferInsert;
+
+// ==================== جدول مخالصات إنهاء الخدمة ====================
+/**
+ * End of Service Settlements - إنهاء الخدمة (انتهاء العقد وعدم التجديد) والمخالصة النهائية
+ * - كل مخالصة مرتبطة بطلب من نوع end_of_service في employeeRequests (requestId)
+ * - بيانات الموظف والأجر لقطة وقت الإنشاء/آخر تعديل، والحساب من shared/endOfService.ts
+ * - عند الاعتماد تُربط السلف والمخالفات المخصومة (settledInEndOfServiceId) ويُعطّل الموظف
+ * - الحالات: draft → approved → paid، والإلغاء من المسودة أو المعتمدة (يُحرر الربط ويُعاد تفعيل الموظف)
+ */
+export const endOfServiceSettlements = mysqlTable("endOfServiceSettlements", {
+  id: int("id").autoincrement().primaryKey(),
+  settlementNumber: varchar("settlementNumber", { length: 30 }).notNull().unique(), // EOS-2026-0001
+  requestId: int("requestId").notNull().unique(),
+  employeeId: int("employeeId").notNull(),
+  branchId: int("branchId"),
+  reason: varchar("reason", { length: 50 }).default("contract_expiry").notNull(),
+  status: mysqlEnum("status", ["draft", "approved", "paid", "cancelled"]).default("draft").notNull(),
+
+  // التواريخ (YYYY-MM-DD)
+  letterDate: date("letterDate", { mode: "string" }).notNull(),
+  hireDate: date("hireDate", { mode: "string" }).notNull(),
+  contractEndDate: date("contractEndDate", { mode: "string" }).notNull(),
+  lastWorkingDay: date("lastWorkingDay", { mode: "string" }).notNull(),
+
+  // لقطة بيانات الموظف
+  employeeName: varchar("employeeName", { length: 255 }).notNull(),
+  employeeCode: varchar("employeeCode", { length: 50 }).notNull(),
+  nationality: varchar("nationality", { length: 100 }),
+  idNumber: varchar("idNumber", { length: 50 }),
+  position: varchar("position", { length: 100 }),
+  branchName: varchar("branchName", { length: 255 }),
+
+  // الأجر المعتمد للحساب
+  baseSalary: decimal("baseSalary", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  fixedAllowances: decimal("fixedAllowances", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  monthlyWage: decimal("monthlyWage", { precision: 12, scale: 2 }).default("0.00").notNull(),
+
+  // مدة الخدمة
+  serviceYears: int("serviceYears").default(0).notNull(),
+  serviceMonths: int("serviceMonths").default(0).notNull(),
+  serviceDays: int("serviceDays").default(0).notNull(),
+  serviceTotalDays: int("serviceTotalDays").default(0).notNull(),
+
+  // المستحقات
+  eosAward: decimal("eosAward", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  leaveBalanceDays: decimal("leaveBalanceDays", { precision: 8, scale: 2 }).default("0.00").notNull(),
+  leaveBalanceDaysOverride: decimal("leaveBalanceDaysOverride", { precision: 8, scale: 2 }),
+  leaveCompensation: decimal("leaveCompensation", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  salaryDays: decimal("salaryDays", { precision: 8, scale: 2 }).default("0.00").notNull(),
+  salaryDaysOverride: decimal("salaryDaysOverride", { precision: 8, scale: 2 }),
+  salaryDue: decimal("salaryDue", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  otherAdditions: decimal("otherAdditions", { precision: 12, scale: 2 }).default("0.00").notNull(),
+
+  // الخصومات
+  otherDeductions: decimal("otherDeductions", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  advancesDeduction: decimal("advancesDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  violationsDeduction: decimal("violationsDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+
+  // الإجماليات (الصافي سالب = مبلغ مستحق على الموظف)
+  totalEntitlements: decimal("totalEntitlements", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  totalDeductions: decimal("totalDeductions", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  netAmount: decimal("netAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
+
+  // الملاحظات
+  leaveNote: text("leaveNote"),
+  salaryNote: text("salaryNote"),
+  otherAdditionsNote: text("otherAdditionsNote"),
+  otherDeductionsNote: text("otherDeductionsNote"),
+  notes: text("notes"),
+
+  // التفاصيل (JSON)
+  advancesDetails: text("advancesDetails"), // EndOfServiceDeductionItem[]
+  violationsDetails: text("violationsDetails"), // EndOfServiceDeductionItem[]
+  calculationSnapshot: text("calculationSnapshot"), // EndOfServiceCalculation
+
+  // مصادر الحساب
+  lastPayrollYear: int("lastPayrollYear"),
+  lastPayrollMonth: int("lastPayrollMonth"),
+  annualLeaveDaysTaken: decimal("annualLeaveDaysTaken", { precision: 8, scale: 2 }).default("0.00").notNull(),
+
+  // الصرف
+  paymentMethod: varchar("paymentMethod", { length: 30 }),
+  paymentReference: varchar("paymentReference", { length: 100 }),
+
+  // التتبع
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }),
+  approvedBy: int("approvedBy"),
+  approvedByName: varchar("approvedByName", { length: 255 }),
+  approvedAt: timestamp("approvedAt"),
+  paidBy: int("paidBy"),
+  paidByName: varchar("paidByName", { length: 255 }),
+  paidAt: timestamp("paidAt"),
+  cancelledBy: int("cancelledBy"),
+  cancelledByName: varchar("cancelledByName", { length: 255 }),
+  cancelledAt: timestamp("cancelledAt"),
+  cancellationReason: text("cancellationReason"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("endOfServiceSettlements_employeeId_idx").on(table.employeeId),
+]);
+
+export type EndOfServiceSettlement = typeof endOfServiceSettlements.$inferSelect;
+export type InsertEndOfServiceSettlement = typeof endOfServiceSettlements.$inferInsert;
 
 // ==================== جدول المصاريف ====================
 /**

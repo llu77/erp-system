@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { COMPANY_INFO, SIGNATURES } from '../shared/branding';
-import { renderVoucherHtml, type VoucherTemplateAssets, type VoucherTemplateData } from '../shared/voucherTemplate';
+import { PRINT_FONT_PATH, renderVoucherHtml, type VoucherTemplateAssets, type VoucherTemplateData } from '../shared/voucherTemplate';
 
 const MIME_BY_EXT: Record<string, string> = {
   '.png': 'image/png',
@@ -20,8 +20,6 @@ const MIME_BY_EXT: Record<string, string> = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
 };
-
-const FONT_PATH = '/fonts/NotoSansArabic-Regular.ttf';
 
 /** مجلدات محتملة للملفات العامة (تطوير / إنتاج) */
 function publicDirCandidates(): string[] {
@@ -76,7 +74,7 @@ export function loadVoucherAssets(options: { includeFont?: boolean; refresh?: bo
       supervisorSignature: pick(SIGNATURES.supervisor.image),
       managerSignature: pick(SIGNATURES.manager.image),
       stamp: pick(SIGNATURES.stamp.image),
-      font: read(FONT_PATH),
+      font: read(PRINT_FONT_PATH),
     };
     if (missing.length > 0) {
       console.warn('[Vouchers] ملفات صور غير موجودة، سيُطبع السند بدونها:', missing.join(', '));
@@ -93,7 +91,15 @@ export function renderVoucherHtmlEmbedded(voucher: VoucherTemplateData, options:
 
 /** توليد PDF للسند عبر puppeteer */
 export async function generateVoucherPDF(voucher: VoucherTemplateData): Promise<Buffer> {
-  const html = renderVoucherHtmlEmbedded(voucher);
+  return renderHtmlToPdf(renderVoucherHtmlEmbedded(voucher));
+}
+
+/**
+ * تحويل صفحة HTML مستقلة (صور وخطوط مضمّنة) إلى PDF عبر puppeteer
+ * - حجم الصفحة وهوامشها من @page في القالب (preferCSSPageSize)
+ * - ينتظر تحميل الخطوط حتى لا يُطبع النص العربي بخط بديل
+ */
+export async function renderHtmlToPdf(html: string): Promise<Buffer> {
   const { default: puppeteer } = await import('puppeteer');
   // نفس متصفح باقي تقارير PDF، مع الرجوع لمتصفح puppeteer المثبت إن لم يوجد
   const systemChromium = '/usr/bin/chromium-browser';

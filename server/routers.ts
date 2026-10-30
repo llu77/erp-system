@@ -7,6 +7,8 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
 import * as payrollService from "./payroll/service";
+import * as endOfService from "./endOfService/service";
+import { parseDateOnly } from "../shared/endOfService";
 import { notifyOwner } from "./_core/notification";
 import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from "./email/scheduledReports";
 import * as advancedNotifications from "./notifications/advancedNotificationService";
@@ -170,6 +172,72 @@ const payrollAdjustmentSchema = z.object({
   deferredAdvanceIds: z.array(z.number()).optional(),
   deferredViolationIds: z.array(z.number()).optional(),
   notes: z.string().max(1000).nullable().optional(),
+});
+
+// ==================== إنهاء الخدمة والمخالصة النهائية ====================
+
+function endOfServiceActor(user: { id: number; name: string | null; username?: string | null; role: string; branchId: number | null }): endOfService.EndOfServiceActor {
+  return { id: user.id, name: user.name || user.username || null, role: user.role, branchId: user.branchId ?? null };
+}
+
+// تحويل أخطاء خدمة إنهاء الخدمة إلى أخطاء tRPC مفهومة
+async function runEndOfServiceAction<T>(action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error: any) {
+    if (error instanceof TRPCError) throw error;
+    if (error instanceof endOfService.EndOfServiceError) {
+      throw new TRPCError({ code: error.code, message: error.message });
+    }
+    logger.error('خطأ في عملية إنهاء الخدمة', error);
+    throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'حدث خطأ غير متوقع في إنهاء الخدمة' });
+  }
+}
+
+const eosDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'صيغة التاريخ يجب أن تكون YYYY-MM-DD');
+const eosAmountSchema = z.number().min(0).max(10_000_000);
+const eosDaysSchema = z.number().min(0).max(100_000);
+const eosNoteSchema = z.string().max(2000).nullable().optional();
+
+// نموذج إنهاء الخدمة: المدخلات اليدوية فقط، والخادم يحسب كل المبالغ
+const eosFormSchema = z.object({
+  employeeId: z.number().int().positive(),
+  hireDate: eosDateSchema,
+  contractEndDate: eosDateSchema,
+  lastWorkingDay: eosDateSchema,
+  letterDate: eosDateSchema,
+  nationality: z.string().max(100).nullable().optional(),
+  idNumber: z.string().max(50).nullable().optional(),
+  position: z.string().max(100).nullable().optional(),
+  baseSalary: eosAmountSchema,
+  fixedAllowances: eosAmountSchema,
+  leaveBalanceDaysOverride: eosDaysSchema.nullable().optional(),
+  leaveNote: eosNoteSchema,
+  salaryDaysOverride: eosDaysSchema.nullable().optional(),
+  salaryNote: eosNoteSchema,
+  otherAdditions: eosAmountSchema.optional(),
+  otherAdditionsNote: eosNoteSchema,
+  otherDeductions: eosAmountSchema.optional(),
+  otherDeductionsNote: eosNoteSchema,
+  notes: eosNoteSchema,
+});
+
+// تاريخ مباشرة العمل في ملف الموظف (YYYY-MM-DD أو null)
+const employeeHireDateSchema = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'صيغة تاريخ المباشرة يجب أن تكون YYYY-MM-DD')
+  .refine(value => parseDateOnly(value) !== null, 'تاريخ المباشرة غير صحيح')
+  .nullable()
+  .optional();
+
+// عرض المخالصات: المسؤول والمدير والمشرف العام (كل الفروع) ومشرف الفرع (موظفو فرعه فقط)
+const endOfServiceViewProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (!['admin', 'manager', 'supervisor', 'viewer'].includes(ctx.user.role)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بعرض مخالصات إنهاء الخدمة' });
+  }
+  if (ctx.user.role === 'supervisor' && ctx.user.branchId == null) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'حسابك غير مرتبط بفرع' });
+  }
+  return next({ ctx });
 });
 
 // ==================== السندات المالية: الصلاحيات والمدخلات ====================
@@ -1845,6 +1913,8 @@ export const appRouter = router({
         iqamaExpiryDate: z.date().optional(),
         healthCertExpiryDate: z.date().optional(),
         contractExpiryDate: z.date().optional(),
+        hireDate: employeeHireDateSchema,
+        nationality: z.string().trim().max(100).nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         await db.createEmployee({
@@ -1857,6 +1927,8 @@ export const appRouter = router({
           iqamaExpiryDate: input.iqamaExpiryDate,
           healthCertExpiryDate: input.healthCertExpiryDate,
           contractExpiryDate: input.contractExpiryDate,
+          hireDate: input.hireDate ?? null,
+          nationality: input.nationality || null,
         });
         await db.createActivityLog({
           userId: ctx.user.id,
@@ -1882,6 +1954,9 @@ export const appRouter = router({
         iqamaExpiryDate: z.date().optional(),
         healthCertExpiryDate: z.date().optional(),
         contractExpiryDate: z.date().optional(),
+        // اختياريان: عدم إرسالهما يبقي القيمة الحالية، وnull يمسحها
+        hireDate: employeeHireDateSchema,
+        nationality: z.string().trim().max(100).nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         await db.updateEmployee(input.id, {
@@ -1895,6 +1970,8 @@ export const appRouter = router({
           iqamaExpiryDate: input.iqamaExpiryDate || null,
           healthCertExpiryDate: input.healthCertExpiryDate || null,
           contractExpiryDate: input.contractExpiryDate || null,
+          ...(input.hireDate !== undefined ? { hireDate: input.hireDate } : {}),
+          ...(input.nationality !== undefined ? { nationality: input.nationality || null } : {}),
         });
         await db.createActivityLog({
           userId: ctx.user.id,
@@ -3342,10 +3419,11 @@ export const appRouter = router({
       if (!employee) {
         // إذا لم يكن موظفاً، أرجع الطلبات التي أنشأها المستخدم
         const allRequests = await db.getAllEmployeeRequests();
-        return allRequests.filter(r => r.employeeName === ctx.user.name);
+        return allRequests.filter(r => r.employeeName === ctx.user.name && endOfService.isRequestVisibleToEmployee(r));
       }
-      
-      return await db.getEmployeeRequestsByEmployeeId(employee.id);
+
+      const requests = await db.getEmployeeRequestsByEmployeeId(employee.id);
+      return requests.filter(endOfService.isRequestVisibleToEmployee);
     }),
 
     // الطلبات المعلقة - متاح للمشرف العام والمدير والمسؤول
@@ -3533,6 +3611,10 @@ export const appRouter = router({
         if (!request) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'الطلب غير موجود' });
         }
+        // حالة طلب إنهاء الخدمة تتبع مخالصته (اعتماد/إلغاء) ولا تُغيّر من هنا
+        if (request.requestType === 'end_of_service') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'يُدار إنهاء الخدمة من صفحة إنهاء الخدمة' });
+        }
 
         const oldStatus = request.status;
 
@@ -3663,6 +3745,12 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const request = await db.getEmployeeRequestById(input.id);
+        // طلب إنهاء الخدمة: يُحذف مع مخالصته فقط بعد إلغائها
+        if (request?.requestType === 'end_of_service') {
+          await runEndOfServiceAction(() => endOfService.deleteEndOfServiceRequest(input.id));
+          return { success: true, message: 'تم حذف طلب إنهاء الخدمة ومخالصته الملغاة' };
+        }
+        // السلفة المخصومة في مسيرة معتمدة أو في مخالصة نهائية لا تُحذف
         if (request?.requestType === 'advance') {
           await runPayrollAction(() => payrollService.assertSourceNotLocked('advance', input.id));
         }
@@ -3954,6 +4042,105 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await runPayrollAction(() => payrollService.deleteViolation(input.id));
         return { success: true, message: 'تم حذف المخالفة' };
+      }),
+  }),
+
+  // ==================== إنهاء الخدمة (انتهاء العقد وعدم التجديد) والمخالصة النهائية ====================
+  endOfService: router({
+    // بيانات الموظف الافتراضية للنموذج (الأجر، الإجازات، آخر مسيرة، السلف والمخالفات، المخالصة القائمة)
+    defaults: managerProcedure
+      .input(z.object({ employeeId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        return runEndOfServiceAction(() => endOfService.getDefaults(input.employeeId));
+      }),
+
+    // معاينة الحساب بنفس دالة الحفظ
+    preview: managerProcedure
+      .input(eosFormSchema)
+      .query(async ({ input }) => {
+        return runEndOfServiceAction(() => endOfService.previewSettlement(input));
+      }),
+
+    create: managerProcedure
+      .input(eosFormSchema)
+      .mutation(async ({ input, ctx }) => {
+        return runEndOfServiceAction(() => endOfService.createSettlement(input, endOfServiceActor(ctx.user)));
+      }),
+
+    // تعديل مخالصة في حالة المسودة فقط مع إعادة الحساب
+    update: managerProcedure
+      .input(eosFormSchema.extend({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, ...form } = input;
+        return runEndOfServiceAction(() => endOfService.updateSettlement(id, form, endOfServiceActor(ctx.user)));
+      }),
+
+    list: endOfServiceViewProcedure
+      .input(z.object({
+        status: z.string().max(20).optional(),
+        branchId: z.number().int().positive().optional(),
+      }).optional())
+      .query(async ({ input, ctx }) => {
+        return runEndOfServiceAction(() => endOfService.listSettlements(input, ctx.user));
+      }),
+
+    getById: endOfServiceViewProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        return runEndOfServiceAction(() => endOfService.getSettlementById(input.id, ctx.user));
+      }),
+
+    // المخالصة المرتبطة بطلب إنهاء خدمة (للانتقال من صفحة الطلبات)
+    getByRequestId: endOfServiceViewProcedure
+      .input(z.object({ requestId: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        return runEndOfServiceAction(() => endOfService.getSettlementByRequestId(input.requestId, ctx.user));
+      }),
+
+    // الاعتماد يعيد الحساب أولاً: إن تغيرت الأرقام تُحفظ ويُرفض الاعتماد (CONFLICT) للمراجعة
+    approve: managerProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        return runEndOfServiceAction(() => endOfService.approveSettlement(input.id, endOfServiceActor(ctx.user)));
+      }),
+
+    markPaid: managerProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        paymentMethod: z.enum(['cash', 'bank_transfer', 'check']),
+        paymentReference: z.string().max(100).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return runEndOfServiceAction(() =>
+          endOfService.markSettlementPaid(input.id, input.paymentMethod, input.paymentReference, endOfServiceActor(ctx.user))
+        );
+      }),
+
+    cancel: managerProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        reason: z.string().trim().min(3, 'سبب الإلغاء مطلوب (3 أحرف على الأقل)').max(1000),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return runEndOfServiceAction(() => endOfService.cancelSettlement(input.id, input.reason, endOfServiceActor(ctx.user)));
+      }),
+
+    // PDF للخطاب أو المخالصة (التوقيعات والختم بعد الاعتماد فقط)
+    pdf: endOfServiceViewProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        document: z.enum(['letter', 'settlement']),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const data = await runEndOfServiceAction(() => endOfService.getDocumentData(input.id, ctx.user));
+        const { generateEndOfServicePDF, endOfServiceFileName } = await import('./endOfServicePdf');
+        try {
+          const pdfBuffer = await generateEndOfServicePDF(data, input.document);
+          return { pdf: pdfBuffer.toString('base64'), filename: endOfServiceFileName(data, input.document) };
+        } catch (error: any) {
+          logger.error('فشل توليد PDF لإنهاء الخدمة', error);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'تعذر توليد ملف PDF، استخدم زر الطباعة من المتصفح' });
+        }
       }),
   }),
 
@@ -7972,7 +8159,9 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         employeeId: z.number(),
       }))
       .query(async ({ input }) => {
-        return await db.getEmployeeRequestsByEmployeeId(input.employeeId);
+        // إنهاء الخدمة يظهر للموظف بعد اعتماده فقط
+        const requests = await db.getEmployeeRequestsByEmployeeId(input.employeeId);
+        return requests.filter(endOfService.isRequestVisibleToEmployee);
       }),
   }),
 
@@ -8672,6 +8861,9 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         }
         
         const existingRequest = await db.getEmployeeRequestById(input.requestId);
+        if (existingRequest?.requestType === 'end_of_service') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'يُدار إنهاء الخدمة من صفحة إنهاء الخدمة' });
+        }
         if (existingRequest?.requestType === 'advance' && existingRequest.status === 'approved' && input.status !== 'approved') {
           await runPayrollAction(() => payrollService.assertSourceNotLocked('advance', input.requestId));
         }
@@ -10346,6 +10538,7 @@ function getRequestTypeName(type: string): string {
     permission: 'استئذان',
     objection: 'اعتراض',
     resignation: 'استقالة',
+    end_of_service: 'إنهاء خدمة',
   };
   return types[type] || type;
 }

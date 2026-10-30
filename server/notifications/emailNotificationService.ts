@@ -1988,6 +1988,7 @@ export async function notifyEmployeeRequestSubmitted(data: {
     permission: 'استئذان',
     objection: 'اعتراض',
     resignation: 'استقالة',
+    end_of_service: 'إنهاء خدمة',
   };
   
   const requestTypeName = requestTypeNames[data.requestType] || data.requestType;
@@ -2106,6 +2107,7 @@ export async function notifyEmployeeRequestApproved(data: {
     permission: 'استئذان',
     objection: 'اعتراض',
     resignation: 'استقالة',
+    end_of_service: 'إنهاء خدمة',
   };
   
   const requestTypeName = requestTypeNames[data.requestType] || data.requestType;
@@ -2228,6 +2230,7 @@ export async function notifyEmployeeRequestRejected(data: {
     permission: 'استئذان',
     objection: 'اعتراض',
     resignation: 'استقالة',
+    end_of_service: 'إنهاء خدمة',
   };
   
   const requestTypeName = requestTypeNames[data.requestType] || data.requestType;

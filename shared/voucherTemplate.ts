@@ -94,13 +94,22 @@ export interface VoucherTemplateOptions {
   printedAt?: Date;
 }
 
+/** مسار الخط العربي المضمّن في المستندات المطبوعة (نسبي لمجلد client/public) */
+export const PRINT_FONT_PATH = "/fonts/NotoSansArabic-Regular.ttf";
+
 function joinAsset(base: string | undefined, assetPath: string): string {
   if (/^(data:|https?:|blob:)/i.test(assetPath)) return assetPath;
   if (!base) return assetPath;
   return `${base.replace(/\/+$/, "")}/${assetPath.replace(/^\/+/, "")}`;
 }
 
-function resolveAssets(options: VoucherTemplateOptions): Required<Omit<VoucherTemplateAssets, "font">> & { font?: string } {
+export type ResolvedVoucherAssets = Required<Omit<VoucherTemplateAssets, "font">> & { font?: string };
+
+/**
+ * روابط الصور والخط للطباعة: الصور الممررة صراحةً أولاً، وإلا مسار الملف العام
+ * (مسبوقاً بـ assetBaseUrl إن وجد). مشتركة بين السندات ومستندات إنهاء الخدمة.
+ */
+export function resolveVoucherAssets(options: Pick<VoucherTemplateOptions, "assets" | "assetBaseUrl">): ResolvedVoucherAssets {
   const a = options.assets ?? {};
   const base = options.assetBaseUrl;
   return {
@@ -108,20 +117,42 @@ function resolveAssets(options: VoucherTemplateOptions): Required<Omit<VoucherTe
     supervisorSignature: a.supervisorSignature ?? joinAsset(base, SIGNATURES.supervisor.image),
     managerSignature: a.managerSignature ?? joinAsset(base, SIGNATURES.manager.image),
     stamp: a.stamp ?? joinAsset(base, SIGNATURES.stamp.image),
-    font: a.font ?? (base !== undefined ? joinAsset(base, "/fonts/NotoSansArabic-Regular.ttf") : undefined),
+    font: a.font ?? (base !== undefined ? joinAsset(base, PRINT_FONT_PATH) : undefined),
   };
+}
+
+/** تعريف @font-face للخط العربي المضمّن (نص فارغ إن لم يوجد خط) */
+export function printFontFaceCss(font: string | undefined, family = "VoucherArabic", weight = "100 900"): string {
+  return font
+    ? `@font-face { font-family: '${family}'; src: url('${font.replace(/'/g, "%27")}') format('truetype'); font-weight: ${weight}; }`
+    : "";
+}
+
+/** سكربت الطباعة التلقائية بعد تحميل الصفحة والخطوط */
+export function autoPrintScript(): string {
+  return `<script>
+      (function () {
+        function go() { setTimeout(function () { try { window.focus(); window.print(); } catch (e) {} }, 350); }
+        var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+        if (document.readyState === 'complete') { fontsReady.then(go); }
+        else { window.addEventListener('load', function () { fontsReady.then(go); }); }
+      })();
+    </script>`;
 }
 
 function normalizeType(type: VoucherTemplateData["voucherType"]): VoucherType {
   return type === "payment" ? "payment" : "receipt";
 }
 
-/** نص ثنائي اللغة: العربي ثم الفاصل ثم الإنجليزي (كل جزء معزول اتجاهياً) */
-function bi(ar: string, en: string): string {
+/** نص ثنائي اللغة: العربي ثم الفاصل ثم الإنجليزي (كل جزء معزول اتجاهياً). المدخلات HTML جاهز (مُهرّب) */
+export function bilingualHtml(ar: string, en: string): string {
   return `<span class="ar">${ar}</span><span class="sep"> / </span><span class="en">${en}</span>`;
 }
 
-function textOrBlank(value: unknown): string {
+const bi = bilingualHtml;
+
+/** النص مُهرّباً، أو مسافة فارغة (&nbsp;) إن كان فارغاً */
+export function textOrBlank(value: unknown): string {
   const s = value === null || value === undefined ? "" : String(value).trim();
   return s ? escapeHtml(s) : "&nbsp;";
 }
@@ -227,7 +258,7 @@ function renderPayment(v: VoucherTemplateData): string {
     </div>`;
 }
 
-function renderSignatures(v: VoucherTemplateData, type: VoucherType, assets: ReturnType<typeof resolveAssets>): string {
+function renderSignatures(v: VoucherTemplateData, type: VoucherType, assets: ResolvedVoucherAssets): string {
   const signed = isVoucherSigned(v.status);
   const cancelled = v.status === "cancelled";
   const pending = `<div class="sig-pending">${cancelled ? "ملغي / Cancelled" : "بانتظار الاعتماد<br><small>Pending Approval</small>"}</div>`;
@@ -400,15 +431,13 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
   const type = normalizeType(v.voucherType);
   const titles = VOUCHER_TITLES[type];
   const company = { ...COMPANY_INFO, ...(options.company ?? {}) };
-  const assets = resolveAssets(options);
+  const assets = resolveVoucherAssets(options);
   const status = v.status || "draft";
   const statusLabel = getVoucherStatusLabel(status, type);
   const total = roundMoney(v.totalAmount);
   const accent = type === "receipt" ? "#1f3a5f" : "#7a1f1f";
   const accentSoft = type === "receipt" ? "#eef3f9" : "#fbf0f0";
-  const fontFace = assets.font
-    ? `@font-face { font-family: 'VoucherArabic'; src: url('${assets.font.replace(/'/g, "%27")}') format('truetype'); font-weight: 100 900; }`
-    : "";
+  const fontFace = printFontFaceCss(assets.font);
 
   const watermark = status === "cancelled"
     ? `<div class="watermark cancelled">ملغي / CANCELLED</div>`
@@ -432,16 +461,7 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
 
   const showReceivedBy = type === "receipt" && v.payeeName && v.payeeName.trim() && v.payeeName.trim() !== (v.partyName || "").trim();
 
-  const printScript = options.autoPrint
-    ? `<script>
-      (function () {
-        function go() { setTimeout(function () { try { window.focus(); window.print(); } catch (e) {} }, 350); }
-        var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
-        if (document.readyState === 'complete') { fontsReady.then(go); }
-        else { window.addEventListener('load', function () { fontsReady.then(go); }); }
-      })();
-    </script>`
-    : "";
+  const printScript = options.autoPrint ? autoPrintScript() : "";
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
