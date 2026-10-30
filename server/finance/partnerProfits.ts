@@ -7,6 +7,7 @@
 
 import * as db from "../db";
 import { getBranchMonthlyFinancials } from "./branchFinancials";
+import { ensureFixedExpensesForViewedMonth } from "../expenses/autoExpenses";
 import { loadDocumentAssetsForBranch, renderHtmlToPdf } from "../voucherPdf";
 import {
   branchDisplayName,
@@ -26,7 +27,7 @@ export async function getPartnerProfits(
   month: number,
   options: { branchId?: number } = {}
 ): Promise<PartnerProfitsSummary> {
-  // TODO(integrator): await ensureFixedExpensesForMonth(year, month);
+  await ensureFixedExpensesForViewedMonth(year, month);
   const allBranches = await db.getBranches();
   const active = allBranches.filter(
     b => b.isActive !== false && (options.branchId == null || b.id === options.branchId)

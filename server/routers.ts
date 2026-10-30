@@ -38,6 +38,8 @@ import * as aiRecommendationNotifier from "./ai/aiRecommendationNotifier";
 import * as aiRecommendationMonitor from "./scheduler/aiRecommendationMonitor";
 import * as financialValidation from "./validation/financialValidation";
 import * as financeReports from "./reports/financeReportsPdf";
+import * as autoExpenses from "./expenses/autoExpenses";
+import { EXPENSE_PAYMENT_METHODS, MANUAL_EXPENSE_CATEGORIES, expenseCategoryLabel } from "../shared/expenses";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -232,8 +234,29 @@ async function runPayrollAction<T>(action: () => Promise<T>): Promise<T> {
     if (error instanceof payrollService.PayrollError) {
       throw new TRPCError({ code: error.code, message: error.message });
     }
+    // تسجيل المسير المعتمد في المصاريف يتم داخل نفس المعاملة
+    if (error instanceof autoExpenses.ExpenseRuleError) {
+      if (error.code === 'INTERNAL_SERVER_ERROR') payrollLogger.error('خطأ في تسجيل مصروف المسيرة', error);
+      throw new TRPCError({ code: error.code, message: error.message });
+    }
     payrollLogger.error('خطأ في عملية مسيرة الرواتب', error);
     throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message || 'حدث خطأ غير متوقع' });
+  }
+}
+
+// أخطاء قواعد المصاريف (التلقائية والقوالب) -> رسائل عربية برمز مناسب
+// (تعطل قاعدة البيانات INTERNAL_SERVER_ERROR وليس تعارضاً من المستخدم)
+async function runExpenseAction<T>(action: () => Promise<T> | T): Promise<T> {
+  try {
+    return await action();
+  } catch (error: any) {
+    if (error instanceof TRPCError) throw error;
+    if (error instanceof autoExpenses.ExpenseRuleError) {
+      if (error.code === 'INTERNAL_SERVER_ERROR') logger.error('خطأ في نظام المصاريف', error);
+      throw new TRPCError({ code: error.code, message: error.message });
+    }
+    logger.error('خطأ في عملية المصاريف', error);
+    throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'حدث خطأ غير متوقع في المصاريف' });
   }
 }
 
@@ -4251,10 +4274,16 @@ export const appRouter = router({
   expenses: router({
     // الحصول على جميع المصاريف
     list: protectedProcedure.query(async ({ ctx }) => {
+      // المصاريف الثابتة للشهر الحالي تُضاف تلقائياً قبل العرض (مرة كل فترة، والفشل لا يوقف العرض)
+      await autoExpenses.ensureCurrentMonthFixedExpenses();
       const expenses = await db.getAllExpenses();
       // المشرف يرى مصاريف فرعه فقط (إذا كان مرتبط بفرع)
       if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null) {
         return expenses.filter(exp => exp.branchId === ctx.user.branchId || exp.createdBy === ctx.user.id);
+      }
+      // مصاريف مسيرات الرواتب لمن يحق له عرض المسيرات فقط
+      if (!['admin', 'manager', 'supervisor', 'viewer'].includes(ctx.user.role)) {
+        return expenses.filter(exp => exp.source !== 'payroll');
       }
       return expenses;
     }),
@@ -4321,14 +4350,15 @@ export const appRouter = router({
     // إنشاء مصروف - المشرف يمكنه الإدخال فقط
     create: supervisorInputProcedure
       .input(z.object({
-        category: z.enum(['shop_supplies', 'printing', 'carpet_cleaning', 'small_needs', 'residency', 'medical_exam', 'transportation', 'electricity', 'internet', 'license_renewal', 'visa', 'residency_renewal', 'health_cert_renewal', 'maintenance', 'health_cert', 'violation', 'emergency', 'shop_rent', 'housing_rent', 'improvements', 'bonus', 'other']),
+        // الرواتب لا تُدخل يدوياً (تأتي من المسير المعتمد)
+        category: z.enum(MANUAL_EXPENSE_CATEGORIES),
         title: z.string().min(1),
         description: z.string().optional(),
         amount: z.string(),
         branchId: z.number().optional(),
         branchName: z.string().optional(),
         expenseDate: z.string(),
-        paymentMethod: z.enum(['cash', 'bank_transfer', 'check', 'credit_card', 'other']).default('cash'),
+        paymentMethod: z.enum(EXPENSE_PAYMENT_METHODS).default('cash'),
         paymentReference: z.string().optional(),
         supplierId: z.number().optional(),
         supplierName: z.string().optional(),
@@ -4385,16 +4415,15 @@ export const appRouter = router({
         }
         // ==================== نهاية التحقق ====================
 
-        const expenseNumber = await db.generateExpenseNumber();
-        
-        await db.createExpense({
+        // رقم فريد بنفس مولّد المصاريف التلقائية (لا تعارض مع الإضافة التلقائية المتزامنة)
+        const created = await runExpenseAction(() => autoExpenses.createExpenseWithNumber({
           ...input,
-          expenseNumber,
+          source: 'manual',
           expenseDate: new Date(input.expenseDate),
           status: 'pending',
           createdBy: ctx.user.id,
           createdByName: ctx.user.name || 'مستخدم',
-        });
+        }));
 
         // إشعار المسؤول
         await notifyOwner({
@@ -4405,34 +4434,9 @@ export const appRouter = router({
         // إرسال إشعار بريد إلكتروني إذا كان المصروف مرتفع (أكثر من 500 ر.س)
         const expenseAmount = parseFloat(input.amount);
         if (expenseAmount >= 500) {
-          const categoryNames: Record<string, string> = {
-            shop_supplies: 'مستلزمات المحل',
-            printing: 'طباعة',
-            carpet_cleaning: 'غسيل سجاد',
-            small_needs: 'احتياجات صغيرة',
-            residency: 'إقامة',
-            medical_exam: 'فحص طبي',
-            transportation: 'مواصلات',
-            electricity: 'كهرباء',
-            internet: 'إنترنت',
-            license_renewal: 'تجديد رخصة',
-            visa: 'تأشيرة',
-            residency_renewal: 'تجديد إقامة',
-            health_cert_renewal: 'تجديد شهادة صحية',
-            maintenance: 'صيانة',
-            health_cert: 'شهادة صحية',
-            violation: 'مخالفة',
-            emergency: 'طوارئ',
-            shop_rent: 'إيجار محل',
-            housing_rent: 'إيجار سكن',
-            improvements: 'تحسينات',
-            bonus: 'بونص',
-            other: 'أخرى',
-          };
-          
           emailNotifications.notifyHighExpense({
             amount: expenseAmount,
-            category: categoryNames[input.category] || input.category,
+            category: expenseCategoryLabel(input.category),
             description: input.description,
             branchId: input.branchId,
             branchName: input.branchName,
@@ -4445,7 +4449,7 @@ export const appRouter = router({
         try {
           const { monitorNewExpense } = await import('./ai/smartMonitoringService');
           const monitoringResult = await monitorNewExpense({
-            id: 0, // سيتم تحديثه
+            id: created.id,
             branchId: input.branchId || 0,
             category: input.category,
             amount: Number(input.amount),
@@ -4461,25 +4465,42 @@ export const appRouter = router({
       }),
 
     // تحديث مصروف - الأدمن فقط
+    // مصروف المسير لا يُعدّل؛ المصروف الثابت يُعدّل مبلغه وملاحظاته فقط
     update: adminOnlyEditProcedure
       .input(z.object({
         id: z.number(),
-        category: z.enum(['shop_supplies', 'printing', 'carpet_cleaning', 'small_needs', 'residency', 'medical_exam', 'transportation', 'electricity', 'internet', 'license_renewal', 'visa', 'residency_renewal', 'health_cert_renewal', 'maintenance', 'health_cert', 'violation', 'emergency', 'shop_rent', 'housing_rent', 'improvements', 'bonus', 'other']).optional(),
+        category: z.enum(MANUAL_EXPENSE_CATEGORIES).optional(),
         title: z.string().optional(),
         description: z.string().optional(),
         amount: z.string().optional(),
         expenseDate: z.string().optional(),
-        paymentMethod: z.enum(['cash', 'bank_transfer', 'check', 'credit_card', 'other']).optional(),
+        paymentMethod: z.enum(EXPENSE_PAYMENT_METHODS).optional(),
         paymentReference: z.string().optional(),
         receiptNumber: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const { id, expenseDate, ...data } = input;
-        const updateData: any = { ...data };
-        if (expenseDate) {
+        const existing = await db.getExpenseById(id);
+        if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'المصروف غير موجود' });
+        await runExpenseAction(() => autoExpenses.assertExpenseEditable(existing, { ...data, expenseDate }));
+        if (data.amount !== undefined) {
+          const amountValidation = financialValidation.validateAmount(data.amount, { fieldName: 'مبلغ المصروف', allowZero: false });
+          if (!amountValidation.success) financialValidation.throwValidationError(amountValidation.errors);
+        }
+        // المصروف الثابت: تُحفظ الحقول المسموح بها فقط (البند والتاريخ وطريقة الدفع من القالب)
+        const updateData: any = existing.source === 'fixed' ? autoExpenses.pickFixedExpenseEditableFields(data) : { ...data };
+        if (expenseDate && existing.source !== 'fixed') {
           updateData.expenseDate = new Date(expenseDate);
         }
         await db.updateExpense(id, updateData);
+        if (existing.source === 'fixed' && data.amount !== undefined && Number(data.amount) !== Number(existing.amount)) {
+          await db.createExpenseLog({
+            expenseId: id,
+            action: `تعديل مبلغ المصروف الثابت من ${existing.amount} إلى ${data.amount}`,
+            performedBy: ctx.user.id,
+            performedByName: ctx.user.name,
+          });
+        }
         return { success: true, message: 'تم تحديث المصروف بنجاح' };
       }),
 
@@ -4491,6 +4512,10 @@ export const appRouter = router({
         rejectionReason: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        const existing = await db.getExpenseById(input.id);
+        if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'المصروف غير موجود' });
+        // مصروف المسير تتبع حالته المسير (يُدفع أو يُلغى من صفحة المسيرات)
+        await runExpenseAction(() => autoExpenses.assertExpenseStatusChangeable(existing));
         await db.updateExpenseStatus(
           input.id,
           input.status,
@@ -4519,13 +4544,60 @@ export const appRouter = router({
         return { success: true, message: `تم تحديث الحالة إلى: ${statusNames[input.status]}` };
       }),
 
-    // حذف مصروف - الأدمن فقط
+    // حذف مصروف - الأدمن فقط (مصروف المسير والمصروف الثابت لا يُحذفان)
     delete: adminOnlyEditProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
+        const existing = await db.getExpenseById(input.id);
+        if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'المصروف غير موجود' });
+        await runExpenseAction(() => autoExpenses.assertExpenseDeletable(existing));
         await db.deleteExpense(input.id);
         return { success: true, message: 'تم حذف المصروف بنجاح' };
       }),
+
+    // قوالب المصاريف الثابتة الشهرية لكل فرع (للمسؤول فقط)؛ التعديل يسري على الشهور التي لم تُضف بعد
+    fixedTemplates: router({
+      list: adminProcedure.query(async () => {
+        return await runExpenseAction(() => autoExpenses.listFixedExpenseTemplates());
+      }),
+
+      save: adminProcedure
+        .input(z.object({
+          id: z.number().int().positive().optional(),
+          branchId: z.number().int().positive(),
+          category: z.enum(MANUAL_EXPENSE_CATEGORIES),
+          title: z.string().trim().min(2, 'اسم المصروف مطلوب').max(100),
+          amount: z.number().positive('المبلغ يجب أن يكون أكبر من صفر').max(10_000_000),
+          paymentMethod: z.enum(EXPENSE_PAYMENT_METHODS),
+          isActive: z.boolean().optional(),
+          sortOrder: z.number().int().min(0).max(1000).optional(),
+          startsOn: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'الشهر بصيغة YYYY-MM').optional(),
+        }))
+        .mutation(async ({ input }) => {
+          const result = await runExpenseAction(() => autoExpenses.saveFixedExpenseTemplate(input));
+          const addedNow = result.currentMonth.created;
+          return {
+            success: true,
+            id: result.id,
+            addedThisMonth: addedNow,
+            message: input.id
+              ? 'تم حفظ المصروف الثابت؛ يسري على الشهور التي لم تُضف بعد'
+              : addedNow > 0
+                ? 'تمت إضافة المصروف الثابت وتسجيله لهذا الشهر'
+                : 'تمت إضافة المصروف الثابت',
+          };
+        }),
+
+      remove: adminProcedure
+        .input(z.object({ id: z.number().int().positive() }))
+        .mutation(async ({ input }) => {
+          await runExpenseAction(() => autoExpenses.deactivateFixedExpenseTemplate(input.id));
+          return {
+            success: true,
+            message: 'تم إيقاف المصروف الثابت؛ لن يُضاف من الشهر القادم، ومصروف هذا الشهر (إن أُضيف) يبقى ويمكن رفضه',
+          };
+        }),
+    }),
 
     // رفع مرفق للمصروف
     uploadAttachment: supervisorInputProcedure

@@ -6,6 +6,7 @@
 import { getDb } from "../db";
 import { dailyRevenues, expenses, branches } from "../../drizzle/schema";
 import { eq, gte, lte, and, desc } from "drizzle-orm";
+import { expenseCategoryLabel } from "../../shared/expenses";
 
 // واجهة بيانات التصدير
 export interface ExportData {
@@ -114,32 +115,12 @@ export async function prepareExpensesForExport(
   const allBranches = await db!.select().from(branches);
   const branchMap = new Map(allBranches.map(b => [b.id, b.nameAr]));
   
-  // ترجمة التصنيفات
-  const categoryNames: Record<string, string> = {
-    shop_supplies: "مستلزمات المحل",
-    printing: "طباعة",
-    carpet_cleaning: "تنظيف سجاد",
-    small_needs: "احتياجات صغيرة",
-    residency: "إقامة",
-    medical_exam: "فحص طبي",
-    transportation: "مواصلات",
-    electricity: "كهرباء",
-    internet: "إنترنت",
-    license_renewal: "تجديد رخصة",
-    visa: "تأشيرة",
-    maintenance: "صيانة",
-    shop_rent: "إيجار محل",
-    housing_rent: "إيجار سكن",
-    improvements: "تحسينات",
-    bonus: "مكافأة",
-    other: "أخرى",
-  };
   
   // تحويل البيانات
   const exportData = filteredExpenses.map(exp => ({
     التاريخ: new Date(exp.expenseDate).toLocaleDateString('ar-SA'),
     الفرع: exp.branchId ? branchMap.get(exp.branchId) || "غير معروف" : "عام",
-    التصنيف: categoryNames[exp.category] || exp.category,
+    التصنيف: expenseCategoryLabel(exp.category),
     العنوان: exp.title,
     المبلغ: Number(exp.amount),
     الحالة: exp.status === 'approved' ? 'معتمد' : exp.status === 'paid' ? 'مدفوع' : exp.status,

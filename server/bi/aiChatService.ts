@@ -10,7 +10,8 @@ import {
   monthlyRecords
 } from "../../drizzle/schema";
 import { sql, eq, and, gte, lte, desc, asc } from "drizzle-orm";
-import { TOTAL_FIXED_COSTS, FIXED_COSTS_PER_BRANCH, BRANCHES_COUNT, FIXED_COSTS_PER_BRANCH_BREAKDOWN } from "./financialForecastService";
+import { TOTAL_FIXED_COSTS, FIXED_COSTS_PER_BRANCH, BRANCHES_COUNT, FIXED_COSTS_PER_BRANCH_BREAKDOWN, excludeFixedCostCategories } from "./financialForecastService";
+import { expenseCategoryLabel } from "../../shared/expenses";
 
 // ==================== أنواع البيانات ====================
 
@@ -121,7 +122,7 @@ async function getBusinessContext(branchId?: number): Promise<BusinessContext> {
   const daysWithRevenue = Number(revenue30Days?.count || 1);
   const avgDaily = daysWithRevenue > 0 ? totalRevenue30 / daysWithRevenue : 0;
 
-  // جلب المصاريف آخر 30 يوم
+  // جلب المصاريف آخر 30 يوم (المتغيرة فقط: الإيجارات والإنترنت والكهرباء والرواتب ضمن التكاليف الثابتة أدناه)
   const expensesByCategory = await db
     .select({
       category: expenses.category,
@@ -129,9 +130,12 @@ async function getBusinessContext(branchId?: number): Promise<BusinessContext> {
     })
     .from(expenses)
     .where(
-      branchId
-        ? sql`DATE(${expenses.expenseDate}) >= ${last30Days.toISOString().split('T')[0]} AND ${expenses.branchId} = ${branchId} AND ${expenses.status} IN ('approved', 'paid')`
-        : sql`DATE(${expenses.expenseDate}) >= ${last30Days.toISOString().split('T')[0]} AND ${expenses.status} IN ('approved', 'paid')`
+      and(
+        branchId
+          ? sql`DATE(${expenses.expenseDate}) >= ${last30Days.toISOString().split('T')[0]} AND ${expenses.branchId} = ${branchId} AND ${expenses.status} IN ('approved', 'paid')`
+          : sql`DATE(${expenses.expenseDate}) >= ${last30Days.toISOString().split('T')[0]} AND ${expenses.status} IN ('approved', 'paid')`,
+        excludeFixedCostCategories()
+      )
     )
     .groupBy(expenses.category);
 
@@ -309,20 +313,9 @@ async function getBusinessContext(branchId?: number): Promise<BusinessContext> {
 
 // ==================== ترجمة أسماء الفئات ====================
 
+// الأسماء من المصدر المشترك (نفس أسماء صفحة المصاريف)
 function getCategoryName(category: string): string {
-  const categories: Record<string, string> = {
-    salaries: 'رواتب',
-    shop_rent: 'إيجار المحل',
-    housing_rent: 'إيجار السكن',
-    electricity: 'كهرباء',
-    internet: 'إنترنت',
-    maintenance: 'صيانة',
-    supplies: 'مستلزمات',
-    marketing: 'تسويق',
-    transportation: 'نقل',
-    other: 'أخرى',
-  };
-  return categories[category] || category;
+  return expenseCategoryLabel(category);
 }
 
 // ==================== البرومبت الأساسي ====================

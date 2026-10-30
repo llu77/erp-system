@@ -12,6 +12,11 @@ vi.mock("./db", async importOriginal => {
   return { ...actual, getBranches: vi.fn() };
 });
 
+vi.mock("./expenses/autoExpenses", async importOriginal => {
+  const actual = await importOriginal<typeof import("./expenses/autoExpenses")>();
+  return { ...actual, ensureFixedExpensesForViewedMonth: vi.fn(async () => null) };
+});
+
 vi.mock("./finance/branchFinancials", async importOriginal => {
   const actual = await importOriginal<typeof import("./finance/branchFinancials")>();
   return { ...actual, getBranchMonthlyFinancials: vi.fn() };
@@ -25,6 +30,7 @@ vi.mock("./voucherPdf", async importOriginal => {
 import type { TrpcContext } from "./_core/context";
 import * as db from "./db";
 import * as financials from "./finance/branchFinancials";
+import * as autoExpenses from "./expenses/autoExpenses";
 import * as voucherPdf from "./voucherPdf";
 import { appRouter } from "./routers";
 
@@ -117,6 +123,7 @@ describe("partnerProfits.summary", () => {
   it("returns one statement per active branch with partners and lists the others separately", async () => {
     const summary = await caller("admin").partnerProfits.summary({ year: 2026, month: 10 });
 
+    expect(autoExpenses.ensureFixedExpensesForViewedMonth).toHaveBeenCalledWith(2026, 10);
     expect(summary.year).toBe(2026);
     expect(summary.month).toBe(10);
     expect(summary.branches.map(b => [b.branchId, b.establishmentKey])).toEqual([

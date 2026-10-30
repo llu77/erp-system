@@ -24,6 +24,7 @@ import {
   type InsertPayrollDetail,
 } from "../../drizzle/schema";
 import { JOB_TITLE_SUPERVISOR, employeeJobTitle } from "../../shared/employeeFile";
+import { markPayrollExpensePaid, recordPayrollExpense, removePayrollExpense } from "../expenses/autoExpenses";
 import {
   calculatePayrollLine,
   sumPayrollTotals,
@@ -1032,6 +1033,13 @@ export async function transitionPayrollStatus(payrollId: number, to: PayrollStat
       .set(update)
       .where(and(eq(payrolls.id, payrollId), eq(payrolls.status, payroll.status)));
     if (affectedRows(res) === 0) throw new PayrollError("تم تعديل المسير من مستخدم آخر، يرجى التحديث", "CONFLICT");
+
+    // المسير المعتمد مصروف (رواتب) في نفس المعاملة: يُسجل عند الاعتماد، يُدفع معه، ويُحذف عند الإلغاء
+    const expenseActor = { id: actor.id, name: actor.name };
+    if (to === "approved") await recordPayrollExpense(tx, payrollId, expenseActor, "approved", now);
+    else if (to === "paid") await markPayrollExpensePaid(tx, payrollId, expenseActor, now);
+    else if (to === "cancelled") await removePayrollExpense(tx, payrollId);
+
     return { from: payroll.status, to, payroll };
   });
 }
@@ -1046,6 +1054,8 @@ export async function deletePayrollSafely(payrollId: number) {
     if (payroll.status === "paid") throw new PayrollError("لا يمكن حذف مسير مدفوع", "CONFLICT");
     await assertNoSettlementDependsOnPayroll(tx, payroll);
     await releaseLinkedItems(tx, payrollId);
+    // المسير المعتمد يمكن حذفه: يُحذف مصروفه معه
+    await removePayrollExpense(tx, payrollId);
     await tx.delete(payrollDetails).where(eq(payrollDetails.payrollId, payrollId));
     await tx.delete(payrolls).where(eq(payrolls.id, payrollId));
   });

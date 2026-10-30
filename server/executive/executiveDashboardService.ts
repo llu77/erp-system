@@ -8,7 +8,7 @@ import {
   kpiSnapshots, executiveAlerts, invoices, expenses, payrolls, employees, branches,
   InsertKPISnapshot, InsertExecutiveAlert
 } from "../../drizzle/schema";
-import { eq, desc, and, gte, lte, sql, sum, count, avg } from "drizzle-orm";
+import { eq, desc, and, gte, lte, ne, sql, sum, count, avg } from "drizzle-orm";
 
 // ==================== أنواع البيانات ====================
 
@@ -111,24 +111,26 @@ export async function calculateExecutiveKPIs(
       lte(invoices.createdAt, prevEndDate)
     ));
   
-  // 3. حساب المصاريف الحالية
+  // 3. حساب المصاريف الحالية (بتاريخ المصروف، وبدون صفوف المسير لأن الرواتب تُضاف من المسيرات أدناه)
   const currentExpenses = await db.select({
     total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`
   })
     .from(expenses)
     .where(and(
-      gte(expenses.createdAt, startDate),
-      lte(expenses.createdAt, endDate)
+      gte(expenses.expenseDate, startDate),
+      lte(expenses.expenseDate, endDate),
+      ne(expenses.source, "payroll")
     ));
-  
+
   // 4. حساب المصاريف السابقة
   const prevExpenses = await db.select({
     total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`
   })
     .from(expenses)
     .where(and(
-      gte(expenses.createdAt, prevStartDate),
-      lte(expenses.createdAt, prevEndDate)
+      gte(expenses.expenseDate, prevStartDate),
+      lte(expenses.expenseDate, prevEndDate),
+      ne(expenses.source, "payroll")
     ));
   
   // 5. حساب الرواتب (آخر مسير)
@@ -310,14 +312,15 @@ export async function getFinancialTrends(
         lte(invoices.createdAt, endDate)
       ));
     
-    // المصاريف
+    // المصاريف (بدون صفوف المسير؛ الرواتب تُضاف من المسيرات أدناه)
     const expensesResult = await db.select({
       total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`
     })
       .from(expenses)
       .where(and(
-        gte(expenses.createdAt, startDate),
-        lte(expenses.createdAt, endDate)
+        gte(expenses.expenseDate, startDate),
+        lte(expenses.expenseDate, endDate),
+        ne(expenses.source, "payroll")
       ));
     
     // الرواتب

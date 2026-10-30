@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/lib/trpc";
+import { expenseCategoryLabel } from "@shared/expenses";
 import {
   TrendingUp,
   TrendingDown,
@@ -84,7 +85,8 @@ export default function ProfitLossPage() {
       return invDate.getFullYear() === parseInt(year) && invDate.getMonth() + 1 === parseInt(month);
     });
 
-    const total = filteredInvoices.reduce((sum: number, inv: any) => sum + (inv.total || 0), 0);
+    // المبالغ العشرية تصل نصوصاً: تحويلها لأرقام قبل الجمع
+    const total = filteredInvoices.reduce((sum: number, inv: any) => sum + (Number(inv.total) || 0), 0);
     
     // تجميع حسب الشهر
     const byMonth: { month: string; amount: number }[] = [];
@@ -96,7 +98,7 @@ export default function ProfitLossPage() {
         });
         byMonth.push({
           month: new Date(parseInt(year), m - 1).toLocaleDateString("ar-SA", { month: "short" }),
-          amount: monthInvoices.reduce((s: number, i: any) => s + (i.total || 0), 0),
+          amount: monthInvoices.reduce((s: number, i: any) => s + (Number(i.total) || 0), 0),
         });
       }
     }
@@ -116,7 +118,7 @@ export default function ProfitLossPage() {
       return poDate.getFullYear() === parseInt(year) && poDate.getMonth() + 1 === parseInt(month);
     });
 
-    const total = filteredPurchases.reduce((sum: number, po: any) => sum + (po.total || 0), 0);
+    const total = filteredPurchases.reduce((sum: number, po: any) => sum + (Number(po.total) || 0), 0);
     
     const byMonth: { month: string; amount: number }[] = [];
     if (reportType === "yearly") {
@@ -127,7 +129,7 @@ export default function ProfitLossPage() {
         });
         byMonth.push({
           month: new Date(parseInt(year), m - 1).toLocaleDateString("ar-SA", { month: "short" }),
-          amount: monthPurchases.reduce((s: number, p: any) => s + (p.total || 0), 0),
+          amount: monthPurchases.reduce((s: number, p: any) => s + (Number(p.total) || 0), 0),
         });
       }
     }
@@ -139,21 +141,24 @@ export default function ProfitLossPage() {
   const calculateExpenses = () => {
     if (!expensesData) return { total: 0, byCategory: [] as { name: string; value: number }[] };
     
+    // المعتمدة والمدفوعة بتاريخ المصروف، بدون صفوف مسير الرواتب (الرواتب تُحسب من المسيرات أدناه)
     const filteredExpenses = expensesData.filter((exp: any) => {
-      const expDate = new Date(exp.createdAt);
+      if (exp.source === "payroll") return false;
+      if (exp.status !== "approved" && exp.status !== "paid") return false;
+      const expDate = new Date(exp.expenseDate);
       if (reportType === "yearly") {
         return expDate.getFullYear() === parseInt(year);
       }
       return expDate.getFullYear() === parseInt(year) && expDate.getMonth() + 1 === parseInt(month);
     });
 
-    const total = filteredExpenses.reduce((sum: number, exp: any) => sum + (exp.amount || 0), 0);
-    
+    const total = filteredExpenses.reduce((sum: number, exp: any) => sum + (Number(exp.amount) || 0), 0);
+
     // تجميع حسب الفئة
     const categoryMap: Record<string, number> = {};
     filteredExpenses.forEach((exp: any) => {
-      const cat = exp.category || "أخرى";
-      categoryMap[cat] = (categoryMap[cat] || 0) + (exp.amount || 0);
+      const cat = exp.category || "other";
+      categoryMap[cat] = (categoryMap[cat] || 0) + (Number(exp.amount) || 0);
     });
     
     const byCategory = Object.entries(categoryMap).map(([name, value]) => ({ name, value }));
@@ -243,18 +248,6 @@ export default function ProfitLossPage() {
     }
   };
 
-  const categoryNames: Record<string, string> = {
-    rent: "إيجار",
-    utilities: "مرافق",
-    salaries: "رواتب",
-    marketing: "تسويق",
-    maintenance: "صيانة",
-    supplies: "مستلزمات",
-    transportation: "نقل",
-    insurance: "تأمين",
-    taxes: "ضرائب",
-    other: "أخرى",
-  };
 
   return (
     <div className="space-y-6 print:space-y-4">
@@ -484,7 +477,7 @@ export default function ProfitLossPage() {
                     <Pie
                       data={expenses.byCategory.map((c) => ({
                         ...c,
-                        name: categoryNames[c.name] || c.name,
+                        name: expenseCategoryLabel(c.name),
                       }))}
                       cx="50%"
                       cy="50%"
