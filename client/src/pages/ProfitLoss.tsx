@@ -166,13 +166,15 @@ export default function ProfitLossPage() {
     if (!payrollsData) return 0;
     
     const filteredPayrolls = payrollsData.filter((pr: any) => {
+      // تكلفة الرواتب = المسيرات المعتمدة والمدفوعة فقط
+      if (pr.status !== 'approved' && pr.status !== 'paid') return false;
       if (reportType === "yearly") {
         return pr.year === parseInt(year);
       }
       return pr.year === parseInt(year) && pr.month === parseInt(month);
     });
 
-    return filteredPayrolls.reduce((sum: number, pr: any) => sum + (pr.totalNet || 0), 0);
+    return filteredPayrolls.reduce((sum: number, pr: any) => sum + (parseFloat(pr.totalNetSalary) || 0), 0);
   };
 
   const revenue = calculateRevenue();

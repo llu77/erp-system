@@ -147,9 +147,10 @@ export default function Payrolls() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
   const currentYear = new Date().getFullYear();
-  const [selectedBranch, setSelectedBranch] = useState<number | null>(
-    user?.role === 'supervisor' && user?.branchId ? user.branchId : null
-  );
+  const [pickedBranch, setSelectedBranch] = useState<number | null>(null);
+  // مشرف الفرع يعمل على فرعه فقط
+  const supervisorBranchId = user?.role === 'supervisor' && user?.branchId ? user.branchId : null;
+  const selectedBranch = supervisorBranchId ?? pickedBranch;
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [filterDateFrom, setFilterDateFrom] = useState('');
@@ -210,7 +211,7 @@ export default function Payrolls() {
     setStep('select');
     setInputsByEmployee({});
     setExpandedEmployee(null);
-    if (!(user?.role === 'supervisor' && user?.branchId)) setSelectedBranch(null);
+    setSelectedBranch(null);
   };
 
   // Mutations
@@ -436,7 +437,7 @@ export default function Payrolls() {
                       <Select
                         value={selectedBranch?.toString() || ""}
                         onValueChange={(v) => setSelectedBranch(parseInt(v))}
-                        disabled={user?.role === 'supervisor' && !!user?.branchId}
+                        disabled={!!supervisorBranchId}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="اختر الفرع" />
