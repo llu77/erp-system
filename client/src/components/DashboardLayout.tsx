@@ -68,6 +68,7 @@ import {
   Sparkles,
   Bell,
   ArrowUpCircle,
+  Layers,
 } from "lucide-react";
 import { CSSProperties, createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -183,7 +184,8 @@ const menuStructure: MenuItem[] = [
     children: [
       { icon: FilePlus, label: "تقديم طلب", path: "/submit-request", roles: ["admin", "manager", "employee", "supervisor"] },
       { icon: ClipboardList, label: "إدارة الطلبات", path: "/manage-requests", roles: ["admin", "manager", "supervisor", "viewer"] },
-      { icon: Gift, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin"] },
+      { icon: Gift, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin", "manager"] },
+      { icon: Layers, label: "إعدادات مستويات البونص", path: "/bonus-tiers", roles: ["admin", "manager"] },
     ]
   },
   
@@ -353,16 +355,17 @@ function DashboardLayoutContent({
   };
   const [hasShownDiscrepancyToast, setHasShownDiscrepancyToast] = useState(false);
 
-  // استعلام فروقات البونص (للأدمن فقط)
+  // استعلام فروقات البونص (للمسؤول والمدير)
+  const isBonusManager = user?.role === 'admin' || user?.role === 'manager';
   const { data: bonusDiscrepancies } = trpc.bonuses.getAllDiscrepancies.useQuery(
     undefined,
-    { enabled: user?.role === 'admin' }
+    { enabled: isBonusManager }
   );
 
   // إشعار منبثق عند تسجيل الدخول إذا وجدت فروقات
   useEffect(() => {
     if (
-      user?.role === 'admin' && 
+      isBonusManager && 
       bonusDiscrepancies && 
       bonusDiscrepancies.totalDiscrepancies > 0 && 
       !hasShownDiscrepancyToast
@@ -371,7 +374,7 @@ function DashboardLayoutContent({
       toast.warning(
         `⚠️ تنبيه: ${bonusDiscrepancies.totalDiscrepancies} فروقات في البونص`,
         {
-          description: `في ${bonusDiscrepancies.branches.length} فرع - الأسبوع ${bonusDiscrepancies.weekNumber}`,
+          description: `في ${bonusDiscrepancies.branches.length} فرع - فترة ${bonusDiscrepancies.periodLabel}`,
           duration: 8000,
           action: {
             label: 'عرض التفاصيل',
@@ -380,7 +383,7 @@ function DashboardLayoutContent({
         }
       );
     }
-  }, [bonusDiscrepancies, user, hasShownDiscrepancyToast, setLocation]);
+  }, [bonusDiscrepancies, isBonusManager, hasShownDiscrepancyToast, setLocation]);
   
   // حالة فتح/إغلاق القوائم الفرعية
   const [openMenus, setOpenMenus] = useState<string[]>(() => {

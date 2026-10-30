@@ -191,7 +191,7 @@ export default function Dashboard() {
               </Link>
             </div>
             <CardDescription className="text-red-700">
-              الأسبوع {bonusDiscrepancies.weekNumber} - {bonusDiscrepancies.month}/{bonusDiscrepancies.year}
+              الفترة {bonusDiscrepancies.periodLabel}
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -59,6 +59,7 @@ const Payrolls = lazy(() => import("./pages/Payrolls"));
 const EmployeeViolations = lazy(() => import("./pages/EmployeeViolations"));
 const Bonuses = lazy(() => import("./pages/Bonuses"));
 const BonusRequests = lazy(() => import("./pages/BonusRequests"));
+const BonusTierSettings = lazy(() => import("./pages/BonusTierSettings"));
 const SubmitRequest = lazy(() => import("./pages/SubmitRequest"));
 const ManageRequests = lazy(() => import("./pages/ManageRequests"));
 const HROnboarding = lazy(() => import("./pages/HROnboarding"));
@@ -325,6 +326,13 @@ function Router() {
       <Route path="/bonus-requests">
         <DashboardLayout>
           <LazyPage component={BonusRequests} />
+        </DashboardLayout>
+      </Route>
+      
+      {/* إعدادات مستويات البونص (المسؤول والمدير) */}
+      <Route path="/bonus-tiers">
+        <DashboardLayout>
+          <LazyPage component={BonusTierSettings} />
         </DashboardLayout>
       </Route>
       
