@@ -9815,9 +9815,6 @@ export async function getEmployeesWithExpiringDocuments() {
   if (!db) return { expiring: { iqama: [], healthCert: [], contract: [] }, expired: { iqama: [], healthCert: [], contract: [] }, summary: { totalExpiring: 0, totalExpired: 0, expiringIqamaCount: 0, expiringHealthCertCount: 0, expiringContractCount: 0, expiredIqamaCount: 0, expiredHealthCertCount: 0, expiredContractCount: 0 } };
   
   const now = new Date();
-  const oneMonthFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  const twoMonthsFromNow = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
-  const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   
   const { employees, branches } = await import('../drizzle/schema');
   
@@ -9848,34 +9845,27 @@ export async function getEmployeesWithExpiringDocuments() {
   const expiredHealthCert: typeof allEmployees = [];
   const expiredContract: typeof allEmployees = [];
   
+  // نفس حالات لوحة الوثائق (أيام الرياض، والحدود في shared/employeeFile.ts) حتى يطابق التقرير الشاشة
+  const { describeDocumentExpiry } = await import('../shared/employeeFile');
+  const classify = (
+    kind: 'iqama' | 'health' | 'contract',
+    expiry: Date | null,
+    emp: (typeof allEmployees)[number],
+    expiredList: typeof allEmployees,
+    expiringList: typeof allEmployees
+  ) => {
+    const { status } = describeDocumentExpiry(kind, expiry, now);
+    if (status === 'expired') expiredList.push(emp);
+    else if (status === 'critical' || status === 'warning') expiringList.push(emp);
+  };
   for (const emp of allEmployees) {
-    if (emp.iqamaExpiryDate) {
-      if (emp.iqamaExpiryDate < now) {
-        expiredIqama.push(emp);
-      } else if (emp.iqamaExpiryDate <= oneMonthFromNow) {
-        expiringIqama.push(emp);
-      }
-    }
-    
-    if (emp.healthCertExpiryDate) {
-      if (emp.healthCertExpiryDate < now) {
-        expiredHealthCert.push(emp);
-      } else if (emp.healthCertExpiryDate <= oneWeekFromNow) {
-        expiringHealthCert.push(emp);
-      }
-    }
-    
-    if (emp.contractExpiryDate) {
-      if (emp.contractExpiryDate < now) {
-        expiredContract.push(emp);
-      } else if (emp.contractExpiryDate <= twoMonthsFromNow) {
-        expiringContract.push(emp);
-      }
-    }
+    classify('iqama', emp.iqamaExpiryDate, emp, expiredIqama, expiringIqama);
+    classify('health', emp.healthCertExpiryDate, emp, expiredHealthCert, expiringHealthCert);
+    classify('contract', emp.contractExpiryDate, emp, expiredContract, expiringContract);
   }
   
   const branchesData = await db.select().from(branches);
-  const branchMap = new Map(branchesData.map(b => [b.id, b.name]));
+  const branchMap = new Map(branchesData.map(b => [b.id, b.nameAr || b.name]));
   
   const addBranchName = (emps: typeof allEmployees) => 
     emps.map(emp => ({
