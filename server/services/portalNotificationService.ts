@@ -292,6 +292,7 @@ export async function notifyRequestApproved(
     permission: "استئذان",
     objection: "اعتراض",
     resignation: "استقالة",
+    end_of_service: "إنهاء خدمة",
   };
 
   const label = typeLabels[requestType] || requestType;
@@ -326,6 +327,7 @@ export async function notifyRequestRejected(
     permission: "استئذان",
     objection: "اعتراض",
     resignation: "استقالة",
+    end_of_service: "إنهاء خدمة",
   };
 
   const label = typeLabels[requestType] || requestType;
@@ -482,6 +484,7 @@ export async function notifySupervisorNewRequest(
     permission: "استئذان",
     objection: "اعتراض",
     resignation: "استقالة",
+    end_of_service: "إنهاء خدمة",
   };
 
   const label = typeLabels[requestType] || requestType;

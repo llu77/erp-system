@@ -179,6 +179,7 @@ const requestTypeNames: Record<string, string> = {
   permission: 'استئذان',
   objection: 'اعتراض',
   resignation: 'استقالة',
+  end_of_service: 'إنهاء خدمة',
 };
 
 // أسماء حالات الطلبات بالعربية

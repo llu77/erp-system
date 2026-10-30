@@ -482,7 +482,8 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
         'arrears': 'متأخرات',
         'permission': 'استئذان',
         'objection': 'اعتراض',
-        'resignation': 'استقالة'
+        'resignation': 'استقالة',
+        'end_of_service': 'إنهاء خدمة'
       };
 
       const requestsList = requests.map((r: any, index: number) => {
@@ -1073,6 +1074,7 @@ async function cancelRequest(sessionId: string): Promise<ToolResult> {
       permission: 'استئذان',
       objection: 'اعتراض',
       resignation: 'استقالة',
+      end_of_service: 'إنهاء خدمة',
     };
 
     const typeName = typeNames[latestRequest.requestType] || latestRequest.requestType;

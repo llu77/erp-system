@@ -53,6 +53,7 @@ const REQUEST_TYPE_NAMES: Record<string, string> = {
   permission: 'استئذان',
   objection: 'اعتراض',
   resignation: 'استقالة',
+  end_of_service: 'إنهاء خدمة',
 };
 
 // ==================== دوال إنشاء الملخص ====================

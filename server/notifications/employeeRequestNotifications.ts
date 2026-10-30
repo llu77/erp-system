@@ -11,6 +11,7 @@ const REQUEST_TYPE_NAMES: Record<string, string> = {
   permission: 'استئذان',
   objection: 'اعتراض على مخالفة',
   resignation: 'استقالة',
+  end_of_service: 'إنهاء خدمة',
 };
 
 // حالات الطلب بالعربية

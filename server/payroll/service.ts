@@ -16,6 +16,7 @@ import {
   employeeRequests,
   employeeInvoices,
   employeeViolations,
+  endOfServiceSettlements,
   payrolls,
   payrollDetails,
   type Payroll,
@@ -864,18 +865,40 @@ async function syncOpenPayrollsSafely(employeeId: number) {
   }
 }
 
+/** رسالة رفض تعديل سلفة/مخالفة مخصومة في مخالصة نهائية (إنهاء خدمة) */
+export function settledInEndOfServiceMessage(kind: "advance" | "violation", settlementNumber?: string | null): string {
+  const label = kind === "advance" ? "السلفة مخصومة في مخالصة نهائية" : "المخالفة مخصومة في مخالصة نهائية";
+  return `${label}${settlementNumber ? ` (${settlementNumber})` : ""}، ألغِ المخالصة أولاً`;
+}
+
+async function assertNotSettledInEndOfService(
+  db: Db,
+  kind: "advance" | "violation",
+  settlementId: number | null | undefined
+) {
+  if (!settlementId) return;
+  const rows = await db
+    .select({ settlementNumber: endOfServiceSettlements.settlementNumber })
+    .from(endOfServiceSettlements)
+    .where(eq(endOfServiceSettlements.id, settlementId))
+    .limit(1);
+  throw new PayrollError(settledInEndOfServiceMessage(kind, rows[0]?.settlementNumber), "CONFLICT");
+}
+
 /**
  * التحقق قبل إلغاء/حذف سلفة أو مخالفة: يُمنع إذا كانت مخصومة في مسيرة معتمدة أو مدفوعة
+ * أو في مخالصة نهائية (إنهاء خدمة)
  */
 export async function assertSourceNotLocked(kind: "advance" | "violation", sourceId: number) {
   const db = await getDb();
   if (!db) return;
   const table = kind === "advance" ? employeeRequests : employeeViolations;
   const rows = await db
-    .select({ payrollId: table.deductedInPayrollId })
+    .select({ payrollId: table.deductedInPayrollId, settledInEndOfServiceId: table.settledInEndOfServiceId })
     .from(table)
     .where(eq(table.id, sourceId))
     .limit(1);
+  await assertNotSettledInEndOfService(db, kind, rows[0]?.settledInEndOfServiceId);
   const payrollId = rows[0]?.payrollId;
   if (!payrollId) return;
   const p = await db
@@ -1068,6 +1091,8 @@ export async function reviewViolation(
   const db = await requireDb();
   const violation = await getViolation(id);
   if (!violation) throw new PayrollError("المخالفة غير موجودة", "NOT_FOUND");
+  // المخالفة المخصومة في مخالصة نهائية لا تُراجع ولا تُلغى حتى تُلغى المخالصة
+  await assertNotSettledInEndOfService(db, "violation", violation.settledInEndOfServiceId);
   const allowedFrom: Record<string, string[]> = {
     approved: ["pending"],
     rejected: ["pending"],

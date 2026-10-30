@@ -424,6 +424,7 @@ export async function sendRequestApprovedEmail(
     permission: "استئذان",
     objection: "اعتراض",
     resignation: "استقالة",
+    end_of_service: "إنهاء خدمة",
   };
 
   const label = typeLabels[requestType] || requestType;
@@ -458,6 +459,7 @@ export async function sendRequestRejectedEmail(
     permission: "استئذان",
     objection: "اعتراض",
     resignation: "استقالة",
+    end_of_service: "إنهاء خدمة",
   };
 
   const label = typeLabels[requestType] || requestType;
