@@ -227,7 +227,12 @@ export function CalculationBreakdown({
             negative
           />
         )}
-        <Row label="إجمالي الخصومات" value={`- ${formatSar(c.totalDeductions)}`} strong negative={c.totalDeductions > 0} />
+        <Row
+          label="إجمالي الخصومات"
+          value={c.totalDeductions > 0 ? `- ${formatSar(c.totalDeductions)}` : formatSar(0)}
+          strong
+          negative={c.totalDeductions > 0}
+        />
       </Section>
 
       <NetAmountBox calculation={c} />

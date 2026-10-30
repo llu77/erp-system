@@ -284,6 +284,14 @@ const MAX_WIDTH = 400;
 // يمنع تكرار القائمة الجانبية عندما تُغلّف الصفحة بـ DashboardLayout داخل مسار مغلّف به أصلاً
 const DashboardLayoutNestingContext = createContext(false);
 
+
+/** هل عنصر القائمة نشط للمسار الحالي (المسار نفسه أو صفحة فرعية منه) */
+function isMenuPathActive(itemPath: string | undefined, location: string): boolean {
+  if (!itemPath) return false;
+  if (location === itemPath) return true;
+  return itemPath !== "/" && location.startsWith(`${itemPath}/`);
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -345,7 +353,12 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = flatMenuItems.find((item) => item.path === location);
+  // الصفحات الفرعية (مثل /end-of-service/3) تتبع عنصر القائمة الأقرب
+  const activeMenuItem =
+    flatMenuItems.find((item) => item.path === location) ??
+    flatMenuItems
+      .filter((item) => isMenuPathActive(item.path, location))
+      .sort((a, b) => (b.path ?? "").length - (a.path ?? "").length)[0];
   const isMobile = useIsMobile();
 
   // دالة للتنقل مع إغلاق القائمة على الموبايل
@@ -543,7 +556,7 @@ function DashboardLayoutContent({
               {finalMenu.map((item) => {
                 // عنصر بدون أطفال (رابط مباشر)
                 if (!item.children) {
-                  const isActive = location === item.path;
+                  const isActive = isMenuPathActive(item.path, location);
                   return (
                     <SidebarMenuItem key={item.path}>
                       <SidebarMenuButton
@@ -596,7 +609,7 @@ function DashboardLayoutContent({
                       <CollapsibleContent>
                         <SidebarMenuSub className="mr-4 border-r border-border/50 pr-2 sidebar-submenu">
                           {item.children.map((child) => {
-                            const isChildActive = location === child.path;
+                            const isChildActive = isMenuPathActive(child.path, location);
                             return (
                               <SidebarMenuSubItem key={child.path}>
                                 <SidebarMenuSubButton
