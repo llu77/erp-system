@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { PORTAL_LOGIN_PATH, resolveAuthRedirect } from "@/lib/portal/routes";
+import { portalLoginUrl, resolveAuthRedirect } from "@/lib/portal/routes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
@@ -21,7 +21,10 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!target) return;
 
   redirectingToLogin = true;
-  window.location.href = target === "employee-login" ? PORTAL_LOGIN_PATH : getLoginUrl();
+  window.location.href =
+    target === "employee-login"
+      ? portalLoginUrl(window.location.pathname + window.location.search)
+      : getLoginUrl();
 };
 
 queryClient.getQueryCache().subscribe(event => {

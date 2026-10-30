@@ -79,8 +79,23 @@ export type PortalReviewer = {
 
 const PORTAL_STAFF_REVIEWER_ROLES = ["admin", "manager", "supervisor", "viewer"];
 
-/** تحديد المراجع من السياق (null إذا لم يكن مخولاً). مستخدم النظام له الأولوية على جلسة البوابة */
+/**
+ * تحديد المراجع من السياق (null إذا لم يكن مخولاً).
+ * جلسة مشرف البوابة لها الأولوية (مثل واجهة البوابة) حتى يطبق منع اعتماد الطلب الشخصي ونطاق الفرع
+ * إذا كان المتصفح يحمل الجلستين معاً؛ وإلا مستخدم النظام الرئيسي
+ */
 export function resolvePortalReviewer(ctx: Pick<TrpcContext, "user" | "employee">): PortalReviewer | null {
+  const employee = ctx.employee;
+  if (employee && employee.isSupervisor && employee.branchId != null) {
+    return {
+      kind: "employee",
+      id: employee.id,
+      name: employee.name,
+      role: "supervisor",
+      branchId: employee.branchId,
+      employeeId: employee.id,
+    };
+  }
   const user = ctx.user;
   if (user && PORTAL_STAFF_REVIEWER_ROLES.includes(user.role)) {
     const scoped = user.role === "supervisor" || user.role === "viewer";
@@ -91,17 +106,6 @@ export function resolvePortalReviewer(ctx: Pick<TrpcContext, "user" | "employee"
       role: user.role,
       branchId: scoped ? user.branchId ?? null : null,
       employeeId: null,
-    };
-  }
-  const employee = ctx.employee;
-  if (employee && employee.isSupervisor && employee.branchId != null) {
-    return {
-      kind: "employee",
-      id: employee.id,
-      name: employee.name,
-      role: "supervisor",
-      branchId: employee.branchId,
-      employeeId: employee.id,
     };
   }
   return null;

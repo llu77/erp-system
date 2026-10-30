@@ -277,3 +277,17 @@ describe("main-system context", () => {
     vi.doUnmock("./db");
   });
 });
+
+describe("resolvePortalReviewer", () => {
+  it("prefers a portal supervisor session over a staff session in the same browser", async () => {
+    const { resolvePortalReviewer } = await import("./_core/trpc");
+    const staff = { id: 9, role: "manager", name: "مدير", username: "m", branchId: null } as any;
+    const supervisor = { id: 41, name: "علي", code: "E41", branchId: 2, isSupervisor: true };
+    const both = resolvePortalReviewer({ user: staff, employee: supervisor });
+    expect(both).toMatchObject({ kind: "employee", id: 41, employeeId: 41, branchId: 2 });
+    expect(resolvePortalReviewer({ user: staff, employee: null })).toMatchObject({ kind: "staff", id: 9, branchId: null });
+    // موظف غير مشرف مع جلسة موظفين: يبقى مستخدم النظام هو المراجع
+    expect(resolvePortalReviewer({ user: staff, employee: { ...supervisor, isSupervisor: false } })).toMatchObject({ kind: "staff" });
+    expect(resolvePortalReviewer({ user: null, employee: { ...supervisor, isSupervisor: false } })).toBeNull();
+  });
+});

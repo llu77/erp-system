@@ -24,8 +24,10 @@ import {
   portalHomePath,
   readPositiveIntParam,
   resolveAdminPortalAccess,
+  portalLoginUrl,
   resolveAuthRedirect,
   resolvePortalTab,
+  safePortalReturnPath,
   shouldRetryQuery,
   summarizeExpiringDocuments,
   validateAdvanceForm,
@@ -77,8 +79,9 @@ describe("portal auth redirects", () => {
     expect(
       resolveAuthRedirect(EMPLOYEE_UNAUTHED_ERR_MSG, EMPLOYEE_PORTAL_PATH)
     ).toBe("employee-login");
+    // صفحة في النظام الرئيسي: دخول النظام وليس دخول الموظفين
     expect(resolveAuthRedirect(EMPLOYEE_UNAUTHED_ERR_MSG, "/payrolls")).toBe(
-      "employee-login"
+      "oauth-login"
     );
     expect(
       resolveAuthRedirect(EMPLOYEE_UNAUTHED_ERR_MSG, PORTAL_LOGIN_PATH)
@@ -405,5 +408,21 @@ describe("portal errors", () => {
     expect(shouldRetryQuery(0, { data: { code: "NOT_FOUND" } })).toBe(false);
     expect(shouldRetryQuery(0, new Error("network"))).toBe(true);
     expect(shouldRetryQuery(2, new Error("network"))).toBe(false);
+  });
+});
+
+describe("login return path", () => {
+  it("returns only to portal pages, never off-site or to the login page", () => {
+    expect(safePortalReturnPath("/employee-portal?tab=salary&payrollId=12")).toBe("/employee-portal?tab=salary&payrollId=12");
+    expect(safePortalReturnPath("/admin-employee-portal?tab=requests")).toBe("/admin-employee-portal?tab=requests");
+    for (const bad of ["https://evil.example/x", "//evil.example", "/\\evil.example", "/payrolls", "/employee-login?next=/x", "", null]) {
+      expect(safePortalReturnPath(bad as string | null)).toBeNull();
+    }
+  });
+
+  it("builds the login URL with an encoded next parameter", () => {
+    expect(portalLoginUrl("/employee-portal?tab=salary")).toBe("/employee-login?next=%2Femployee-portal%3Ftab%3Dsalary");
+    expect(portalLoginUrl("/payrolls")).toBe("/employee-login");
+    expect(portalLoginUrl(undefined)).toBe("/employee-login");
   });
 });

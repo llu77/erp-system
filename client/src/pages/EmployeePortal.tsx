@@ -70,8 +70,8 @@ import {
   ADMIN_PORTAL_PATH,
   EMPLOYEE_PORTAL_PATH,
   EMPLOYEE_PORTAL_TABS,
-  PORTAL_LOGIN_PATH,
   buildTabHref,
+  portalLoginUrl,
   errorMessage,
   formatPortalDate,
   formatPortalDateTime,
@@ -151,7 +151,8 @@ export default function EmployeePortal() {
 
   useEffect(() => {
     if (!sessionLoading && !sessionError && !employeeInfo) {
-      setLocation(PORTAL_LOGIN_PATH, { replace: true });
+      // العودة لنفس التبويب بعد الدخول (روابط الإشعارات: ?tab=salary&payrollId=)
+      setLocation(portalLoginUrl(window.location.pathname + window.location.search), { replace: true });
     }
   }, [sessionLoading, sessionError, employeeInfo, setLocation]);
 

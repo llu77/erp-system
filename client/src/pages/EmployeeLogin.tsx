@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { trpc } from '@/lib/trpc';
-import { errorMessage, portalHomePath, shouldRetryQuery } from '@/lib/portal/portalUi';
+import { errorMessage, portalHomePath, safePortalReturnPath, shouldRetryQuery } from '@/lib/portal/portalUi';
 import { clearLegacyPortalStorage, type PortalMe } from '@/lib/portal/usePortalSession';
 import { SYSTEM_BRAND } from '@shared/branding';
 import { Loader2, Sparkles, User, Lock, AlertCircle, ArrowLeft } from 'lucide-react';
@@ -29,9 +29,12 @@ export default function EmployeeLogin() {
     clearLegacyPortalStorage();
   }, []);
 
+  // صفحة العودة بعد الدخول (?next= من روابط الإشعارات) - داخل البوابة فقط
+  const nextPath = safePortalReturnPath(new URLSearchParams(window.location.search).get('next'));
+
   useEffect(() => {
-    if (existing) setLocation(portalHomePath(existing), { replace: true });
-  }, [existing, setLocation]);
+    if (existing) setLocation(nextPath ?? portalHomePath(existing), { replace: true });
+  }, [existing, nextPath, setLocation]);
 
   const loginMutation = trpc.employeeAuth.login.useMutation({
     onSuccess: result => {
@@ -40,7 +43,7 @@ export default function EmployeeLogin() {
       queryClient.removeQueries();
       utils.employeeAuth.me.setData(undefined, me);
       utils.employeeAuth.me.invalidate();
-      setLocation(portalHomePath(me), { replace: true });
+      setLocation(nextPath ?? portalHomePath(me), { replace: true });
     },
     onError: err => {
       setError(errorMessage(err, 'حدث خطأ في تسجيل الدخول، حاول مرة أخرى'));

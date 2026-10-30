@@ -19,6 +19,7 @@ import {
   ADMIN_PORTAL_PATH,
   ADMIN_PORTAL_TABS,
   EMPLOYEE_PORTAL_PATH,
+  PORTAL_LOGIN_PATH,
   STAFF_ROLE_LABELS,
   buildTabHref,
   daysUntil,
@@ -27,6 +28,7 @@ import {
   formatPortalDate,
   formatPortalDateTime,
   formatSar,
+  portalLoginUrl,
   resolveAdminPortalAccess,
   resolvePortalTab,
   shouldRetryQuery,
@@ -141,7 +143,10 @@ export default function AdminEmployeePortal() {
   const redirectTo = access?.kind === 'redirect' ? access.to : null;
   useEffect(() => {
     if (redirectTo && !sessionError) {
-      setLocation(redirectTo, { replace: true });
+      // صفحة الدخول مع العودة لنفس التبويب بعد الدخول
+      const target =
+        redirectTo === PORTAL_LOGIN_PATH ? portalLoginUrl(window.location.pathname + window.location.search) : redirectTo;
+      setLocation(target, { replace: true });
     }
   }, [redirectTo, sessionError, setLocation]);
 
