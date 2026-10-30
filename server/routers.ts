@@ -37,6 +37,7 @@ import * as smartPermissions from "./ai/smartPermissions";
 import * as aiRecommendationNotifier from "./ai/aiRecommendationNotifier";
 import * as aiRecommendationMonitor from "./scheduler/aiRecommendationMonitor";
 import * as financialValidation from "./validation/financialValidation";
+import * as financeReports from "./reports/financeReportsPdf";
 
 // إنشاء loggers للوحدات المختلفة
 const logger = createLogger('Routers');
@@ -107,6 +108,25 @@ function checkBranchAccess(userBranchId: number | null, targetBranchId: number):
   if (userBranchId === null) return true;
   // التحقق من تطابق الفرع
   return userBranchId === targetBranchId;
+}
+
+/**
+ * فرع تقارير الإيرادات والمصاريف PDF (null = جميع الفروع)
+ * - المسؤول والمدير: الفرع المطلوب أو جميع الفروع
+ * - المشرف والمشرف العام المرتبطان بفرع: فرعهما فقط (نفس قائمة الفروع في الصفحة)
+ * - المشرف العام غير المرتبط بفرع: الفرع المطلوب أو جميع الفروع
+ * - المشرف غير المرتبط بفرع: مرفوض
+ */
+function reportBranchScope(user: { role: string; branchId: number | null }, requestedBranchId: number | null): number | null {
+  if (user.role === 'admin' || user.role === 'manager') return requestedBranchId;
+  if (user.branchId != null) {
+    if (requestedBranchId != null && requestedBranchId !== user.branchId) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك عرض تقارير فرع آخر' });
+    }
+    return user.branchId;
+  }
+  if (user.role === 'viewer') return requestedBranchId;
+  throw new TRPCError({ code: 'FORBIDDEN', message: 'حسابك غير مرتبط بفرع' });
 }
 
 // ==================== صلاحيات مسيرات الرواتب ====================
@@ -2501,6 +2521,22 @@ export const appRouter = router({
         return await db.getDailyRevenuesByDateRange(input.branchId, input.startDate, input.endDate);
       }),
 
+    // تقرير الإيرادات PDF بالقالب الرسمي (أدوار صفحة الإيرادات، والمشرف لفرعه فقط)
+    reportPdf: supervisorViewProcedure
+      .input(financeReports.revenueReportInput)
+      .mutation(async ({ input, ctx }) => {
+        const branchId = reportBranchScope(ctx.user, input.branchId ?? null);
+        const period = financeReports.resolveRevenueReportPeriod(input);
+        if ('error' in period) throw new TRPCError({ code: 'BAD_REQUEST', message: period.error });
+        const params = { branchId, ...period, preparedByName: ctx.user.name };
+        const data = await financeReports.getRevenueReportData(params);
+        if (!data) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفرع غير موجود' });
+        return renderDocumentPdf('تقرير الإيرادات', async () => ({
+          pdf: await financeReports.generateRevenueReportPDF(data),
+          filename: financeReports.revenueReportFileName(params),
+        }));
+      }),
+
     // حذف إيراد يومي (للأدمن فقط)
     deleteDaily: adminProcedure
       .input(z.object({
@@ -4260,6 +4296,26 @@ export const appRouter = router({
       }).optional())
       .query(async ({ input }) => {
         return await db.getExpensesStats(input?.startDate, input?.endDate);
+      }),
+
+    // تقرير المصاريف الشهري PDF بالقالب الرسمي: المعتمدة والمدفوعة فقط (أدوار صفحة المصاريف، والمشرف لفرعه فقط)
+    reportPdf: supervisorViewProcedure
+      .input(financeReports.expenseReportInput)
+      .mutation(async ({ input, ctx }) => {
+        const params = {
+          year: input.year,
+          month: input.month,
+          branchId: reportBranchScope(ctx.user, input.branchId ?? null),
+          category: input.category ?? null,
+          status: input.status ?? null,
+          preparedByName: ctx.user.name,
+        };
+        const data = await financeReports.getExpenseReportData(params);
+        if (!data) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفرع غير موجود' });
+        return renderDocumentPdf('تقرير المصاريف', async () => ({
+          pdf: await financeReports.generateExpenseReportPDF(data),
+          filename: financeReports.expenseReportFileName(params),
+        }));
       }),
 
     // إنشاء مصروف - المشرف يمكنه الإدخال فقط

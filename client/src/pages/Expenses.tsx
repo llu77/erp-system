@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc";
+import { downloadBase64Pdf } from "@/lib/downloadPdf";
+import type { ExpenseCategory } from "@shared/expenses";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useIsMobile } from "@/hooks/useMobile";
 import { ResponsiveTable, Column } from "@/components/ResponsiveTable";
@@ -48,7 +50,6 @@ import {
   TrendingDown,
   Clock,
   Filter,
-  Printer,
   FileText,
   Upload,
   Image,
@@ -614,228 +615,34 @@ export default function Expenses() {
     toast.success('تم فتح التقرير بنجاح');
   };
 
-  // طباعة تقرير المصاريف
-  const printExpensesReport = () => {
+  // تقرير المصاريف PDF: يُولَّد في الخادم بالقالب الرسمي (ترويسة مؤسسة الفرع) حسب فلاتر الشهر والفرع والتصنيف
+  // التقرير للمعتمدة والمدفوعة فقط، فلا يُصدَّر مع فلتر "قيد المراجعة" أو "مرفوض"
+  const reportPdfMutation = trpc.expenses.reportPdf.useMutation();
+  const downloadExpensesReport = async () => {
     const [year, month] = filterMonth.split('-').map(Number);
-    const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-    const monthName = monthNames[month - 1];
-    const branchName = filterBranch === 'all' ? 'جميع الفروع' : branches?.find(b => b.id.toString() === filterBranch)?.nameAr || 'غير محدد';
-    
-    // تجميع المصاريف حسب التصنيف (فقط المعتمدة والمدفوعة)
-    const approvedAndPaidExpenses = filteredExpenses?.filter(exp => exp.status === 'approved' || exp.status === 'paid') || [];
-    const expensesByCategory: Record<string, { count: number; total: number; items: typeof filteredExpenses }> = {};
-    approvedAndPaidExpenses.forEach(exp => {
-      if (!expensesByCategory[exp.category]) {
-        expensesByCategory[exp.category] = { count: 0, total: 0, items: [] };
-      }
-      expensesByCategory[exp.category].count++;
-      expensesByCategory[exp.category].total += parseFloat(exp.amount || '0');
-      expensesByCategory[exp.category].items?.push(exp);
-    });
-    
-    // حساب الإجمالي للمعتمدة والمدفوعة فقط
-    const reportTotal = approvedAndPaidExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount || '0'), 0);
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error('يرجى السماح بالنوافذ المنبثقة');
+    if (!year || !month) {
+      toast.error('يرجى اختيار الشهر');
       return;
     }
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="UTF-8">
-        <title>تقرير المصاريف - ${monthName} ${year}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800;900&display=swap');
-          body { 
-            font-family: 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif; 
-            padding: 20px; 
-            background: #fff;
-            color: #000;
-            font-size: 14px;
-          }
-          .header { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            padding-bottom: 20px;
-            border-bottom: 3px solid #000;
-          }
-          .logo { font-size: 28px; font-weight: 800; color: #000; margin-bottom: 5px; }
-          .report-title { font-size: 20px; color: #000; margin: 10px 0; font-weight: 700; }
-          .report-info { color: #6b7280; font-size: 14px; }
-          .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 25px;
-          }
-          .summary-card {
-            background: #f5f5f5;
-            border: 2px solid #000;
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-          }
-          .summary-card .label { color: #333; font-size: 12px; margin-bottom: 5px; font-weight: 600; }
-          .summary-card .value { font-size: 22px; font-weight: 800; color: #000; }
-          .category-section {
-            margin-bottom: 25px;
-            page-break-inside: avoid;
-          }
-          .category-header {
-            background: #1a1a1a;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px 8px 0 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-          .category-name { font-weight: 700; font-size: 14px; }
-          .category-total { font-size: 16px; font-weight: 800; }
-          table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-bottom: 10px;
-            background: white;
-          }
-          th { 
-            background: #f5f5f5; 
-            padding: 10px 8px; 
-            text-align: right; 
-            font-weight: 700;
-            color: #000;
-            border: 1px solid #ccc;
-          }
-          td { 
-            padding: 10px 8px; 
-            border: 1px solid #ccc; 
-            text-align: right;
-            font-weight: 600;
-            color: #000;
-          }
-          tr:nth-child(even) { background: #f8fafc; }
-          .amount { color: #cc0000; font-weight: 800; font-size: 15px; }
-          .status-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: 500;
-          }
-          .status-pending { background: #fef3c7; color: #92400e; }
-          .status-approved { background: #d1fae5; color: #065f46; }
-          .status-paid { background: #dbeafe; color: #1e40af; }
-          .status-rejected { background: #fee2e2; color: #991b1b; }
-          .grand-total {
-            background: #1a1a1a;
-            color: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 20px;
-            font-weight: 800;
-            margin-top: 20px;
-            border: 2px solid #000;
-          }
-          .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #e2e8f0;
-            text-align: center;
-            color: #9ca3af;
-            font-size: 11px;
-          }
-          @media print {
-            body { padding: 10px; }
-            .summary-cards { grid-template-columns: repeat(4, 1fr); }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="logo">Symbol AI</div>
-          <div class="report-title">تقرير المصاريف الشهري</div>
-          <div class="report-info">
-            <strong>الشهر:</strong> ${monthName} ${year} | 
-            <strong>الفرع:</strong> ${branchName} | 
-            <strong>تاريخ الطباعة:</strong> ${new Date().toLocaleDateString('ar-SA')}
-          </div>
-        </div>
-
-        <div class="summary-cards">
-          <div class="summary-card">
-            <div class="label">عدد المصاريف (معتمدة/مدفوعة)</div>
-            <div class="value">${approvedAndPaidExpenses.length}</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">عدد التصنيفات</div>
-            <div class="value">${Object.keys(expensesByCategory).length}</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">متوسط المصروف</div>
-            <div class="value">${approvedAndPaidExpenses.length ? (reportTotal / approvedAndPaidExpenses.length).toFixed(2) : '0.00'} ر.س</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">إجمالي المصاريف (معتمدة/مدفوعة)</div>
-            <div class="value">${reportTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</div>
-          </div>
-        </div>
-
-        ${Object.entries(expensesByCategory).map(([category, data]) => `
-          <div class="category-section">
-            <div class="category-header">
-              <span class="category-name">${categoryNames[category] || category}</span>
-              <span class="category-total">${data.count} مصروف | ${data.total.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>رقم المصروف</th>
-                  <th>العنوان</th>
-                  <th>التاريخ</th>
-                  <th>طريقة الدفع</th>
-                  <th>الحالة</th>
-                  <th>المبلغ</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${data.items?.map(exp => `
-                  <tr>
-                    <td>${exp.expenseNumber}</td>
-                    <td>${exp.title}</td>
-                    <td>${new Date(exp.expenseDate).toLocaleDateString('ar-SA')}</td>
-                    <td>${paymentMethods.find(p => p.value === exp.paymentMethod)?.label || exp.paymentMethod}</td>
-                    <td><span class="status-badge status-${exp.status}">${statusNames[exp.status]}</span></td>
-                    <td class="amount">${parseFloat(exp.amount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        `).join('')}
-
-        <div class="grand-total">
-          <span>إجمالي المصاريف المعتمدة والمدفوعة لشهر ${monthName} ${year}</span>
-          <span>${reportTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ريال سعودي</span>
-        </div>
-
-        <div class="footer">
-          <p>تم إنشاء هذا التقرير بواسطة نظام Symbol AI لإدارة الموارد</p>
-          <p>جميع الحقوق محفوظة © ${new Date().getFullYear()}</p>
-        </div>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 500);
+    if (filterStatus !== 'all' && filterStatus !== 'approved' && filterStatus !== 'paid') {
+      toast.error('تقرير المصاريف يشمل المعتمدة والمدفوعة فقط، اختر حالة "معتمد" أو "مدفوع" أو جميع الحالات');
+      return;
+    }
+    const toastId = `expense-report-pdf-${filterMonth}-${filterBranch}`;
+    try {
+      toast.loading('جاري توليد ملف PDF...', { id: toastId });
+      const result = await reportPdfMutation.mutateAsync({
+        year,
+        month,
+        branchId: filterBranch === 'all' ? null : Number(filterBranch),
+        category: filterCategory === 'all' ? null : (filterCategory as ExpenseCategory),
+        status: filterStatus === 'approved' || filterStatus === 'paid' ? filterStatus : null,
+      });
+      downloadBase64Pdf(result.pdf, result.filename);
+      toast.success('تم تحميل تقرير المصاريف', { id: toastId });
+    } catch (error: any) {
+      toast.error(error?.message || 'فشل توليد ملف PDF', { id: toastId });
+    }
   };
 
   return (
@@ -1169,9 +976,9 @@ export default function Expenses() {
                 </SelectContent>
               </Select>
               <div className="flex-1" />
-              <Button variant="outline" onClick={printExpensesReport} className="gap-2">
-                <Printer className="h-4 w-4" />
-                طباعة التقرير
+              <Button variant="outline" onClick={downloadExpensesReport} disabled={reportPdfMutation.isPending} className="gap-2">
+                {reportPdfMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                تصدير PDF
               </Button>
             </div>
             {/* عرض إجمالي المصاريف المفلترة */}
