@@ -9,6 +9,10 @@ import * as db from "./db";
 import * as payrollService from "./payroll/service";
 import * as endOfService from "./endOfService/service";
 import { parseDateOnly } from "../shared/endOfService";
+import * as employeeFileService from "./employeeFile/service";
+import * as employeeFileSchemas from "./employeeFile/schemas";
+import { employeeFileProcedure, documentsOverviewProcedure, assertEmployeeBranchAccess, scopedBranchFilter, runEmployeeFileAction } from "./employeeFile/access";
+import { DOCUMENT_KIND_LABELS } from "../shared/employeeFile";
 import { notifyOwner } from "./_core/notification";
 import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from "./email/scheduledReports";
 import * as advancedNotifications from "./notifications/advancedNotificationService";
@@ -219,13 +223,6 @@ const eosFormSchema = z.object({
   otherDeductionsNote: eosNoteSchema,
   notes: eosNoteSchema,
 });
-
-// تاريخ مباشرة العمل في ملف الموظف (YYYY-MM-DD أو null)
-const employeeHireDateSchema = z.string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'صيغة تاريخ المباشرة يجب أن تكون YYYY-MM-DD')
-  .refine(value => parseDateOnly(value) !== null, 'تاريخ المباشرة غير صحيح')
-  .nullable()
-  .optional();
 
 // عرض المخالصات: المسؤول والمدير والمشرف العام (كل الفروع) ومشرف الفرع (موظفو فرعه فقط)
 const endOfServiceViewProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -1884,13 +1881,20 @@ export const appRouter = router({
 
   // ==================== إدارة الموظفين (للبونص) ====================
   employees: router({
+    // withImages: لصفحة الموظفين (روابط الصورة والوثائق مجددة) - للمسؤول والمدير ومشرف الفرع (فرعه فقط)
     list: protectedProcedure
-      .input(z.object({ branchId: z.number().optional() }).optional())
-      .query(async ({ input }) => {
-        if (input?.branchId) {
-          return await db.getEmployeesByBranch(input.branchId);
+      .input(z.object({ branchId: z.number().optional(), withImages: z.boolean().optional() }).optional())
+      .query(async ({ input, ctx }): Promise<employeeFileService.EmployeeListRow[]> => {
+        if (input?.withImages) {
+          if (!['admin', 'manager', 'supervisor'].includes(ctx.user.role)) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بعرض وثائق الموظفين' });
+          }
+          return await runEmployeeFileAction(() =>
+            employeeFileService.listEmployeesWithImages(scopedBranchFilter(ctx.user, input.branchId))
+          );
         }
-        return await db.getAllEmployees();
+        const rows = input?.branchId ? await db.getEmployeesByBranch(input.branchId) : await db.getAllEmployees();
+        return rows.map(employeeFileService.toEmployeeListRow);
       }),
 
     listByBranch: protectedProcedure
@@ -1900,34 +1904,17 @@ export const appRouter = router({
       }),
 
     create: managerProcedure
-      .input(z.object({
-        code: z.string().min(1),
-        name: z.string().min(1),
-        branchId: z.number().optional(),
-        phone: z.string().optional(),
-        position: z.string().optional(),
-        isActive: z.boolean().optional(),
-        iqamaNumber: z.string().optional(),
-        iqamaExpiryDate: z.date().optional(),
-        healthCertExpiryDate: z.date().optional(),
-        contractExpiryDate: z.date().optional(),
-        hireDate: employeeHireDateSchema,
-        nationality: z.string().trim().max(100).nullable().optional(),
-      }))
+      .input(employeeFileSchemas.employeeCreateSchema)
       .mutation(async ({ input, ctx }) => {
-        await db.createEmployee({
+        // بيانات الوثائق المدخلة عند الإنشاء تُسجّل باسم من أدخلها
+        const { patch } = employeeFileSchemas.buildEmployeeUpdatePatch(input, null, ctx.user.id);
+        await runEmployeeFileAction(() => db.createEmployee({
+          ...patch,
           code: input.code,
           name: input.name,
-          branchId: input.branchId || 0,
-          phone: input.phone,
-          position: input.position,
-          iqamaNumber: input.iqamaNumber,
-          iqamaExpiryDate: input.iqamaExpiryDate,
-          healthCertExpiryDate: input.healthCertExpiryDate,
-          contractExpiryDate: input.contractExpiryDate,
-          hireDate: input.hireDate ?? null,
-          nationality: input.nationality || null,
-        });
+          branchId: input.branchId ?? 0,
+          isActive: input.isActive ?? true,
+        }));
         await db.createActivityLog({
           userId: ctx.user.id,
           userName: ctx.user.name || 'مستخدم',
@@ -1938,47 +1925,58 @@ export const appRouter = router({
         return { success: true, message: 'تم إنشاء الموظف بنجاح' };
       }),
 
-    // تحديث موظف (متاح للمشرفين والأدمن)
+    // تحديث موظف (المسؤول والمدير، ومشرف الفرع لموظفي فرعه فقط)
+    // كل الحقول اختيارية: عدم الإرسال يبقي القيمة الحالية، وnull يمسحها
     update: supervisorEditProcedure
-      .input(z.object({
-        id: z.number(),
-        code: z.string().min(1),
-        name: z.string().min(1),
-        branchId: z.number().optional(),
-        phone: z.string().optional(),
-        position: z.string().optional(),
-        isActive: z.boolean().optional(),
-        iqamaNumber: z.string().optional(),
-        iqamaExpiryDate: z.date().optional(),
-        healthCertExpiryDate: z.date().optional(),
-        contractExpiryDate: z.date().optional(),
-        // اختياريان: عدم إرسالهما يبقي القيمة الحالية، وnull يمسحها
-        hireDate: employeeHireDateSchema,
-        nationality: z.string().trim().max(100).nullable().optional(),
-      }))
+      .input(employeeFileSchemas.employeeUpdateSchema)
       .mutation(async ({ input, ctx }) => {
-        await db.updateEmployee(input.id, {
-          code: input.code,
-          name: input.name,
-          branchId: input.branchId || 0,
-          phone: input.phone || null,
-          position: input.position || null,
-          isActive: input.isActive ?? true,
-          iqamaNumber: input.iqamaNumber || null,
-          iqamaExpiryDate: input.iqamaExpiryDate || null,
-          healthCertExpiryDate: input.healthCertExpiryDate || null,
-          contractExpiryDate: input.contractExpiryDate || null,
-          ...(input.hireDate !== undefined ? { hireDate: input.hireDate } : {}),
-          ...(input.nationality !== undefined ? { nationality: input.nationality || null } : {}),
-        });
+        const { id, ...fields } = input;
+        const isBranchSupervisor = ctx.user.role === 'supervisor';
+        // البيانات الحالية لازمة لتحقق فرع المشرف ولمعرفة هل تغيرت بيانات الوثائق
+        const needsCurrent = isBranchSupervisor || employeeFileSchemas.hasDocumentFields(fields);
+        const current = needsCurrent ? await db.getEmployeeById(id) : null;
+        if (needsCurrent && !current) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
+        }
+        if (isBranchSupervisor) {
+          assertEmployeeBranchAccess(ctx.user, current!.branchId);
+          if (fields.branchId !== undefined && fields.branchId !== ctx.user.branchId) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكن للمشرف نقل الموظف إلى فرع آخر' });
+          }
+        }
+        const { patch, documentsChanged } = employeeFileSchemas.buildEmployeeUpdatePatch(fields, current ?? null, ctx.user.id);
+        if (Object.keys(patch).length > 0) {
+          await runEmployeeFileAction(() => db.updateEmployee(id, patch));
+        }
         await db.createActivityLog({
           userId: ctx.user.id,
           userName: ctx.user.name || 'مستخدم',
           action: 'update',
           entityType: 'employee',
-          details: `تم تحديث موظف: ${input.name}`,
+          details: `تم تحديث موظف: ${input.name ?? current?.name ?? id}${documentsChanged ? ' (بيانات الوثائق)' : ''}`,
         });
         return { success: true, message: 'تم تحديث الموظف بنجاح' };
+      }),
+
+    // ملف الموظف الكامل: البيانات والوثائق والراتب وحساب البوابة
+    getFile: employeeFileProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        if (ctx.user.role === 'supervisor') {
+          const employee = await db.getEmployeeById(input.id);
+          if (!employee) throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
+          assertEmployeeBranchAccess(ctx.user, employee.branchId);
+        }
+        return await runEmployeeFileAction(() => employeeFileService.getEmployeeFile(input.id));
+      }),
+
+    // لوحة الوثائق: كل الموظفين النشطين ووثائقهم (المشرف: فرعه فقط)
+    getDocumentsOverview: documentsOverviewProcedure
+      .input(z.object({ branchId: z.number().int().positive().optional() }).optional())
+      .query(async ({ input, ctx }) => {
+        return await runEmployeeFileAction(() =>
+          employeeFileService.getDocumentsOverview({ branchId: scopedBranchFilter(ctx.user, input?.branchId) })
+        );
       }),
 
     delete: managerProcedure
@@ -2025,39 +2023,60 @@ export const appRouter = router({
         return { success: true, message: 'تم تحديث المعلومات بنجاح' };
       }),
 
-    // رفع صورة وثيقة
-    uploadDocumentImage: managerProcedure
-      .input(z.object({
-        employeeId: z.number(),
-        documentType: z.enum(['iqama', 'healthCert', 'contract']),
-        base64Data: z.string(),
-        fileName: z.string(),
-        contentType: z.string(),
-      }))
+    // رفع الصورة الشخصية أو صورة وثيقة (صور حتى 5 ميجابايت، والوثائق تقبل PDF)
+    uploadDocumentImage: employeeFileProcedure
+      .input(employeeFileSchemas.documentUploadSchema)
       .mutation(async ({ input, ctx }) => {
+        const employee = await db.getEmployeeById(input.employeeId);
+        if (!employee) throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
+        assertEmployeeBranchAccess(ctx.user, employee.branchId);
+
+        const decoded = employeeFileSchemas.decodeEmployeeUpload(input);
+        if (!decoded.ok) throw new TRPCError({ code: 'BAD_REQUEST', message: decoded.error });
+
         const { storagePut } = await import('./storage');
-        
-        const base64Content = input.base64Data.replace(/^data:[^;]+;base64,/, '');
-        const buffer = Buffer.from(base64Content, 'base64');
-        
-        const timestamp = Date.now();
-        const randomSuffix = Math.random().toString(36).substring(2, 8);
-        const fileKey = `employee-documents/${input.employeeId}/${input.documentType}-${timestamp}-${randomSuffix}-${input.fileName}`;
-        
-        const { url, key } = await storagePut(fileKey, buffer, input.contentType);
-        
-        // حفظ رابط الصورة في قاعدة البيانات
-        await db.updateEmployeeDocumentImage(input.employeeId, input.documentType, url);
-        
+        const { randomBytes } = await import('crypto');
+        const fileKey = employeeFileSchemas.buildDocumentStorageKey(employee.id, input.kind, decoded.fileName, randomBytes(6).toString('hex'));
+        let stored: { url: string; key: string };
+        try {
+          stored = await storagePut(fileKey, decoded.buffer, decoded.contentType);
+        } catch (error) {
+          logger.error('فشل رفع ملف الموظف إلى التخزين', { employeeId: employee.id, kind: input.kind, error: (error as Error)?.message });
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'تعذر رفع الملف إلى التخزين، حاول مرة أخرى' });
+        }
+
+        // حفظ الرابط ومفتاح التخزين (لتجديد الرابط عند القراءة)
+        await runEmployeeFileAction(() => employeeFileService.setEmployeeImage(employee.id, input.kind, stored));
+        employeeFileService.cacheUploadedFileUrl(stored.key, stored.url);
+
         await db.createActivityLog({
           userId: ctx.user.id,
           userName: ctx.user.name || 'مستخدم',
           action: 'update',
           entityType: 'employee_document',
-          details: `تم رفع صورة ${input.documentType} للموظف رقم ${input.employeeId}`,
+          details: `تم رفع ${DOCUMENT_KIND_LABELS[input.kind]} للموظف ${employee.name} (${employee.code})`,
         });
-        
-        return { success: true, url, key };
+
+        return { success: true, url: stored.url };
+      }),
+
+    // إزالة الصورة الشخصية أو صورة وثيقة
+    removeDocumentImage: employeeFileProcedure
+      .input(employeeFileSchemas.documentRemoveSchema)
+      .mutation(async ({ input, ctx }) => {
+        const employee = await db.getEmployeeById(input.employeeId);
+        if (!employee) throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
+        assertEmployeeBranchAccess(ctx.user, employee.branchId);
+
+        await runEmployeeFileAction(() => employeeFileService.setEmployeeImage(employee.id, input.kind, null));
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'delete',
+          entityType: 'employee_document',
+          details: `تمت إزالة ${DOCUMENT_KIND_LABELS[input.kind]} للموظف ${employee.name} (${employee.code})`,
+        });
+        return { success: true };
       }),
 
     // تقرير الموظفين بدون وثائق
@@ -4166,24 +4185,26 @@ export const appRouter = router({
       return await db.getAllEmployeeSalarySettings();
     }),
 
-    // تحديث إعدادات راتب موظف
-    upsert: adminProcedure
-      .input(z.object({
-        employeeId: z.number(),
-        baseSalary: z.string().default('2000.00'),
-        overtimeEnabled: z.boolean().default(false),
-        overtimeRate: z.string().default('1000.00'),
-        isSupervisor: z.boolean().default(false),
-        supervisorIncentive: z.string().default('400.00'),
-        fixedDeduction: z.string().default('0.00'),
-        fixedDeductionReason: z.string().optional(),
-        bankName: z.string().optional(),
-        bankAccount: z.string().optional(),
-        iban: z.string().optional(),
-      }))
-      .mutation(async ({ input }) => {
-        await db.upsertEmployeeSalarySetting(input);
-        return { success: true, message: 'تم حفظ إعدادات الراتب بنجاح' };
+    // حفظ إعدادات راتب موظف (الحقول المرسلة فقط)، ثم تحديث مسيراته المفتوحة
+    // علامة "مشرف فرع" توحّد حافز المشرف وصلاحية المشرف في بوابة الموظفين
+    save: managerProcedure
+      .input(employeeFileSchemas.salarySettingsSaveSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { previous, next, created } = await runEmployeeFileAction(() => employeeFileService.saveSalarySettings(input));
+        const sync = await employeeFileService.applySalaryChangeToOpenPayrolls(input.employeeId, previous, next);
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: created ? 'create' : 'update',
+          entityType: 'employee_salary_settings',
+          entityId: input.employeeId,
+          details: `تم حفظ إعدادات راتب الموظف رقم ${input.employeeId}: الأساسي ${next.baseSalary}، بدل إضافي ${next.overtimeEnabled ? next.overtimeRate : 'غير مفعل'}، مشرف ${next.isSupervisor ? 'نعم' : 'لا'}`,
+        });
+        return {
+          success: true as const,
+          openPayrollsUpdated: sync.updated,
+          openPayrollsFailed: sync.failed,
+        };
       }),
 
     // حذف إعدادات
@@ -9184,16 +9205,34 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
     
     // تصدير تقرير الوثائق PDF
-    exportDocumentsReport: adminProcedure
+    exportDocumentsReport: managerProcedure
       .input(z.object({
         branchId: z.number().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const { generateDocumentReportHTML } = await import('./documentReportService');
-        
-        // جلب بيانات الوثائق
-        const documentsData = await db.getEmployeesWithExpiringDocuments();
-        
+
+        // جلب بيانات الوثائق (مقتصرة على الفرع المختار)
+        const allDocuments = await db.getEmployeesWithExpiringDocuments();
+        const inBranch = <T extends { branchId: number }>(rows: T[]) =>
+          input.branchId ? rows.filter(row => row.branchId === input.branchId) : rows;
+        const expired = { iqama: inBranch(allDocuments.expired.iqama), healthCert: inBranch(allDocuments.expired.healthCert), contract: inBranch(allDocuments.expired.contract) };
+        const expiring = { iqama: inBranch(allDocuments.expiring.iqama), healthCert: inBranch(allDocuments.expiring.healthCert), contract: inBranch(allDocuments.expiring.contract) };
+        const documentsData = {
+          expired,
+          expiring,
+          summary: {
+            totalExpired: expired.iqama.length + expired.healthCert.length + expired.contract.length,
+            totalExpiring: expiring.iqama.length + expiring.healthCert.length + expiring.contract.length,
+            expiredIqamaCount: expired.iqama.length,
+            expiringIqamaCount: expiring.iqama.length,
+            expiredHealthCertCount: expired.healthCert.length,
+            expiringHealthCertCount: expiring.healthCert.length,
+            expiredContractCount: expired.contract.length,
+            expiringContractCount: expiring.contract.length,
+          },
+        };
+
         // تحديد اسم الفرع
         let branchFilter: string | null = null;
         if (input.branchId) {
