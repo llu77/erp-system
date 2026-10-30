@@ -14,11 +14,14 @@ import { toast } from "sonner";
 import { 
   Loader2, Search, Filter, CheckCircle, XCircle, Clock, Eye, 
   FileText, Calendar, DollarSign, AlertTriangle, LogOut, User,
-  Building, MessageSquare, Trash2, UserX, ExternalLink, RefreshCw
+  Building, MessageSquare, Trash2, UserX, ExternalLink, RefreshCw,
+  Printer, FileDown
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { END_OF_SERVICE_REQUEST_TYPE } from "@shared/endOfService";
+import { renderAdvanceRequestHtml, repaymentMethodLabel } from "@shared/advanceRequestTemplate";
+import { downloadBase64Pdf } from "@/lib/downloadPdf";
 
 const requestTypes = [
   { value: "advance", label: "سلفة", icon: DollarSign },
@@ -72,7 +75,7 @@ export default function ManageRequests() {
   });
 
   const { data: stats } = trpc.employeeRequests.stats.useQuery();
-  const { data: requestDetail } = trpc.employeeRequests.getById.useQuery(
+  const { data: requestDetail, isLoading: requestDetailLoading, error: requestDetailError, refetch: refetchRequestDetail } = trpc.employeeRequests.getById.useQuery(
     { id: selectedRequest! },
     { enabled: !!selectedRequest }
   );
@@ -121,6 +124,44 @@ export default function ManageRequests() {
       reviewNotes: reviewNotes || undefined,
       rejectionReason: actionType === "reject" ? rejectionReason : undefined,
     });
+  };
+
+  // طباعة طلب السلفة الرسمي (نفس قالب PDF): النافذة تُفتح من حدث النقر ثم تُملأ ببيانات الخادم
+  const [printingAdvanceId, setPrintingAdvanceId] = useState<number | null>(null);
+  const printAdvanceRequest = async (requestId: number) => {
+    const win = window.open("", "_blank");
+    if (!win) {
+      toast.error("يرجى السماح بالنوافذ المنبثقة للطباعة");
+      return;
+    }
+    win.document.write('<p dir="rtl" style="font-family:Tahoma,Arial,sans-serif;text-align:center;margin-top:40vh;color:#555">جاري تجهيز طلب السلفة للطباعة...</p>');
+    setPrintingAdvanceId(requestId);
+    try {
+      const data = await utils.employeeRequests.advanceDocument.fetch({ id: requestId });
+      const html = renderAdvanceRequestHtml(data, { assetBaseUrl: window.location.origin, autoPrint: true });
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    } catch (error) {
+      win.close();
+      toast.error((error as { message?: string })?.message || "تعذر تجهيز طلب السلفة للطباعة");
+    } finally {
+      setPrintingAdvanceId(null);
+    }
+  };
+
+  // تحميل طلب السلفة PDF (مولّد في الخادم)
+  const advancePdfMutation = trpc.employeeRequests.advancePdf.useMutation();
+  const downloadAdvancePdf = async (requestId: number) => {
+    const toastId = `advance-pdf-${requestId}`;
+    try {
+      toast.loading("جاري توليد ملف PDF...", { id: toastId });
+      const result = await advancePdfMutation.mutateAsync({ id: requestId });
+      downloadBase64Pdf(result.pdf, result.filename);
+      toast.success("تم تحميل طلب السلفة", { id: toastId });
+    } catch (error) {
+      toast.error((error as { message?: string })?.message || "فشل توليد ملف PDF", { id: toastId });
+    }
   };
 
   // فتح مخالصة إنهاء الخدمة المرتبطة بالطلب
@@ -452,6 +493,22 @@ export default function ManageRequests() {
             </DialogDescription>
           </DialogHeader>
 
+          {!requestDetail && requestDetailLoading && (
+            <div className="flex items-center justify-center py-10 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin ml-2" />
+              جاري تحميل تفاصيل الطلب...
+            </div>
+          )}
+          {!requestDetail && requestDetailError && (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-sm text-red-500">{requestDetailError.message || "تعذر تحميل تفاصيل الطلب"}</p>
+              <Button variant="outline" size="sm" onClick={() => refetchRequestDetail()}>
+                <RefreshCw className="h-4 w-4 ml-2" />
+                إعادة المحاولة
+              </Button>
+            </div>
+          )}
+
           {requestDetail && (
             <Tabs defaultValue="details" className="w-full">
               <TabsList className="w-full">
@@ -530,7 +587,7 @@ export default function ManageRequests() {
                       {requestDetail.repaymentMethod && (
                         <div>
                           <Label className="text-muted-foreground">طريقة السداد</Label>
-                          <p className="font-medium">{requestDetail.repaymentMethod}</p>
+                          <p className="font-medium">{repaymentMethodLabel(requestDetail.repaymentMethod)}</p>
                         </div>
                       )}
                     </div>
@@ -540,6 +597,38 @@ export default function ManageRequests() {
                         <p className="text-sm">{requestDetail.advanceReason}</p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* مستند طلب السلفة الرسمي: طباعة و PDF (التوقيعات والختم بعد الموافقة فقط) */}
+                {requestDetail.requestType === "advance" && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => printAdvanceRequest(requestDetail.id)}
+                      disabled={printingAdvanceId === requestDetail.id}
+                    >
+                      {printingAdvanceId === requestDetail.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                      ) : (
+                        <Printer className="h-4 w-4 ml-2" />
+                      )}
+                      طباعة طلب السلفة
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => downloadAdvancePdf(requestDetail.id)}
+                      disabled={advancePdfMutation.isPending}
+                    >
+                      {advancePdfMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                      ) : (
+                        <FileDown className="h-4 w-4 ml-2" />
+                      )}
+                      PDF
+                    </Button>
                   </div>
                 )}
 

@@ -1,8 +1,12 @@
 /**
  * خدمة توليد تقرير حالة الوثائق HTML
- * Symbol AI - نظام إدارة الموارد البشرية
  * قالب احترافي يدعم اللغة العربية بالكامل
+ * الجهة المُصدرة: مؤسسة الفرع المحدد، أو الهوية العامة لجميع الفروع (بدون اسم النظام)
  */
+
+import { SIGNATURES } from '../shared/branding';
+import { escapeHtml } from '../shared/vouchers';
+import { establishmentDetailsLine, getReportEstablishment, reportFooterHtml } from '../shared/reportBranding';
 
 interface DocumentReportData {
   generatedAt: Date;
@@ -108,6 +112,8 @@ const getStatusBadge = (days: number | null): { text: string; textEn: string; co
 export function generateDocumentReportHTML(data: DocumentReportData): string {
   const reportNumber = `DOC-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(Date.now()).slice(-4)}`;
   const branchLabel = data.branchFilter || 'جميع الفروع';
+  const est = getReportEstablishment(data.branchFilter);
+  const estDetails = establishmentDetailsLine(est);
   
   // تجميع جميع الوثائق المنتهية
   const expiredDocs: Array<{
@@ -543,7 +549,10 @@ export function generateDocumentReportHTML(data: DocumentReportData): string {
     }
     
     .stamp .company {
-      font-size: 8px;
+      font-size: 7px;
+      line-height: 1.2;
+      text-align: center;
+      padding: 0 4px;
     }
     
     .stamp .symbol {
@@ -601,15 +610,14 @@ export function generateDocumentReportHTML(data: DocumentReportData): string {
     <!-- الهيدر -->
     <div class="header">
       <div class="logo-section">
-        <div class="logo">S</div>
         <div class="company-info">
-          <h1>Symbol AI</h1>
-          <p>نظام إدارة الموارد البشرية</p>
+          <h1>${escapeHtml(est.nameAr)}</h1>
+          ${estDetails ? `<p>${escapeHtml(estDetails)}</p>` : ''}
         </div>
       </div>
       <div class="report-meta">
         <p>تاريخ الإصدار: <span class="date">${formatDate(data.generatedAt)}</span></p>
-        <p>أعده: ${data.generatedBy}</p>
+        <p>أعده: ${escapeHtml(data.generatedBy)}</p>
         <p>رقم التقرير: ${reportNumber}</p>
       </div>
     </div>
@@ -618,7 +626,7 @@ export function generateDocumentReportHTML(data: DocumentReportData): string {
     <div class="report-title">
       <h2>تقرير حالة وثائق الموظفين</h2>
       <p class="subtitle">Employee Documents Status Report</p>
-      <span class="branch-badge">${branchLabel}</span>
+      <span class="branch-badge">${escapeHtml(branchLabel)}</span>
     </div>
     
     <!-- بطاقات الملخص -->
@@ -666,9 +674,9 @@ export function generateDocumentReportHTML(data: DocumentReportData): string {
         <tbody>
           ${expiredDocs.map(doc => `
             <tr>
-              <td><strong>${doc.name}</strong></td>
-              <td>${doc.code}</td>
-              <td>${doc.branch}</td>
+              <td><strong>${escapeHtml(doc.name)}</strong></td>
+              <td>${escapeHtml(doc.code)}</td>
+              <td>${escapeHtml(doc.branch)}</td>
               <td>${doc.docType} (${doc.docTypeEn})</td>
               <td>${formatDateShort(doc.expiryDate)}</td>
               <td class="text-danger">${doc.days !== null ? `منتهية منذ ${Math.abs(doc.days)} يوم` : '-'}</td>
@@ -711,9 +719,9 @@ export function generateDocumentReportHTML(data: DocumentReportData): string {
         <tbody>
           ${expiringDocs.map(doc => `
             <tr>
-              <td><strong>${doc.name}</strong></td>
-              <td>${doc.code}</td>
-              <td>${doc.branch}</td>
+              <td><strong>${escapeHtml(doc.name)}</strong></td>
+              <td>${escapeHtml(doc.code)}</td>
+              <td>${escapeHtml(doc.branch)}</td>
               <td>${doc.docType} (${doc.docTypeEn})</td>
               <td>${formatDateShort(doc.expiryDate)}</td>
               <td class="${doc.priority === 'HIGH' ? 'text-danger' : doc.priority === 'MEDIUM' ? 'text-warning' : 'text-success'}">${doc.days} يوم</td>
@@ -729,27 +737,27 @@ export function generateDocumentReportHTML(data: DocumentReportData): string {
     <div class="signatures-section">
       <div class="signatures-grid">
         <div class="signature-box">
-          <div class="title">المشرف العام - General Supervisor</div>
+          <div class="title">${escapeHtml(SIGNATURES.supervisor.title)} - ${escapeHtml(SIGNATURES.supervisor.titleEn)}</div>
           <div class="line">
-            <div class="name">سالم الوادعي</div>
-            <div class="role">Salem Al-Wadei</div>
+            <div class="name">${escapeHtml(SIGNATURES.supervisor.name)}</div>
+            <div class="role">${escapeHtml(SIGNATURES.supervisor.nameEn)}</div>
           </div>
         </div>
         
         <div class="signature-box stamp-box">
           <div class="stamp">
-            <span class="company">Symbol AI</span>
+            <span class="company">${escapeHtml(est.nameAr)}</span>
             <span class="symbol">✓</span>
             <span class="company">معتمد</span>
           </div>
-          <div class="role">ختم الشركة</div>
+          <div class="role">${escapeHtml(SIGNATURES.stamp.label)}</div>
         </div>
         
         <div class="signature-box">
-          <div class="title">المدير - Manager</div>
+          <div class="title">${escapeHtml(SIGNATURES.manager.title)} - ${escapeHtml(SIGNATURES.manager.titleEn)}</div>
           <div class="line">
-            <div class="name">عمر المطيري</div>
-            <div class="role">Omar Al-Mutairi</div>
+            <div class="name">${escapeHtml(SIGNATURES.manager.name)}</div>
+            <div class="role">${escapeHtml(SIGNATURES.manager.nameEn)}</div>
           </div>
         </div>
       </div>
@@ -757,8 +765,7 @@ export function generateDocumentReportHTML(data: DocumentReportData): string {
     
     <!-- الفوتر -->
     <div class="footer">
-      <p>هذا التقرير تم إنشاؤه آلياً بواسطة نظام Symbol AI لإدارة الموارد البشرية</p>
-      <p>All rights reserved to Symbol AI © ${new Date().getFullYear()}</p>
+      <p>${reportFooterHtml(est)}</p>
     </div>
   </div>
   

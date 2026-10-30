@@ -1,7 +1,9 @@
 /**
- * قوالب PDF الرسمية الموحدة - Symbol AI
+ * قوالب PDF الرسمية الموحدة
  * تصميم احترافي موحد يليق بالشركات
  * مع ختم وتوقيعات رسمية
+ * - الجهة المُصدرة: مؤسسة الفرع المحدد (branchName)، أو الهوية العامة لعدة فروع/جميع الفروع
+ * - اسم النظام لا يظهر على المستندات المطبوعة
  */
 
 // =====================================================
@@ -38,8 +40,23 @@ export const PDF_COLORS = {
 // معلومات التوقيعات والختم + معلومات الشركة
 // (نُقلت إلى shared/branding.ts ليستخدمها الخادم أيضاً في PDF السندات)
 // =====================================================
-import { SIGNATURES, COMPANY_INFO } from '@shared/branding';
+import { SIGNATURES, COMPANY_INFO, type BranchLike, type Establishment } from '@shared/branding';
+import { escapeHtml } from '@shared/vouchers';
+import { establishmentDetailsLine, getReportEstablishment } from '@shared/reportBranding';
 export { SIGNATURES, COMPANY_INFO };
+
+/** خيارات الجهة المُصدرة للتقرير */
+export interface PDFBrandingOptions {
+  /** فرع التقرير (اسم أو كائن فرع، أو قائمة فروع لتقرير مجمّع؛ بدون فرع أو "جميع الفروع" = الهوية العامة) */
+  branchName?: BranchLike | BranchLike[];
+  /** تجاوز المؤسسة صراحةً */
+  establishment?: Establishment;
+}
+
+/** مؤسسة التقرير من الفرع المحدد (أو الهوية العامة) */
+export function getPDFEstablishment(options?: PDFBrandingOptions): Establishment {
+  return options?.establishment ?? getReportEstablishment(options?.branchName ?? null);
+}
 
 // =====================================================
 // الأنماط الأساسية للـ PDF
@@ -643,9 +660,11 @@ export function getPDFHeader(
     reportNumber?: string;
     reportDate?: string;
     status?: 'approved' | 'pending' | 'draft';
-  }
+  } & PDFBrandingOptions
 ): string {
-  const dateStr = options?.reportDate || new Date().toLocaleDateString('ar-SA', {
+  const company = getPDFEstablishment(options);
+  const companyDetails = establishmentDetailsLine(company);
+  const dateStr = options?.reportDate || new Date().toLocaleDateString('ar-SA-u-ca-gregory', {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
@@ -667,10 +686,10 @@ export function getPDFHeader(
     <div class="pdf-header">
       ${statusBadge}
       <div class="pdf-header-right">
-        <img src="${COMPANY_INFO.logo}" alt="${COMPANY_INFO.name}" class="pdf-logo" onerror="this.style.display='none'" />
+        ${company.logo ? `<img src="${escapeHtml(company.logo)}" alt="${escapeHtml(company.nameAr)}" class="pdf-logo" onerror="this.style.display='none'" />` : ''}
         <div class="pdf-company-info">
-          <div class="pdf-company-name">${COMPANY_INFO.name}</div>
-          <div class="pdf-company-subtitle">${COMPANY_INFO.subtitle}</div>
+          <div class="pdf-company-name">${escapeHtml(company.nameAr)}</div>
+          ${companyDetails ? `<div class="pdf-company-subtitle">${escapeHtml(companyDetails)}</div>` : ''}
         </div>
       </div>
       <div class="pdf-header-left">
@@ -686,9 +705,10 @@ export function getPDFHeader(
 /**
  * إنشاء تذييل التقرير
  */
-export function getPDFFooter(pageInfo?: string): string {
+export function getPDFFooter(pageInfo?: string, options?: PDFBrandingOptions): string {
+  const company = getPDFEstablishment(options);
   const now = new Date();
-  const dateStr = now.toLocaleDateString('ar-SA', {
+  const dateStr = now.toLocaleDateString('ar-SA-u-ca-gregory', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -700,8 +720,8 @@ export function getPDFFooter(pageInfo?: string): string {
     <div class="pdf-footer">
       <div class="pdf-footer-content">
         <div class="pdf-footer-company">
-          <img src="${COMPANY_INFO.logo}" alt="${COMPANY_INFO.name}" class="pdf-footer-logo" onerror="this.style.display='none'" />
-          <span>${COMPANY_INFO.name} - ${COMPANY_INFO.subtitle}</span>
+          ${company.logo ? `<img src="${escapeHtml(company.logo)}" alt="${escapeHtml(company.nameAr)}" class="pdf-footer-logo" onerror="this.style.display='none'" />` : ''}
+          <span>${escapeHtml(company.nameAr)}</span>
         </div>
         <div class="pdf-footer-info">
           ${pageInfo || ''}
@@ -811,7 +831,10 @@ export function getPDFApprovalSection(options?: {
   showManagerSignature?: boolean;
   isApproved?: boolean;
   approvalDate?: string;
+  /** ختم المؤسسة (الافتراضي: ختم الإدارة) */
+  stampImage?: string;
 }): string {
+  const stampImage = options?.stampImage || SIGNATURES.stamp.image;
   const showStamp = options?.showStamp !== false;
   const showSupervisor = options?.showSupervisorSignature !== false;
   const showManager = options?.showManagerSignature !== false;
@@ -883,7 +906,7 @@ export function getPDFApprovalSection(options?: {
         
         ${showStamp ? `
           <div class="pdf-stamp-box">
-            <img src="${SIGNATURES.stamp.image}" alt="ختم الشركة" class="pdf-stamp-image" onerror="this.style.display='none'" />
+            <img src="${escapeHtml(stampImage)}" alt="${escapeHtml(SIGNATURES.stamp.label)}" class="pdf-stamp-image" onerror="this.style.display='none'" />
             <div class="pdf-stamp-label">${SIGNATURES.stamp.label}</div>
           </div>
         ` : ''}
@@ -996,9 +1019,10 @@ export function createPDFDocument(
       showManagerSignature?: boolean;
       approvalDate?: string;
     };
-  }
+  } & PDFBrandingOptions
 ): string {
   const isApproved = options?.status === 'approved';
+  const company = getPDFEstablishment(options);
   
   return `
     <!DOCTYPE html>
@@ -1006,7 +1030,7 @@ export function createPDFDocument(
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>${title} - ${COMPANY_INFO.name}</title>
+      <title>${title} - ${escapeHtml(company.nameAr)}</title>
       <style>${PDF_BASE_STYLES}</style>
     </head>
     <body>
@@ -1015,17 +1039,19 @@ export function createPDFDocument(
       ${getPDFHeader(title, {
         reportNumber: options?.reportNumber,
         reportDate: options?.reportDate,
-        status: options?.status
+        status: options?.status,
+        establishment: company
       })}
       
       ${content}
       
       ${options?.showApproval !== false ? getPDFApprovalSection({
         ...options?.approvalOptions,
-        isApproved
+        isApproved,
+        stampImage: company.stamp
       }) : ''}
-      
-      ${options?.showFooter !== false ? getPDFFooter() : ''}
+
+      ${options?.showFooter !== false ? getPDFFooter(undefined, { establishment: company }) : ''}
     </body>
     </html>
   `;

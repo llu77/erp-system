@@ -53,6 +53,9 @@ import { Link } from 'wouter';
 import usePOSKeyboard from '@/hooks/usePOSKeyboard';
 import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
 import { Keyboard } from 'lucide-react';
+import { getEstablishmentForBranch } from '@shared/branding';
+import { resolveStoreName } from '@shared/reportBranding';
+import { escapeHtml } from '@shared/vouchers';
 
 // Types
 interface CartItem {
@@ -137,6 +140,11 @@ export default function POS() {
   const { data: employees = [] } = trpc.pos.employees.byBranch.useQuery(
     { branchId: selectedBranchId! },
     { enabled: !!selectedBranchId }
+  );
+  // إعدادات طباعة الفرع (اسم المتجر على الإيصال؛ وإلا اسم مؤسسة الفرع)
+  const { data: branchPrintSettings } = trpc.pos.printSettings.get.useQuery(
+    { branchId: selectedBranchId! },
+    { enabled: !!selectedBranchId, staleTime: 5 * 60_000 }
   );
   const { data: categories = [] } = trpc.pos.categories.list.useQuery();
   const { data: services = [] } = trpc.pos.services.list.useQuery();
@@ -371,8 +379,12 @@ setLastInvoice({
   const handlePrint = () => {
     if (!lastInvoice) return;
     
-    const branchName = branches.find(b => b.id === selectedBranchId)?.nameAr || 'غير محدد';
+    const selectedBranch = branches.find(b => b.id === selectedBranchId);
+    const branchName = selectedBranch?.nameAr || 'غير محدد';
     const branchPhone = ''; // سيتم إضافة رقم الهاتف للفروع لاحقاً
+    // اسم المتجر من إعدادات طباعة الفرع، وإلا اسم مؤسسة الفرع (وليس اسم النظام)
+    const establishmentName = getEstablishmentForBranch(selectedBranch ?? null).nameAr;
+    const storeName = resolveStoreName(branchPrintSettings?.storeName, selectedBranch ?? null);
     const employeeName = employees.find(e => e.id === selectedEmployeeId)?.name || 'غير محدد';
     
     // تنسيق التاريخ بالميلادي
@@ -647,8 +659,8 @@ setLastInvoice({
           <!-- Header مع الشعار -->
           <div class="header">
             <div class="logo">✂</div>
-            <h1>Symbol AI</h1>
-            <div class="branch">${branchName}</div>
+            <h1>${escapeHtml(storeName)}</h1>
+            <div class="branch">${escapeHtml(branchName)}</div>
             <div class="phone">هاتف: ${branchPhone}</div>
             <div class="invoice-num">${lastInvoice.invoiceNumber}</div>
           </div>
@@ -732,7 +744,7 @@ setLastInvoice({
             <p class="thanks">شكراً لزيارتكم ❤</p>
             <p class="welcome">نتشرف بخدمتكم دائماً</p>
             <p class="welcome">نتمنى لكم يوماً سعيداً</p>
-            <p class="brand">Symbol AI - نظام نقاط البيع الذكي</p>
+            ${storeName !== establishmentName ? `<p class="brand">${escapeHtml(establishmentName)}</p>` : ''}
           </div>
         </div>
         

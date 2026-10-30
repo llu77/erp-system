@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import POSNavHeader from '@/components/POSNavHeader';
 import { useAuth } from '@/_core/hooks/useAuth';
+import { resolveStoreName } from '@shared/reportBranding';
+import { escapeHtml } from '@shared/vouchers';
 
 export default function POSDailyReport() {
   const { user } = useAuth();
@@ -65,7 +67,12 @@ export default function POSDailyReport() {
     },
     { enabled: !!selectedBranchId && !!selectedDate }
   );
-  
+  // إعدادات طباعة الفرع (اسم المتجر في ترويسة التقرير؛ وإلا اسم مؤسسة الفرع)
+  const { data: branchPrintSettings } = trpc.pos.printSettings.get.useQuery(
+    { branchId: selectedBranchId! },
+    { enabled: !!selectedBranchId, staleTime: 5 * 60_000 }
+  );
+
   // Daily report will be calculated from invoices
   const dailyReport = useMemo(() => {
     if (!todayInvoices || todayInvoices.length === 0) return null;
@@ -119,8 +126,10 @@ export default function POSDailyReport() {
   });
   
   const handlePrint = () => {
-    const branchName = branches.find(b => b.id === selectedBranchId)?.nameAr || 'غير محدد';
-    
+    const selectedBranch = branches.find(b => b.id === selectedBranchId);
+    const branchName = selectedBranch?.nameAr || 'غير محدد';
+    const storeName = resolveStoreName(branchPrintSettings?.storeName, selectedBranch ?? null);
+
     const printHTML = `
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
@@ -144,8 +153,8 @@ export default function POSDailyReport() {
       </head>
       <body>
         <div class="header">
-          <h1>Symbol AI - تقرير اليوم</h1>
-          <p>الفرع: ${branchName}</p>
+          <h1>${escapeHtml(storeName)} - تقرير اليوم</h1>
+          <p>الفرع: ${escapeHtml(branchName)}</p>
           <p>${formattedDate}</p>
         </div>
         
@@ -182,7 +191,7 @@ export default function POSDailyReport() {
             ${employeeStats.map((emp, i) => `
               <tr>
                 <td>${i + 1}</td>
-                <td>${emp.name}</td>
+                <td>${escapeHtml(emp.name)}</td>
                 <td>${emp.invoiceCount}</td>
                 <td>${emp.totalRevenue.toFixed(2)} ر.س</td>
               </tr>

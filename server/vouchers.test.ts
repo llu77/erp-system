@@ -20,7 +20,7 @@ import {
   type VoucherStatus,
 } from "../shared/vouchers";
 import { renderVoucherHtml, type VoucherTemplateData } from "../shared/voucherTemplate";
-import { SIGNATURES } from "../shared/branding";
+import { ESTABLISHMENTS, GROUP_ESTABLISHMENT, SIGNATURES } from "../shared/branding";
 import {
   createVoucher,
   isDuplicateKeyError,
@@ -30,7 +30,7 @@ import {
   updateVoucherStatus,
   VoucherError,
 } from "./receiptVoucher";
-import { loadVoucherAssets, readPublicAssetAsDataUri, renderVoucherHtmlEmbedded, voucherFileName } from "./voucherPdf";
+import { loadDocumentAssetsForBranch, loadVoucherAssets, readPublicAssetAsDataUri, renderVoucherHtmlEmbedded, voucherFileName } from "./voucherPdf";
 import { buildVoucherEmailHtml } from "./receiptVoucherEmail";
 
 const ASSETS = {
@@ -384,8 +384,27 @@ describe("توليد السند على الخادم (الصور المضمّنة
     expect(assets.stamp).toMatch(/^data:image\//);
     expect(assets.supervisorSignature).toMatch(/^data:image\//);
     expect(assets.managerSignature).toMatch(/^data:image\//);
-    expect(assets.logo).toMatch(/^data:image\//);
+    // المؤسسات بلا شعار حالياً: ترويسة نصية
+    expect(assets.logo).toBe("");
     expect(assets.font).toBeUndefined();
+    const withLogo = loadVoucherAssets({ includeFont: false, establishment: { logo: SIGNATURES.stamp.image, stamp: SIGNATURES.stamp.image } });
+    expect(withLogo.logo).toMatch(/^data:image\//);
+    expect(loadDocumentAssetsForBranch("فرع لبن").stamp).toBe(loadVoucherAssets().stamp);
+  });
+
+  it("brands the voucher with the establishment of its branch", () => {
+    const laban = renderVoucherHtmlEmbedded(voucher({ branchName: "فرع لبن" }));
+    expect(laban).toContain(ESTABLISHMENTS.qessa.nameAr);
+    expect(laban).not.toContain(ESTABLISHMENTS.tadarruj.nameAr);
+    const tuwaiq = renderVoucherHtml(voucher({ branchName: "Tuwaiq" }));
+    expect(tuwaiq).toContain(ESTABLISHMENTS.tadarruj.nameAr);
+    const other = renderVoucherHtml(voucher({ branchName: "فرع العليا" }));
+    expect(other).toContain(GROUP_ESTABLISHMENT.nameAr);
+    for (const html of [laban, tuwaiq, other]) {
+      expect(html).not.toMatch(/symbol|سيمبول/i);
+      expect(html).not.toContain('alt="logo"');
+    }
+    expect(renderVoucherHtml(voucher(), { company: { nameAr: "جهة مخصصة" } })).toContain("جهة مخصصة");
   });
 
   it("renders embedded images only once approved", () => {

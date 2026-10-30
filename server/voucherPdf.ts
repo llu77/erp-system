@@ -7,7 +7,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { COMPANY_INFO, SIGNATURES } from '../shared/branding';
+import { GROUP_ESTABLISHMENT, SIGNATURES, getEstablishmentForBranch, type Establishment } from '../shared/branding';
 import { PRINT_FONT_PATH, renderVoucherHtml, type VoucherTemplateAssets, type VoucherTemplateData } from '../shared/voucherTemplate';
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -53,40 +53,61 @@ export function readPublicAssetAsDataUri(assetPath: string, dirs: string[] = pub
   return undefined;
 }
 
-let cachedAssets: VoucherTemplateAssets | null = null;
+const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+/** ذاكرة مؤقتة لكل ملف عام (data URI أو null إن لم يوجد) */
+const assetCache = new Map<string, string | null>();
+const warnedMissing = new Set<string>();
+
+function cachedAsset(assetPath: string, refresh: boolean): string | undefined {
+  if (refresh || !assetCache.has(assetPath)) {
+    assetCache.set(assetPath, readPublicAssetAsDataUri(assetPath) ?? null);
+  }
+  return assetCache.get(assetPath) ?? undefined;
+}
 
 /**
- * صور السند كـ data URIs (مع تخزين مؤقت)
- * الصور غير الموجودة تُستبدل بصورة شفافة صغيرة حتى لا تظهر أيقونة صورة مكسورة
+ * صور المستند كـ data URIs حسب مؤسسته (الشعار والختم)، مع تخزين مؤقت لكل ملف
+ * - مؤسسة بدون شعار: logo = '' (ترويسة نصية بدون صورة)
+ * - الصور غير الموجودة تُستبدل بصورة شفافة صغيرة حتى لا تظهر أيقونة صورة مكسورة
  */
-export function loadVoucherAssets(options: { includeFont?: boolean; refresh?: boolean } = {}): VoucherTemplateAssets {
-  if (!cachedAssets || options.refresh) {
-    const blank = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-    const read = (p: string) => readPublicAssetAsDataUri(p);
-    const missing: string[] = [];
-    const pick = (p: string) => {
-      const uri = read(p);
-      if (!uri) missing.push(p);
-      return uri ?? blank;
-    };
-    cachedAssets = {
-      logo: pick(COMPANY_INFO.logo),
-      supervisorSignature: pick(SIGNATURES.supervisor.image),
-      managerSignature: pick(SIGNATURES.manager.image),
-      stamp: pick(SIGNATURES.stamp.image),
-      font: read(PRINT_FONT_PATH),
-    };
-    if (missing.length > 0) {
-      console.warn('[Vouchers] ملفات صور غير موجودة، سيُطبع السند بدونها:', missing.join(', '));
-    }
+export function loadVoucherAssets(
+  options: { includeFont?: boolean; refresh?: boolean; establishment?: Pick<Establishment, 'logo' | 'stamp'> | null } = {}
+): VoucherTemplateAssets {
+  const refresh = options.refresh === true;
+  const establishment = options.establishment ?? GROUP_ESTABLISHMENT;
+  const missing: string[] = [];
+  const pick = (p: string) => {
+    const uri = cachedAsset(p, refresh);
+    if (!uri) missing.push(p);
+    return uri ?? BLANK_IMAGE;
+  };
+  const images: VoucherTemplateAssets = {
+    logo: establishment.logo ? pick(establishment.logo) : '',
+    supervisorSignature: pick(SIGNATURES.supervisor.image),
+    managerSignature: pick(SIGNATURES.manager.image),
+    stamp: pick(establishment.stamp || SIGNATURES.stamp.image),
+  };
+  const newlyMissing = missing.filter(p => !warnedMissing.has(p));
+  if (newlyMissing.length > 0) {
+    newlyMissing.forEach(p => warnedMissing.add(p));
+    console.warn('[Documents] ملفات صور غير موجودة، سيُطبع المستند بدونها:', newlyMissing.join(', '));
   }
-  const { font, ...images } = cachedAssets;
-  return options.includeFont === false ? images : { ...images, font };
+  if (options.includeFont === false) return images;
+  return { ...images, font: cachedAsset(PRINT_FONT_PATH, refresh) };
+}
+
+/** صور مستند فرع معيّن (شعار وختم مؤسسة الفرع) */
+export function loadDocumentAssetsForBranch(
+  branchName: string | null | undefined,
+  options: { includeFont?: boolean } = {}
+): VoucherTemplateAssets {
+  return loadVoucherAssets({ ...options, establishment: getEstablishmentForBranch(branchName) });
 }
 
 /** HTML السند الكامل بصور مضمّنة (للـ PDF والمرفقات) */
 export function renderVoucherHtmlEmbedded(voucher: VoucherTemplateData, options: { includeFont?: boolean } = {}): string {
-  return renderVoucherHtml(voucher, { assets: loadVoucherAssets({ includeFont: options.includeFont }) });
+  return renderVoucherHtml(voucher, { assets: loadDocumentAssetsForBranch(voucher.branchName, options) });
 }
 
 /** توليد PDF للسند عبر puppeteer */

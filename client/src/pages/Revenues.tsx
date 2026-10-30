@@ -929,6 +929,9 @@ export default function Revenues() {
 // مكون سجل الإيرادات الشهري
 function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: number | null; selectedDate: string; userRole?: string }) {
   const isMobile = useIsMobile();
+  // فرع السجل لترويسة المؤسسة في PDF (نفس استعلام الصفحة الرئيسية من الذاكرة المؤقتة)
+  const { data: branchOptions } = trpc.branches.list.useQuery();
+  const logBranch = branchOptions?.find(b => b.id === branchId) ?? null;
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [revenueToDelete, setRevenueToDelete] = useState<number | null>(null);
   const utils = trpc.useUtils();
@@ -1079,7 +1082,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
   </style>
 </head>
 <body>
-  ${getPDFHeader(`سجل إيرادات شهر ${monthName}`, { reportNumber: `REV-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` })}
+  ${getPDFHeader(`سجل إيرادات شهر ${monthName}`, { reportNumber: `REV-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`, branchName: logBranch })}
   
   ${getPDFInfoSection([
     { label: 'من تاريخ', value: format(monthStart, "d MMMM", { locale: ar }) },
@@ -1145,7 +1148,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
     </tbody>
   </table>
   
-  ${getPDFFooter()}
+  ${getPDFFooter(undefined, { branchName: logBranch })}
 </body>
 </html>
       `;
