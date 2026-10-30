@@ -14,8 +14,6 @@ import {
   GROUP_ESTABLISHMENT,
   SIGNATURES,
 } from "../shared/branding";
-
-const QESSA = ESTABLISHMENTS.qessa;
 import {
   calculateEndOfServiceSettlement,
   type EndOfServiceCalcInput,
@@ -44,6 +42,9 @@ import {
   renderEndOfServiceHtmlEmbedded,
 } from "./endOfServicePdf";
 import { loadVoucherAssets, renderHtmlToPdf } from "./voucherPdf";
+
+/** فرع لبن في بيانات الاختبار -> مؤسسة قصه وتخفيف */
+const QESSA = ESTABLISHMENTS.qessa;
 
 const ASSETS = {
   logo: "data:image/png;base64,LOGO",
