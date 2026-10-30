@@ -125,6 +125,10 @@ export function canCreateVoucher(role: string | null | undefined): boolean {
 /** هل يقتصر المستخدم على فرعه؟ (غير المدير/المسؤول المرتبط بفرع) */
 export function scopedBranchId(actor: Pick<VoucherActor, 'role' | 'branchId'>): number | null {
   if (isVoucherApprover(actor.role)) return null;
+  // مشرف الفرع غير المرتبط بفرع لا يحصل على صلاحية كل الفروع
+  if (actor.role === 'supervisor' && actor.branchId == null) {
+    throw new VoucherError('حساب المشرف غير مرتبط بفرع', 'FORBIDDEN');
+  }
   return actor.branchId ?? null;
 }
 

@@ -344,6 +344,11 @@ describe("خدمة السندات - الصلاحيات والتحقق", () => {
     expect(scopedBranchId(manager)).toBeNull();
   });
 
+  it("refuses a supervisor account that is not linked to a branch instead of granting all branches", () => {
+    expect(() => scopedBranchId({ role: "supervisor", branchId: null })).toThrow(/غير مرتبط بفرع/);
+    expect(scopedBranchId({ role: "viewer", branchId: null })).toBeNull();
+  });
+
   it("rejects status changes by supervisors before touching the database", async () => {
     await expect(updateVoucherStatus("RV-2026-0001", "approved", supervisor)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });

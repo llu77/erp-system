@@ -122,7 +122,12 @@ const payrollEditProcedure = protectedProcedure.use(({ ctx, next }) => {
 });
 
 function assertPayrollBranchAccess(user: { role: string; branchId: number | null }, branchId: number) {
-  if (user.role === 'supervisor' && !checkBranchAccess(user.branchId ?? null, branchId)) {
+  if (user.role !== 'supervisor') return;
+  // مشرف الفرع غير المرتبط بفرع لا يحصل على صلاحية كل الفروع
+  if (user.branchId == null) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'حساب المشرف غير مرتبط بفرع' });
+  }
+  if (!checkBranchAccess(user.branchId, branchId)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك الوصول لمسيرات فرع آخر' });
   }
 }
@@ -3666,8 +3671,8 @@ export const appRouter = router({
   payrolls: router({
     // قائمة المسيرات (المشرف يرى فرعه فقط)
     list: payrollViewProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
-        return await db.getPayrollsByBranch(ctx.user.branchId);
+      if (ctx.user.role === 'supervisor') {
+        return ctx.user.branchId ? await db.getPayrollsByBranch(ctx.user.branchId) : [];
       }
       return await db.getAllPayrolls();
     }),
@@ -3883,7 +3888,8 @@ export const appRouter = router({
         status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(),
       }).optional())
       .query(async ({ input, ctx }) => {
-        const branchId = ctx.user.role === 'supervisor' && ctx.user.branchId ? ctx.user.branchId : input?.branchId;
+        if (ctx.user.role === 'supervisor' && !ctx.user.branchId) return [];
+        const branchId = ctx.user.role === 'supervisor' ? ctx.user.branchId : input?.branchId;
         return await runPayrollAction(() => payrollService.listViolations({ ...input, branchId }));
       }),
 

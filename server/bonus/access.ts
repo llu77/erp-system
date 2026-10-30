@@ -18,6 +18,10 @@ export function isBonusManager(user: Pick<BonusUser, "role">): boolean {
 /** نطاق الفرع للمستخدم: null = كل الفروع */
 export function getBonusBranchScope(user: Pick<BonusUser, "role" | "branchId">): number | null {
   if (isBonusManager(user)) return null;
+  // مشرف الفرع غير المرتبط بفرع لا يحصل على صلاحية كل الفروع
+  if (user.role === "supervisor" && user.branchId == null) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "حساب المشرف غير مرتبط بفرع" });
+  }
   return user.branchId ?? null;
 }
 
