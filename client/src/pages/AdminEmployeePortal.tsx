@@ -106,6 +106,10 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
 };
 
+// قيم فلاتر الطلبات كما يقبلها الخادم (قوائم الاختيار تحمل هذه القيم فقط)
+type RequestStatusFilter = 'pending' | 'approved' | 'rejected' | 'cancelled';
+type RequestTypeFilter = 'advance' | 'vacation' | 'arrears' | 'permission' | 'objection' | 'resignation' | 'end_of_service';
+
 export default function AdminEmployeePortal() {
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -181,8 +185,8 @@ export default function AdminEmployeePortal() {
   // جلب الطلبات
   const requestsQuery = trpc.portalAdmin.getRequests.useQuery(
     {
-      status: selectedStatus === 'all' ? undefined : selectedStatus,
-      requestType: selectedRequestType === 'all' ? undefined : selectedRequestType,
+      status: selectedStatus === 'all' ? undefined : (selectedStatus as RequestStatusFilter),
+      requestType: selectedRequestType === 'all' ? undefined : (selectedRequestType as RequestTypeFilter),
       branchId: selectedBranch === 'all' ? undefined : parseInt(selectedBranch),
     },
     { enabled: hasAccess, retry: shouldRetryQuery }
