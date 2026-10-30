@@ -199,6 +199,17 @@ describe("employee portal session", () => {
     await expectTrpcError(caller.employeePortal.getSalarySlips(), "INTERNAL_SERVER_ERROR");
     await expectTrpcError(caller.portalAdmin.getRequests({}), "INTERNAL_SERVER_ERROR");
     await expectTrpcError(caller.employeeAssistant.startNewConversation(), "INTERNAL_SERVER_ERROR");
+
+    // مستخدم نظام ليس مراجعاً في نفس المتصفح: الجلسة غير المتحقق منها قد تكون لمشرف
+    const withEmployeeUser = staffCaller({ role: "employee" });
+    await expectTrpcError(withEmployeeUser.portalAdmin.getRequests({}), "FORBIDDEN");
+    const lookupFailedWithEmployeeUser = appRouter.createCaller({
+      ...baseCtx(),
+      user: { id: 2, role: "employee" } as StaffUser,
+      employee: null,
+      employeeLookupFailed: true,
+    });
+    await expectTrpcError(lookupFailedWithEmployeeUser.portalAdmin.getRequests({}), "INTERNAL_SERVER_ERROR");
   });
 
   it("logout clears the portal cookie", async () => {

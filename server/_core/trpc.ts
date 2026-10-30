@@ -127,7 +127,8 @@ export const portalReviewerProcedure = t.procedure.use(
     const reviewer = resolvePortalReviewer(ctx);
 
     if (!reviewer) {
-      if (!ctx.user && ctx.employeeLookupFailed) throw employeeLookupFailedError();
+      // جلسة البوابة لم يُتحقق منها: قد تكون لمشرف، فلا يُحكم بعدم الصلاحية
+      if (ctx.employeeLookupFailed) throw employeeLookupFailedError();
       if (!ctx.user && !ctx.employee) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: EMPLOYEE_UNAUTHED_ERR_MSG });
       }
