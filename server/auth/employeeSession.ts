@@ -40,13 +40,22 @@ export class EmployeeSessionConfigError extends Error {
 
 /** سر التوقيع: JWT_SECRET فقط (لا يوجد سر احتياطي) */
 function getSessionKey(): Uint8Array {
-  const secret = process.env.JWT_SECRET;
+  const secret = process.env.JWT_SECRET?.trim();
   if (!secret) throw new EmployeeSessionConfigError();
   return new TextEncoder().encode(secret);
 }
 
 export function isEmployeeSessionConfigured(): boolean {
-  return Boolean(process.env.JWT_SECRET);
+  return Boolean(process.env.JWT_SECRET?.trim());
+}
+
+/** تعذّر التحقق من جلسة صالحة التوقيع بسبب خطأ في قاعدة البيانات (ليس "غير مسجل") */
+export class EmployeeSessionLookupError extends Error {
+  constructor(cause?: unknown) {
+    super("تعذر التحقق من جلسة الموظف");
+    this.name = "EmployeeSessionLookupError";
+    this.cause = cause;
+  }
 }
 
 /** توقيع جلسة موظف */
@@ -169,7 +178,7 @@ export function toPortalEmployee(record: EmployeeSessionRecord): PortalEmployee 
 export async function loadEmployeeSessionRecord(employeeId: number): Promise<EmployeeSessionRecord | null> {
   const [{ getDb }, { employees }] = await Promise.all([import("../db"), import("../../drizzle/schema")]);
   const db = await getDb();
-  if (!db) return null;
+  if (!db) throw new EmployeeSessionLookupError("database unavailable");
   const rows = await db
     .select({
       id: employees.id,
@@ -189,7 +198,8 @@ export async function loadEmployeeSessionRecord(employeeId: number): Promise<Emp
 
 /**
  * هوية الموظف من الطلب: null إذا لم يوجد كوكي أو كان غير صالح أو الحساب موقوف أو تغيّر إصدار الجلسة
- * (قراءة قاعدة البيانات فقط عند وجود كوكي موقّع صالح)
+ * (قراءة قاعدة البيانات فقط عند وجود كوكي موقّع صالح).
+ * خطأ قاعدة البيانات يُرمى EmployeeSessionLookupError حتى لا يُعامل الموظف كأنه غير مسجل
  */
 export async function resolvePortalEmployee(
   cookieHeader: string | undefined | null,
@@ -199,11 +209,12 @@ export async function resolvePortalEmployee(
   if (!token) return null;
   const claims = await verifyEmployeeSession(token);
   if (!claims) return null;
+  let record: EmployeeSessionRecord | null;
   try {
-    const record = await loadRecord(claims.employeeId);
-    return isEmployeeSessionValid(record, claims) ? toPortalEmployee(record) : null;
+    record = await loadRecord(claims.employeeId);
   } catch (error) {
     console.error("[EmployeeSession] فشل التحقق من جلسة الموظف:", error);
-    return null;
+    throw error instanceof EmployeeSessionLookupError ? error : new EmployeeSessionLookupError(error);
   }
+  return isEmployeeSessionValid(record, claims) ? toPortalEmployee(record!) : null;
 }

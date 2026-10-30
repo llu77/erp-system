@@ -2,7 +2,7 @@ import { COOKIE_NAME, EMPLOYEE_UNAUTHED_ERR_MSG } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { localLogin, createLocalUser, changePassword, resetPassword, ensureAdminExists } from "./auth/localAuth";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router, employeeProcedure, portalReviewerProcedure } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, router, employeeProcedure, portalReviewerProcedure, employeeLookupFailedError } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
@@ -8223,7 +8223,14 @@ ${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.
           });
         }
 
-        const result = await employeeAuth.employeeLogin(input.username, input.password);
+        // خطأ الخادم (قاعدة البيانات مثلاً) لا يُحسب محاولة فاشلة؛ كلمة المرور الخاطئة فقط تبقى محجوزة
+        let result: Awaited<ReturnType<typeof employeeAuth.employeeLogin>>;
+        try {
+          result = await employeeAuth.employeeLogin(input.username, input.password);
+        } catch (error) {
+          employeeAuth.employeeLoginLimiter.release(limiterKey);
+          throw error;
+        }
         if (!result.success) {
           throw new TRPCError({ code: 'UNAUTHORIZED', message: result.error });
         }
@@ -8243,6 +8250,8 @@ ${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.
 
     // الموظف المسجل في البوابة (null بدون جلسة صالحة)
     me: publicProcedure.query(async ({ ctx }) => {
+      // خطأ قاعدة البيانات عند التحقق من الجلسة: خطأ قابل لإعادة المحاولة وليس "غير مسجل"
+      if (!ctx.employee && ctx.employeeLookupFailed) throw employeeLookupFailedError();
       if (!ctx.employee) return null;
       const { getPortalMe } = await import('./auth/employeeAuth');
       return getPortalMe(ctx.employee.id);

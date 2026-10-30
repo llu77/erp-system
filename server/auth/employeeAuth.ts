@@ -115,6 +115,14 @@ export class LoginFailureLimiter {
     return 0;
   }
 
+  /** يعيد محاولة محجوزة لم تُحسم (خطأ في الخادم وليس كلمة مرور خاطئة) */
+  release(key: string): void {
+    const entry = this.failures.get(key);
+    if (!entry) return;
+    entry.count -= 1;
+    if (entry.count <= 0) this.failures.delete(key);
+  }
+
   reset(key: string): void {
     this.failures.delete(key);
   }

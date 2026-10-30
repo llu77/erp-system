@@ -4,6 +4,7 @@ import { EMPLOYEE_COOKIE_NAME, EMPLOYEE_SESSION_TTL_MS } from "../shared/const";
 import {
   EMPLOYEE_SESSION_AUDIENCE,
   EmployeeSessionConfigError,
+  EmployeeSessionLookupError,
   clearEmployeeSessionCookie,
   getEmployeeSessionCookieOptions,
   isEmployeeSessionValid,
@@ -176,11 +177,11 @@ describe("resolvePortalEmployee", () => {
     await expect(resolvePortalEmployee(cookieHeader(token), load)).resolves.toBeNull();
   });
 
-  it("returns null when loading the record fails", async () => {
+  it("throws a lookup error (not \"signed out\") when loading the record fails", async () => {
     const token = await signEmployeeSession({ employeeId: 7, sessionVersion: 3 });
     const load = vi.fn().mockRejectedValue(new Error("db down"));
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    await expect(resolvePortalEmployee(cookieHeader(token), load)).resolves.toBeNull();
+    await expect(resolvePortalEmployee(cookieHeader(token), load)).rejects.toBeInstanceOf(EmployeeSessionLookupError);
     spy.mockRestore();
   });
 });
@@ -236,6 +237,18 @@ describe("LoginFailureLimiter", () => {
     expect(limiter.reserveAttempt("burst", 101)).toBe(0);
   });
 
+  it("releases a reserved attempt when the server fails before checking the password", () => {
+    const limiter = new LoginFailureLimiter(2, 60_000);
+    expect(limiter.reserveAttempt("k", 0)).toBe(0);
+    limiter.release("k");
+    expect(limiter.reserveAttempt("k", 1)).toBe(0);
+    expect(limiter.reserveAttempt("k", 2)).toBe(0);
+    expect(limiter.reserveAttempt("k", 3)).toBeGreaterThan(0);
+    // مفتاح غير موجود: لا شيء
+    limiter.release("missing");
+    expect(limiter.blockedForMs("missing", 4)).toBe(0);
+  });
+
   it("clears failures after a successful login", () => {
     const limiter = new LoginFailureLimiter(2, 60_000);
     limiter.recordFailure("k", 0);
@@ -272,6 +285,25 @@ describe("main-system context", () => {
     expect(getUserById).not.toHaveBeenCalled();
     expect(ctx.employee).toBeNull();
 
+    vi.doUnmock("./_core/sdk");
+    vi.doUnmock("./auth/localAuth");
+    vi.doUnmock("./db");
+  });
+
+  it("flags a portal session it could not verify instead of treating it as signed out", async () => {
+    vi.resetModules();
+    vi.doMock("./_core/sdk", () => ({ sdk: { authenticateRequest: vi.fn().mockRejectedValue(new Error("no oauth")) } }));
+    vi.doMock("./auth/localAuth", () => ({ getUserById: vi.fn() }));
+    vi.doMock("./db", () => ({ getDb: vi.fn().mockResolvedValue(null) }));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { createContext } = await import("./_core/context");
+    const token = await signEmployeeSession({ employeeId: 7, sessionVersion: 3 });
+
+    const ctx = await createContext({ req: { headers: { cookie: cookieHeader(token) } }, res: {} } as any);
+    expect(ctx.employee).toBeNull();
+    expect(ctx.employeeLookupFailed).toBe(true);
+
+    spy.mockRestore();
     vi.doUnmock("./_core/sdk");
     vi.doUnmock("./auth/localAuth");
     vi.doUnmock("./db");

@@ -46,12 +46,18 @@ export const adminProcedure = t.procedure.use(
 
 // ==================== بوابة الموظفين ====================
 
+/** تعذر التحقق من جلسة البوابة (قاعدة البيانات): خطأ قابل لإعادة المحاولة، لا إعادة توجيه للدخول */
+export function employeeLookupFailedError(): TRPCError {
+  return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذر التحقق من جلسة البوابة، حاول مرة أخرى" });
+}
+
 /** إجراءات الموظف في البوابة: الهوية من كوكي جلسة البوابة فقط (لا تُقبل معرفات من الواجهة) */
 export const employeeProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
     if (!ctx.employee) {
+      if (ctx.employeeLookupFailed) throw employeeLookupFailedError();
       throw new TRPCError({ code: "UNAUTHORIZED", message: EMPLOYEE_UNAUTHED_ERR_MSG });
     }
 
@@ -121,6 +127,7 @@ export const portalReviewerProcedure = t.procedure.use(
     const reviewer = resolvePortalReviewer(ctx);
 
     if (!reviewer) {
+      if (!ctx.user && ctx.employeeLookupFailed) throw employeeLookupFailedError();
       if (!ctx.user && !ctx.employee) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: EMPLOYEE_UNAUTHED_ERR_MSG });
       }

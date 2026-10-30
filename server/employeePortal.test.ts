@@ -193,6 +193,13 @@ describe("employee portal session", () => {
     await expect(anonymousCaller().employeeAuth.me()).resolves.toBeNull();
   });
 
+  it("reports a retryable server error, not a sign-out, when the session lookup failed", async () => {
+    const caller = appRouter.createCaller({ ...baseCtx(), user: null, employee: null, employeeLookupFailed: true });
+    await expectTrpcError(caller.employeeAuth.me(), "INTERNAL_SERVER_ERROR");
+    await expectTrpcError(caller.employeePortal.getSalarySlips(), "INTERNAL_SERVER_ERROR");
+    await expectTrpcError(caller.portalAdmin.getRequests({}), "INTERNAL_SERVER_ERROR");
+  });
+
   it("logout clears the portal cookie", async () => {
     const ctx = { ...baseCtx(), user: null, employee: null };
     await expect(appRouter.createCaller(ctx).employeeAuth.logout()).resolves.toEqual({ success: true });

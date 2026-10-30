@@ -94,10 +94,13 @@ const EXPIRY_COLUMNS = {
 // ==================== تجديد روابط الصور ====================
 
 const URL_CACHE_TTL_MS = 20 * 60 * 1000;
-const URL_FAILURE_TTL_MS = 60 * 1000;
+/** بعد فشل خدمة التخزين: مدة استخدام الروابط المحفوظة قبل إعادة المحاولة */
+export const URL_FAILURE_TTL_MS = 60 * 1000;
 const URL_CACHE_MAX = 5000;
 const STORAGE_TIMEOUT_MS = 5000;
 const urlCache = new Map<string, { url: string | null; expiresAt: number }>();
+/** قاطع دائرة لخدمة التخزين: بعد أي فشل أو مهلة تُستخدم الروابط المحفوظة حتى هذا الوقت */
+let storageDownUntil = 0;
 
 function rememberUrl(key: string, url: string | null, ttl: number) {
   if (urlCache.size >= URL_CACHE_MAX) {
@@ -138,6 +141,8 @@ export async function resolveStoredFileUrl(
   if (!key) return fallback;
   const cached = urlCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.url ?? fallback;
+  // خدمة التخزين متعطلة مؤخراً: الرابط المحفوظ فوراً بدل انتظار مهلة كل ملف (قوائم الموظفين والوثائق)
+  if (Date.now() < storageDownUntil) return fallback;
   try {
     const { storageGet } = await import("../storage");
     const { url } = await withTimeout(storageGet(key), STORAGE_TIMEOUT_MS);
@@ -145,8 +150,15 @@ export async function resolveStoredFileUrl(
     return url || fallback;
   } catch {
     rememberUrl(key, null, URL_FAILURE_TTL_MS);
+    storageDownUntil = Date.now() + URL_FAILURE_TTL_MS;
     return fallback;
   }
+}
+
+/** للاختبارات: إعادة ضبط حالة خدمة التخزين */
+export function resetStorageCircuitForTests() {
+  storageDownUntil = 0;
+  urlCache.clear();
 }
 
 /** تحديث الذاكرة المؤقتة بعد رفع ملف جديد */

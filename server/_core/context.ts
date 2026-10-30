@@ -6,7 +6,7 @@ import { COOKIE_NAME } from "../../shared/const";
 import { jwtVerify } from "jose";
 import { parse as parseCookieHeader } from "cookie";
 import { getUserById } from "../auth/localAuth";
-import { isEmployeePortalAudience, resolvePortalEmployee, type PortalEmployee } from "../auth/employeeSession";
+import { EmployeeSessionLookupError, isEmployeePortalAudience, resolvePortalEmployee, type PortalEmployee } from "../auth/employeeSession";
 
 export type { PortalEmployee } from "../auth/employeeSession";
 
@@ -16,6 +16,8 @@ export type TrpcContext = {
   user: User | null;
   /** موظف بوابة الموظفين (من كوكي الجلسة الخاص بالبوابة فقط) */
   employee?: PortalEmployee | null;
+  /** كوكي البوابة صالح لكن تعذر التحقق منه (خطأ قاعدة بيانات): خطأ قابل لإعادة المحاولة وليس "غير مسجل" */
+  employeeLookupFailed?: boolean;
 };
 
 export async function createContext(
@@ -53,12 +55,20 @@ export async function createContext(
   }
 
   // جلسة بوابة الموظفين (قراءة واحدة من قاعدة البيانات فقط عند وجود كوكي البوابة)
-  const employee = await resolvePortalEmployee(opts.req.headers.cookie);
+  let employee: PortalEmployee | null = null;
+  let employeeLookupFailed = false;
+  try {
+    employee = await resolvePortalEmployee(opts.req.headers.cookie);
+  } catch (error) {
+    if (!(error instanceof EmployeeSessionLookupError)) throw error;
+    employeeLookupFailed = true;
+  }
 
   return {
     req: opts.req,
     res: opts.res,
     user,
     employee,
+    employeeLookupFailed,
   };
 }
