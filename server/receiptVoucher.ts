@@ -287,8 +287,8 @@ export async function createVoucher(
     // سند القبض: "استلمنا من" افتراضياً الفرع - المشرف الذي سلّم المبلغ
     if (!partyName) {
       partyName = [branchName, actorName].filter(Boolean).join(' - ');
-      partyType = partyType ?? (branchId ? 'branch' : 'other');
-      if (branchId && partyType === 'branch') partyId = partyId ?? branchId;
+      partyType = branchId ? 'branch' : 'other';
+      partyId = branchId;
     }
     // المستلم الفعلي (Received by)
     if (!payeeName) payeeName = actorName;
