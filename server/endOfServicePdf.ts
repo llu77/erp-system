@@ -1,6 +1,6 @@
 /**
  * توليد PDF لخطاب إنهاء الخدمة والمخالصة النهائية من القالب الموحد shared/endOfServiceTemplate.ts
- * - الشعار والتوقيعات والختم والخط تُضمَّن كـ data URI (نفس أصول السندات) حتى يعمل PDF بدون شبكة
+ * - الشعار والتوقيعات والختم والخط تُضمَّن كـ data URI (حسب مؤسسة فرع الموظف) حتى يعمل PDF بدون شبكة
  * - التحويل عبر نفس مسار puppeteer المستخدم للسندات (renderHtmlToPdf)
  */
 
@@ -9,7 +9,7 @@ import type {
   EndOfServiceDocumentKind,
 } from "../shared/endOfService";
 import { renderEndOfServiceDocumentHtml } from "../shared/endOfServiceTemplate";
-import { loadVoucherAssets, renderHtmlToPdf } from "./voucherPdf";
+import { loadDocumentAssetsForBranch, renderHtmlToPdf } from "./voucherPdf";
 
 /** HTML المستند الكامل بصور وخط مضمّنة (للـ PDF والمرفقات) */
 export function renderEndOfServiceHtmlEmbedded(
@@ -18,7 +18,9 @@ export function renderEndOfServiceHtmlEmbedded(
   options: { includeFont?: boolean; printedAt?: Date } = {}
 ): string {
   return renderEndOfServiceDocumentHtml(kind, data, {
-    assets: loadVoucherAssets({ includeFont: options.includeFont }),
+    assets: loadDocumentAssetsForBranch(data.branchName, {
+      includeFont: options.includeFont,
+    }),
     printedAt: options.printedAt,
   });
 }

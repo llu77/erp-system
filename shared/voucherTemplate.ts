@@ -6,7 +6,7 @@
  * - جميع النصوص المُدخلة من المستخدم تُهرّب قبل إدراجها في HTML
  */
 
-import { COMPANY_INFO, SIGNATURES, isPlaceholderValue, type CompanyInfo } from "./branding";
+import { SIGNATURES, getEstablishmentForBranch, isPlaceholderValue, type CompanyInfo, type Establishment } from "./branding";
 import {
   VOUCHER_TITLES,
   PAYMENT_METHOD_LABELS,
@@ -87,6 +87,7 @@ export interface VoucherTemplateOptions {
   assetBaseUrl?: string;
   /** صور مُمررة صراحةً (مثل data URIs في الخادم) */
   assets?: VoucherTemplateAssets;
+  /** تجاوز بيانات الجهة المُصدرة (الافتراضي: مؤسسة فرع السند) */
   company?: Partial<CompanyInfo>;
   /** إضافة سكربت طباعة تلقائية بعد تحميل الصفحة */
   autoPrint?: boolean;
@@ -107,18 +108,41 @@ export type ResolvedVoucherAssets = Required<Omit<VoucherTemplateAssets, "font">
 
 /**
  * روابط الصور والخط للطباعة: الصور الممررة صراحةً أولاً، وإلا مسار الملف العام
- * (مسبوقاً بـ assetBaseUrl إن وجد). مشتركة بين السندات ومستندات إنهاء الخدمة.
+ * (مسبوقاً بـ assetBaseUrl إن وجد). مشتركة بين السندات ومستندات الموظفين وإنهاء الخدمة.
+ * - الشعار والختم من مؤسسة المستند (شعار فارغ = ترويسة نصية بدون صورة)
  */
-export function resolveVoucherAssets(options: Pick<VoucherTemplateOptions, "assets" | "assetBaseUrl">): ResolvedVoucherAssets {
+export function resolveVoucherAssets(
+  options: Pick<VoucherTemplateOptions, "assets" | "assetBaseUrl">,
+  establishment?: Pick<Establishment, "logo" | "stamp"> | null
+): ResolvedVoucherAssets {
   const a = options.assets ?? {};
   const base = options.assetBaseUrl;
+  const logo = establishment?.logo ?? "";
+  const stamp = establishment?.stamp || SIGNATURES.stamp.image;
   return {
-    logo: a.logo ?? joinAsset(base, COMPANY_INFO.logo),
+    logo: a.logo ?? (logo ? joinAsset(base, logo) : ""),
     supervisorSignature: a.supervisorSignature ?? joinAsset(base, SIGNATURES.supervisor.image),
     managerSignature: a.managerSignature ?? joinAsset(base, SIGNATURES.manager.image),
-    stamp: a.stamp ?? joinAsset(base, SIGNATURES.stamp.image),
+    stamp: a.stamp ?? joinAsset(base, stamp),
     font: a.font ?? (base !== undefined ? joinAsset(base, PRINT_FONT_PATH) : undefined),
   };
+}
+
+/**
+ * الجهة المُصدرة للمستند: مؤسسة الفرع (لبن -> قصه وتخفيف، طويق -> تدرج وتخفيف، وإلا الهوية العامة)
+ * مع تجاوز اختياري لبعض الحقول
+ */
+export function resolveDocumentCompany(
+  branchName: string | null | undefined,
+  override?: Partial<CompanyInfo> | null
+): Establishment {
+  return { ...getEstablishmentForBranch(branchName), ...(override ?? {}) };
+}
+
+/** وسم الشعار (نص فارغ عندما لا يوجد شعار حتى لا يبقى مكان صورة فارغ) */
+export function logoImgHtml(src: string | null | undefined, className: string): string {
+  const s = (src ?? "").trim();
+  return s ? `<img class="${className}" src="${escapeHtml(s)}" alt="logo" onerror="this.style.display='none'" />` : "";
 }
 
 /** تعريف @font-face للخط العربي المضمّن (نص فارغ إن لم يوجد خط) */
@@ -430,8 +454,8 @@ const STYLES = (accent: string, accentSoft: string, fontFace: string) => `
 export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTemplateOptions = {}): string {
   const type = normalizeType(v.voucherType);
   const titles = VOUCHER_TITLES[type];
-  const company = { ...COMPANY_INFO, ...(options.company ?? {}) };
-  const assets = resolveVoucherAssets(options);
+  const company = resolveDocumentCompany(v.branchName, options.company);
+  const assets = resolveVoucherAssets(options, company);
   const status = v.status || "draft";
   const statusLabel = getVoucherStatusLabel(status, type);
   const total = roundMoney(v.totalAmount);
@@ -478,13 +502,13 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
       <div class="header">
         <div class="co co-ar">
           <div class="name">${escapeHtml(company.nameAr)}</div>
-          <div class="sub">${escapeHtml(company.subtitle)}</div>
+          ${company.subtitle ? `<div class="sub">${escapeHtml(company.subtitle)}</div>` : ""}
           ${companyMetaAr ? `<div class="meta">${companyMetaAr}</div>` : ""}
           ${legal ? `<div class="meta">${legal}</div>` : ""}
         </div>
-        <img class="logo" src="${escapeHtml(assets.logo)}" alt="logo" onerror="this.style.visibility='hidden'" />
+        ${logoImgHtml(assets.logo, "logo")}
         <div class="co co-en">
-          <div class="name">${escapeHtml(company.name)}</div>
+          ${company.name ? `<div class="name">${escapeHtml(company.name)}</div>` : ""}
           ${v.branchName ? `<div class="sub">Branch: ${escapeHtml(v.branchName)}</div>` : ""}
           ${!isPlaceholderValue(company.email) ? `<div class="meta">${escapeHtml(company.email)}</div>` : ""}
         </div>
@@ -552,7 +576,7 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
       <div class="footer">
         <span>${bi("أُعد بواسطة", "Prepared by")}: ${textOrBlank(v.createdByName)}</span>
         <span>${bi("تاريخ الطباعة", "Printed")}: ${escapeHtml(formatVoucherDateTime(options.printedAt ?? new Date()))}</span>
-        <span>${escapeHtml(company.name)} - ${escapeHtml(titles.ar)}</span>
+        <span>${escapeHtml(company.nameAr)} - ${escapeHtml(titles.ar)}</span>
       </div>
     </div>
   </div>

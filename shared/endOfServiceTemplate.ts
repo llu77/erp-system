@@ -7,12 +7,7 @@
  * - تنبيهات الحساب (calculation.warnings) للمراجعة الداخلية فقط ولا تُطبع أبداً
  */
 
-import {
-  COMPANY_INFO,
-  SIGNATURES,
-  isPlaceholderValue,
-  type CompanyInfo,
-} from "./branding";
+import { SIGNATURES, isPlaceholderValue, type CompanyInfo } from "./branding";
 import {
   END_OF_SERVICE_DOCUMENT_TITLES,
   END_OF_SERVICE_PAYMENT_METHODS,
@@ -34,7 +29,9 @@ import {
 import {
   autoPrintScript,
   bilingualHtml as bi,
+  logoImgHtml,
   printFontFaceCss,
+  resolveDocumentCompany,
   resolveVoucherAssets,
   textOrBlank,
   type ResolvedVoucherAssets,
@@ -48,6 +45,7 @@ export interface EndOfServiceTemplateOptions {
   assetBaseUrl?: string;
   /** صور مُمررة صراحةً (مثل data URIs في الخادم) */
   assets?: EndOfServiceTemplateAssets;
+  /** تجاوز بيانات المنشأة (الافتراضي: مؤسسة فرع الموظف) */
   company?: Partial<CompanyInfo>;
   /** إضافة سكربت طباعة تلقائية بعد تحميل الصفحة */
   autoPrint?: boolean;
@@ -146,10 +144,11 @@ function buildContext(
   options: EndOfServiceTemplateOptions
 ): DocContext {
   const status = String(data.status || "draft");
+  const company = resolveDocumentCompany(data.branchName, options.company);
   return {
     data,
-    company: { ...COMPANY_INFO, ...(options.company ?? {}) },
-    assets: resolveVoucherAssets(options),
+    company,
+    assets: resolveVoucherAssets(options, company),
     status,
     signed: isEndOfServiceSigned(status),
     cancelled: status === "cancelled",
@@ -179,9 +178,9 @@ function renderLetterhead(ctx: DocContext): string {
         ${metaAr ? `<div class="lh-meta">${metaAr}</div>` : ""}
         ${legal ? `<div class="lh-meta">${legal}</div>` : ""}
       </div>
-      <div class="lh-logo"><img src="${esc(ctx.assets.logo)}" alt="logo" onerror="this.style.visibility='hidden'" /></div>
+      ${ctx.assets.logo ? `<div class="lh-logo">${logoImgHtml(ctx.assets.logo, "lh-logo-img")}</div>` : ""}
       <div class="lh-side lh-en">
-        <div class="lh-name">${esc(c.name)}</div>
+        ${present(c.name) ? `<div class="lh-name">${esc(c.name)}</div>` : ""}
         ${email ? `<div class="lh-meta">${email}</div>` : ""}
       </div>
     </header>`;
@@ -243,7 +242,7 @@ function renderFooter(ctx: DocContext, kind: EndOfServiceDocumentKind): string {
   const title = END_OF_SERVICE_DOCUMENT_TITLES[kind].ar;
   return `
     <footer class="doc-footer">
-      <span>${esc(ctx.company.nameAr)} - ${esc(ctx.company.name)}</span>
+      <span>${esc(ctx.company.nameAr)}${present(ctx.company.name) ? ` - ${esc(ctx.company.name)}` : ""}</span>
       <span>${esc(title)} &nbsp;|&nbsp; رقم المستند: <b class="ltr">${esc(ctx.data.settlementNumber)}</b></span>
       <span>تاريخ الطباعة: <span class="ltr">${esc(formatVoucherDateTime(ctx.printedAt))}</span></span>
     </footer>`;

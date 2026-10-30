@@ -9,7 +9,13 @@ vi.mock("./voucherPdf", async importOriginal => {
   };
 });
 
-import { COMPANY_INFO, SIGNATURES } from "../shared/branding";
+import {
+  ESTABLISHMENTS,
+  GROUP_ESTABLISHMENT,
+  SIGNATURES,
+} from "../shared/branding";
+
+const QESSA = ESTABLISHMENTS.qessa;
 import {
   calculateEndOfServiceSettlement,
   type EndOfServiceCalcInput,
@@ -95,7 +101,7 @@ function doc(
     nationality: "سعودي",
     idNumber: "1087654321",
     position: "مشرف صالون أول",
-    branchName: "فرع العليا",
+    branchName: "فرع لبن",
     hireDate: merged.hireDate,
     contractEndDate: "2026-10-31",
     lastWorkingDay: merged.lastWorkingDay,
@@ -170,9 +176,33 @@ describe("خطاب انتهاء العقد وعدم التجديد", () => {
     expect(html).toContain("size: A4");
     expect(html).toContain("إشعار انتهاء عقد العمل وعدم التجديد");
     expect(html).toContain("NOTICE OF CONTRACT EXPIRY AND NON-RENEWAL");
-    expect(html).toContain(COMPANY_INFO.nameAr);
-    expect(html).toContain(COMPANY_INFO.name);
+    // فرع لبن -> مؤسسة قصه وتخفيف (لا اسم النظام ولا الهوية العامة)
+    expect(html).toContain(QESSA.nameAr);
+    expect(html).not.toContain(GROUP_ESTABLISHMENT.nameAr);
+    expect(html).not.toMatch(/symbol|سيمبول/i);
     expect(html).toContain(ASSETS.logo);
+  });
+
+  it("brands each branch with its establishment and falls back to the group", () => {
+    expect(visibleText(letter(doc({ branchName: "فرع طويق" })))).toContain(
+      `تود ${ESTABLISHMENTS.tadarruj.nameAr} إحاطتكم علماً`
+    );
+    expect(visibleText(settlement(doc({ branchName: "فرع طويق" })))).toContain(
+      `بأنني استلمت من ${ESTABLISHMENTS.tadarruj.nameAr} كامل مستحقاتي`
+    );
+    expect(visibleText(letter(doc({ branchName: "فرع آخر" })))).toContain(
+      `تود ${GROUP_ESTABLISHMENT.nameAr} إحاطتكم علماً`
+    );
+  });
+
+  it("prints a text letterhead without an image slot when the establishment has no logo", () => {
+    const html = letter(doc(), { assets: { ...ASSETS, logo: "" } });
+    expect(html).not.toContain('class="lh-logo"');
+    expect(html).not.toContain('alt="logo"');
+    const viaBase = renderEndOfServiceLetterHtml(doc(), {
+      assetBaseUrl: "https://erp.example.com",
+    });
+    expect(viaBase).not.toContain('alt="logo"');
   });
 
   it("fills the reference line and the employee details", () => {
@@ -184,7 +214,7 @@ describe("خطاب انتهاء العقد وعدم التجديد", () => {
       "سعودي",
       "1087654321",
       "مشرف صالون أول",
-      "فرع العليا",
+      "فرع لبن",
     ])
       expect(text).toContain(value);
     expect(text).toContain("رقم الهوية / الإقامة");
@@ -194,7 +224,7 @@ describe("خطاب انتهاء العقد وعدم التجديد", () => {
     expect(text).toContain("السلام عليكم ورحمة الله وبركاته، وبعد:");
     expect(text).toContain("الموضوع: إشعار بانتهاء عقد العمل وعدم تجديده");
     expect(text).toContain(
-      `تود ${COMPANY_INFO.nameAr} إحاطتكم علماً بأن عقد العمل المبرم معكم، والذي بدأ اعتباراً من تاريخ 10/03/2019م، تنتهي مدته بتاريخ 31/10/2026م، وقد قررت المنشأة عدم تجديده بعد انتهاء مدته، وذلك وفقاً لأحكام نظام العمل في المملكة العربية السعودية ولائحته التنفيذية.`
+      `تود ${QESSA.nameAr} إحاطتكم علماً بأن عقد العمل المبرم معكم، والذي بدأ اعتباراً من تاريخ 10/03/2019م، تنتهي مدته بتاريخ 31/10/2026م، وقد قررت المنشأة عدم تجديده بعد انتهاء مدته، وذلك وفقاً لأحكام نظام العمل في المملكة العربية السعودية ولائحته التنفيذية.`
     );
     expect(text).toContain(
       "وبناءً عليه، يكون آخر يوم عمل لكم لدى المنشأة هو يوم السبت الموافق 31/10/2026م، وتنتهي العلاقة التعاقدية بانتهاء هذا اليوم."
@@ -290,7 +320,7 @@ describe("المخالصة النهائية", () => {
       "سعودي",
       "1087654321",
       "مشرف صالون أول",
-      "فرع العليا",
+      "فرع لبن",
       "10/03/2019",
       "31/10/2026",
       "انتهاء مدة العقد وعدم التجديد",
@@ -344,7 +374,7 @@ describe("المخالصة النهائية", () => {
     expect(text).toContain(formatVoucherAmount(c.netAmount));
     expect(text).toContain(c.netAmountWords);
     expect(text).toContain(
-      `أقر أنا الموقع أدناه / محمد عبدالله القحطاني، رقم الهوية / الإقامة (1087654321)، بأنني استلمت من ${COMPANY_INFO.nameAr} كامل مستحقاتي العمالية عن كامل مدة خدمتي لديها من تاريخ 10/03/2019م حتى تاريخ 31/10/2026م، بما في ذلك مكافأة نهاية الخدمة والأجور وجميع البدلات، بمبلغ صافٍ وقدره (${formatVoucherAmount(c.netAmount)} ريال سعودي) ${c.netAmountWords}، وأنه لم يعد لي أي حق أو مطالبة من أي نوع قِبَل المنشأة، وأبرئ ذمتها إبراءً عاماً شاملاً نهائياً.`
+      `أقر أنا الموقع أدناه / محمد عبدالله القحطاني، رقم الهوية / الإقامة (1087654321)، بأنني استلمت من ${QESSA.nameAr} كامل مستحقاتي العمالية عن كامل مدة خدمتي لديها من تاريخ 10/03/2019م حتى تاريخ 31/10/2026م، بما في ذلك مكافأة نهاية الخدمة والأجور وجميع البدلات، بمبلغ صافٍ وقدره (${formatVoucherAmount(c.netAmount)} ريال سعودي) ${c.netAmountWords}، وأنه لم يعد لي أي حق أو مطالبة من أي نوع قِبَل المنشأة، وأبرئ ذمتها إبراءً عاماً شاملاً نهائياً.`
     );
   });
 
@@ -516,7 +546,8 @@ describe("التوقيعات والختم والعلامة المائية حسب
       expect(approved).toContain(
         `https://erp.example.com${SIGNATURES.stamp.image}`
       );
-      expect(approved).toContain(`https://erp.example.com${COMPANY_INFO.logo}`);
+      // لا شعار للمؤسسة: ترويسة نصية بدون صورة
+      expect(approved).not.toContain('alt="logo"');
       // الخط يُعرّف بوزن عادي حتى يظهر الخط العريض العربي
       expect(approved).toContain(
         printFontFaceCss(
@@ -583,9 +614,7 @@ describe("التهريب وبيانات الشركة", () => {
   it("hides placeholder company values and shows real ones", () => {
     for (const html of [letter(doc()), settlement(doc())]) {
       expect(html).not.toMatch(/X{4,}/);
-      expect(html).toContain(COMPANY_INFO.address);
-      expect(html).toContain(COMPANY_INFO.email);
-      expect(html).toContain(COMPANY_INFO.subtitle);
+      expect(html).toContain(QESSA.address);
     }
     const company = {
       phone: "+966 11 222 3333",
@@ -722,7 +751,7 @@ describe("قالب السندات بعد مشاركة الأدوات المسا�
 
   it("resolves explicit assets before public paths", () => {
     expect(resolveVoucherAssets({ assets: { stamp: "S" } })).toEqual({
-      logo: COMPANY_INFO.logo,
+      logo: "",
       supervisorSignature: SIGNATURES.supervisor.image,
       managerSignature: SIGNATURES.manager.image,
       stamp: "S",
@@ -731,6 +760,16 @@ describe("قالب السندات بعد مشاركة الأدوات المسا�
     expect(resolveVoucherAssets({ assetBaseUrl: "https://x.test" }).font).toBe(
       `https://x.test${PRINT_FONT_PATH}`
     );
+    // شعار وختم المؤسسة
+    expect(
+      resolveVoucherAssets(
+        { assetBaseUrl: "https://x.test" },
+        { logo: "/logos/q.png", stamp: "/stamps/q.png" }
+      )
+    ).toMatchObject({
+      logo: "https://x.test/logos/q.png",
+      stamp: "https://x.test/stamps/q.png",
+    });
     expect(printFontFaceCss(undefined)).toBe("");
     expect(printFontFaceCss("a'b")).toContain("url('a%27b')");
   });
