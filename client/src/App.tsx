@@ -48,6 +48,7 @@ const SalesDashboard = lazy(() => import("./pages/SalesDashboard"));
 const Revenues = lazy(() => import("./pages/Revenues"));
 const Expenses = lazy(() => import("./pages/Expenses"));
 const ProfitLoss = lazy(() => import("./pages/ProfitLoss"));
+const PartnerProfits = lazy(() => import("./pages/PartnerProfits"));
 const CashFlowReport = lazy(() => import("./pages/CashFlowReport"));
 const ReceiptVoucher = lazy(() => import("./pages/ReceiptVoucher"));
 const ReceiptVoucherReports = lazy(() => import("./pages/ReceiptVoucherReports"));
@@ -415,6 +416,13 @@ function Router() {
       <Route path="/profit-loss">
         <DashboardLayout>
           <LazyPage component={ProfitLoss} />
+        </DashboardLayout>
+      </Route>
+      
+      {/* أرباح الشركاء (للمسؤول فقط) */}
+      <Route path="/partner-profits">
+        <DashboardLayout>
+          <LazyPage component={PartnerProfits} />
         </DashboardLayout>
       </Route>
       

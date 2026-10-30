@@ -70,6 +70,7 @@ import {
   ArrowUpCircle,
   Layers,
   UserX,
+  Handshake,
 } from "lucide-react";
 import { CSSProperties, createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -118,6 +119,7 @@ const menuStructure: MenuItem[] = [
     children: [
       { icon: TrendingUp, label: "لوحة التحكم التنفيذية", path: "/executive-dashboard", roles: ["admin", "manager", "viewer"] },
       { icon: BarChart3, label: "الأرباح والخسائر", path: "/profit-loss", roles: ["admin", "manager", "viewer"] },
+      { icon: Handshake, label: "أرباح الشركاء", path: "/partner-profits", roles: ["admin"] },
       { icon: Store, label: "لوحة المبيعات", path: "/sales-dashboard", roles: ["admin", "manager", "viewer"] },
       { icon: BarChart3, label: "التقارير", path: "/reports", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Brain, label: "التنبيهات الذكية", path: "/smart-alerts", roles: ["admin", "manager"] },
