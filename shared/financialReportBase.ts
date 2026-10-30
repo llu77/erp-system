@@ -95,6 +95,14 @@ export function renderSummaryCards(cards: ReportSummaryCard[]): string {
     </section>`;
 }
 
+/**
+ * نص حر داخل خلية قابلة للالتفاف: يُهرَّب ثم تُحفظ الأرقام المرجعية اللاتينية (مثل PAY-2026-10-0002)
+ * في سطر واحد وباتجاه صحيح حتى لا تنكسر داخل النص العربي
+ */
+export function wrapTextHtml(text: string | null | undefined): string {
+  return esc(text ?? "").replace(/[A-Za-z]+(?:-[A-Za-z0-9]+)+/g, ref => `<span class="ref-token">${ref}</span>`);
+}
+
 /** خلية مبلغ في الجدول: "-" للصفر في الأعمدة الاختيارية */
 export function amountCell(value: number, dashIfZero = false): string {
   if (dashIfZero && Math.abs(value) < 0.005) return `<td class="amt muted">-</td>`;
@@ -163,6 +171,7 @@ export const FINANCIAL_REPORT_STYLES = `
   table.fin.report td.date { direction: ltr; text-align: right; unicode-bidi: isolate; white-space: nowrap; }
   table.fin.report td.ref { direction: ltr; text-align: right; unicode-bidi: isolate; white-space: nowrap; font-size: 9.5px; color: #3f4753; }
   table.fin.report td.wrap { overflow-wrap: anywhere; }
+  table.fin.report td.wrap .ref-token { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
   table.fin.report td.nowrap { white-space: nowrap; }
   table.fin.report tr.total-row td { background: ${DOC_ACCENT_SOFT} !important; font-weight: 700; border-top: 2px solid ${DOC_ACCENT}; font-size: 11px; }
   table.fin.report tr.total-row td.amt { color: ${DOC_ACCENT}; }

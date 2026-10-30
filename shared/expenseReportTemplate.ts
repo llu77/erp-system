@@ -34,6 +34,7 @@ import {
   renderReportSigners,
   renderReportTitleRow,
   renderSummaryCards,
+  wrapTextHtml,
 } from "./financialReportBase";
 
 export const EXPENSE_REPORT_TITLE = "تقرير المصاريف";
@@ -223,7 +224,7 @@ function detailRows(rows: ExpenseReportRow[], withBranch: boolean): string {
           <tr>
             <td class="date">${esc(dateText(r.expenseDate))}</td>
             <td class="ref">${esc(r.expenseNumber)}</td>
-            <td class="wrap">${esc(r.title)}</td>
+            <td class="wrap">${wrapTextHtml(r.title)}</td>
             <td class="nowrap">${esc(expenseCategoryLabel(r.category))}</td>
             ${withBranch ? `<td class="nowrap">${esc(present(r.branchName) ?? "-")}</td>` : ""}
             <td class="nowrap">${esc(expensePaymentMethodLabel(r.paymentMethod))}</td>
