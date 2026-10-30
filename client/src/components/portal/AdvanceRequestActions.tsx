@@ -7,21 +7,28 @@ import { toast } from "sonner";
 import { Download, Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { downloadBase64Pdf, openPendingWindow, showPdfInWindow } from "@/lib/portal/documents";
+import {
+  downloadBase64Pdf,
+  openPendingWindow,
+  showPdfInWindow,
+} from "@/lib/portal/documents";
 import { errorMessage } from "@/lib/portal/portalUi";
 
 interface AdvanceRequestActionsProps {
   requestId: number;
 }
 
-export function AdvanceRequestActions({ requestId }: AdvanceRequestActionsProps) {
+export function AdvanceRequestActions({
+  requestId,
+}: AdvanceRequestActionsProps) {
   const pdfMutation = trpc.employeePortal.advanceRequestPdf.useMutation();
 
   const handleDownload = async () => {
     const toastId = `advance-pdf-${requestId}`;
     toast.loading("جاري تجهيز طلب السلفة...", { id: toastId });
     try {
-      const result: { pdf: string; filename: string } = await pdfMutation.mutateAsync({ requestId });
+      const result: { pdf: string; filename: string } =
+        await pdfMutation.mutateAsync({ requestId });
       downloadBase64Pdf(result.pdf, result.filename);
       toast.success("تم تحميل طلب السلفة", { id: toastId });
     } catch (error) {
@@ -37,7 +44,8 @@ export function AdvanceRequestActions({ requestId }: AdvanceRequestActionsProps)
       return;
     }
     try {
-      const result: { pdf: string; filename: string } = await pdfMutation.mutateAsync({ requestId });
+      const result: { pdf: string; filename: string } =
+        await pdfMutation.mutateAsync({ requestId });
       showPdfInWindow(win, result.pdf);
     } catch (error) {
       win.close();
@@ -55,7 +63,11 @@ export function AdvanceRequestActions({ requestId }: AdvanceRequestActionsProps)
         disabled={pdfMutation.isPending}
         className="border-amber-500/50 bg-transparent text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
       >
-        {pdfMutation.isPending ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}
+        {pdfMutation.isPending ? (
+          <Loader2 className="ml-1 h-4 w-4 animate-spin" />
+        ) : (
+          <Download className="ml-1 h-4 w-4" />
+        )}
         طلب السلفة PDF
       </Button>
       <Button

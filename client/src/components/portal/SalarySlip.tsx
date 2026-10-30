@@ -42,7 +42,10 @@ import {
   type PayslipLine,
 } from "@/lib/portal/portalUi";
 import { getEstablishmentForBranch } from "@shared/branding";
-import { renderPayslipHtml, type PayslipDocumentData } from "@shared/payslipTemplate";
+import {
+  renderPayslipHtml,
+  type PayslipDocumentData,
+} from "@shared/payslipTemplate";
 import { PortalLoading, PortalQueryError } from "./PortalQueryState";
 
 /** صف في قائمة القسائم (employeePortal.getSalarySlips) */
@@ -69,7 +72,9 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
     if (initialPayrollId != null) setSelectedId(initialPayrollId);
   }, [initialPayrollId]);
 
-  const slipsQuery = trpc.employeePortal.getSalarySlips.useQuery(undefined, { retry: shouldRetryQuery });
+  const slipsQuery = trpc.employeePortal.getSalarySlips.useQuery(undefined, {
+    retry: shouldRetryQuery,
+  });
   const slips: PortalSalarySlipSummary[] = slipsQuery.data ?? [];
   const payrollId = pickPayrollId(slips, selectedId);
 
@@ -86,7 +91,8 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
     const toastId = `payslip-pdf-${slip.payrollId}`;
     toast.loading("جاري تجهيز ملف PDF...", { id: toastId });
     try {
-      const result: { pdf: string; filename: string } = await pdfMutation.mutateAsync({ payrollId: slip.payrollId });
+      const result: { pdf: string; filename: string } =
+        await pdfMutation.mutateAsync({ payrollId: slip.payrollId });
       downloadBase64Pdf(result.pdf, result.filename);
       toast.success("تم تحميل القسيمة", { id: toastId });
     } catch (error) {
@@ -99,7 +105,10 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
     if (!slip) return;
     let html: string;
     try {
-      html = renderPayslipHtml(slip, { assetBaseUrl: window.location.origin, autoPrint: true });
+      html = renderPayslipHtml(slip, {
+        assetBaseUrl: window.location.origin,
+        autoPrint: true,
+      });
     } catch (error) {
       console.error("[Portal] payslip print render failed", error);
       toast.error("تعذر تجهيز القسيمة للطباعة، استخدم تحميل PDF");
@@ -139,7 +148,9 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
         <CardContent className="py-12 text-center">
           <Receipt className="h-12 w-12 text-slate-600 mx-auto mb-4" />
           <p className="text-slate-300">لا توجد قسائم رواتب معتمدة بعد</p>
-          <p className="text-slate-500 text-sm mt-2">تظهر القسيمة هنا بعد اعتماد مسير الرواتب من الإدارة</p>
+          <p className="text-slate-500 text-sm mt-2">
+            تظهر القسيمة هنا بعد اعتماد مسير الرواتب من الإدارة
+          </p>
         </CardContent>
       </Card>
     );
@@ -173,14 +184,21 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-white">{payrollPeriodLabel(s.year, s.month)}</span>
-                  <Badge variant="outline" className={cn("text-[11px]", status.className)}>
+                  <span className="text-sm font-medium text-white">
+                    {payrollPeriodLabel(s.year, s.month)}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={cn("text-[11px]", status.className)}
+                  >
                     {status.label}
                   </Badge>
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2 text-xs">
                   <span className="text-slate-400">{s.payrollNumber}</span>
-                  <span className="font-medium text-amber-400">{formatSar(s.netSalary)}</span>
+                  <span className="font-medium text-amber-400">
+                    {formatSar(s.netSalary)}
+                  </span>
                 </div>
               </button>
             );
@@ -227,27 +245,49 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function LineRow({ line, negative }: { line: PayslipLine; negative?: boolean }) {
+function LineRow({
+  line,
+  negative,
+}: {
+  line: PayslipLine;
+  negative?: boolean;
+}) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-start justify-between gap-3 text-sm">
         <span className="text-slate-300">{line.label}</span>
-        <span className={cn("shrink-0 font-medium", negative ? "text-red-400" : "text-white")}>
+        <span
+          className={cn(
+            "shrink-0 font-medium",
+            negative ? "text-red-400" : "text-white"
+          )}
+        >
           {negative ? "- " : ""}
           {formatSar(line.amount)}
         </span>
       </div>
-      {line.note && <p className="text-xs text-slate-500">السبب: {line.note}</p>}
+      {line.note && (
+        <p className="text-xs text-slate-500">السبب: {line.note}</p>
+      )}
       {line.items && line.items.length > 0 && (
         <ul className="space-y-1 rounded-md border border-slate-700/70 bg-slate-900/40 p-2">
           {line.items.map((item, index) => (
-            <li key={`${line.key}-${index}`} className="flex items-start justify-between gap-3 text-xs">
+            <li
+              key={`${line.key}-${index}`}
+              className="flex items-start justify-between gap-3 text-xs"
+            >
               <div className="min-w-0">
                 <span className="text-slate-300">{item.label}</span>
-                {item.date && <span className="mr-2 text-slate-500">{formatPortalDate(item.date)}</span>}
+                {item.date && (
+                  <span className="mr-2 text-slate-500">
+                    {formatPortalDate(item.date)}
+                  </span>
+                )}
                 {item.note && <p className="text-slate-500">{item.note}</p>}
               </div>
-              <span className="shrink-0 text-slate-300">{formatSar(item.amount)}</span>
+              <span className="shrink-0 text-slate-300">
+                {formatSar(item.amount)}
+              </span>
             </li>
           ))}
         </ul>
@@ -263,7 +303,12 @@ interface PayslipDetailProps {
   isDownloading: boolean;
 }
 
-function PayslipDetail({ slip, onDownload, onPrint, isDownloading }: PayslipDetailProps) {
+function PayslipDetail({
+  slip,
+  onDownload,
+  onPrint,
+  isDownloading,
+}: PayslipDetailProps) {
   const status = payslipStatusInfo(slip.status);
   const establishment = getEstablishmentForBranch(slip.branchName);
   const earnings = buildPayslipEarnings(slip);
@@ -287,7 +332,9 @@ function PayslipDetail({ slip, onDownload, onPrint, isDownloading }: PayslipDeta
               {establishment.nameAr}
               {slip.branchName ? ` - ${slip.branchName}` : ""}
             </p>
-            <p className="text-xs text-slate-500">رقم المسير: {slip.payrollNumber}</p>
+            <p className="text-xs text-slate-500">
+              رقم المسير: {slip.payrollNumber}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className={status.className}>
@@ -301,7 +348,11 @@ function PayslipDetail({ slip, onDownload, onPrint, isDownloading }: PayslipDeta
               onClick={onDownload}
               disabled={isDownloading}
             >
-              {isDownloading ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}
+              {isDownloading ? (
+                <Loader2 className="ml-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="ml-1 h-4 w-4" />
+              )}
               تحميل PDF
             </Button>
             <Button
@@ -323,12 +374,25 @@ function PayslipDetail({ slip, onDownload, onPrint, isDownloading }: PayslipDeta
           <InfoItem label="الاسم" value={slip.employee.name} />
           <InfoItem label="الرقم الوظيفي" value={slip.employee.code} />
           <InfoItem label="المسمى الوظيفي" value={slip.employee.position} />
-          {slip.employee.iqamaNumber && <InfoItem label="رقم الإقامة" value={slip.employee.iqamaNumber} />}
-          {slip.employee.nationality && <InfoItem label="الجنسية" value={slip.employee.nationality} />}
+          {slip.employee.iqamaNumber && (
+            <InfoItem label="رقم الإقامة" value={slip.employee.iqamaNumber} />
+          )}
+          {slip.employee.nationality && (
+            <InfoItem label="الجنسية" value={slip.employee.nationality} />
+          )}
           {period && <InfoItem label="فترة المسير" value={period} />}
-          {slip.employee.bankName && <InfoItem label="البنك" value={slip.employee.bankName} />}
+          {slip.employee.bankName && (
+            <InfoItem label="البنك" value={slip.employee.bankName} />
+          )}
           {slip.employee.iban && (
-            <InfoItem label="الآيبان" value={<span dir="ltr" className="font-mono text-xs">{slip.employee.iban}</span>} />
+            <InfoItem
+              label="الآيبان"
+              value={
+                <span dir="ltr" className="font-mono text-xs">
+                  {slip.employee.iban}
+                </span>
+              }
+            />
           )}
         </div>
 
@@ -336,15 +400,21 @@ function PayslipDetail({ slip, onDownload, onPrint, isDownloading }: PayslipDeta
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="rounded-lg bg-slate-700/30 p-3">
             <p className="text-xs text-slate-400">أيام العمل</p>
-            <p className="text-lg font-bold text-white">{slip.attendance.workDays}</p>
+            <p className="text-lg font-bold text-white">
+              {slip.attendance.workDays}
+            </p>
           </div>
           <div className="rounded-lg bg-slate-700/30 p-3">
             <p className="text-xs text-slate-400">أيام الغياب</p>
-            <p className="text-lg font-bold text-white">{slip.attendance.absentDays}</p>
+            <p className="text-lg font-bold text-white">
+              {slip.attendance.absentDays}
+            </p>
           </div>
           <div className="rounded-lg bg-slate-700/30 p-3">
             <p className="text-xs text-slate-400">أيام الإجازة</p>
-            <p className="text-lg font-bold text-white">{slip.attendance.leaveDays}</p>
+            <p className="text-lg font-bold text-white">
+              {slip.attendance.leaveDays}
+            </p>
           </div>
         </div>
 
@@ -362,7 +432,9 @@ function PayslipDetail({ slip, onDownload, onPrint, isDownloading }: PayslipDeta
             ))}
             <div className="flex justify-between border-t border-slate-700 pt-2 text-sm font-medium">
               <span className="text-emerald-400">إجمالي الاستحقاقات</span>
-              <span className="text-emerald-400">{formatSar(slip.totals.grossSalary)}</span>
+              <span className="text-emerald-400">
+                {formatSar(slip.totals.grossSalary)}
+              </span>
             </div>
           </div>
         </section>
@@ -377,9 +449,13 @@ function PayslipDetail({ slip, onDownload, onPrint, isDownloading }: PayslipDeta
           </h4>
           <div className="space-y-3">
             {deductions.length === 0 ? (
-              <p className="text-sm text-slate-500">لا توجد خصومات على هذه القسيمة</p>
+              <p className="text-sm text-slate-500">
+                لا توجد خصومات على هذه القسيمة
+              </p>
             ) : (
-              deductions.map(line => <LineRow key={line.key} line={line} negative />)
+              deductions.map(line => (
+                <LineRow key={line.key} line={line} negative />
+              ))
             )}
             <div className="flex justify-between border-t border-slate-700 pt-2 text-sm font-medium">
               <span className="text-red-400">إجمالي الخصومات</span>
@@ -398,9 +474,13 @@ function PayslipDetail({ slip, onDownload, onPrint, isDownloading }: PayslipDeta
               <Wallet className="h-5 w-5 text-amber-500" />
               صافي الراتب
             </span>
-            <span className="text-2xl font-bold text-amber-400">{formatSar(net)}</span>
+            <span className="text-2xl font-bold text-amber-400">
+              {formatSar(net)}
+            </span>
           </div>
-          <p className="mt-2 text-sm text-amber-200/80">{netSalaryInWords(net)}</p>
+          <p className="mt-2 text-sm text-amber-200/80">
+            {netSalaryInWords(net)}
+          </p>
         </div>
 
         {/* الاعتماد والصرف */}
@@ -408,14 +488,18 @@ function PayslipDetail({ slip, onDownload, onPrint, isDownloading }: PayslipDeta
           <div>
             <p className="text-xs text-slate-400">اعتمد المسير</p>
             <p className="text-white">{slip.approvedByName || "الإدارة"}</p>
-            <p className="text-xs text-slate-500">{formatPortalDateTime(slip.approvedAt)}</p>
+            <p className="text-xs text-slate-500">
+              {formatPortalDateTime(slip.approvedAt)}
+            </p>
           </div>
           <div>
             <p className="text-xs text-slate-400">حالة الصرف</p>
             {slip.status === "paid" ? (
               <>
                 <p className="text-emerald-400">تم صرف الراتب</p>
-                <p className="text-xs text-slate-500">{formatPortalDateTime(slip.paidAt)}</p>
+                <p className="text-xs text-slate-500">
+                  {formatPortalDateTime(slip.paidAt)}
+                </p>
               </>
             ) : (
               <p className="text-slate-300">معتمد - بانتظار الصرف</p>

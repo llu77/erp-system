@@ -9,7 +9,11 @@
 import { EMPLOYEE_UNAUTHED_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { LEAVE_KIND_LABELS, type LeaveKind } from "@shared/payroll";
 import type { PayslipDocumentData, PayslipItem } from "@shared/payslipTemplate";
-import { amountToArabicWords, toVoucherDateString, VOUCHER_TIMEZONE } from "@shared/vouchers";
+import {
+  amountToArabicWords,
+  toVoucherDateString,
+  VOUCHER_TIMEZONE,
+} from "@shared/vouchers";
 
 // ==================== المسارات ====================
 
@@ -17,7 +21,11 @@ export const PORTAL_LOGIN_PATH = "/employee-login";
 export const EMPLOYEE_PORTAL_PATH = "/employee-portal";
 export const ADMIN_PORTAL_PATH = "/admin-employee-portal";
 
-const PORTAL_PATHS = [PORTAL_LOGIN_PATH, EMPLOYEE_PORTAL_PATH, ADMIN_PORTAL_PATH];
+const PORTAL_PATHS = [
+  PORTAL_LOGIN_PATH,
+  EMPLOYEE_PORTAL_PATH,
+  ADMIN_PORTAL_PATH,
+];
 
 export function isPortalPath(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
@@ -48,7 +56,12 @@ export function portalHomePath(me: { isSupervisor: boolean }): string {
 }
 
 /** أدوار مستخدمي النظام المسموح لهم بلوحة مراجعة البوابة */
-export const STAFF_REVIEWER_ROLES = ["admin", "manager", "supervisor", "viewer"] as const;
+export const STAFF_REVIEWER_ROLES = [
+  "admin",
+  "manager",
+  "supervisor",
+  "viewer",
+] as const;
 
 export function isStaffReviewerRole(role: string | null | undefined): boolean {
   return !!role && (STAFF_REVIEWER_ROLES as readonly string[]).includes(role);
@@ -82,10 +95,24 @@ export const STAFF_ROLE_LABELS: Record<string, string> = {
 
 // ==================== التبويبات من الرابط ====================
 
-export const EMPLOYEE_PORTAL_TABS = ["chat", "requests", "salary", "leaves", "bonus", "profile"] as const;
+export const EMPLOYEE_PORTAL_TABS = [
+  "chat",
+  "requests",
+  "salary",
+  "leaves",
+  "bonus",
+  "profile",
+] as const;
 export type EmployeePortalTab = (typeof EMPLOYEE_PORTAL_TABS)[number];
 
-export const ADMIN_PORTAL_TABS = ["dashboard", "requests", "employees", "documents", "reports", "myProfile"] as const;
+export const ADMIN_PORTAL_TABS = [
+  "dashboard",
+  "requests",
+  "employees",
+  "documents",
+  "reports",
+  "myProfile",
+] as const;
 export type AdminPortalTab = (typeof ADMIN_PORTAL_TABS)[number];
 
 /** أسماء بديلة قد تصل في روابط الإشعارات */
@@ -113,12 +140,16 @@ export function resolvePortalTab<T extends string>(
   if (!requested) return fallback;
   if ((allowed as readonly string[]).includes(requested)) return requested as T;
   const alias = TAB_ALIASES[requested];
-  if (alias && (allowed as readonly string[]).includes(alias)) return alias as T;
+  if (alias && (allowed as readonly string[]).includes(alias))
+    return alias as T;
   return fallback;
 }
 
 /** رقم موجب من الرابط (مثل ?payrollId=12) أو null */
-export function readPositiveIntParam(search: string | null | undefined, name: string): number | null {
+export function readPositiveIntParam(
+  search: string | null | undefined,
+  name: string
+): number | null {
   const value = toSearchParams(search).get(name);
   if (!value || !/^\d+$/.test(value)) return null;
   const n = Number(value);
@@ -126,7 +157,11 @@ export function readPositiveIntParam(search: string | null | undefined, name: st
 }
 
 /** رابط تبويب مع الحفاظ على بقية معاملات الرابط */
-export function buildTabHref(path: string, search: string | null | undefined, tab: string): string {
+export function buildTabHref(
+  path: string,
+  search: string | null | undefined,
+  tab: string
+): string {
   const params = toSearchParams(search);
   params.set("tab", tab);
   return `${path}?${params.toString()}`;
@@ -151,7 +186,10 @@ const DATE_TIME_FORMAT = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
 });
 
 /** تاريخ ميلادي بالعربية ليوم التقويم في الرياض (يقبل YYYY-MM-DD أو Date) */
-export function formatPortalDate(value: Date | string | null | undefined, fallback = "-"): string {
+export function formatPortalDate(
+  value: Date | string | null | undefined,
+  fallback = "-"
+): string {
   const ymd = toVoucherDateString(value ?? null);
   if (!ymd) return fallback;
   const [y, m, d] = ymd.split("-").map(Number);
@@ -159,7 +197,10 @@ export function formatPortalDate(value: Date | string | null | undefined, fallba
 }
 
 /** تاريخ ووقت بتوقيت الرياض */
-export function formatPortalDateTime(value: Date | string | null | undefined, fallback = "-"): string {
+export function formatPortalDateTime(
+  value: Date | string | null | undefined,
+  fallback = "-"
+): string {
   if (value === null || value === undefined || value === "") return fallback;
   const d = value instanceof Date ? value : new Date(value);
   if (isNaN(d.getTime())) return fallback;
@@ -167,7 +208,10 @@ export function formatPortalDateTime(value: Date | string | null | undefined, fa
 }
 
 /** عدد الأيام حتى التاريخ (بأيام تقويم الرياض): سالب = منتهي */
-export function daysUntil(value: Date | string | null | undefined, now: Date = new Date()): number | null {
+export function daysUntil(
+  value: Date | string | null | undefined,
+  now: Date = new Date()
+): number | null {
   const target = toVoucherDateString(value ?? null);
   const today = toVoucherDateString(now);
   if (!target || !today) return null;
@@ -220,7 +264,8 @@ export function errorMessage(error: unknown, fallback: string): string {
   const message = (error as { message?: unknown } | null)?.message;
   if (typeof message !== "string") return fallback;
   const trimmed = message.trim();
-  if (!trimmed || trimmed.startsWith("[") || trimmed.startsWith("{")) return fallback;
+  if (!trimmed || trimmed.startsWith("[") || trimmed.startsWith("{"))
+    return fallback;
   return trimmed;
 }
 
@@ -230,23 +275,42 @@ export function trpcErrorCode(error: unknown): string | undefined {
 }
 
 /** إعادة المحاولة للأخطاء المؤقتة فقط (لا تُعاد أخطاء الصلاحية أو عدم الوجود) */
-export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+export function shouldRetryQuery(
+  failureCount: number,
+  error: unknown
+): boolean {
   const code = trpcErrorCode(error);
-  if (code && ["NOT_FOUND", "FORBIDDEN", "UNAUTHORIZED", "BAD_REQUEST"].includes(code)) return false;
+  if (
+    code &&
+    ["NOT_FOUND", "FORBIDDEN", "UNAUTHORIZED", "BAD_REQUEST"].includes(code)
+  )
+    return false;
   return failureCount < 2;
 }
 
 // ==================== قسيمة الراتب ====================
 
 /** حالة القسيمة في البوابة: المعتمدة والمصروفة باللون الأخضر */
-export function payslipStatusInfo(status: string | null | undefined): { label: string; className: string } {
+export function payslipStatusInfo(status: string | null | undefined): {
+  label: string;
+  className: string;
+} {
   switch (status) {
     case "approved":
-      return { label: "معتمد", className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" };
+      return {
+        label: "معتمد",
+        className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+      };
     case "paid":
-      return { label: "تم الصرف", className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" };
+      return {
+        label: "تم الصرف",
+        className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+      };
     default:
-      return { label: "غير معتمد", className: "bg-amber-500/20 text-amber-300 border-amber-500/40" };
+      return {
+        label: "غير معتمد",
+        className: "bg-amber-500/20 text-amber-300 border-amber-500/40",
+      };
   }
 }
 
@@ -258,7 +322,9 @@ export interface PayslipLine {
   items?: PayslipItem[];
 }
 
-export function leaveTypeLabel(leaveType: string | null | undefined): string | null {
+export function leaveTypeLabel(
+  leaveType: string | null | undefined
+): string | null {
   if (!leaveType) return null;
   return LEAVE_KIND_LABELS[leaveType as LeaveKind] ?? leaveType;
 }
@@ -266,9 +332,15 @@ export function leaveTypeLabel(leaveType: string | null | undefined): string | n
 /** بنود الاستحقاقات (الراتب الأساسي دائماً، والبقية عند وجود قيمة) */
 export function buildPayslipEarnings(data: PayslipDocumentData): PayslipLine[] {
   const e = data.earnings;
-  const lines: PayslipLine[] = [{ key: "base", label: "الراتب الأساسي", amount: toAmount(e.baseSalary) }];
+  const lines: PayslipLine[] = [
+    { key: "base", label: "الراتب الأساسي", amount: toAmount(e.baseSalary) },
+  ];
   if (e.overtimeEnabled && toAmount(e.overtimeAmount) > 0) {
-    lines.push({ key: "overtime", label: "بدل الساعات الإضافية", amount: toAmount(e.overtimeAmount) });
+    lines.push({
+      key: "overtime",
+      label: "بدل الساعات الإضافية",
+      amount: toAmount(e.overtimeAmount),
+    });
   }
   if (toAmount(e.incentiveAmount) > 0) {
     lines.push({
@@ -281,31 +353,48 @@ export function buildPayslipEarnings(data: PayslipDocumentData): PayslipLine[] {
 }
 
 /** بنود الخصومات مع تفاصيل كل بند (السلف، المخالفات، الإجازات، الفواتير السالبة) */
-export function buildPayslipDeductions(data: PayslipDocumentData): PayslipLine[] {
+export function buildPayslipDeductions(
+  data: PayslipDocumentData
+): PayslipLine[] {
   const d = data.deductions;
   const a = data.attendance;
-  const items = data.items ?? { advances: [], violations: [], leaves: [], negativeInvoices: [] };
+  const items = data.items ?? {
+    advances: [],
+    violations: [],
+    leaves: [],
+    negativeInvoices: [],
+  };
   const lines: PayslipLine[] = [];
 
   if (toAmount(d.absentDeduction) > 0) {
     lines.push({
       key: "absent",
-      label: a.absentDays > 0 ? `خصم الغياب (${a.absentDays} يوم)` : "خصم الغياب",
+      label:
+        a.absentDays > 0 ? `خصم الغياب (${a.absentDays} يوم)` : "خصم الغياب",
       amount: toAmount(d.absentDeduction),
     });
   }
   if (toAmount(d.leaveDeduction) > 0) {
     const kind = leaveTypeLabel(a.leaveType);
-    const parts = [a.leaveDays > 0 ? `${a.leaveDays} يوم` : null, kind].filter(Boolean);
+    const parts = [a.leaveDays > 0 ? `${a.leaveDays} يوم` : null, kind].filter(
+      Boolean
+    );
     lines.push({
       key: "leave",
-      label: parts.length ? `خصم الإجازات (${parts.join(" - ")})` : "خصم الإجازات",
+      label: parts.length
+        ? `خصم الإجازات (${parts.join(" - ")})`
+        : "خصم الإجازات",
       amount: toAmount(d.leaveDeduction),
       items: items.leaves,
     });
   }
   if (toAmount(d.advanceDeduction) > 0) {
-    lines.push({ key: "advance", label: "خصم السلف", amount: toAmount(d.advanceDeduction), items: items.advances });
+    lines.push({
+      key: "advance",
+      label: "خصم السلف",
+      amount: toAmount(d.advanceDeduction),
+      items: items.advances,
+    });
   }
   if (toAmount(d.violationsDeduction) > 0) {
     lines.push({
@@ -337,7 +426,8 @@ export function buildPayslipDeductions(data: PayslipDocumentData): PayslipLine[]
 /** صافي الراتب كتابةً (الصافي السالب مبلغ مستحق على الموظف) */
 export function netSalaryInWords(net: number): string {
   const value = toAmount(net);
-  if (value < 0) return `لا يوجد صافي مستحق — مستحق على الموظف: ${amountToArabicWords(Math.abs(value))}`;
+  if (value < 0)
+    return `لا يوجد صافي مستحق — مستحق على الموظف: ${amountToArabicWords(Math.abs(value))}`;
   return amountToArabicWords(value);
 }
 
@@ -347,13 +437,18 @@ export function pickPayrollId(
   preferred: number | null | undefined
 ): number | null {
   if (!slips || slips.length === 0) return null;
-  if (preferred != null && slips.some(s => s.payrollId === preferred)) return preferred;
+  if (preferred != null && slips.some(s => s.payrollId === preferred))
+    return preferred;
   return slips[0].payrollId;
 }
 
 // ==================== طلب السلفة ====================
 
-export const REPAYMENT_METHODS = ["salary_deduction", "installments", "full_payment"] as const;
+export const REPAYMENT_METHODS = [
+  "salary_deduction",
+  "installments",
+  "full_payment",
+] as const;
 export type RepaymentMethod = (typeof REPAYMENT_METHODS)[number];
 
 export const ADVANCE_LIMITS = {
@@ -372,7 +467,14 @@ export interface AdvanceFormInput {
 export type AdvanceFormErrors = Partial<Record<keyof AdvanceFormInput, string>>;
 
 export type AdvanceFormResult =
-  | { ok: true; value: { amount: number; reason: string; repaymentMethod: RepaymentMethod } }
+  | {
+      ok: true;
+      value: {
+        amount: number;
+        reason: string;
+        repaymentMethod: RepaymentMethod;
+      };
+    }
   | { ok: false; errors: AdvanceFormErrors };
 
 /** تحويل الأرقام العربية/الفارسية والفواصل إلى صيغة رقمية */
@@ -385,7 +487,9 @@ export function normalizeAmountInput(raw: string): string {
     .replace(/[٬,\s]/g, "");
 }
 
-export function validateAdvanceForm(input: AdvanceFormInput): AdvanceFormResult {
+export function validateAdvanceForm(
+  input: AdvanceFormInput
+): AdvanceFormResult {
   const errors: AdvanceFormErrors = {};
 
   const normalized = normalizeAmountInput(input.amount);
@@ -410,14 +514,20 @@ export function validateAdvanceForm(input: AdvanceFormInput): AdvanceFormResult 
     errors.reason = `السبب طويل جداً (الحد ${ADVANCE_LIMITS.maxReason} حرف)`;
   }
 
-  if (!(REPAYMENT_METHODS as readonly string[]).includes(input.repaymentMethod)) {
+  if (
+    !(REPAYMENT_METHODS as readonly string[]).includes(input.repaymentMethod)
+  ) {
     errors.repaymentMethod = "يرجى اختيار طريقة السداد";
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
-    value: { amount, reason, repaymentMethod: input.repaymentMethod as RepaymentMethod },
+    value: {
+      amount,
+      reason,
+      repaymentMethod: input.repaymentMethod as RepaymentMethod,
+    },
   };
 }
 
@@ -435,8 +545,10 @@ export function validatePasswordChange(input: {
     return `كلمة المرور الجديدة يجب أن تكون ${PORTAL_PASSWORD_MIN_LENGTH} أحرف على الأقل`;
   }
   if (input.newPassword.length > 128) return "كلمة المرور طويلة جداً";
-  if (input.newPassword === input.currentPassword) return "كلمة المرور الجديدة يجب أن تختلف عن الحالية";
-  if (input.newPassword !== input.confirmPassword) return "تأكيد كلمة المرور غير مطابق";
+  if (input.newPassword === input.currentPassword)
+    return "كلمة المرور الجديدة يجب أن تختلف عن الحالية";
+  if (input.newPassword !== input.confirmPassword)
+    return "تأكيد كلمة المرور غير مطابق";
   return null;
 }
 
@@ -448,13 +560,20 @@ interface ExpiringDocsLike {
   expiring?: Record<string, unknown[] | undefined> | null;
 }
 
-function countGroups(groups: Record<string, unknown[] | undefined> | null | undefined): number {
+function countGroups(
+  groups: Record<string, unknown[] | undefined> | null | undefined
+): number {
   if (!groups) return 0;
-  return Object.values(groups).reduce<number>((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
+  return Object.values(groups).reduce<number>(
+    (sum, list) => sum + (Array.isArray(list) ? list.length : 0),
+    0
+  );
 }
 
 /** عدد الوثائق المنتهية والقريبة من الانتهاء (من الملخص إن وُجد) */
-export function summarizeExpiringDocuments(docs: ExpiringDocsLike | null | undefined): {
+export function summarizeExpiringDocuments(
+  docs: ExpiringDocsLike | null | undefined
+): {
   expired: number;
   expiring: number;
 } {

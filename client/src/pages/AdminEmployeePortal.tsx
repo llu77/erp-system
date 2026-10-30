@@ -134,11 +134,12 @@ export default function AdminEmployeePortal() {
   // ملفي وجرس الإشعارات للموظف المسجل في البوابة فقط
   const isEmployeeSession = access?.kind === 'employee';
 
+  const redirectTo = access?.kind === 'redirect' ? access.to : null;
   useEffect(() => {
-    if (access?.kind === 'redirect' && !sessionError) {
-      setLocation(access.to, { replace: true });
+    if (redirectTo && !sessionError) {
+      setLocation(redirectTo, { replace: true });
     }
-  }, [access?.kind, access, sessionError, setLocation]);
+  }, [redirectTo, sessionError, setLocation]);
 
   const reviewerName = isEmployeeSession
     ? me?.name ?? ''

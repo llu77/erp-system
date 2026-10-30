@@ -17,7 +17,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import {
@@ -37,9 +43,16 @@ interface AdvanceRequestDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const EMPTY_FORM: AdvanceFormInput = { amount: "", reason: "", repaymentMethod: "salary_deduction" };
+const EMPTY_FORM: AdvanceFormInput = {
+  amount: "",
+  reason: "",
+  repaymentMethod: "salary_deduction",
+};
 
-export function AdvanceRequestDialog({ open, onOpenChange }: AdvanceRequestDialogProps) {
+export function AdvanceRequestDialog({
+  open,
+  onOpenChange,
+}: AdvanceRequestDialogProps) {
   const [form, setForm] = useState<AdvanceFormInput>(EMPTY_FORM);
   const [errors, setErrors] = useState<AdvanceFormErrors>({});
   const utils = trpc.useUtils();
@@ -77,7 +90,9 @@ export function AdvanceRequestDialog({ open, onOpenChange }: AdvanceRequestDialo
 
   const amountPreview = (() => {
     const n = Number(normalizeAmountInput(form.amount));
-    return Number.isFinite(n) && n >= ADVANCE_LIMITS.minAmount && n <= ADVANCE_LIMITS.maxAmount
+    return Number.isFinite(n) &&
+      n >= ADVANCE_LIMITS.minAmount &&
+      n <= ADVANCE_LIMITS.maxAmount
       ? amountToArabicWords(n)
       : null;
   })();
@@ -89,7 +104,10 @@ export function AdvanceRequestDialog({ open, onOpenChange }: AdvanceRequestDialo
         if (!createMutation.isPending) onOpenChange(next);
       }}
     >
-      <DialogContent className="bg-slate-800 border-slate-700 text-white sm:max-w-lg" dir="rtl">
+      <DialogContent
+        className="bg-slate-800 border-slate-700 text-white sm:max-w-lg"
+        dir="rtl"
+      >
         <DialogHeader className="text-right">
           <DialogTitle className="flex items-center gap-2 text-white">
             <Wallet className="h-5 w-5 text-amber-500" />
@@ -119,7 +137,9 @@ export function AdvanceRequestDialog({ open, onOpenChange }: AdvanceRequestDialo
             {errors.amount ? (
               <p className="text-xs text-red-400">{errors.amount}</p>
             ) : (
-              amountPreview && <p className="text-xs text-slate-400">{amountPreview}</p>
+              amountPreview && (
+                <p className="text-xs text-slate-400">{amountPreview}</p>
+              )
             )}
           </div>
 
@@ -153,7 +173,10 @@ export function AdvanceRequestDialog({ open, onOpenChange }: AdvanceRequestDialo
               onValueChange={value => update("repaymentMethod", value)}
               disabled={createMutation.isPending}
             >
-              <SelectTrigger className="bg-slate-700/60 border-slate-600 text-white" aria-invalid={!!errors.repaymentMethod}>
+              <SelectTrigger
+                className="bg-slate-700/60 border-slate-600 text-white"
+                aria-invalid={!!errors.repaymentMethod}
+              >
                 <SelectValue placeholder="اختر طريقة السداد" />
               </SelectTrigger>
               <SelectContent>
@@ -164,13 +187,16 @@ export function AdvanceRequestDialog({ open, onOpenChange }: AdvanceRequestDialo
                 ))}
               </SelectContent>
             </Select>
-            {errors.repaymentMethod && <p className="text-xs text-red-400">{errors.repaymentMethod}</p>}
+            {errors.repaymentMethod && (
+              <p className="text-xs text-red-400">{errors.repaymentMethod}</p>
+            )}
           </div>
 
           <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              يصدر طلب السلفة كمستند رسمي يمكنك تحميله وطباعته من سجل طلباتي، ويظهر عليه الختم والتوقيع بعد موافقة الإدارة.
+              يصدر طلب السلفة كمستند رسمي يمكنك تحميله وطباعته من سجل طلباتي،
+              ويظهر عليه الختم والتوقيع بعد موافقة الإدارة.
             </span>
           </div>
 
@@ -180,7 +206,9 @@ export function AdvanceRequestDialog({ open, onOpenChange }: AdvanceRequestDialo
               disabled={createMutation.isPending}
               className="bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700"
             >
-              {createMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+              {createMutation.isPending && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              )}
               إرسال الطلب
             </Button>
             <Button

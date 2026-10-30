@@ -30,7 +30,9 @@ export function openPendingWindow(message: string): Window | null {
 /** عرض ملف PDF (base64) في نافذة مفتوحة مسبقاً للطباعة من عارض المتصفح */
 export function showPdfInWindow(win: Window, base64: string): void {
   const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  const url = URL.createObjectURL(
+    new Blob([bytes], { type: "application/pdf" })
+  );
   win.location.href = url;
   // الرابط مطلوب طوال عرض الملف؛ يُحرر بعد مدة كافية
   setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);

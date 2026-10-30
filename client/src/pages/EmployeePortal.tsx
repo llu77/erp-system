@@ -309,9 +309,10 @@ export default function EmployeePortal() {
     if (!result.ok) toast.error(result.message);
   };
 
-  const quickActions = [
+  // طلب السلفة يفتح النموذج الرسمي (المبلغ والسبب وطريقة السداد) بدلاً من المحادثة
+  const quickActions: Array<{ label: string; icon: typeof Calendar; prompt: string; opensAdvanceForm?: boolean }> = [
     { label: 'طلب إجازة', icon: Calendar, prompt: 'أريد تقديم طلب إجازة' },
-    { label: 'طلب سلفة', icon: DollarSign, prompt: 'أريد تقديم طلب سلفة' },
+    { label: 'طلب سلفة', icon: DollarSign, prompt: 'أريد تقديم طلب سلفة', opensAdvanceForm: true },
     { label: 'طلب استئذان', icon: Clock, prompt: 'أريد تقديم طلب استئذان' },
     { label: 'تقرير البونص', icon: FileText, prompt: 'أريد الاطلاع على تقرير البونص الخاص بي' },
   ];
@@ -647,7 +648,11 @@ export default function EmployeePortal() {
                           size="sm"
                           className="text-[11px] sm:text-xs h-7 sm:h-8 px-2 sm:px-3 bg-slate-700/50 border-slate-600/50 text-slate-300 hover:text-white hover:bg-slate-600/50 hover:border-amber-500/50"
                           onClick={() => {
-                            setInput(action.prompt);
+                            if (action.opensAdvanceForm) {
+                              setShowAdvanceForm(true);
+                            } else {
+                              setInput(action.prompt);
+                            }
                           }}
                         >
                           <action.icon className="h-3 w-3 sm:h-3.5 sm:w-3.5 ml-1 text-amber-500" />

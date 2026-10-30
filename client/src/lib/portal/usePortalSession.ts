@@ -52,11 +52,16 @@ export function usePortalSession() {
   const logoutMutation = trpc.employeeAuth.logout.useMutation();
 
   /** تسجيل الخروج: يمسح الكوكي من الخادم ثم كل البيانات المخزنة مؤقتاً */
-  const logout = useCallback(async (): Promise<{ ok: true } | { ok: false; message: string }> => {
+  const logout = useCallback(async (): Promise<
+    { ok: true } | { ok: false; message: string }
+  > => {
     try {
       await logoutMutation.mutateAsync();
     } catch (error) {
-      return { ok: false, message: errorMessage(error, "تعذر تسجيل الخروج، حاول مرة أخرى") };
+      return {
+        ok: false,
+        message: errorMessage(error, "تعذر تسجيل الخروج، حاول مرة أخرى"),
+      };
     }
     clearLegacyPortalStorage();
     // لا تبقى بيانات الموظف في ذاكرة المتصفح بعد الخروج (أجهزة مشتركة)
