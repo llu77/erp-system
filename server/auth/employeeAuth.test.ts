@@ -32,7 +32,8 @@ describe('Employee Authentication Utilities', () => {
     it('should generate password of correct length', () => {
       const password = generatePassword();
       expect(password).toBeDefined();
-      expect(password.length).toBe(8);
+      expect(password.length).toBe(10);
+      expect(generatePassword(16).length).toBe(16);
     });
 
     it('should generate different passwords each time', () => {
