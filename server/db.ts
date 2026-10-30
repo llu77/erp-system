@@ -8790,34 +8790,26 @@ export async function getEmployeeSalarySlip(employeeId: number, year: number, mo
 
   if (employee.length === 0) return null;
 
-  // جلب مسير الرواتب للشهر المحدد
-  const payroll = await db.select()
-    .from(payrolls)
-    .where(
-      and(
-        eq(payrolls.branchId, employee[0].branchId),
-        eq(payrolls.year, year),
-        eq(payrolls.month, month)
-      )
-    )
-    .limit(1);
-
-  if (payroll.length === 0) return null;
-
-  // جلب تفاصيل راتب الموظف
-  const salaryDetail = await db.select()
+  // جلب سطر الموظف في مسيرة الشهر المعتمدة أو المدفوعة فقط
+  // (البحث بالموظف نفسه وليس بفرعه الحالي حتى لا تختفي القسيمة بعد النقل بين الفروع)
+  const rows = await db.select({ detail: payrollDetails, payroll: payrolls })
     .from(payrollDetails)
+    .innerJoin(payrolls, eq(payrolls.id, payrollDetails.payrollId))
     .where(
       and(
-        eq(payrollDetails.payrollId, payroll[0].id),
-        eq(payrollDetails.employeeId, employeeId)
+        eq(payrollDetails.employeeId, employeeId),
+        eq(payrolls.year, year),
+        eq(payrolls.month, month),
+        inArray(payrolls.status, ['approved', 'paid'])
       )
     )
+    .orderBy(desc(payrolls.id))
     .limit(1);
 
-  if (salaryDetail.length === 0) return null;
+  if (rows.length === 0) return null;
 
-  const detail = salaryDetail[0];
+  const payroll = [rows[0].payroll];
+  const detail = rows[0].detail;
 
   return {
     // معلومات الموظف
@@ -8853,6 +8845,7 @@ export async function getEmployeeSalarySlip(employeeId: number, year: number, mo
     deductionReason: detail.deductionReason,
     advanceDeduction: parseFloat(detail.advanceDeduction as string) || 0,
     negativeInvoicesDeduction: parseFloat(detail.negativeInvoicesDeduction as string) || 0,
+    violationsDeduction: parseFloat(detail.violationsDeduction as string) || 0,
     
     // الإجازات
     leaveDays: detail.leaveDays || 0,
@@ -8889,7 +8882,12 @@ export async function getEmployeeSalaryHistory(employeeId: number, limit: number
     netSalary: payrollDetails.netSalary,
   })
     .from(payrollDetails)
-    .where(eq(payrollDetails.employeeId, employeeId))
+    .innerJoin(payrolls, eq(payrolls.id, payrollDetails.payrollId))
+    .where(and(
+      eq(payrollDetails.employeeId, employeeId),
+      // الموظف يرى فقط الرواتب المعتمدة أو المدفوعة
+      inArray(payrolls.status, ['approved', 'paid'])
+    ))
     .orderBy(desc(payrollDetails.id))
     .limit(limit);
 
