@@ -9375,6 +9375,40 @@ ${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.
       }),
   }),
 
+  // ==================== أرباح الشركاء (للمسؤول فقط) ====================
+  partnerProfits: router({
+    // ملخص الشهر: أرقام كل فرع له نسب شركاء وتوزيع الربح، والفروع بدون نسب منفصلة
+    summary: adminProcedure
+      .input(z.object({
+        year: z.number().int().min(2020).max(2100),
+        month: z.number().int().min(1).max(12),
+      }))
+      .query(async ({ input }) => {
+        const { getPartnerProfits } = await import('./finance/partnerProfits');
+        return getPartnerProfits(input.year, input.month);
+      }),
+
+    // بيان توزيع أرباح الشركاء PDF لفرع واحد
+    pdf: adminProcedure
+      .input(z.object({
+        year: z.number().int().min(2020).max(2100),
+        month: z.number().int().min(1).max(12),
+        branchId: z.number().int().positive(),
+      }))
+      .mutation(async ({ input }) => {
+        const { getPartnerProfits, generatePartnerProfitsPDF, partnerProfitsFileName } = await import('./finance/partnerProfits');
+        const { branches } = await getPartnerProfits(input.year, input.month, { branchId: input.branchId });
+        const statement = branches[0];
+        if (!statement) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الفرع غير موجود أو ليست له نسب شركاء' });
+        }
+        return renderDocumentPdf('بيان أرباح الشركاء', async () => ({
+          pdf: await generatePartnerProfitsPDF(statement),
+          filename: partnerProfitsFileName(statement),
+        }));
+      }),
+  }),
+
   // ==================== إشعارات بوابة الموظفين ====================
   portalNotifications: router({
     // إشعارات الموظف المسجل في البوابة فقط (الهوية من جلسة البوابة)
