@@ -798,6 +798,18 @@ export async function syncOpenPayrollsForEmployee(employeeId: number): Promise<n
 }
 
 /**
+ * تحديث المسيرات المفتوحة بعد حفظ تغيير مكتمل: فشل التحديث لا يُلغي العملية المحفوظة،
+ * بل يُسجَّل ويمكن إعادة المحاولة بزر "إعادة الحساب" في المسيرة
+ */
+async function syncOpenPayrollsSafely(employeeId: number) {
+  try {
+    await syncOpenPayrollsForEmployee(employeeId);
+  } catch (error) {
+    console.error(`[Payroll] تعذر تحديث المسيرات المفتوحة للموظف ${employeeId}:`, error);
+  }
+}
+
+/**
  * التحقق قبل إلغاء/حذف سلفة أو مخالفة: يُمنع إذا كانت مخصومة في مسيرة معتمدة أو مدفوعة
  */
 export async function assertSourceNotLocked(kind: "advance" | "violation", sourceId: number) {
@@ -962,7 +974,7 @@ export async function createViolation(input: {
     reviewedByName: autoApprove ? input.actor.name : null,
     reviewedAt: autoApprove ? now : null,
   });
-  if (autoApprove) await syncOpenPayrollsForEmployee(emp.id);
+  if (autoApprove) await syncOpenPayrollsSafely(emp.id);
   return { id: insertId(res), status: autoApprove ? "approved" : "pending" };
 }
 
@@ -991,7 +1003,7 @@ export async function reviewViolation(
     .where(and(eq(employeeViolations.id, id), eq(employeeViolations.status, violation.status)));
   if (affectedRows(res) === 0) throw new PayrollError("تم تعديل المخالفة من مستخدم آخر", "CONFLICT");
 
-  await syncOpenPayrollsForEmployee(violation.employeeId);
+  await syncOpenPayrollsSafely(violation.employeeId);
   return { success: true };
 }
 
@@ -1001,7 +1013,7 @@ export async function deleteViolation(id: number) {
   if (!violation) throw new PayrollError("المخالفة غير موجودة", "NOT_FOUND");
   await assertSourceNotLocked("violation", id);
   await db.delete(employeeViolations).where(eq(employeeViolations.id, id));
-  if (violation.deductedInPayrollId) await syncOpenPayrollsForEmployee(violation.employeeId);
+  if (violation.deductedInPayrollId) await syncOpenPayrollsSafely(violation.employeeId);
   return { success: true };
 }
 
