@@ -116,8 +116,9 @@ function normalizeType(type: VoucherTemplateData["voucherType"]): VoucherType {
   return type === "payment" ? "payment" : "receipt";
 }
 
+/** نص ثنائي اللغة: العربي ثم الفاصل ثم الإنجليزي (كل جزء معزول اتجاهياً) */
 function bi(ar: string, en: string): string {
-  return `<span class="ar">${ar}</span><span class="en">${en}</span>`;
+  return `<span class="ar">${ar}</span><span class="sep"> / </span><span class="en">${en}</span>`;
 }
 
 function textOrDash(value: unknown): string {
@@ -310,9 +311,9 @@ const STYLES = (accent: string, accentSoft: string, fontFace: string) => `
   .watermark.draft { color: rgba(0, 0, 0, 0.06); }
   .watermark.cancelled { color: rgba(185, 28, 28, 0.13); }
   .content { position: relative; z-index: 1; }
-  .ar { display: inline; }
-  .en { display: inline; direction: ltr; unicode-bidi: isolate; color: #555; font-size: 0.82em; margin-inline-start: 4px; }
-  .en::before { content: "/ "; }
+  .ar { display: inline; unicode-bidi: isolate; }
+  .sep { color: #999; }
+  .en { display: inline; direction: ltr; unicode-bidi: isolate; color: #555; font-size: 0.82em; }
   .header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 3px double ${accent}; }
   .co { flex: 1; }
   .co-ar .name { font-size: 18px; font-weight: 800; }
@@ -324,7 +325,7 @@ const STYLES = (accent: string, accentSoft: string, fontFace: string) => `
   .title-row { display: flex; align-items: stretch; justify-content: space-between; gap: 10px; margin: 10px 0 8px; }
   .no-box, .amount-box { width: 30%; border: 1.5px solid ${accent}; border-radius: 6px; text-align: center; overflow: hidden; }
   .no-box .lbl, .amount-box .lbl { background: ${accent}; color: #fff; font-size: 11px; padding: 3px 4px; }
-  .no-box .lbl .en, .amount-box .lbl .en { color: #e5e7eb; }
+  .no-box .lbl .en, .amount-box .lbl .en, .no-box .lbl .sep, .amount-box .lbl .sep { color: #e5e7eb; }
   .no-box .val { font-size: 16px; font-weight: 800; padding: 6px 4px; direction: ltr; letter-spacing: 1px; }
   .amount-box .val { font-size: 20px; font-weight: 800; padding: 4px; direction: ltr; }
   .title { flex: 1; text-align: center; align-self: center; }
@@ -344,8 +345,8 @@ const STYLES = (accent: string, accentSoft: string, fontFace: string) => `
   .field .fill .words-en { display: block; direction: ltr; text-align: left; font-size: 11px; color: #333; font-weight: 500; }
   table.items { width: 100%; border-collapse: collapse; margin: 10px 0 8px; font-size: 11.5px; }
   table.items th { background: ${accent}; color: #fff; padding: 5px 4px; border: 1px solid ${accent}; font-weight: 700; }
-  table.items th .en { color: #e5e7eb; display: block; margin: 0; }
-  table.items th .en::before { content: ""; }
+  table.items th .en { color: #e5e7eb; display: block; }
+  table.items th .sep, .sig-title .sep { display: none; }
   table.items td { border: 1px solid #bbb; padding: 4px 6px; vertical-align: top; }
   table.items td.c { text-align: center; }
   table.items td.num { text-align: left; direction: ltr; white-space: nowrap; }
@@ -369,17 +370,17 @@ const STYLES = (accent: string, accentSoft: string, fontFace: string) => `
   .signatures { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; }
   .sig-box { flex: 1; text-align: center; }
   .sig-title { font-size: 11px; font-weight: 700; margin-bottom: 2px; }
-  .sig-title .en { display: block; margin: 0; }
-  .sig-title .en::before { content: ""; }
-  .sig-area { height: 58px; display: flex; align-items: center; justify-content: center; }
-  .sig-img { max-height: 56px; max-width: 120px; object-fit: contain; }
+  .sig-title .en { display: block; }
+  .sig-area { height: 66px; display: flex; align-items: center; justify-content: center; }
+  /* صور التوقيع فيها مساحات شفافة كبيرة: نعرض الشريط الأوسط الذي يحتوي التوقيع */
+  .sig-img { width: 150px; height: 64px; object-fit: cover; object-position: center; }
   .sig-pending { font-size: 10px; color: #888; border: 1px dashed #bbb; border-radius: 4px; padding: 4px 8px; }
   .sig-line { border-bottom: 1px solid #333; margin: 2px 10px 3px; }
   .sig-name { font-size: 11.5px; font-weight: 700; }
   .sig-name-en { font-size: 10px; color: #555; direction: ltr; }
   .stamp-area { height: 96px; display: flex; align-items: center; justify-content: center; }
   .stamp-img { width: 92px; height: 92px; object-fit: contain; opacity: 0.92; }
-  .stamp-placeholder { width: 86px; height: 86px; border: 2px dashed #bbb; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 10px; color: #888; }
+  .stamp-placeholder { width: 86px; height: 86px; border: 2px dashed #bbb; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 10px; color: #888; }
   .approval-note { margin-top: 6px; text-align: center; font-size: 11px; color: #065f46; font-weight: 700; }
   .receiver { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 14px; margin-top: 12px; padding: 8px; border: 1px solid #999; border-radius: 4px; }
   .receiver-title { font-weight: 800; font-size: 12px; min-width: 110px; }
@@ -451,7 +452,7 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
   <style>${STYLES(accent, accentSoft, fontFace)}</style>
 </head>
 <body>
-  <div class="page status-${escapeHtml(status)} type-${type}">
+  <div class="page page-${escapeHtml(status)} type-${type}">
     ${watermark}
     <div class="content">
       <div class="header">

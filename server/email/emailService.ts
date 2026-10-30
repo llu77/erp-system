@@ -3,11 +3,18 @@ import { Resend } from 'resend';
 const resend = new Resend(process.env.RESEND_API_KEY);
 const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@example.com';
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer | string;
+  contentType?: string;
+}
+
 export interface EmailOptions {
   to: string | string[];
   subject: string;
   html: string;
   text?: string;
+  attachments?: EmailAttachment[];
 }
 
 export async function sendEmail(options: EmailOptions): Promise<{ success: boolean; id?: string; error?: string }> {
@@ -18,6 +25,7 @@ export async function sendEmail(options: EmailOptions): Promise<{ success: boole
       subject: options.subject,
       html: options.html,
       text: options.text,
+      ...(options.attachments && options.attachments.length > 0 ? { attachments: options.attachments } : {}),
     });
 
     if (error) {

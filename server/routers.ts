@@ -167,6 +167,93 @@ const payrollAdjustmentSchema = z.object({
   notes: z.string().max(1000).nullable().optional(),
 });
 
+// ==================== السندات المالية: الصلاحيات والمدخلات ====================
+
+function voucherActor(user: { id: number; name: string | null; username?: string | null; role: string; branchId: number | null }) {
+  return { id: user.id, name: user.name || user.username || null, role: user.role, branchId: user.branchId ?? null };
+}
+
+// تحويل أخطاء خدمة السندات إلى أخطاء tRPC مفهومة
+async function runVoucherAction<T>(action: () => Promise<T>): Promise<T> {
+  const { VoucherError } = await import('./receiptVoucher');
+  try {
+    return await action();
+  } catch (error: any) {
+    if (error instanceof TRPCError) throw error;
+    if (error instanceof VoucherError) {
+      throw new TRPCError({ code: error.code, message: error.message });
+    }
+    logger.error('خطأ في عملية السندات', error);
+    throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'حدث خطأ غير متوقع في السندات' });
+  }
+}
+
+/** فرع تقرير السندات: المشرف يرى فرعه فقط */
+function voucherReportBranch(user: { role: string; branchId: number | null }, branchId?: string): string | undefined {
+  if (user.role !== 'admin' && user.role !== 'manager' && user.branchId) return String(user.branchId);
+  return branchId || undefined;
+}
+
+// تاريخ السند: نص YYYY-MM-DD (المفضل) أو Date (للتوافق مع الواجهة القديمة)
+const voucherDateInput = z.union([z.date(), z.string().regex(/^\d{4}-\d{2}-\d{2}/, 'صيغة التاريخ غير صحيحة')]);
+const voucherMoneyInput = z.number().min(0).max(100_000_000);
+
+const voucherItemSchema = z.object({
+  description: z.string().trim().min(1, 'وصف البند مطلوب').max(500),
+  amount: voucherMoneyInput.optional().nullable(),
+  quantity: z.number().positive().max(1_000_000).optional().nullable(),
+  unitPrice: voucherMoneyInput.optional().nullable(),
+  notes: z.string().max(1000).optional().nullable(),
+});
+
+const voucherCreateSchema = z.object({
+  voucherType: z.enum(['receipt', 'payment']).default('receipt'),
+  voucherDate: voucherDateInput.optional(),
+  dueDateFrom: voucherDateInput.optional().nullable(),
+  dueDateTo: voucherDateInput.optional().nullable(),
+  dueDate: voucherDateInput.optional().nullable(), // للتوافق العكسي
+  partyName: z.string().max(255).optional().nullable(),
+  partyType: z.enum(['branch', 'employee', 'supplier', 'customer', 'owner', 'other']).optional().nullable(),
+  partyId: z.number().int().optional().nullable(),
+  payeeName: z.string().max(255).optional().nullable(),
+  payeeAddress: z.string().max(1000).optional().nullable(),
+  payeePhone: z.string().max(20).optional().nullable(),
+  payeeEmail: z.string().max(320).optional().nullable(),
+  branchId: z.number().int().optional().nullable(),
+  branchName: z.string().max(100).optional().nullable(),
+  description: z.string().max(2000).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+  paymentMethod: z.enum(['cash', 'bank_transfer', 'check', 'credit_card', 'other', 'mixed']).optional().nullable(),
+  cashAmount: voucherMoneyInput.optional().nullable(),
+  bankAmount: voucherMoneyInput.optional().nullable(),
+  checkAmount: voucherMoneyInput.optional().nullable(),
+  bankName: z.string().max(100).optional().nullable(),
+  bankReference: z.string().max(100).optional().nullable(),
+  checkNumber: z.string().max(50).optional().nullable(),
+  checkDate: voucherDateInput.optional().nullable(),
+  checkBank: z.string().max(100).optional().nullable(),
+  items: z.array(voucherItemSchema).min(1, 'يجب إضافة بند واحد على الأقل').max(100),
+});
+
+const voucherListSchema = z.object({
+  limit: z.number().int().min(1).max(500).default(100),
+  offset: z.number().int().min(0).default(0),
+  voucherType: z.enum(['receipt', 'payment', 'all']).optional(),
+  status: z.enum(['draft', 'approved', 'paid', 'cancelled', 'all']).optional(),
+  branchId: z.number().int().optional().nullable(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  search: z.string().max(100).optional().nullable(),
+});
+
+const voucherReportSchema = z.object({
+  startDate: z.string(),
+  endDate: z.string(),
+  voucherType: z.enum(['receipt', 'payment', 'all']).optional(),
+  status: z.enum(['draft', 'approved', 'paid', 'cancelled', 'all']).optional(),
+  branchId: z.string().optional(),
+});
+
 export const appRouter = router({
   system: systemRouter,
   
@@ -6862,148 +6949,88 @@ export const appRouter = router({
       }),
   }),
 
+  // ==================== السندات المالية (سند قبض / سند صرف) ====================
+  // الإنشاء: المسؤول والمدير والمشرف (فرعه فقط)
+  // الاعتماد / الصرف / الإلغاء: المسؤول والمدير فقط - التوقيعات والختم تظهر بعد الاعتماد
+  // الحذف: المسؤول فقط وللمسودات فقط
   receiptVoucher: router({
-    create: supervisorInputProcedure
+    create: supervisorEditProcedure
+      .input(voucherCreateSchema)
+      .mutation(async ({ ctx, input }) => {
+        const { createVoucher } = await import('./receiptVoucher');
+        const { voucherType, ...data } = input;
+        return runVoucherAction(() => createVoucher(voucherType, data, voucherActor(ctx.user)));
+      }),
+
+    get: supervisorViewProcedure
       .input(z.object({
-        voucherDate: z.date(),
-        dueDateFrom: z.date().optional(),
-        dueDateTo: z.date().optional(),
-        dueDate: z.date().optional(), // للتوافق العكسي
-        payeeName: z.string().min(1),
-        payeeAddress: z.string().optional(),
-        payeePhone: z.string().optional(),
-        payeeEmail: z.string().optional(),
-        branchId: z.number().optional(),
-        branchName: z.string().optional(),
-        description: z.string().optional(),
-        notes: z.string().optional(),
-        paymentMethod: z.enum(['cash', 'bank_transfer', 'check', 'credit_card', 'other']).default('cash'),
-        items: z.array(z.object({
-          description: z.string().min(1),
-          amount: z.number().positive(),
-          notes: z.string().optional(),
-        })),
+        voucherId: z.string().min(1).max(50),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { getVoucher } = await import('./receiptVoucher');
+        return runVoucherAction(() => getVoucher(input.voucherId, voucherActor(ctx.user)));
+      }),
+
+    getAll: supervisorViewProcedure
+      .input(voucherListSchema)
+      .query(async ({ ctx, input }) => {
+        const { listVouchers } = await import('./receiptVoucher');
+        return runVoucherAction(() => listVouchers(input, voucherActor(ctx.user)));
+      }),
+
+    // تغيير الحالة: اعتماد / صرف (سند الصرف فقط) / إلغاء بسبب - للمدير والمسؤول فقط
+    updateStatus: managerProcedure
+      .input(z.object({
+        voucherId: z.string().min(1).max(50),
+        status: z.enum(['approved', 'paid', 'cancelled']),
+        reason: z.string().max(1000).optional().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { createReceiptVoucher } = await import('./receiptVoucher');
-        const createdByName = (ctx.user?.name as string) || (ctx.user?.username as string) || 'Unknown';
-        return createReceiptVoucher({
-          ...input,
-          createdBy: ctx.user.id,
-          createdByName,
-        });
-      }),
-
-    get: supervisorInputProcedure
-      .input(z.object({
-        voucherId: z.string(),
-      }))
-      .query(async ({ input }) => {
-        const { getReceiptVoucher } = await import('./receiptVoucher');
-        return getReceiptVoucher(input.voucherId);
-      }),
-
-    getAll: supervisorInputProcedure
-      .input(z.object({
-        limit: z.number().default(50),
-        offset: z.number().default(0),
-      }))
-      .query(async ({ input }) => {
-        const { getAllReceiptVouchers } = await import('./receiptVoucher');
-        return getAllReceiptVouchers(input.limit, input.offset);
-      }),
-
-    updateStatus: supervisorInputProcedure
-      .input(z.object({
-        voucherId: z.string(),
-        status: z.enum(['draft', 'approved', 'paid', 'cancelled']),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const { updateReceiptVoucherStatus } = await import('./receiptVoucher');
-        const approvedByName = (ctx.user?.name as string | undefined) || (ctx.user?.username as string | undefined);
-        return updateReceiptVoucherStatus(
-          input.voucherId,
-          input.status,
-          ctx.user.id,
-          approvedByName
+        const { updateVoucherStatus } = await import('./receiptVoucher');
+        return runVoucherAction(() =>
+          updateVoucherStatus(input.voucherId, input.status, voucherActor(ctx.user), { reason: input.reason })
         );
       }),
 
     delete: adminProcedure
       .input(z.object({
-        voucherId: z.string(),
+        voucherId: z.string().min(1).max(50),
       }))
-      .mutation(async ({ input }) => {
-        const { deleteReceiptVoucher } = await import('./receiptVoucher');
-        return deleteReceiptVoucher(input.voucherId);
+      .mutation(async ({ ctx, input }) => {
+        const { deleteVoucher } = await import('./receiptVoucher');
+        return runVoucherAction(() => deleteVoucher(input.voucherId, voucherActor(ctx.user)));
       }),
 
-    sendEmail: supervisorInputProcedure
+    sendEmail: supervisorEditProcedure
       .input(z.object({
-        voucherId: z.string(),
+        voucherId: z.string().min(1).max(50),
       }))
-      .mutation(async ({ input }) => {
-        const { getReceiptVoucher } = await import('./receiptVoucher');
-        const { sendReceiptVoucherEmail } = await import('./receiptVoucherEmail');
-        
-        const voucher = await getReceiptVoucher(input.voucherId);
-        if (!voucher) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'السند غير موجود' });
-        }
-
-        const result = await sendReceiptVoucherEmail({
-          voucherId: voucher.voucherId,
-          voucherNumber: voucher.voucherId,
-          voucherDate: voucher.voucherDate.toISOString(),
-          payeeName: voucher.payeeName,
-          payeeEmail: voucher.payeeEmail || undefined,
-          totalAmount: voucher.totalAmount,
-          branchId: voucher.branchId || undefined,
-          branchName: voucher.branchName || undefined,
-          items: voucher.items || [],
-          createdByName: voucher.createdByName,
-        });
-
-        return result;
+      .mutation(async ({ ctx, input }) => {
+        const { getVoucher } = await import('./receiptVoucher');
+        const { sendVoucherEmail } = await import('./receiptVoucherEmail');
+        const voucher = await runVoucherAction(() => getVoucher(input.voucherId, voucherActor(ctx.user)));
+        return sendVoucherEmail(voucher);
       }),
 
-    // توليد PDF لسند قبض فردي
-    generatePDF: supervisorInputProcedure
+    // توليد PDF لسند فردي من القالب الموحد
+    generatePDF: supervisorViewProcedure
       .input(z.object({
-        voucherId: z.string(),
+        voucherId: z.string().min(1).max(50),
       }))
-      .mutation(async ({ input }) => {
-        const { getReceiptVoucher } = await import('./receiptVoucher');
-        const { generateSingleReceiptVoucherPDF } = await import('./pdfService');
-        
-        const voucher = await getReceiptVoucher(input.voucherId);
-        if (!voucher) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'السند غير موجود' });
+      .mutation(async ({ ctx, input }) => {
+        const { getVoucher } = await import('./receiptVoucher');
+        const { generateVoucherPDF, voucherFileName } = await import('./voucherPdf');
+        const voucher = await runVoucherAction(() => getVoucher(input.voucherId, voucherActor(ctx.user)));
+        try {
+          const pdfBuffer = await generateVoucherPDF(voucher);
+          return { pdf: pdfBuffer.toString('base64'), filename: voucherFileName(voucher, 'pdf') };
+        } catch (error: any) {
+          logger.error('فشل توليد PDF للسند', error);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'تعذر توليد ملف PDF، استخدم زر الطباعة من المتصفح' });
         }
-
-        const pdfBuffer = await generateSingleReceiptVoucherPDF({
-          voucherId: voucher.voucherId,
-          voucherDate: voucher.voucherDate,
-          dueDateFrom: voucher.dueDateFrom,
-          dueDateTo: voucher.dueDateTo,
-          payeeName: voucher.payeeName,
-          payeePhone: voucher.payeePhone,
-          payeeEmail: voucher.payeeEmail,
-          branchName: voucher.branchName,
-          totalAmount: voucher.totalAmount,
-          status: voucher.status,
-          createdByName: voucher.createdByName,
-          createdAt: voucher.createdAt,
-          notes: voucher.notes,
-          items: voucher.items || [],
-        });
-        
-        // تحويل Buffer إلى Base64 لإرساله للعميل
-        const base64PDF = pdfBuffer.toString('base64');
-        return { pdf: base64PDF, filename: `receipt-voucher-${voucher.voucherId}.pdf` };
       }),
 
-    generateReportPDF: supervisorInputProcedure
+    generateReportPDF: supervisorViewProcedure
       .input(z.object({
         title: z.string(),
         periodType: z.string(),
@@ -7027,58 +7054,69 @@ export const appRouter = router({
         })),
       }))
       .mutation(async ({ input }) => {
+        const { escapeHtml } = await import('../shared/vouchers');
         const { generateReceiptVoucherReportPDF } = await import('./pdfService');
-        const pdfBuffer = await generateReceiptVoucherReportPDF(input);
-        
+        // تهريب النصوص المُدخلة قبل إدراجها في HTML التقرير
+        const pdfBuffer = await generateReceiptVoucherReportPDF({
+          ...input,
+          title: escapeHtml(input.title),
+          periodType: escapeHtml(input.periodType),
+          startDate: escapeHtml(input.startDate),
+          endDate: escapeHtml(input.endDate),
+          branchName: escapeHtml(input.branchName),
+          receipts: input.receipts.map(r => ({
+            ...r,
+            voucherId: escapeHtml(r.voucherId),
+            voucherDate: escapeHtml(r.voucherDate),
+            payeeName: escapeHtml(r.payeeName),
+            status: escapeHtml(r.status),
+            createdByName: escapeHtml(r.createdByName),
+            notes: r.notes === undefined ? undefined : escapeHtml(r.notes),
+            branchName: r.branchName === undefined ? undefined : escapeHtml(r.branchName),
+          })),
+        });
+
         // تحويل Buffer إلى Base64 لإرساله للعميل
         const base64PDF = pdfBuffer.toString('base64');
         return { pdf: base64PDF };
       }),
 
-    // تقرير السندات الشهري
+    // تقرير السندات الشهري (المشرف: فرعه فقط)
     getMonthlyReport: supervisorViewProcedure
-      .input(z.object({
-        startDate: z.string(),
-        endDate: z.string(),
-        status: z.enum(['draft', 'approved', 'paid', 'cancelled', 'all']).optional(),
-        branchId: z.string().optional(),
-      }))
-      .query(async ({ input }) => {
+      .input(voucherReportSchema)
+      .query(async ({ ctx, input }) => {
         const { getVouchersForReport } = await import('./db');
         return getVouchersForReport({
           startDate: new Date(input.startDate),
           endDate: new Date(input.endDate),
+          voucherType: input.voucherType ?? 'all',
           status: input.status,
-          branchId: input.branchId,
+          branchId: voucherReportBranch(ctx.user, input.branchId),
         });
       }),
 
     // توليد PDF لتقرير السندات الشهري
-    generateMonthlyReportPDF: supervisorInputProcedure
-      .input(z.object({
-        startDate: z.string(),
-        endDate: z.string(),
-        status: z.enum(['draft', 'approved', 'paid', 'cancelled', 'all']).optional(),
-        branchId: z.string().optional(),
-      }))
-      .mutation(async ({ input }) => {
+    generateMonthlyReportPDF: supervisorViewProcedure
+      .input(voucherReportSchema)
+      .mutation(async ({ ctx, input }) => {
         const { getVouchersForReport } = await import('./db');
         const { generateVouchersReportPDF } = await import('./pdfService');
-        
+
         const reportData = await getVouchersForReport({
           startDate: new Date(input.startDate),
           endDate: new Date(input.endDate),
+          voucherType: input.voucherType ?? 'all',
           status: input.status,
-          branchId: input.branchId,
+          branchId: voucherReportBranch(ctx.user, input.branchId),
         });
-        
+
         if (!reportData) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في جلب بيانات التقرير' });
         }
-        
+
         const pdfBuffer = await generateVouchersReportPDF(reportData);
         const base64PDF = pdfBuffer.toString('base64');
-        return { pdf: base64PDF, filename: `vouchers-report-${new Date().toISOString().split('T')[0]}.pdf` };
+        return { pdf: base64PDF, filename: `vouchers-report-${input.startDate.slice(0, 10)}-${input.endDate.slice(0, 10)}.pdf` };
       }),
   }),
 
@@ -8740,12 +8778,14 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         startDate: z.string(),
         endDate: z.string(),
         branchId: z.number().optional(),
+        voucherType: z.enum(['receipt', 'payment', 'all']).optional(),
       }))
       .query(async ({ input }) => {
         const result = await db.getVouchersByPaymentMethod(
           input.startDate,
           input.endDate,
-          input.branchId
+          input.branchId,
+          input.voucherType ?? 'receipt'
         );
         return result;
       }),

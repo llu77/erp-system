@@ -530,6 +530,13 @@ function Router() {
           <LazyPage component={ReceiptVoucher} />
         </DashboardLayout>
       </Route>
+
+      {/* سند الصرف (نفس صفحة السندات على تبويب الصرف) */}
+      <Route path="/payment-voucher">
+        <DashboardLayout>
+          <LazyPage component={ReceiptVoucher} />
+        </DashboardLayout>
+      </Route>
       
       {/* تقارير سندات القبض */}
       <Route path="/receipt-voucher-reports">

@@ -10,8 +10,15 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO, isW
 import { ar } from 'date-fns/locale';
 import { Download, FileText, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getVoucherStatusLabel } from '@shared/vouchers';
 
 type PeriodType = 'day' | 'week' | 'month';
+type VoucherTypeFilter = 'all' | 'receipt' | 'payment';
+
+const VOUCHER_TYPE_LABELS: Record<string, string> = {
+  receipt: 'سند قبض',
+  payment: 'سند صرف',
+};
 
 // دالة مساعدة لتحويل التاريخ بشكل آمن
 function safeParseDate(dateValue: any): Date | null {
@@ -54,18 +61,17 @@ function safeFormatDate(dateValue: any, formatStr: string = 'yyyy-MM-dd'): strin
 
 export default function ReceiptVoucherReports() {
   const [periodType, setPeriodType] = useState<PeriodType>('month');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  // التاريخ الافتراضي من أجزاء التاريخ المحلية (toISOString يُزيح اليوم في توقيت +3)
+  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [voucherType, setVoucherType] = useState<VoucherTypeFilter>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  const { data: receipts = [], isLoading } = trpc.receiptVoucher.getAll.useQuery({ limit: 1000, offset: 0 });
-  const { data: branches = [] } = trpc.branches.list.useQuery();
-  const generatePDFMutation = trpc.receiptVoucher.generateReportPDF.useMutation();
-
   // حساب نطاق التاريخ بناءً على نوع الفترة
   const dateRange = useMemo(() => {
-    const date = parseISO(selectedDate);
+    const parsed = parseISO(selectedDate);
+    const date = isValid(parsed) ? parsed : new Date();
     switch (periodType) {
       case 'day':
         return { start: date, end: date };
@@ -75,6 +81,17 @@ export default function ReceiptVoucherReports() {
         return { start: startOfMonth(date), end: endOfMonth(date) };
     }
   }, [selectedDate, periodType]);
+
+  // الفترة والنوع يُطبقان على الخادم
+  const { data: receipts = [], isLoading } = trpc.receiptVoucher.getAll.useQuery({
+    limit: 500,
+    offset: 0,
+    voucherType,
+    startDate: format(dateRange.start, 'yyyy-MM-dd'),
+    endDate: format(dateRange.end, 'yyyy-MM-dd'),
+  });
+  const { data: branches = [] } = trpc.branches.list.useQuery();
+  const generatePDFMutation = trpc.receiptVoucher.generateReportPDF.useMutation();
 
   // تصفية السندات حسب الفترة والبحث والفرع
   const filteredReceipts = useMemo(() => {
@@ -89,8 +106,9 @@ export default function ReceiptVoucherReports() {
         const matchesSearch = searchTerm === '' || 
           receipt.voucherId.toLowerCase().includes(searchTerm.toLowerCase()) ||
           receipt.payeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          receipt.partyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           receipt.notes?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesBranch = selectedBranch === 'all' || 
+        const matchesBranch = selectedBranch === 'all' ||  
           receipt.branchName === selectedBranch ||
           (receipt.branchId && receipt.branchId.toString() === selectedBranch);
         return matchesSearch && matchesBranch;
@@ -100,35 +118,46 @@ export default function ReceiptVoucherReports() {
       const matchesSearch = searchTerm === '' || 
         receipt.voucherId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         receipt.payeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        receipt.partyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         receipt.notes?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesBranch = selectedBranch === 'all' || 
+      const matchesBranch = selectedBranch === 'all' ||  
         receipt.branchName === selectedBranch ||
         (receipt.branchId && receipt.branchId.toString() === selectedBranch);
       return inRange && matchesSearch && matchesBranch;
     });
   }, [receipts, dateRange, searchTerm, selectedBranch]);
 
-  // حساب الإحصائيات
+  // حساب الإحصائيات (السندات الملغاة لا تدخل في الإجماليات)
   const statistics = useMemo(() => {
-    const totalAmount = filteredReceipts.reduce((sum, r) => sum + (parseFloat(r.totalAmount as any) || 0), 0);
-    const count = filteredReceipts.length;
+    const active = filteredReceipts.filter(r => r.status !== 'cancelled');
+    const sumOf = (list: typeof active) => list.reduce((sum, r) => sum + (parseFloat(r.totalAmount as any) || 0), 0);
+    const totalAmount = sumOf(active);
+    const count = active.length;
 
     return {
       count,
       totalAmount,
       averageAmount: count > 0 ? totalAmount / count : 0,
+      receiptAmount: sumOf(active.filter(r => r.voucherType !== 'payment')),
+      paymentAmount: sumOf(active.filter(r => r.voucherType === 'payment')),
+      cancelledCount: filteredReceipts.length - count,
     };
   }, [filteredReceipts]);
 
+  const statusLabel = (status: string, type: string) =>
+    getVoucherStatusLabel(status, type === 'payment' ? 'payment' : 'receipt').ar;
+
   // تصدير إلى Excel
   const exportToExcel = () => {
-    const headers = ['رقم السند', 'التاريخ', 'المدفوع له', 'المبلغ الكلي', 'الحالة', 'المشرف', 'الملاحظات'];
+    const headers = ['رقم السند', 'النوع', 'التاريخ', 'الطرف', 'المستلم', 'المبلغ الكلي', 'الحالة', 'المشرف', 'الملاحظات'];
     const data = filteredReceipts.map(receipt => [
       receipt.voucherId,
+      VOUCHER_TYPE_LABELS[receipt.voucherType] || '',
       safeFormatDate(receipt.voucherDate),
+      receipt.partyName || receipt.payeeName || '',
       receipt.payeeName || '',
       parseFloat(receipt.totalAmount as any)?.toFixed(2) || '0',
-      receipt.status || '',
+      statusLabel(receipt.status, receipt.voucherType),
       receipt.createdByName || '',
       receipt.notes || '',
     ]);
@@ -136,7 +165,7 @@ export default function ReceiptVoucherReports() {
     let csv = '\uFEFF'; // BOM للعربية
     csv += headers.join(',') + '\n';
     data.forEach(row => {
-      csv += row.map(cell => `"${cell}"`).join(',') + '\n';
+      csv += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + '\n';
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -157,7 +186,7 @@ export default function ReceiptVoucherReports() {
       const endDateStr = format(dateRange.end, 'yyyy-MM-dd');
       
       const result = await generatePDFMutation.mutateAsync({
-        title: 'تقرير سندات القبض',
+        title: voucherType === 'payment' ? 'تقرير سندات الصرف' : voucherType === 'receipt' ? 'تقرير سندات القبض' : 'تقرير السندات (قبض وصرف)',
         periodType: periodLabel,
         startDate: startDateStr,
         endDate: endDateStr,
@@ -168,9 +197,9 @@ export default function ReceiptVoucherReports() {
           averageAmount: statistics.averageAmount,
         },
         receipts: filteredReceipts.map(receipt => ({
-          voucherId: receipt.voucherId,
+          voucherId: `${receipt.voucherId} (${VOUCHER_TYPE_LABELS[receipt.voucherType] || ''})`,
           voucherDate: safeFormatDate(receipt.voucherDate),
-          payeeName: receipt.payeeName || '',
+          payeeName: receipt.partyName || receipt.payeeName || '',
           totalAmount: (parseFloat(receipt.totalAmount as any) || 0).toFixed(2),
           status: receipt.status || 'draft',
           createdByName: receipt.createdByName || '',
@@ -209,8 +238,8 @@ export default function ReceiptVoucherReports() {
     <div className="space-y-6">
       {/* رأس الصفحة */}
       <div>
-        <h1 className="text-3xl font-bold">تقارير سندات القبض</h1>
-        <p className="text-gray-500 mt-2">عرض وتحليل جميع سندات القبض المسجلة</p>
+        <h1 className="text-3xl font-bold">تقارير السندات</h1>
+        <p className="text-gray-500 mt-2">عرض وتحليل سندات القبض والصرف المسجلة (الملغي لا يدخل في الإجماليات)</p>
       </div>
 
       {/* الفلاتر */}
@@ -219,7 +248,22 @@ export default function ReceiptVoucherReports() {
           <CardTitle>الفلاتر والبحث</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+            {/* نوع السند */}
+            <div>
+              <label className="text-sm font-medium">نوع السند</label>
+              <Select value={voucherType} onValueChange={(v) => setVoucherType(v as VoucherTypeFilter)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع السندات</SelectItem>
+                  <SelectItem value="receipt">سندات القبض</SelectItem>
+                  <SelectItem value="payment">سندات الصرف</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* نوع الفترة */}
             <div>
               <label className="text-sm font-medium">نوع الفترة</label>
@@ -267,7 +311,7 @@ export default function ReceiptVoucherReports() {
             <div className="md:col-span-2">
               <label className="text-sm font-medium">البحث</label>
               <Input
-                placeholder="ابحث عن رقم السند أو المدفوع له..."
+                placeholder="ابحث عن رقم السند أو الطرف..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -284,7 +328,9 @@ export default function ReceiptVoucherReports() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{statistics.count}</div>
-            <p className="text-xs text-gray-500 mt-1">سند في الفترة المحددة</p>
+            <p className="text-xs text-gray-500 mt-1">
+              سند في الفترة المحددة{statistics.cancelledCount > 0 ? ` (+${statistics.cancelledCount} ملغي غير محتسب)` : ''}
+            </p>
           </CardContent>
         </Card>
 
@@ -295,6 +341,11 @@ export default function ReceiptVoucherReports() {
           <CardContent>
             <div className="text-2xl font-bold">{statistics.totalAmount.toFixed(2)}</div>
             <p className="text-xs text-gray-500 mt-1">ريال سعودي</p>
+            {voucherType === 'all' && (
+              <p className="text-xs text-gray-500 mt-1">
+                قبض: {statistics.receiptAmount.toFixed(2)} | صرف: {statistics.paymentAmount.toFixed(2)}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -349,8 +400,9 @@ export default function ReceiptVoucherReports() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>رقم السند</TableHead>
+                    <TableHead>النوع</TableHead>
                     <TableHead>التاريخ</TableHead>
-                    <TableHead>المدفوع له</TableHead>
+                    <TableHead>الطرف</TableHead>
                     <TableHead>المبلغ الكلي</TableHead>
                     <TableHead>المشرف</TableHead>
                     <TableHead>الحالة</TableHead>
@@ -358,17 +410,27 @@ export default function ReceiptVoucherReports() {
                 </TableHeader>
                 <TableBody>
                   {filteredReceipts.map((receipt) => (
-                    <TableRow key={receipt.id}>
+                    <TableRow key={receipt.id} className={receipt.status === 'cancelled' ? 'opacity-60' : ''}>
                       <TableCell className="font-medium">{receipt.voucherId}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={receipt.voucherType === 'payment' ? 'border-red-300 text-red-700' : 'border-blue-300 text-blue-700'}>
+                          {VOUCHER_TYPE_LABELS[receipt.voucherType] || 'سند قبض'}
+                        </Badge>
+                      </TableCell>
                       <TableCell>
                         {safeFormatDate(receipt.voucherDate)}
                       </TableCell>
-                      <TableCell>{receipt.payeeName}</TableCell>
-                      <TableCell>{parseFloat(receipt.totalAmount as any)?.toFixed(2)} ر.س</TableCell>
+                      <TableCell>
+                        {receipt.partyName || receipt.payeeName}
+                        {receipt.voucherType !== 'payment' && receipt.partyName && receipt.payeeName !== receipt.partyName && (
+                          <div className="text-xs text-gray-500">المستلم: {receipt.payeeName}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className={receipt.status === 'cancelled' ? 'line-through' : ''}>{parseFloat(receipt.totalAmount as any)?.toFixed(2)} ر.س</TableCell>
                       <TableCell>{receipt.createdByName}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
-                          {receipt.status === 'draft' ? 'مسودة' : receipt.status === 'approved' ? 'معتمد' : receipt.status === 'paid' ? 'مدفوع' : 'ملغي'}
+                          {statusLabel(receipt.status, receipt.voucherType)}
                         </Badge>
                       </TableCell>
                     </TableRow>
