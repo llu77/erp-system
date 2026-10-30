@@ -198,6 +198,7 @@ describe("employee portal session", () => {
     await expectTrpcError(caller.employeeAuth.me(), "INTERNAL_SERVER_ERROR");
     await expectTrpcError(caller.employeePortal.getSalarySlips(), "INTERNAL_SERVER_ERROR");
     await expectTrpcError(caller.portalAdmin.getRequests({}), "INTERNAL_SERVER_ERROR");
+    await expectTrpcError(caller.employeeAssistant.startNewConversation(), "INTERNAL_SERVER_ERROR");
   });
 
   it("logout clears the portal cookie", async () => {

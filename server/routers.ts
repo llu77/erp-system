@@ -7741,6 +7741,7 @@ export const appRouter = router({
         // الهوية: موظف بجلسة البوابة (بياناته من الجلسة فقط، وتُتجاهل بيانات الواجهة) أو مستخدم النظام الرئيسي
         const portalEmployee = ctx.employee ?? null;
         if (!portalEmployee && !ctx.user) {
+          if (ctx.employeeLookupFailed) throw employeeLookupFailedError();
           throw new TRPCError({ code: 'UNAUTHORIZED', message: EMPLOYEE_UNAUTHED_ERR_MSG });
         }
         type AssistantEmployeeContext = NonNullable<typeof input.employeeContext>;
@@ -8146,6 +8147,7 @@ ${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.
             branchName: rawInput.branchName,
           };
         } else {
+          if (ctx.employeeLookupFailed) throw employeeLookupFailedError();
           throw new TRPCError({ code: 'UNAUTHORIZED', message: EMPLOYEE_UNAUTHED_ERR_MSG });
         }
 
