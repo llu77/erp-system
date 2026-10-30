@@ -7,14 +7,16 @@ import { Mail, Loader2, Bell, Shield, CheckCircle } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 
+import { errorMessage } from '@/lib/portal/portalUi';
+
+/** البريد الإلكتروني للموظف المسجل في البوابة (الهوية من جلسة الخادم) */
 interface EmailSetupModalProps {
   isOpen: boolean;
-  employeeId: number;
   employeeName: string;
   onSuccess: () => void;
 }
 
-export function EmailSetupModal({ isOpen, employeeId, employeeName, onSuccess }: EmailSetupModalProps) {
+export function EmailSetupModal({ isOpen, employeeName, onSuccess }: EmailSetupModalProps) {
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -44,15 +46,15 @@ export function EmailSetupModal({ isOpen, employeeId, employeeName, onSuccess }:
 
     try {
       await setupEmailMutation.mutateAsync({
-        employeeId,
         email: email.trim(),
       });
 
       toast.success('تم حفظ البريد الإلكتروني بنجاح');
       onSuccess();
     } catch (err) {
-      setError('حدث خطأ أثناء حفظ البريد الإلكتروني');
-      toast.error('فشل في حفظ البريد الإلكتروني');
+      const message = errorMessage(err, 'حدث خطأ أثناء حفظ البريد الإلكتروني');
+      setError(message);
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }

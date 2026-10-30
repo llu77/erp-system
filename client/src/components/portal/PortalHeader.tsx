@@ -20,7 +20,6 @@ import { NotificationBell } from './NotificationBell';
 
 interface PortalHeaderProps {
   user: PortalUser;
-  employeeId?: number; // لنظام الإشعارات
   title?: string;
   showDocumentStatus?: boolean;
   documentStatus?: {
@@ -51,7 +50,6 @@ const ROLE_COLORS: Record<UserRole, string> = {
 
 export function PortalHeader({
   user,
-  employeeId,
   title,
   showDocumentStatus = false,
   documentStatus,
@@ -113,11 +111,9 @@ export function PortalHeader({
           {/* Right Section - User Info & Actions */}
           <div className="flex items-center gap-3">
             {/* Notifications Bell */}
-            {showNotifications && employeeId && (
-              <NotificationBell 
-                employeeId={employeeId} 
-                className="text-slate-400 hover:text-white"
-              />
+            {/* الإشعارات للموظف المسجل في البوابة (من جلسة الخادم) */}
+            {showNotifications && (
+              <NotificationBell className="text-slate-400 hover:text-white" />
             )}
             
             {/* Legacy Notifications Button (fallback) */}

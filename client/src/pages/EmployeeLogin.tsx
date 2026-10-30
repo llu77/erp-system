@@ -1,72 +1,77 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { trpc } from '@/lib/trpc';
+import { errorMessage, portalHomePath, shouldRetryQuery } from '@/lib/portal/portalUi';
+import { clearLegacyPortalStorage, type PortalMe } from '@/lib/portal/usePortalSession';
+import { SYSTEM_BRAND } from '@shared/branding';
 import { Loader2, Sparkles, User, Lock, AlertCircle, ArrowLeft } from 'lucide-react';
 
 export default function EmployeeLogin() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
 
-  const loginMutation = trpc.employeeAuth.login.useMutation();
+  // جلسة قائمة (كوكي البوابة): الانتقال مباشرة دون إعادة الدخول
+  const meQuery = trpc.employeeAuth.me.useQuery(undefined, { retry: shouldRetryQuery });
+  const existing: PortalMe | null = meQuery.data ?? null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    // هوية البوابة القديمة كانت تُحفظ في المتصفح؛ الجلسة الآن في كوكي من الخادم فقط
+    clearLegacyPortalStorage();
+  }, []);
+
+  useEffect(() => {
+    if (existing) setLocation(portalHomePath(existing), { replace: true });
+  }, [existing, setLocation]);
+
+  const loginMutation = trpc.employeeAuth.login.useMutation({
+    onSuccess: result => {
+      const me: PortalMe = result.employee;
+      // بيانات أي جلسة سابقة على هذا الجهاز لا تُعرض للموظف الجديد
+      queryClient.removeQueries();
+      utils.employeeAuth.me.setData(undefined, me);
+      utils.employeeAuth.me.invalidate();
+      setLocation(portalHomePath(me), { replace: true });
+    },
+    onError: err => {
+      setError(errorMessage(err, 'حدث خطأ في تسجيل الدخول، حاول مرة أخرى'));
+    },
+  });
+  const isLoading = loginMutation.isPending;
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setError('');
-    setIsLoading(true);
-
-    try {
-      const result = await loginMutation.mutateAsync({
-        username: username.trim(),
-        password,
-      });
-
-      if (result.success && result.employee) {
-        // حفظ معلومات الموظف في localStorage مع email و emailVerified
-        localStorage.setItem('employeeInfo', JSON.stringify({
-          ...result.employee,
-          email: result.employee.email || null,
-          emailVerified: result.employee.emailVerified || false,
-        }));
-        localStorage.setItem('employeeToken', 'employee-session');
-        
-        // التوجيه حسب الصلاحيات
-        if (result.employee.isAdmin || result.employee.isSupervisor) {
-          // الأدمن والمشرفين يتم توجيههم للداشبورد
-          setLocation('/admin-employee-portal');
-        } else {
-          // الموظفين العاديين يتم توجيههم لبوابة الموظفين
-          setLocation('/employee-portal');
-        }
-      } else {
-        setError(result.error || 'حدث خطأ في تسجيل الدخول');
-      }
-    } catch (err: any) {
-      setError(err.message || 'حدث خطأ في تسجيل الدخول');
-    } finally {
-      setIsLoading(false);
+    const trimmed = username.trim();
+    if (!trimmed || !password) {
+      setError('يرجى إدخال اسم المستخدم وكلمة المرور');
+      return;
     }
+    loginMutation.mutate({ username: trimmed, password });
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4" dir="rtl">
       {/* Background Pattern */}
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMjIiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyem0wLTR2Mkgy NHYtMmgxMnptMC00djJIMjR2LTJoMTJ6bTAtNHYySDI0di0yaDEyem0wLTR2MkgyNHYtMmgxMnoiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-20"></div>
-      
+
       <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-2xl mb-4 shadow-lg shadow-amber-500/20">
             <Sparkles className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Symbol AI</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">{SYSTEM_BRAND.name}</h1>
           <p className="text-slate-400">بوابة الموظفين</p>
         </div>
 
@@ -78,7 +83,7 @@ export default function EmployeeLogin() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               {error && (
                 <Alert variant="destructive" className="bg-red-500/10 border-red-500/30 text-red-400">
                   <AlertCircle className="h-4 w-4" />
@@ -93,10 +98,14 @@ export default function EmployeeLogin() {
                   <Input
                     id="username"
                     type="text"
+                    dir="ltr"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="أدخل اسم المستخدم"
-                    className="pr-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-amber-500"
+                    className="pr-10 text-right bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 focus:border-amber-500"
                     required
                     disabled={isLoading}
                   />
@@ -110,6 +119,7 @@ export default function EmployeeLogin() {
                   <Input
                     id="password"
                     type="password"
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="أدخل كلمة المرور"
@@ -136,6 +146,10 @@ export default function EmployeeLogin() {
               </Button>
             </form>
 
+            <p className="mt-4 text-center text-xs text-slate-500">
+              لا تملك حساباً أو نسيت كلمة المرور؟ تواصل مع الإدارة لتفعيل حسابك أو إعادة تعيين كلمة المرور.
+            </p>
+
             <div className="mt-6 pt-6 border-t border-slate-700">
               <Button
                 variant="ghost"
@@ -151,7 +165,7 @@ export default function EmployeeLogin() {
 
         {/* Footer */}
         <p className="text-center text-slate-500 text-sm mt-6">
-          © 2024 Symbol AI - جميع الحقوق محفوظة
+          © {new Date().getFullYear()} {SYSTEM_BRAND.name} - جميع الحقوق محفوظة
         </p>
       </div>
     </div>

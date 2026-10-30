@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Clock, CheckCircle2, XCircle, AlertCircle, FileText, User, Calendar, ChevronLeft } from "lucide-react";
+import { errorMessage, formatPortalDateTime } from "@/lib/portal/portalUi";
 
 interface RequestTimelineProps {
   requestId: number;
@@ -25,7 +26,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: typeof 
 export function RequestTimeline({ requestId, requestType, currentStatus }: RequestTimelineProps) {
   const [isOpen, setIsOpen] = useState(false);
   
-  const { data: timeline, isLoading } = trpc.employeePortal.getRequestTimeline.useQuery(
+  const { data: timeline, isLoading, error, refetch, isFetching } = trpc.employeePortal.getRequestTimeline.useQuery(
     { requestId },
     { enabled: isOpen }
   );
@@ -34,16 +35,7 @@ export function RequestTimeline({ requestId, requestType, currentStatus }: Reque
     return statusConfig[status] || { label: status, color: "bg-gray-400", icon: Clock };
   };
 
-  const formatDate = (date: Date | string) => {
-    const d = new Date(date);
-    return d.toLocaleDateString("ar-SA", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const formatDate = (date: Date | string) => formatPortalDateTime(date);
 
   const currentConfig = getStatusConfig(currentStatus);
   const CurrentIcon = currentConfig.icon;
@@ -87,6 +79,13 @@ export function RequestTimeline({ requestId, requestType, currentStatus }: Reque
           {isLoading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center gap-2 py-6 text-center">
+              <p className="text-sm text-destructive">{errorMessage(error, "تعذر تحميل سجل التتبع")}</p>
+              <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+                إعادة المحاولة
+              </Button>
             </div>
           ) : timeline && timeline.length > 0 ? (
             <div className="relative">

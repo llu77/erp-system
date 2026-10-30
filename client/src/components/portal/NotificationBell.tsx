@@ -16,9 +16,12 @@ import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
+import { toast as sonnerToast } from "sonner";
+import { errorMessage } from "@/lib/portal/portalUi";
 
+/** إشعارات الموظف المسجل في البوابة (الهوية من جلسة الخادم) */
 interface NotificationBellProps {
-  employeeId: number;
   className?: string;
 }
 
@@ -45,7 +48,8 @@ const priorityColors: Record<string, string> = {
 
 const urgentTypes = ['document_expired', 'document_expiring', 'request_rejected'];
 
-export function NotificationBell({ employeeId, className }: NotificationBellProps) {
+export function NotificationBell({ className }: NotificationBellProps) {
+  const [, navigate] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [lastNotificationId, setLastNotificationId] = useState<number | null>(null);
@@ -61,19 +65,24 @@ export function NotificationBell({ employeeId, className }: NotificationBellProp
     showNotification: showPushNotification,
   } = usePushNotifications();
 
-  const { data: unreadCount = 0 } = trpc.portalNotifications.getUnreadCount.useQuery(
-    { employeeId },
-    { refetchInterval: 30000, enabled: !!employeeId }
-  );
+  const { data: unreadCount = 0 } = trpc.portalNotifications.getUnreadCount.useQuery(undefined, {
+    refetchInterval: 30000,
+  });
 
-  const { data: notifications = [], isLoading } = trpc.portalNotifications.getNotifications.useQuery(
-    { employeeId, limit: 20 },
-    { enabled: isOpen && !!employeeId, refetchOnWindowFocus: false }
+  const {
+    data: notifications = [],
+    isLoading,
+    error: notificationsError,
+    refetch: refetchNotifications,
+    isFetching: fetchingNotifications,
+  } = trpc.portalNotifications.getNotifications.useQuery(
+    { limit: 20 },
+    { enabled: isOpen, refetchOnWindowFocus: false }
   );
 
   const { data: latestNotifications = [] } = trpc.portalNotifications.getNotifications.useQuery(
-    { employeeId, limit: 1, unreadOnly: true },
-    { refetchInterval: 30000, enabled: !!employeeId && permission === 'granted' }
+    { limit: 1, unreadOnly: true },
+    { refetchInterval: 30000, enabled: permission === 'granted' }
   );
 
   useEffect(() => {
@@ -102,25 +111,24 @@ export function NotificationBell({ employeeId, className }: NotificationBellProp
     }
   }, [latestNotifications, lastNotificationId, permission, showPushNotification]);
 
+  const refreshNotifications = () => {
+    utils.portalNotifications.getUnreadCount.invalidate();
+    utils.portalNotifications.getNotifications.invalidate();
+  };
+
   const markAsReadMutation = trpc.portalNotifications.markAsRead.useMutation({
-    onSuccess: () => {
-      utils.portalNotifications.getUnreadCount.invalidate({ employeeId });
-      utils.portalNotifications.getNotifications.invalidate({ employeeId });
-    },
+    onSuccess: refreshNotifications,
+    onError: error => sonnerToast.error(errorMessage(error, "تعذر تحديث حالة الإشعار")),
   });
 
   const markAllAsReadMutation = trpc.portalNotifications.markAllAsRead.useMutation({
-    onSuccess: () => {
-      utils.portalNotifications.getUnreadCount.invalidate({ employeeId });
-      utils.portalNotifications.getNotifications.invalidate({ employeeId });
-    },
+    onSuccess: refreshNotifications,
+    onError: error => sonnerToast.error(errorMessage(error, "تعذر تعليم الإشعارات كمقروءة")),
   });
 
   const deleteNotificationMutation = trpc.portalNotifications.deleteNotification.useMutation({
-    onSuccess: () => {
-      utils.portalNotifications.getUnreadCount.invalidate({ employeeId });
-      utils.portalNotifications.getNotifications.invalidate({ employeeId });
-    },
+    onSuccess: refreshNotifications,
+    onError: error => sonnerToast.error(errorMessage(error, "تعذر حذف الإشعار")),
   });
 
   useEffect(() => {
@@ -136,19 +144,24 @@ export function NotificationBell({ employeeId, className }: NotificationBellProp
 
   const handleNotificationClick = (notification: typeof notifications[0]) => {
     if (!notification.isRead) {
-      markAsReadMutation.mutate({ notificationId: notification.id, employeeId });
+      markAsReadMutation.mutate({ notificationId: notification.id });
     }
     if (notification.actionUrl) {
-      window.location.href = notification.actionUrl;
+      // الروابط الداخلية تُفتح داخل التطبيق (مثل ?tab=salary) دون إعادة تحميل الصفحة
+      if (notification.actionUrl.startsWith("/") && !notification.actionUrl.startsWith("//")) {
+        navigate(notification.actionUrl);
+      } else {
+        window.location.href = notification.actionUrl;
+      }
       setIsOpen(false);
     }
   };
 
-  const handleMarkAllAsRead = () => markAllAsReadMutation.mutate({ employeeId });
+  const handleMarkAllAsRead = () => markAllAsReadMutation.mutate();
 
   const handleDeleteNotification = (e: React.MouseEvent, notificationId: number) => {
     e.stopPropagation();
-    deleteNotificationMutation.mutate({ notificationId, employeeId });
+    deleteNotificationMutation.mutate({ notificationId });
   };
 
   const handleEnablePush = useCallback(async () => {
@@ -230,6 +243,13 @@ export function NotificationBell({ employeeId, className }: NotificationBellProp
             {isLoading ? (
               <div className="flex items-center justify-center h-32">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : notificationsError ? (
+              <div className="flex flex-col items-center justify-center gap-2 h-32 text-center px-4">
+                <p className="text-sm text-destructive">{errorMessage(notificationsError, "تعذر تحميل الإشعارات")}</p>
+                <Button variant="outline" size="sm" onClick={() => refetchNotifications()} disabled={fetchingNotifications}>
+                  إعادة المحاولة
+                </Button>
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
