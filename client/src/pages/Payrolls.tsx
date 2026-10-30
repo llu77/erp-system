@@ -143,6 +143,13 @@ function recomputeLine(line: PreviewLine, inputs: LineInputs): PayrollLineResult
 
 const toggleId = (list: number[], id: number) => (list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
 
+/** البنود المخصومة والمؤجلة معاً (لعرضها في نافذة التعديل) */
+function allLinked<T extends { id: number }>(raw: string | null | undefined): T[] {
+  const parsed = parseLinkedItems<T>(raw);
+  const seen = new Set(parsed.items.map(i => i.id));
+  return [...parsed.items, ...parsed.deferredItems.filter(i => !seen.has(i.id))];
+}
+
 export default function Payrolls() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
@@ -360,11 +367,16 @@ export default function Payrolls() {
   const formatDate = (date: Date | string) => new Date(date).toLocaleDateString('ar-SA');
 
   // تصفية المسيرات حسب الفترة الزمنية
+  // المقارنة بالسنة والشهر فقط (تجنب انزياح المنطقة الزمنية عند تحويل "YYYY-MM-DD" إلى تاريخ)
+  const monthKey = (value: string) => {
+    const [y, m] = value.split('-').map(Number);
+    return y * 100 + m;
+  };
   const filteredPayrolls = payrolls?.filter(p => {
     if (!filterDateFrom && !filterDateTo) return true;
-    const payrollDate = new Date(p.year, p.month - 1, 1);
-    if (filterDateFrom && payrollDate < new Date(filterDateFrom)) return false;
-    if (filterDateTo && payrollDate > new Date(filterDateTo)) return false;
+    const key = p.year * 100 + p.month;
+    if (filterDateFrom && key < monthKey(filterDateFrom)) return false;
+    if (filterDateTo && key > monthKey(filterDateTo)) return false;
     return true;
   });
 
@@ -393,9 +405,9 @@ export default function Payrolls() {
     workDays: editInputs.workDays,
     incentiveAmount: editInputs.incentiveAmount,
     otherDeduction: editInputs.otherDeduction,
-    advanceDeduction: parseLinkedItems<PayrollAdvanceItem>(editingDetail.advanceDetails).items
+    advanceDeduction: allLinked<PayrollAdvanceItem>(editingDetail.advanceDetails)
       .filter(a => !editInputs.deferredAdvanceIds.includes(a.id)).reduce((s, a) => s + a.amount, 0),
-    violationsDeduction: parseLinkedItems<PayrollViolationItem>(editingDetail.violationsDetails).items
+    violationsDeduction: allLinked<PayrollViolationItem>(editingDetail.violationsDetails)
       .filter(v => !editInputs.deferredViolationIds.includes(v.id)).reduce((s, v) => s + v.amount, 0),
     negativeInvoicesDeduction: parseFloat(editingDetail.negativeInvoicesDeduction || '0'),
     leaves: parseJsonArray<PayrollLeaveItem>(editingDetail.leaveDetails).map(l => ({ type: l.kind, days: l.days })),
@@ -521,6 +533,13 @@ export default function Payrolls() {
                       </div>
                     </div>
 
+                    {(previewQuery.data?.excludedEmployees?.length ?? 0) > 0 && (
+                      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-xs text-yellow-500">
+                        مستبعدون لوجودهم في مسيرة أخرى لنفس الشهر (منقولون بين الفروع):{' '}
+                        {previewQuery.data!.excludedEmployees.map(e => `${e.employeeName} (${e.payrollNumber})`).join('، ')}
+                      </div>
+                    )}
+
                     {previewQuery.data?.existingPayroll && (
                       <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400 flex items-center gap-2">
                         <AlertCircle className="h-4 w-4" />
@@ -546,7 +565,7 @@ export default function Payrolls() {
                               <TableHead className="text-center">الأساسي</TableHead>
                               <TableHead className="text-center">ساعات إضافية</TableHead>
                               <TableHead className="text-center">الحوافز</TableHead>
-                              <TableHead className="text-center">أيام العمل</TableHead>
+                              <TableHead className="text-center" title="أيام الإجازة المعتمدة لا تُحتسب غياباً">أيام العمل</TableHead>
                               <TableHead className="text-center">الغياب</TableHead>
                               <TableHead className="text-center">الإجازات</TableHead>
                               <TableHead className="text-center">السلف</TableHead>
@@ -1197,10 +1216,10 @@ export default function Payrolls() {
                     />
                   </div>
                 </div>
-                {isManager && parseLinkedItems<PayrollAdvanceItem>(editingDetail.advanceDetails).items.length > 0 && (
+                {isManager && allLinked<PayrollAdvanceItem>(editingDetail.advanceDetails).length > 0 && (
                   <div className="space-y-1">
                     <div className="text-xs font-bold">السلف المخصومة (ألغِ التحديد لتأجيل السلفة لمسيرة لاحقة)</div>
-                    {parseLinkedItems<PayrollAdvanceItem>(editingDetail.advanceDetails).items.map(a => (
+                    {allLinked<PayrollAdvanceItem>(editingDetail.advanceDetails).map(a => (
                       <label key={a.id} className="flex items-center gap-2 text-xs">
                         <Checkbox
                           checked={!editInputs.deferredAdvanceIds.includes(a.id)}
@@ -1211,10 +1230,10 @@ export default function Payrolls() {
                     ))}
                   </div>
                 )}
-                {isManager && parseLinkedItems<PayrollViolationItem>(editingDetail.violationsDetails).items.length > 0 && (
+                {isManager && allLinked<PayrollViolationItem>(editingDetail.violationsDetails).length > 0 && (
                   <div className="space-y-1">
                     <div className="text-xs font-bold">المخالفات المخصومة</div>
-                    {parseLinkedItems<PayrollViolationItem>(editingDetail.violationsDetails).items.map(v => (
+                    {allLinked<PayrollViolationItem>(editingDetail.violationsDetails).map(v => (
                       <label key={v.id} className="flex items-center gap-2 text-xs">
                         <Checkbox
                           checked={!editInputs.deferredViolationIds.includes(v.id)}

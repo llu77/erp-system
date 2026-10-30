@@ -131,6 +131,16 @@ function payrollActor(user: { id: number; name: string | null; role: string; bra
   return { id: user.id, name: user.name, role: user.role, branchId: user.branchId ?? null };
 }
 
+// تأجيل السلف والمخالفات قرار للمسؤول والمدير فقط؛ لغيرهم تبقى قيم التأجيل المحفوظة كما هي
+function stripDeferralUnlessManager<T extends { deferredAdvanceIds?: number[]; deferredViolationIds?: number[] }>(
+  user: { role: string },
+  adjustment: T
+): T {
+  if (user.role === 'admin' || user.role === 'manager') return adjustment;
+  const { deferredAdvanceIds, deferredViolationIds, ...rest } = adjustment;
+  return rest as T;
+}
+
 // تحويل أخطاء خدمة الرواتب إلى أخطاء tRPC مفهومة
 async function runPayrollAction<T>(action: () => Promise<T>): Promise<T> {
   try {
@@ -3290,8 +3300,19 @@ export const appRouter = router({
         noticePeriod: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // فرع الطلب يؤخذ من سجل الموظف وليس من الواجهة (يعتمد عليه نطاق صلاحيات المشرف والرواتب)
+        const requestEmployee = await db.getEmployeeById(input.employeeId);
+        if (!requestEmployee) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
+        }
+        if (ctx.user.role === 'supervisor' && !checkBranchAccess(ctx.user.branchId ?? null, requestEmployee.branchId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك تقديم طلب لموظف في فرع آخر' });
+        }
+        const requestBranch = await db.getBranchById(requestEmployee.branchId);
         const result = await db.createEmployeeRequest({
           ...input,
+          branchId: requestEmployee.branchId,
+          branchName: requestBranch ? (requestBranch.nameAr || requestBranch.name) : input.branchName,
           advanceAmount: input.advanceAmount?.toString(),
           arrearsAmount: input.arrearsAmount?.toString(),
           permissionHours: input.permissionHours?.toString(),
@@ -3408,9 +3429,13 @@ export const appRouter = router({
 
         const oldStatus = request.status;
 
-        // مشرف الفرع يعتمد طلبات فرعه فقط
-        if (ctx.user.role === 'supervisor' && request.branchId && !checkBranchAccess(ctx.user.branchId ?? null, request.branchId)) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك اعتماد طلبات فرع آخر' });
+        // مشرف الفرع يعتمد طلبات موظفي فرعه فقط (حسب فرع الموظف الفعلي)
+        if (ctx.user.role === 'supervisor') {
+          const requestEmployee = await db.getEmployeeById(request.employeeId);
+          const employeeBranchId = requestEmployee?.branchId ?? request.branchId;
+          if (!employeeBranchId || !checkBranchAccess(ctx.user.branchId ?? null, employeeBranchId)) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك اعتماد طلبات فرع آخر' });
+          }
         }
 
         // لا يمكن إلغاء/رفض سلفة مخصومة في مسيرة معتمدة أو مدفوعة
@@ -3609,7 +3634,7 @@ export const appRouter = router({
           branchName: branch.nameAr || branch.name,
           year: input.year,
           month: input.month,
-          adjustments: input.adjustments,
+          adjustments: input.adjustments.map(a => stripDeferralUnlessManager(ctx.user, a)),
           actor: payrollActor(ctx.user),
         }));
 
@@ -3639,7 +3664,7 @@ export const appRouter = router({
         const payroll = await db.getPayrollById(detail.payrollId);
         if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
         assertPayrollBranchAccess(ctx.user, payroll.branchId);
-        await runPayrollAction(() => payrollService.updatePayrollLine(detailId, adjustment));
+        await runPayrollAction(() => payrollService.updatePayrollLine(detailId, stripDeferralUnlessManager(ctx.user, adjustment)));
         return { success: true, message: 'تم تحديث بيانات الراتب وإعادة الحساب' };
       }),
 
@@ -3754,7 +3779,10 @@ export const appRouter = router({
 
     getForEmployee: payrollViewProcedure
       .input(z.object({ employeeId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        const employee = await db.getEmployeeById(input.employeeId);
+        if (!employee) throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
+        assertPayrollBranchAccess(ctx.user, employee.branchId);
         return await db.getUndeductedAdvancesForEmployee(input.employeeId);
       }),
   }),
@@ -8597,12 +8625,8 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في تحديث الطلب' });
         }
 
-        // السلف والإجازات تنعكس مباشرة على مسيرة الرواتب المفتوحة للموظف
-        if (existingRequest && (existingRequest.requestType === 'advance' || existingRequest.requestType === 'vacation')) {
-          await payrollService.syncOpenPayrollsForEmployee(existingRequest.employeeId).catch(error =>
-            payrollLogger.error('خطأ في تحديث مسيرة الرواتب بعد تغيير حالة الطلب', error));
-        }
-        
+        // لا تُحدَّث المسيرات من هذا المسار (غير مرتبط بجلسة دخول)؛
+        // المسيرة المفتوحة تُعاد حسابها تلقائياً عند اعتمادها أو من زر "إعادة الحساب"
         return { success: true };
       }),
 

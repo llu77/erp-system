@@ -250,8 +250,9 @@ export default function EmployeeViolations() {
                               </Button>
                               <Button variant="ghost" size="icon" className="h-7 w-7" title="رفض"
                                 onClick={() => {
-                                  const notes = prompt("سبب الرفض (اختياري)") ?? undefined;
-                                  reviewMutation.mutate({ id: v.id, status: "rejected", notes });
+                                  const notes = prompt("سبب الرفض (اختياري)");
+                                  if (notes === null) return; // ألغى المستخدم
+                                  reviewMutation.mutate({ id: v.id, status: "rejected", notes: notes || undefined });
                                 }}>
                                 <XCircle className="h-3.5 w-3.5 text-red-500" />
                               </Button>
