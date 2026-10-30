@@ -1180,6 +1180,14 @@ export async function cancelSettlement(id: number, reason: string, actor: EndOfS
 // ==================== التكامل مع الطلبات ====================
 
 /**
+ * طلب إنهاء الخدمة يظهر للموظف (بوابة الموظف / طلباتي) بعد اعتماده فقط:
+ * المسودة قرار إداري لم يصدر بعد، والملغى قبل الاعتماد لم يُبلّغ به
+ */
+export function isRequestVisibleToEmployee(request: { requestType: string; status: string }): boolean {
+  return request.requestType !== "end_of_service" || request.status === "approved";
+}
+
+/**
  * حذف طلب إنهاء خدمة (للمسؤول): مسموح فقط إذا كانت مخالصته ملغاة، وتُحذف معه
  * يُرجع false إذا لم يكن الطلب من نوع إنهاء الخدمة
  */

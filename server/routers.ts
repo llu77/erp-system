@@ -3419,10 +3419,11 @@ export const appRouter = router({
       if (!employee) {
         // إذا لم يكن موظفاً، أرجع الطلبات التي أنشأها المستخدم
         const allRequests = await db.getAllEmployeeRequests();
-        return allRequests.filter(r => r.employeeName === ctx.user.name);
+        return allRequests.filter(r => r.employeeName === ctx.user.name && endOfService.isRequestVisibleToEmployee(r));
       }
-      
-      return await db.getEmployeeRequestsByEmployeeId(employee.id);
+
+      const requests = await db.getEmployeeRequestsByEmployeeId(employee.id);
+      return requests.filter(endOfService.isRequestVisibleToEmployee);
     }),
 
     // الطلبات المعلقة - متاح للمشرف العام والمدير والمسؤول
@@ -8158,7 +8159,9 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         employeeId: z.number(),
       }))
       .query(async ({ input }) => {
-        return await db.getEmployeeRequestsByEmployeeId(input.employeeId);
+        // إنهاء الخدمة يظهر للموظف بعد اعتماده فقط
+        const requests = await db.getEmployeeRequestsByEmployeeId(input.employeeId);
+        return requests.filter(endOfService.isRequestVisibleToEmployee);
       }),
   }),
 

@@ -11,6 +11,7 @@ import {
   calculateOrThrow,
   canManageEndOfService,
   getSettlementById,
+  isRequestVisibleToEmployee,
   listSettlements,
   resolveViewScope,
   settlementToForm,
@@ -322,6 +323,15 @@ describe("settlement rows", () => {
 
   it("stores the request's last working day at Riyadh midnight", () => {
     expect(_internal.riyadhMidnight("2026-10-31").toISOString()).toBe("2026-10-30T21:00:00.000Z");
+  });
+});
+
+describe("employee portal visibility", () => {
+  it("shows an end-of-service request to the employee only once approved", () => {
+    expect(isRequestVisibleToEmployee({ requestType: "end_of_service", status: "pending" })).toBe(false);
+    expect(isRequestVisibleToEmployee({ requestType: "end_of_service", status: "cancelled" })).toBe(false);
+    expect(isRequestVisibleToEmployee({ requestType: "end_of_service", status: "approved" })).toBe(true);
+    expect(isRequestVisibleToEmployee({ requestType: "advance", status: "pending" })).toBe(true);
   });
 });
 

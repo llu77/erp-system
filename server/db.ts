@@ -9323,11 +9323,14 @@ export async function getEmployeePortalRequestsStats(employeeId: number) {
   const db = await getDb();
   if (!db) return null;
 
-  const requests = await db.select({
+  const allRequests = await db.select({
     status: employeeRequests.status,
+    requestType: employeeRequests.requestType,
   })
     .from(employeeRequests)
     .where(eq(employeeRequests.employeeId, employeeId));
+  // إنهاء الخدمة يظهر للموظف بعد اعتماده فقط (نفس قائمة طلباتي)
+  const requests = allRequests.filter(r => r.requestType !== 'end_of_service' || r.status === 'approved');
 
   let total = 0;
   let pending = 0;
