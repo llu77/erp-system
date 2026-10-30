@@ -157,19 +157,19 @@ function cleanText(value: unknown, maxLength?: number): string | null {
 }
 
 /**
- * تحويل YYYY-MM-DD إلى Date لحقل DATE في MySQL.
- * يُستخدم منتصف النهار بالتوقيت المحلي حتى لا ينزاح اليوم عند تحويل المنطقة الزمنية.
+ * قيمة حقل DATE في MySQL كنص YYYY-MM-DD مباشرة
+ * (بدون كائن Date حتى لا ينزاح اليوم بسبب المنطقة الزمنية للخادم أو الاتصال)
  */
-function dateOnlyToDb(ymd: string): Date {
-  const [y, m, d] = ymd.split('-').map(n => parseInt(n, 10));
-  return new Date(y, m - 1, d, 12, 0, 0);
+function dateOnlyToDb(ymd: string): SQL {
+  return sql`${ymd}`;
 }
 
-function optionalDateToDb(value: DateInput, label: string): Date | null {
+/** تاريخ اختياري بصيغة YYYY-MM-DD (null إن لم يُرسل) */
+function optionalDateString(value: DateInput, label: string): string | null {
   if (value === null || value === undefined || value === '') return null;
   const ymd = toVoucherDateString(value);
   if (!ymd) throw new VoucherError(`${label} غير صحيح`);
-  return dateOnlyToDb(ymd);
+  return ymd;
 }
 
 function normalizeType(type: unknown): VoucherType {
@@ -253,12 +253,12 @@ export async function createVoucher(
   // التواريخ
   const voucherDateStr = data.voucherDate ? toVoucherDateString(data.voucherDate) : todayVoucherDate();
   if (!voucherDateStr) throw new VoucherError('تاريخ السند غير صحيح');
-  const dueDateFrom = optionalDateToDb(data.dueDateFrom ?? data.dueDate, 'تاريخ بداية الفترة');
-  const dueDateTo = optionalDateToDb(data.dueDateTo, 'تاريخ نهاية الفترة');
-  if (dueDateFrom && dueDateTo && dueDateFrom.getTime() > dueDateTo.getTime()) {
+  const dueDateFrom = optionalDateString(data.dueDateFrom ?? data.dueDate, 'تاريخ بداية الفترة');
+  const dueDateTo = optionalDateString(data.dueDateTo, 'تاريخ نهاية الفترة');
+  if (dueDateFrom && dueDateTo && dueDateFrom > dueDateTo) {
     throw new VoucherError('تاريخ بداية الفترة يجب أن يكون قبل تاريخ نهايتها');
   }
-  const checkDate = split.checkAmount > 0 ? optionalDateToDb(data.checkDate, 'تاريخ الشيك') : null;
+  const checkDate = split.checkAmount > 0 ? optionalDateString(data.checkDate, 'تاريخ الشيك') : null;
 
   const db = await requireDb();
   const actorName = cleanText(actor.name) || 'مستخدم';
@@ -304,9 +304,9 @@ export async function createVoucher(
   const values = {
     voucherType,
     voucherDate: dateOnlyToDb(voucherDateStr),
-    dueDateFrom,
-    dueDateTo,
-    dueDate: dueDateFrom, // للتوافق العكسي
+    dueDateFrom: dueDateFrom ? dateOnlyToDb(dueDateFrom) : null,
+    dueDateTo: dueDateTo ? dateOnlyToDb(dueDateTo) : null,
+    dueDate: dueDateFrom ? dateOnlyToDb(dueDateFrom) : null, // للتوافق العكسي
     partyName,
     partyType,
     partyId,
@@ -327,7 +327,7 @@ export async function createVoucher(
     bankName: split.bankAmount > 0 ? cleanText(data.bankName, 100) : null,
     bankReference: split.bankAmount > 0 ? cleanText(data.bankReference, 100) : null,
     checkNumber: split.checkAmount > 0 ? cleanText(data.checkNumber, 50) : null,
-    checkDate,
+    checkDate: checkDate ? dateOnlyToDb(checkDate) : null,
     checkBank: split.checkAmount > 0 ? cleanText(data.checkBank, 100) : null,
     createdBy: actor.id,
     createdByName: actorName,
