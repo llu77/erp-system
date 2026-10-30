@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { PORTAL_LOGIN_PATH, resolveAuthRedirect } from "@/lib/portal/portalUi";
+import { PORTAL_LOGIN_PATH, resolveAuthRedirect } from "@/lib/portal/routes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";

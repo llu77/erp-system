@@ -6,7 +6,6 @@
  * - بنود قسيمة الراتب وطلب السلفة
  */
 
-import { EMPLOYEE_UNAUTHED_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { LEAVE_KIND_LABELS, type LeaveKind } from "@shared/payroll";
 import type { PayslipDocumentData, PayslipItem } from "@shared/payslipTemplate";
 import {
@@ -14,46 +13,18 @@ import {
   toVoucherDateString,
   VOUCHER_TIMEZONE,
 } from "@shared/vouchers";
+import { EMPLOYEE_PORTAL_PATH, PORTAL_LOGIN_PATH } from "./routes";
 
 // ==================== المسارات ====================
 
-export const PORTAL_LOGIN_PATH = "/employee-login";
-export const EMPLOYEE_PORTAL_PATH = "/employee-portal";
-export const ADMIN_PORTAL_PATH = "/admin-employee-portal";
-
-const PORTAL_PATHS = [
-  PORTAL_LOGIN_PATH,
-  EMPLOYEE_PORTAL_PATH,
+export {
   ADMIN_PORTAL_PATH,
-];
-
-export function isPortalPath(pathname: string | null | undefined): boolean {
-  if (!pathname) return false;
-  return PORTAL_PATHS.some(p => pathname === p || pathname.startsWith(`${p}/`));
-}
-
-/**
- * إعادة التوجيه عند خطأ عدم تسجيل الدخول:
- * - انتهاء جلسة البوابة -> صفحة دخول الموظفين (وليس دخول النظام)
- * - انتهاء جلسة النظام داخل صفحات البوابة -> لا شيء (البوابة تدير جلستها بنفسها)
- */
-export function resolveAuthRedirect(
-  message: string | null | undefined,
-  pathname: string | null | undefined
-): "employee-login" | "oauth-login" | null {
-  if (message === EMPLOYEE_UNAUTHED_ERR_MSG) {
-    return pathname === PORTAL_LOGIN_PATH ? null : "employee-login";
-  }
-  if (message === UNAUTHED_ERR_MSG) {
-    return isPortalPath(pathname) ? null : "oauth-login";
-  }
-  return null;
-}
-
-/** الصفحة الرئيسية للموظف بعد الدخول: المشرف -> لوحة المشرف، غيره -> البوابة */
-export function portalHomePath(me: { isSupervisor: boolean }): string {
-  return me.isSupervisor ? ADMIN_PORTAL_PATH : EMPLOYEE_PORTAL_PATH;
-}
+  EMPLOYEE_PORTAL_PATH,
+  PORTAL_LOGIN_PATH,
+  isPortalPath,
+  portalHomePath,
+  resolveAuthRedirect,
+} from "./routes";
 
 /** أدوار مستخدمي النظام المسموح لهم بلوحة مراجعة البوابة */
 export const STAFF_REVIEWER_ROLES = [
