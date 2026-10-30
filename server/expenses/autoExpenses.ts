@@ -86,13 +86,20 @@ export function isDuplicateKeyError(error: unknown): boolean {
   return e?.code === "ER_DUP_ENTRY" || e?.errno === 1062 || e?.cause?.code === "ER_DUP_ENTRY" || e?.cause?.errno === 1062;
 }
 
-/** أي مفتاح فريد تعارض: sourceKey (المصروف التلقائي موجود) أو expenseNumber (رقم مكرر) */
+/**
+ * أي مفتاح فريد تعارض: sourceKey (المصروف التلقائي موجود) أو expenseNumber (رقم مكرر)
+ * يُقرأ اسم المفتاح من رسالة قاعدة البيانات فقط ("for key '...'")؛ رسالة Drizzle المغلِّفة
+ * تحتوي نص الاستعلام بكل الأعمدة (ومنها sourceKey) فلا يُعتمد عليها
+ */
 export function duplicateKeyTarget(error: unknown): "sourceKey" | "expenseNumber" | "other" | null {
   if (!isDuplicateKeyError(error)) return null;
   const e = error as { message?: string; sqlMessage?: string; cause?: { message?: string; sqlMessage?: string } };
-  const text = [e?.message, e?.sqlMessage, e?.cause?.message, e?.cause?.sqlMessage].filter(Boolean).join(" ");
-  if (/sourceKey/i.test(text)) return "sourceKey";
-  if (/expenseNumber/i.test(text)) return "expenseNumber";
+  const dbMessages = [e?.cause?.sqlMessage, e?.sqlMessage, e?.cause?.message, e?.message].filter(
+    (m): m is string => typeof m === "string" && !m.startsWith("Failed query:")
+  );
+  const key = dbMessages.map(m => /for key '([^']+)'/i.exec(m)?.[1]).find(Boolean) ?? "";
+  if (/sourceKey/i.test(key)) return "sourceKey";
+  if (/expenseNumber/i.test(key)) return "expenseNumber";
   return "other";
 }
 

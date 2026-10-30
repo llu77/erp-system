@@ -23,6 +23,7 @@ import {
   ensureFixedExpensesForMonth,
   fixedExpenseTitle,
   formatExpenseNumber,
+  duplicateKeyTarget,
   insertExpenseWithNumber,
   listFixedExpenseTemplates,
   manualExpenseKey,
@@ -99,6 +100,28 @@ describe("expense numbers", () => {
     const { exec, tried } = fakeExec(0, [sourceDup]);
     expect(await insertExpenseWithNumber(exec, { ...row, sourceKey: "fixed:1:2026-11:3" }, NOW)).toBeNull();
     expect(tried).toEqual(["EXP-2026-0001"]);
+  });
+
+  it("reads the key from the database message, not from Drizzle's wrapper that lists every column", async () => {
+    const { DrizzleQueryError } = await import("drizzle-orm/errors");
+    const sql = "insert into `expenses` (`id`, `expenseNumber`, `source`, `sourceKey`) values (default, ?, ?, ?)";
+    const wrap = (key: string) => {
+      const cause = Object.assign(new Error(`Duplicate entry 'x' for key '${key}'`), {
+        code: "ER_DUP_ENTRY",
+        errno: 1062,
+        sqlMessage: `Duplicate entry 'x' for key '${key}'`,
+      });
+      return new DrizzleQueryError(sql, [], cause);
+    };
+    expect(duplicateKeyTarget(wrap("expenses_expenseNumber_unique"))).toBe("expenseNumber");
+    expect(duplicateKeyTarget(wrap("expenses.expenses_sourceKey_unique"))).toBe("sourceKey");
+    expect(duplicateKeyTarget(wrap("PRIMARY"))).toBe("other");
+
+    // تعارض الرقم داخل الغلاف يُعاد بالرقم التالي ولا يُسقط المصروف
+    const { exec, tried } = fakeExec(6, [wrap("expenses_expenseNumber_unique"), "ok"]);
+    const created = await insertExpenseWithNumber(exec, { ...row, sourceKey: "payroll:9" }, NOW);
+    expect(tried).toEqual(["EXP-2026-0007", "EXP-2026-0008"]);
+    expect(created).toEqual({ id: 99, expenseNumber: "EXP-2026-0008" });
   });
 
   it("rethrows other database errors and gives up after repeated number conflicts", async () => {
