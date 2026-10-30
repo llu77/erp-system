@@ -21,7 +21,7 @@ export function AdvanceRequestActions({ requestId }: AdvanceRequestActionsProps)
     const toastId = `advance-pdf-${requestId}`;
     toast.loading("جاري تجهيز طلب السلفة...", { id: toastId });
     try {
-      const result = await pdfMutation.mutateAsync({ requestId });
+      const result: { pdf: string; filename: string } = await pdfMutation.mutateAsync({ requestId });
       downloadBase64Pdf(result.pdf, result.filename);
       toast.success("تم تحميل طلب السلفة", { id: toastId });
     } catch (error) {
@@ -37,7 +37,7 @@ export function AdvanceRequestActions({ requestId }: AdvanceRequestActionsProps)
       return;
     }
     try {
-      const result = await pdfMutation.mutateAsync({ requestId });
+      const result: { pdf: string; filename: string } = await pdfMutation.mutateAsync({ requestId });
       showPdfInWindow(win, result.pdf);
     } catch (error) {
       win.close();

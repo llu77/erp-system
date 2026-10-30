@@ -86,7 +86,7 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
     const toastId = `payslip-pdf-${slip.payrollId}`;
     toast.loading("جاري تجهيز ملف PDF...", { id: toastId });
     try {
-      const result = await pdfMutation.mutateAsync({ payrollId: slip.payrollId });
+      const result: { pdf: string; filename: string } = await pdfMutation.mutateAsync({ payrollId: slip.payrollId });
       downloadBase64Pdf(result.pdf, result.filename);
       toast.success("تم تحميل القسيمة", { id: toastId });
     } catch (error) {

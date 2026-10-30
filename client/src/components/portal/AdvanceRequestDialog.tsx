@@ -45,7 +45,7 @@ export function AdvanceRequestDialog({ open, onOpenChange }: AdvanceRequestDialo
   const utils = trpc.useUtils();
 
   const createMutation = trpc.employeePortal.createAdvanceRequest.useMutation({
-    onSuccess: result => {
+    onSuccess: (result: { id: number; requestNumber: string }) => {
       toast.success(`تم إرسال طلب السلفة رقم ${result.requestNumber}`, {
         description: "يمكنك متابعة الطلب وتحميله من سجل طلباتي",
       });
@@ -54,7 +54,7 @@ export function AdvanceRequestDialog({ open, onOpenChange }: AdvanceRequestDialo
       setErrors({});
       onOpenChange(false);
     },
-    onError: error => {
+    onError: (error: unknown) => {
       toast.error(errorMessage(error, "تعذر إرسال طلب السلفة"));
     },
   });

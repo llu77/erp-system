@@ -59,7 +59,8 @@ export function usePortalSession() {
       return { ok: false, message: errorMessage(error, "تعذر تسجيل الخروج، حاول مرة أخرى") };
     }
     clearLegacyPortalStorage();
-    queryClient.clear();
+    // لا تبقى بيانات الموظف في ذاكرة المتصفح بعد الخروج (أجهزة مشتركة)
+    queryClient.removeQueries();
     utils.employeeAuth.me.setData(undefined, null);
     navigate(PORTAL_LOGIN_PATH, { replace: true });
     return { ok: true };

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, useSearch } from 'wouter';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -31,12 +32,56 @@ import {
   Wallet,
   CalendarDays,
   UserCircle,
-  Gift
+  Gift,
+  Landmark,
+  Plus,
+  Shield,
+  Stamp,
+  UserCheck,
+  Ban
 } from 'lucide-react';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
-import { SalarySlip, LeaveBalance, EmployeeProfile, BonusReport, RequestTimeline, RequestAttachments, EmployeeInfoForm } from '@/components/portal';
+import {
+  SalarySlip,
+  LeaveBalance,
+  EmployeeProfile,
+  BonusReport,
+  RequestTimeline,
+  RequestAttachments,
+  EmployeeInfoForm,
+  AdvanceRequestDialog,
+  AdvanceRequestActions,
+  PortalQueryError,
+} from '@/components/portal';
 import { NotificationBell } from '@/components/portal/NotificationBell';
 import { EmailSetupModal } from '@/components/portal/EmailSetupModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { usePortalSession, type PortalMe } from '@/lib/portal/usePortalSession';
+import {
+  ADMIN_PORTAL_PATH,
+  EMPLOYEE_PORTAL_PATH,
+  EMPLOYEE_PORTAL_TABS,
+  PORTAL_LOGIN_PATH,
+  buildTabHref,
+  errorMessage,
+  formatPortalDate,
+  formatPortalDateTime,
+  formatSar,
+  readPositiveIntParam,
+  resolvePortalTab,
+  shouldRetryQuery,
+} from '@/lib/portal/portalUi';
+import { repaymentMethodLabel } from '@shared/advanceRequestTemplate';
+import { SYSTEM_BRAND } from '@shared/branding';
 
 interface Message {
   id: string;
@@ -45,18 +90,6 @@ interface Message {
   timestamp: Date;
   hasPendingRequest?: boolean;
   pendingRequestType?: string;
-}
-
-interface EmployeeInfo {
-  id: number;
-  name: string;
-  code: string;
-  branchId: number;
-  branchName: string;
-  position: string | null;
-  email: string | null;
-  emailVerified: boolean;
-  isSupervisor?: boolean;
 }
 
 // أنواع الطلبات بالعربية
@@ -95,30 +128,62 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 
 export default function EmployeePortal() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const utils = trpc.useUtils();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
-  const [employeeInfo, setEmployeeInfo] = useState<EmployeeInfo | null>(null);
-  const [activeTab, setActiveTab] = useState('chat');
+  const [showAdvanceForm, setShowAdvanceForm] = useState(false);
+  const [requestToCancel, setRequestToCancel] = useState<{ id: number; requestNumber: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // جلب طلبات الموظف
-  const { data: myRequests, isLoading: requestsLoading, refetch: refetchRequests } = trpc.employeeAuth.getMyRequests.useQuery(
-    { employeeId: employeeInfo?.id || 0 },
-    { enabled: !!employeeInfo?.id }
-  );
+  // هوية الموظف من جلسة الخادم (كوكي البوابة) وليس من المتصفح
+  const {
+    me: employeeInfo,
+    isLoading: sessionLoading,
+    error: sessionError,
+    refetch: refetchSession,
+    logout,
+    isLoggingOut,
+  } = usePortalSession();
 
-  // جلب معلومات الموظف من localStorage
   useEffect(() => {
-    const storedEmployee = localStorage.getItem('employeeInfo');
-    if (storedEmployee) {
-      setEmployeeInfo(JSON.parse(storedEmployee));
-    } else {
-      setLocation('/employee-login');
+    if (!sessionLoading && !sessionError && !employeeInfo) {
+      setLocation(PORTAL_LOGIN_PATH, { replace: true });
     }
-  }, [setLocation]);
+  }, [sessionLoading, sessionError, employeeInfo, setLocation]);
+
+  // التبويب من الرابط (?tab=) حتى تفتح روابط الإشعارات التبويب الصحيح
+  const activeTab = resolvePortalTab(search, EMPLOYEE_PORTAL_TABS, 'chat');
+  const setActiveTab = (tab: string) => {
+    setLocation(buildTabHref(EMPLOYEE_PORTAL_PATH, search, tab), { replace: true });
+  };
+  const requestedPayrollId = readPositiveIntParam(search, 'payrollId');
+
+  // جلب طلبات الموظف
+  const {
+    data: myRequests,
+    isLoading: requestsLoading,
+    error: requestsError,
+    isFetching: requestsFetching,
+    refetch: refetchRequests,
+  } = trpc.employeeAuth.getMyRequests.useQuery(undefined, {
+    enabled: !!employeeInfo,
+    retry: shouldRetryQuery,
+  });
+
+  const cancelRequestMutation = trpc.employeePortal.cancelRequest.useMutation({
+    onSuccess: () => {
+      toast.success('تم إلغاء الطلب');
+      setRequestToCancel(null);
+      refetchRequests();
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error, 'تعذر إلغاء الطلب'));
+    },
+  });
 
   // رسالة ترحيب
   useEffect(() => {
@@ -177,9 +242,9 @@ export default function EmployeePortal() {
         employeeContext: {
           employeeId: employeeInfo.id,
           employeeName: employeeInfo.name,
-          branchId: employeeInfo.branchId,
-          branchName: employeeInfo.branchName,
-          isSupervisor: employeeInfo.isSupervisor || false,
+          branchId: employeeInfo.branchId ?? undefined,
+          branchName: employeeInfo.branchName ?? undefined,
+          isSupervisor: employeeInfo.isSupervisor,
         },
         conversationHistory: messages.map(m => ({
           role: m.role as 'user' | 'assistant' | 'system' | 'tool',
@@ -239,10 +304,9 @@ export default function EmployeePortal() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('employeeInfo');
-    localStorage.removeItem('employeeToken');
-    setLocation('/employee-login');
+  const handleLogout = async () => {
+    const result = await logout();
+    if (!result.ok) toast.error(result.message);
   };
 
   const quickActions = [
@@ -259,6 +323,19 @@ export default function EmployeePortal() {
     approved: myRequests?.filter(r => r.status === 'approved').length || 0,
     rejected: myRequests?.filter(r => r.status === 'rejected').length || 0,
   };
+
+  if (sessionError && !employeeInfo) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4" dir="rtl">
+        <PortalQueryError
+          className="w-full max-w-md"
+          error={sessionError}
+          title="تعذر التحقق من جلسة الدخول"
+          onRetry={() => refetchSession()}
+        />
+      </div>
+    );
+  }
 
   if (!employeeInfo) {
     return (
@@ -280,36 +357,51 @@ export default function EmployeePortal() {
                 <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-white">Symbol AI</h1>
+                <h1 className="text-lg sm:text-xl font-bold text-white">{SYSTEM_BRAND.name}</h1>
                 <p className="text-[10px] sm:text-xs text-slate-400">بوابة الموظفين</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2 sm:gap-4">
-              {/* جرس الإشعارات */}
-              {employeeInfo.id && (
-                <NotificationBell 
-                  employeeId={employeeInfo.id} 
-                  className="text-slate-400 hover:text-white"
-                />
+              {/* لوحة المشرف (للمشرفين) */}
+              {employeeInfo.isSupervisor && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLocation(ADMIN_PORTAL_PATH)}
+                  className="text-amber-300 hover:text-amber-200 hover:bg-slate-700/80 px-2 sm:px-3 rounded-lg border border-amber-500/30"
+                >
+                  <Shield className="h-4 w-4 sm:ml-2" />
+                  <span className="hidden sm:inline">لوحة المشرف</span>
+                </Button>
               )}
-              
+
+              {/* جرس الإشعارات */}
+              <NotificationBell className="text-slate-400 hover:text-white" />
+
               {/* معلومات الموظف - مخفية على الموبايل الصغير */}
               <div className="text-left hidden sm:block">
                 <p className="text-sm font-medium text-white">{employeeInfo.name}</p>
                 <div className="flex items-center gap-1 text-xs text-slate-400">
-                  <Building2 className="h-3 w-3" />
-                  <span>{employeeInfo.branchName}</span>
+                  <Landmark className="h-3 w-3" />
+                  <span>{employeeInfo.establishmentName}</span>
                 </div>
+                {employeeInfo.branchName && (
+                  <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                    <Building2 className="h-3 w-3" />
+                    <span>{employeeInfo.branchName}</span>
+                  </div>
+                )}
               </div>
               {/* زر الخروج - مكبّر وواضح */}
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleLogout}
+                disabled={isLoggingOut}
                 className="text-slate-300 hover:text-white hover:bg-slate-700/80 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-slate-600/50 hover:border-slate-500"
               >
-                <LogOut className="h-4 w-4 sm:ml-2" />
+                {isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin sm:ml-2" /> : <LogOut className="h-4 w-4 sm:ml-2" />}
                 <span className="hidden sm:inline">خروج</span>
               </Button>
             </div>
@@ -324,8 +416,11 @@ export default function EmployeePortal() {
               <div>
                 <p className="text-sm font-medium text-white">{employeeInfo.name}</p>
                 <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                  <Building2 className="h-2.5 w-2.5" />
-                  <span>{employeeInfo.branchName}</span>
+                  <Landmark className="h-2.5 w-2.5" />
+                  <span>
+                    {employeeInfo.establishmentName}
+                    {employeeInfo.branchName ? ` - ${employeeInfo.branchName}` : ''}
+                  </span>
                 </div>
               </div>
             </div>
@@ -407,7 +502,7 @@ export default function EmployeePortal() {
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <CardTitle className="text-white text-lg">Symbol AI</CardTitle>
+                        <CardTitle className="text-white text-lg">{SYSTEM_BRAND.name}</CardTitle>
                         <p className="text-xs text-slate-400">مساعدك الذكي • متصل</p>
                       </div>
                       <Badge className="mr-auto bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
@@ -592,9 +687,9 @@ export default function EmployeePortal() {
                               employeeContext: {
                                 employeeId: employeeInfo!.id,
                                 employeeName: employeeInfo!.name,
-                                branchId: employeeInfo!.branchId,
-                                branchName: employeeInfo!.branchName,
-                                isSupervisor: employeeInfo!.isSupervisor || false,
+                                branchId: employeeInfo!.branchId ?? undefined,
+                                branchName: employeeInfo!.branchName ?? undefined,
+                                isSupervisor: employeeInfo!.isSupervisor,
                               },
                               conversationHistory: [...messages, userMessage].map(m => ({
                                 role: m.role as 'user' | 'assistant' | 'system' | 'tool',
@@ -687,16 +782,34 @@ export default function EmployeePortal() {
               {/* قائمة الطلبات */}
               <Card className="bg-slate-800/50 border-slate-700">
                 <CardHeader className="border-b border-slate-700">
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <History className="h-5 w-5 text-amber-500" />
-                    سجل طلباتي
-                  </CardTitle>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <History className="h-5 w-5 text-amber-500" />
+                      سجل طلباتي
+                    </CardTitle>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowAdvanceForm(true)}
+                      className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white"
+                    >
+                      <Plus className="h-4 w-4 ml-1" />
+                      طلب سلفة جديد
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   {requestsLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
                     </div>
+                  ) : requestsError ? (
+                    <PortalQueryError
+                      className="m-4"
+                      error={requestsError}
+                      title="تعذر تحميل طلباتك"
+                      onRetry={() => refetchRequests()}
+                      isRetrying={requestsFetching}
+                    />
                   ) : !myRequests || myRequests.length === 0 ? (
                     <div className="text-center py-12">
                       <ClipboardList className="h-12 w-12 text-slate-600 mx-auto mb-4" />
@@ -731,34 +844,54 @@ export default function EmployeePortal() {
                               <p className="text-sm text-slate-400 line-clamp-2">
                                 {request.title || request.description || 'لا يوجد وصف'}
                               </p>
-                              <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
                                 <span>رقم الطلب: {request.requestNumber}</span>
-                                <span>
-                                  {new Date(request.createdAt).toLocaleDateString('ar-SA', {
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric',
-                                  })}
-                                </span>
+                                <span>تاريخ الطلب: {formatPortalDate(request.createdAt)}</span>
                               </div>
                             </div>
-                            
+
                             {/* تفاصيل إضافية حسب نوع الطلب */}
                             <div className="text-left sm:text-right">
                               {request.requestType === 'advance' && request.advanceAmount && (
-                                <div className="text-lg font-bold text-amber-400">
-                                  {Number(request.advanceAmount).toLocaleString('ar-SA')} ر.س
-                                </div>
+                                <>
+                                  <div className="text-lg font-bold text-amber-400">
+                                    {formatSar(request.advanceAmount)}
+                                  </div>
+                                  <div className="text-xs text-slate-400">
+                                    السداد: {repaymentMethodLabel(request.repaymentMethod)}
+                                  </div>
+                                </>
                               )}
                               {request.requestType === 'vacation' && request.vacationStartDate && request.vacationEndDate && (
                                 <div className="text-sm text-slate-400">
-                                  <div>من: {new Date(request.vacationStartDate).toLocaleDateString('ar-SA')}</div>
-                                  <div>إلى: {new Date(request.vacationEndDate).toLocaleDateString('ar-SA')}</div>
+                                  <div>من: {formatPortalDate(request.vacationStartDate)}</div>
+                                  <div>إلى: {formatPortalDate(request.vacationEndDate)}</div>
                                 </div>
                               )}
                             </div>
                           </div>
-                          
+
+                          {/* المراجعة: من راجع الطلب ومتى */}
+                          {(request.status === 'approved' || request.status === 'rejected') && (request.reviewedByName || request.reviewedAt) && (
+                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
+                              <span className="flex items-center gap-1">
+                                <UserCheck className="h-3.5 w-3.5 text-slate-500" />
+                                {request.status === 'approved' ? 'وافق عليه' : 'رفضه'}: {request.reviewedByName || 'الإدارة'}
+                              </span>
+                              {request.reviewedAt && (
+                                <span>بتاريخ: {formatPortalDateTime(request.reviewedAt)}</span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* سبب الرفض */}
+                          {request.status === 'rejected' && request.rejectionReason && (
+                            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                              <p className="text-xs text-red-300 mb-1">سبب الرفض:</p>
+                              <p className="text-sm text-slate-200">{request.rejectionReason}</p>
+                            </div>
+                          )}
+
                           {/* ملاحظات المراجع */}
                           {request.reviewNotes && (request.status === 'approved' || request.status === 'rejected') && (
                             <div className="mt-3 p-3 bg-slate-700/50 rounded-lg">
@@ -766,19 +899,44 @@ export default function EmployeePortal() {
                               <p className="text-sm text-slate-300">{request.reviewNotes}</p>
                             </div>
                           )}
-                          
+
+                          {/* مستند طلب السلفة الرسمي */}
+                          {request.requestType === 'advance' && (
+                            <div className="mt-3 flex flex-col gap-2 rounded-lg border border-slate-700 bg-slate-900/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+                              <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                                <Stamp className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                                {request.status === 'approved'
+                                  ? 'المستند معتمد ويحمل الختم والتوقيع'
+                                  : request.status === 'pending'
+                                    ? 'يظهر الختم والتوقيع على المستند بعد الموافقة على الطلب'
+                                    : 'المستند غير معتمد (بدون ختم)'}
+                              </p>
+                              <AdvanceRequestActions requestId={request.id} />
+                            </div>
+                          )}
+
                           {/* أزرار التتبع والمرفقات */}
-                          <div className="mt-3 flex items-center gap-2 border-t border-slate-700 pt-3">
-                            <RequestTimeline 
-                              requestId={request.id} 
+                          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-700 pt-3">
+                            <RequestTimeline
+                              requestId={request.id}
                               requestType={REQUEST_TYPE_NAMES[request.requestType] || request.requestType}
                               currentStatus={request.status}
                             />
-                            <RequestAttachments 
-                              requestId={request.id} 
-                              employeeId={employeeInfo.id}
+                            <RequestAttachments
+                              requestId={request.id}
                               canEdit={request.status === 'pending'}
                             />
+                            {request.status === 'pending' && request.requestType !== 'end_of_service' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-2 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                onClick={() => setRequestToCancel({ id: request.id, requestNumber: request.requestNumber })}
+                              >
+                                <Ban className="h-4 w-4" />
+                                إلغاء الطلب
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -791,40 +949,79 @@ export default function EmployeePortal() {
 
           {/* كشف الراتب */}
           <TabsContent value="salary" className="mt-0">
-            <SalarySlip employeeId={employeeInfo.id} employeeName={employeeInfo.name} />
+            <SalarySlip initialPayrollId={requestedPayrollId} />
           </TabsContent>
 
           {/* رصيد الإجازات */}
           <TabsContent value="leaves" className="mt-0">
-            <LeaveBalance employeeId={employeeInfo.id} />
+            <LeaveBalance />
           </TabsContent>
 
           {/* تقرير البونص */}
           <TabsContent value="bonus" className="mt-0">
-            <BonusReport employeeId={employeeInfo.id} />
+            <BonusReport />
           </TabsContent>
 
           {/* الملف الشخصي */}
           <TabsContent value="profile" className="mt-0">
             <div className="space-y-6">
-              <EmployeeProfile employeeId={employeeInfo.id} />
-              <EmployeeInfoForm employeeId={employeeInfo.id} />
+              <EmployeeProfile />
+              <EmployeeInfoForm />
             </div>
           </TabsContent>
         </Tabs>
       </div>
 
+      {/* طلب سلفة جديد */}
+      <AdvanceRequestDialog open={showAdvanceForm} onOpenChange={setShowAdvanceForm} />
+
+      {/* تأكيد إلغاء الطلب */}
+      <AlertDialog
+        open={requestToCancel !== null}
+        onOpenChange={(open) => {
+          if (!open && !cancelRequestMutation.isPending) setRequestToCancel(null);
+        }}
+      >
+        <AlertDialogContent className="bg-slate-800 border-slate-700 text-white" dir="rtl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle>إلغاء الطلب</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
+              هل تريد إلغاء الطلب رقم {requestToCancel?.requestNumber}؟ لا يمكن التراجع عن الإلغاء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:justify-start">
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={cancelRequestMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (requestToCancel) cancelRequestMutation.mutate({ requestId: requestToCancel.id });
+              }}
+            >
+              {cancelRequestMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+              نعم، إلغاء الطلب
+            </AlertDialogAction>
+            <AlertDialogCancel
+              className="border-slate-600 bg-transparent text-slate-300 hover:bg-slate-700 hover:text-white"
+              disabled={cancelRequestMutation.isPending}
+            >
+              تراجع
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* نموذج إدخال البريد الإلكتروني الإجباري */}
       {employeeInfo && !employeeInfo.emailVerified && (
         <EmailSetupModal
           isOpen={true}
-          employeeId={employeeInfo.id}
           employeeName={employeeInfo.name}
           onSuccess={() => {
-            // تحديث معلومات الموظف في localStorage
-            const updatedInfo = { ...employeeInfo, emailVerified: true };
-            localStorage.setItem('employeeInfo', JSON.stringify(updatedInfo));
-            setEmployeeInfo(updatedInfo);
+            // الجلسة من الخادم: تحديث بيانات الموظف بعد حفظ البريد
+            utils.employeeAuth.me.setData(undefined, (prev: PortalMe | null | undefined) =>
+              prev ? { ...prev, emailVerified: true } : prev
+            );
+            utils.employeeAuth.me.invalidate();
           }}
         />
       )}
@@ -836,7 +1033,7 @@ export default function EmployeePortal() {
             <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-1.5 rounded-lg shadow-lg">
               <Sparkles className="h-4 w-4 text-white" />
             </div>
-            <span className="text-sm font-semibold text-white">Symbol AI</span>
+            <span className="text-sm font-semibold text-white">{SYSTEM_BRAND.name}</span>
             <span className="text-xs text-slate-400">بوابة الموظفين الذكية</span>
           </div>
           <p className="text-center text-[10px] text-slate-500 mt-1">جميع الحقوق محفوظة © {new Date().getFullYear()}</p>

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, useSearch } from 'wouter';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,8 +11,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpc } from '@/lib/trpc';
-import { EmployeeProfile, EmployeeInfoForm } from '@/components/portal';
+import { EmployeeProfile, EmployeeInfoForm, PortalQueryError } from '@/components/portal';
 import { NotificationBell } from '@/components/portal/NotificationBell';
+import { useAuth } from '@/_core/hooks/useAuth';
+import { usePortalSession } from '@/lib/portal/usePortalSession';
+import {
+  ADMIN_PORTAL_PATH,
+  ADMIN_PORTAL_TABS,
+  EMPLOYEE_PORTAL_PATH,
+  STAFF_ROLE_LABELS,
+  buildTabHref,
+  daysUntil,
+  describeDaysLeft,
+  errorMessage,
+  formatPortalDate,
+  formatPortalDateTime,
+  formatSar,
+  resolveAdminPortalAccess,
+  resolvePortalTab,
+  shouldRetryQuery,
+  summarizeExpiringDocuments,
+} from '@/lib/portal/portalUi';
+import { SYSTEM_BRAND } from '@shared/branding';
 import { 
   Users, 
   FileText, 
@@ -85,21 +106,9 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
 };
 
-interface AdminInfo {
-  id: number;
-  name: string;
-  username: string;
-  role: string;
-  branchId?: number;
-  branchName?: string;
-  isAdmin: boolean;
-  isSupervisor: boolean;
-  accessAllBranches: boolean;
-}
-
 export default function AdminEmployeePortal() {
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const search = useSearch();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedRequestType, setSelectedRequestType] = useState<string>('all');
@@ -110,68 +119,81 @@ export default function AdminEmployeePortal() {
   const [reviewNotes, setReviewNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // جلب معلومات الأدمن من localStorage
-  const adminInfo: AdminInfo | null = useMemo(() => {
-    const stored = localStorage.getItem('employeeInfo');
-    if (stored) {
-      const info = JSON.parse(stored);
-      // التحقق من أن المستخدم أدمن أو مشرف
-      if (info.isAdmin || info.isSupervisor) {
-        return info;
-      }
+  // الهوية من الخادم: موظف مشرف بجلسة البوابة، أو مستخدم النظام بدور مراجع (مسؤول/مدير/مشرف/مشرف عام)
+  const {
+    me,
+    isLoading: sessionLoading,
+    error: sessionError,
+    refetch: refetchSession,
+    logout,
+    isLoggingOut,
+  } = usePortalSession();
+  const { user: staffUser, loading: staffLoading } = useAuth();
+  const access = sessionLoading || staffLoading ? null : resolveAdminPortalAccess(me, staffUser?.role);
+  const hasAccess = access?.kind === 'employee' || access?.kind === 'staff';
+  // ملفي وجرس الإشعارات للموظف المسجل في البوابة فقط
+  const isEmployeeSession = access?.kind === 'employee';
+
+  useEffect(() => {
+    if (access?.kind === 'redirect' && !sessionError) {
+      setLocation(access.to, { replace: true });
     }
-    return null;
-  }, []);
+  }, [access?.kind, access, sessionError, setLocation]);
 
-  // استخدام portalAdmin APIs بدلاً من APIs القديمة
-  const adminId = adminInfo?.id || 0;
+  const reviewerName = isEmployeeSession
+    ? me?.name ?? ''
+    : staffUser?.name || staffUser?.username || 'مستخدم النظام';
+  const reviewerRoleLabel = isEmployeeSession
+    ? 'مشرف'
+    : STAFF_ROLE_LABELS[staffUser?.role ?? ''] ?? 'مراجع';
 
-  // جلب الفروع باستخدام portalAdmin
-  const { data: branches, isLoading: branchesLoading } = trpc.portalAdmin.getBranches.useQuery(
-    { adminId },
-    { enabled: !!adminInfo }
-  );
+  // التبويب من الرابط (?tab=) لروابط الإشعارات
+  const requestedTab = resolvePortalTab(search, ADMIN_PORTAL_TABS, 'dashboard');
+  const activeTab = requestedTab === 'myProfile' && !isEmployeeSession ? 'dashboard' : requestedTab;
+  const setActiveTab = (tab: string) => {
+    setLocation(buildTabHref(ADMIN_PORTAL_PATH, search, tab), { replace: true });
+  };
 
-  // جلب الموظفين باستخدام portalAdmin
-  const { 
-    data: employees, 
-    isLoading: employeesLoading, 
-    refetch: refetchEmployees 
-  } = trpc.portalAdmin.getEmployees.useQuery(
-    { 
-      adminId,
+  // جلب الفروع (نطاق الفروع يحدده الخادم من الجلسة)
+  const { data: branches } = trpc.portalAdmin.getBranches.useQuery(undefined, {
+    enabled: hasAccess,
+    retry: shouldRetryQuery,
+  });
+
+  // جلب الموظفين
+  const employeesQuery = trpc.portalAdmin.getEmployees.useQuery(
+    {
       branchId: selectedBranch !== 'all' ? parseInt(selectedBranch) : undefined,
       search: searchQuery || undefined
     },
-    { enabled: !!adminInfo }
+    { enabled: hasAccess, retry: shouldRetryQuery }
   );
+  const { data: employees, isLoading: employeesLoading } = employeesQuery;
 
-  // جلب الطلبات باستخدام portalAdmin
-  const { 
-    data: requests, 
-    isLoading: requestsLoading, 
-    refetch: refetchRequests 
-  } = trpc.portalAdmin.getRequests.useQuery(
+  // جلب الطلبات
+  const requestsQuery = trpc.portalAdmin.getRequests.useQuery(
     {
-      adminId,
       status: selectedStatus === 'all' ? undefined : selectedStatus,
       requestType: selectedRequestType === 'all' ? undefined : selectedRequestType,
       branchId: selectedBranch === 'all' ? undefined : parseInt(selectedBranch),
     },
-    { enabled: !!adminInfo }
+    { enabled: hasAccess, retry: shouldRetryQuery }
   );
+  const { data: requests, isLoading: requestsLoading, refetch: refetchRequests } = requestsQuery;
 
-  // جلب الوثائق المنتهية باستخدام portalAdmin
-  const { data: expiringDocs } = trpc.portalAdmin.getExpiringDocuments.useQuery(
-    { adminId },
-    { enabled: !!adminInfo }
-  );
+  // جلب الوثائق المنتهية والقريبة من الانتهاء
+  const expiringDocsQuery = trpc.portalAdmin.getExpiringDocuments.useQuery(undefined, {
+    enabled: hasAccess,
+    retry: shouldRetryQuery,
+  });
+  const { data: expiringDocs } = expiringDocsQuery;
 
-  // جلب إحصائيات الداشبورد باستخدام portalAdmin
-  const { data: dashboardStatsData } = trpc.portalAdmin.getDashboardStats.useQuery(
-    { adminId },
-    { enabled: !!adminInfo }
-  );
+  // جلب إحصائيات الداشبورد
+  const dashboardStatsQuery = trpc.portalAdmin.getDashboardStats.useQuery(undefined, {
+    enabled: hasAccess,
+    retry: shouldRetryQuery,
+  });
+  const { data: dashboardStatsData } = dashboardStatsQuery;
 
   // حساب إحصائيات الطلبات من البيانات المتاحة
   const requestStats = useMemo(() => {
@@ -184,18 +206,26 @@ export default function AdminEmployeePortal() {
     };
   }, [requests]);
 
-  // Mutation للموافقة/الرفض باستخدام portalAdmin
+  // الموافقة/الرفض (الصلاحية ونطاق الفرع يتحقق منهما الخادم)
   const updateStatusMutation = trpc.portalAdmin.updateRequestStatus.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      toast.success(variables.status === 'approved' ? 'تمت الموافقة على الطلب' : 'تم رفض الطلب');
       refetchRequests();
+      dashboardStatsQuery.refetch();
       setShowRequestDialog(false);
       setSelectedRequest(null);
       setReviewNotes('');
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error, 'تعذر تحديث حالة الطلب'));
     },
   });
 
   // فلترة الموظفين (الفلترة تتم في الخادم الآن)
   const filteredEmployees = employees || [];
+
+  // عدد الوثائق (كل وثيقة على حدة): المنتهية والقريبة من الانتهاء
+  const docCounts = summarizeExpiringDocuments(expiringDocs);
 
   // إحصائيات الداشبورد
   const dashboardStats = useMemo(() => {
@@ -204,25 +234,21 @@ export default function AdminEmployeePortal() {
         totalEmployees: dashboardStatsData.totalEmployees,
         activeEmployees: dashboardStatsData.activeEmployees,
         pendingRequests: dashboardStatsData.pendingRequests,
-        expiredDocs: dashboardStatsData.expiringDocuments,
-        expiringDocsCount: 0,
+        expiredDocs: docCounts.expired,
+        expiringDocsCount: docCounts.expiring,
         totalRequests: requestStats?.total || 0,
         approvedRequests: dashboardStatsData.approvedRequests,
         rejectedRequests: dashboardStatsData.rejectedRequests,
       };
     }
-    
+
     // Fallback to calculated stats
     const totalEmployees = employees?.length || 0;
     const activeEmployees = employees?.filter((e: any) => e.isActive).length || 0;
     const pendingRequests = requestStats?.pending || 0;
-    const expiredDocs = (expiringDocs?.expired?.iqama?.length || 0) + 
-                        (expiringDocs?.expired?.healthCert?.length || 0) + 
-                        (expiringDocs?.expired?.contract?.length || 0);
-    const expiringDocsCount = (expiringDocs?.expiring?.iqama?.length || 0) + 
-                              (expiringDocs?.expiring?.healthCert?.length || 0) + 
-                              (expiringDocs?.expiring?.contract?.length || 0);
-    
+    const expiredDocs = docCounts.expired;
+    const expiringDocsCount = docCounts.expiring;
+
     return {
       totalEmployees,
       activeEmployees,
@@ -236,41 +262,45 @@ export default function AdminEmployeePortal() {
   }, [employees, requestStats, expiringDocs, dashboardStatsData]);
 
   // معالجة الطلب
-  const handleProcessRequest = async (status: 'approved' | 'rejected') => {
-    if (!selectedRequest || !adminInfo) return;
-    
+  const handleProcessRequest = (status: 'approved' | 'rejected') => {
+    if (!selectedRequest || !hasAccess || updateStatusMutation.isPending) return;
+
     setIsProcessing(true);
-    try {
-      await updateStatusMutation.mutateAsync({
-        adminId: adminInfo.id,
+    updateStatusMutation.mutate(
+      {
         requestId: selectedRequest.id,
         status,
         reviewNotes,
-      });
-    } finally {
-      setIsProcessing(false);
-    }
+      },
+      { onSettled: () => setIsProcessing(false) }
+    );
   };
 
-  // تسجيل الخروج
-  const handleLogout = () => {
-    localStorage.removeItem('employeeInfo');
-    localStorage.removeItem('employeeToken');
-    setLocation('/employee-login');
+  // تسجيل الخروج (جلسة البوابة فقط؛ مستخدم النظام يعود للنظام)
+  const handleLogout = async () => {
+    const result = await logout();
+    if (!result.ok) toast.error(result.message);
   };
 
-  // التحقق من الصلاحيات
-  if (!adminInfo) {
+  // تعذر التحقق من الجلسة (خطأ اتصال)
+  if (sessionError && !hasAccess) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4" dir="rtl">
+        <PortalQueryError
+          className="w-full max-w-md"
+          error={sessionError}
+          title="تعذر التحقق من جلسة الدخول"
+          onRetry={() => refetchSession()}
+        />
+      </div>
+    );
+  }
+
+  // التحقق من الصلاحيات (التحويل لصفحة الدخول أو البوابة يتم تلقائياً)
+  if (!hasAccess) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center" dir="rtl">
-        <Card className="bg-slate-800/50 border-slate-700 p-8 text-center">
-          <Shield className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">غير مصرح</h2>
-          <p className="text-slate-400 mb-4">ليس لديك صلاحية الوصول لهذه الصفحة</p>
-          <Button onClick={() => setLocation('/employee-login')} className="bg-amber-500 hover:bg-amber-600">
-            العودة لتسجيل الدخول
-          </Button>
-        </Card>
+        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
       </div>
     );
   }
@@ -285,7 +315,8 @@ export default function AdminEmployeePortal() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setLocation('/employee-portal')}
+                onClick={() => setLocation(isEmployeeSession ? EMPLOYEE_PORTAL_PATH : '/')}
+                title={isEmployeeSession ? 'بوابتي' : 'العودة للنظام'}
                 className="text-slate-400 hover:text-white hover:bg-slate-700"
               >
                 <ChevronRight className="h-5 w-5" />
@@ -294,35 +325,51 @@ export default function AdminEmployeePortal() {
                 <Shield className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">لوحة تحكم الأدمن</h1>
-                <p className="text-xs text-slate-400">إدارة الموظفين والطلبات</p>
+                <h1 className="text-xl font-bold text-white">لوحة المشرف</h1>
+                <p className="text-xs text-slate-400">{SYSTEM_BRAND.name} - إدارة الموظفين والطلبات</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4">
-              {/* جرس الإشعارات */}
-              {adminInfo.id && (
-                <NotificationBell 
-                  employeeId={adminInfo.id} 
-                  className="text-slate-400 hover:text-white"
-                />
+              {/* جرس الإشعارات (للموظف المسجل في البوابة) */}
+              {isEmployeeSession && (
+                <NotificationBell className="text-slate-400 hover:text-white" />
               )}
-              
+
               <div className="text-left hidden sm:block">
-                <p className="text-sm font-medium text-white">{adminInfo.name}</p>
-                <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs">
-                  {adminInfo.isAdmin ? 'مدير النظام' : 'مشرف'}
-                </Badge>
+                <p className="text-sm font-medium text-white">{reviewerName}</p>
+                <div className="flex items-center gap-1">
+                  <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs">
+                    {reviewerRoleLabel}
+                  </Badge>
+                  {isEmployeeSession && me?.establishmentName && (
+                    <span className="text-[11px] text-slate-400">{me.establishmentName}</span>
+                  )}
+                </div>
               </div>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="text-slate-400 hover:text-white hover:bg-slate-700"
-              >
-                <LogOut className="h-5 w-5" />
-              </Button>
+
+              {isEmployeeSession ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  title="تسجيل الخروج"
+                  className="text-slate-400 hover:text-white hover:bg-slate-700"
+                >
+                  {isLoggingOut ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLocation('/')}
+                  className="text-slate-400 hover:text-white hover:bg-slate-700"
+                >
+                  <Home className="h-5 w-5 sm:ml-2" />
+                  <span className="hidden sm:inline">النظام</span>
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -363,11 +410,26 @@ export default function AdminEmployeePortal() {
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">التقارير</span>
             </TabsTrigger>
-            <TabsTrigger value="myProfile" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white gap-2">
-              <UserCircle className="h-4 w-4" />
-              <span className="hidden sm:inline">ملفي</span>
-            </TabsTrigger>
+            {isEmployeeSession && (
+              <TabsTrigger value="myProfile" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white gap-2">
+                <UserCircle className="h-4 w-4" />
+                <span className="hidden sm:inline">ملفي</span>
+              </TabsTrigger>
+            )}
           </TabsList>
+
+          {/* تعذر تحميل الإحصائيات أو الوثائق */}
+          {(dashboardStatsQuery.error || expiringDocsQuery.error) && activeTab === 'dashboard' && (
+            <PortalQueryError
+              error={dashboardStatsQuery.error ?? expiringDocsQuery.error}
+              title="تعذر تحميل بعض بيانات لوحة المشرف"
+              onRetry={() => {
+                dashboardStatsQuery.refetch();
+                expiringDocsQuery.refetch();
+              }}
+              isRetrying={dashboardStatsQuery.isFetching || expiringDocsQuery.isFetching}
+            />
+          )}
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6">
@@ -442,6 +504,13 @@ export default function AdminEmployeePortal() {
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
                       </div>
+                    ) : requestsQuery.error ? (
+                      <PortalQueryError
+                        error={requestsQuery.error}
+                        title="تعذر تحميل الطلبات"
+                        onRetry={() => requestsQuery.refetch()}
+                        isRetrying={requestsQuery.isFetching}
+                      />
                     ) : requests?.filter((r: any) => r.status === 'pending').slice(0, 5).length === 0 ? (
                       <div className="text-center py-8 text-slate-400">
                         <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-emerald-500" />
@@ -471,7 +540,7 @@ export default function AdminEmployeePortal() {
                               </span>
                               <span className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
-                                {new Date(request.createdAt).toLocaleDateString('ar-SA')}
+                                {formatPortalDate(request.createdAt)}
                               </span>
                             </div>
                           </div>
@@ -492,10 +561,12 @@ export default function AdminEmployeePortal() {
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[300px]">
-                    {!expiringDocs ? (
+                    {expiringDocsQuery.isLoading ? (
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
                       </div>
+                    ) : !expiringDocs ? (
+                      <p className="py-8 text-center text-sm text-slate-400">تعذر تحميل تنبيهات الوثائق</p>
                     ) : dashboardStats.expiredDocs === 0 && dashboardStats.expiringDocsCount === 0 ? (
                       <div className="text-center py-8 text-slate-400">
                         <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-emerald-500" />
@@ -573,10 +644,12 @@ export default function AdminEmployeePortal() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {!expiringDocs ? (
+                  {expiringDocsQuery.isLoading ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
                     </div>
+                  ) : !expiringDocs ? (
+                    <p className="py-8 text-center text-sm text-slate-400">تعذر تحميل ملخص الوثائق</p>
                   ) : dashboardStats.expiredDocs === 0 && dashboardStats.expiringDocsCount === 0 ? (
                     <div className="text-center py-8 text-slate-400">
                       <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-emerald-500" />
@@ -626,7 +699,7 @@ export default function AdminEmployeePortal() {
                                   <div key={`iq-soon-${emp.id}`} className="flex items-center justify-between text-xs bg-amber-500/10 p-2 rounded">
                                     <span className="text-white">{emp.name}</span>
                                     <span className="text-amber-400">
-                                      {emp.iqamaExpiryDate ? `${Math.ceil((new Date(emp.iqamaExpiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} يوم` : 'قريباً'}
+                                      {describeDaysLeft(daysUntil(emp.iqamaExpiryDate))}
                                     </span>
                                   </div>
                                 ))}
@@ -677,7 +750,7 @@ export default function AdminEmployeePortal() {
                                   <div key={`hc-soon-${emp.id}`} className="flex items-center justify-between text-xs bg-amber-500/10 p-2 rounded">
                                     <span className="text-white">{emp.name}</span>
                                     <span className="text-amber-400">
-                                      {emp.healthCertExpiryDate ? `${Math.ceil((new Date(emp.healthCertExpiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} يوم` : 'قريباً'}
+                                      {describeDaysLeft(daysUntil(emp.healthCertExpiryDate))}
                                     </span>
                                   </div>
                                 ))}
@@ -728,7 +801,7 @@ export default function AdminEmployeePortal() {
                                   <div key={`ct-soon-${emp.id}`} className="flex items-center justify-between text-xs bg-amber-500/10 p-2 rounded">
                                     <span className="text-white">{emp.name}</span>
                                     <span className="text-amber-400">
-                                      {emp.contractExpiryDate ? `${Math.ceil((new Date(emp.contractExpiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} يوم` : 'قريباً'}
+                                      {describeDaysLeft(daysUntil(emp.contractExpiryDate))}
                                     </span>
                                   </div>
                                 ))}
@@ -823,6 +896,13 @@ export default function AdminEmployeePortal() {
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
                     </div>
+                  ) : requestsQuery.error ? (
+                    <PortalQueryError
+                      error={requestsQuery.error}
+                      title="تعذر تحميل الطلبات"
+                      onRetry={() => requestsQuery.refetch()}
+                      isRetrying={requestsQuery.isFetching}
+                    />
                   ) : requests?.length === 0 ? (
                     <div className="text-center py-8 text-slate-400">
                       <FileText className="h-12 w-12 mx-auto mb-2" />
@@ -860,12 +940,12 @@ export default function AdminEmployeePortal() {
                             </div>
                             <div className="flex items-center gap-2 text-slate-300">
                               <Calendar className="h-4 w-4 text-emerald-500" />
-                              <span>{new Date(request.createdAt).toLocaleDateString('ar-SA')}</span>
+                              <span>{formatPortalDate(request.createdAt)}</span>
                             </div>
                             {request.advanceAmount && (
                               <div className="flex items-center gap-2 text-slate-300">
                                 <DollarSign className="h-4 w-4 text-purple-500" />
-                                <span>{request.advanceAmount} ر.س</span>
+                                <span>{formatSar(request.advanceAmount)}</span>
                               </div>
                             )}
                           </div>
@@ -925,6 +1005,14 @@ export default function AdminEmployeePortal() {
                 <div className="col-span-full flex items-center justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
                 </div>
+              ) : employeesQuery.error ? (
+                <PortalQueryError
+                  className="col-span-full"
+                  error={employeesQuery.error}
+                  title="تعذر تحميل الموظفين"
+                  onRetry={() => employeesQuery.refetch()}
+                  isRetrying={employeesQuery.isFetching}
+                />
               ) : filteredEmployees.length === 0 ? (
                 <div className="col-span-full text-center py-8 text-slate-400">
                   <Users className="h-12 w-12 mx-auto mb-2" />
@@ -1005,6 +1093,18 @@ export default function AdminEmployeePortal() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                {expiringDocsQuery.isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+                  </div>
+                ) : expiringDocsQuery.error ? (
+                  <PortalQueryError
+                    error={expiringDocsQuery.error}
+                    title="تعذر تحميل الوثائق"
+                    onRetry={() => expiringDocsQuery.refetch()}
+                    isRetrying={expiringDocsQuery.isFetching}
+                  />
+                ) : (
                 <div className="grid md:grid-cols-3 gap-4">
                   {/* الإقامات */}
                   <div className="space-y-3">
@@ -1019,13 +1119,13 @@ export default function AdminEmployeePortal() {
                         {expiringDocs?.expired?.iqama?.map((emp: any) => (
                           <div key={emp.id} className="p-2 bg-red-500/10 rounded border border-red-500/30">
                             <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-red-400">منتهية</p>
+                            <p className="text-xs text-red-400">منتهية منذ {formatPortalDate(emp.iqamaExpiryDate)}</p>
                           </div>
                         ))}
                         {expiringDocs?.expiring?.iqama?.map((emp: any) => (
                           <div key={emp.id} className="p-2 bg-amber-500/10 rounded border border-amber-500/30">
                             <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-amber-400">قريبة الانتهاء</p>
+                            <p className="text-xs text-amber-400">تنتهي {formatPortalDate(emp.iqamaExpiryDate)} ({describeDaysLeft(daysUntil(emp.iqamaExpiryDate))})</p>
                           </div>
                         ))}
                       </div>
@@ -1045,13 +1145,13 @@ export default function AdminEmployeePortal() {
                         {expiringDocs?.expired?.healthCert?.map((emp: any) => (
                           <div key={emp.id} className="p-2 bg-red-500/10 rounded border border-red-500/30">
                             <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-red-400">منتهية</p>
+                            <p className="text-xs text-red-400">منتهية منذ {formatPortalDate(emp.healthCertExpiryDate)}</p>
                           </div>
                         ))}
                         {expiringDocs?.expiring?.healthCert?.map((emp: any) => (
                           <div key={emp.id} className="p-2 bg-amber-500/10 rounded border border-amber-500/30">
                             <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-amber-400">قريبة الانتهاء</p>
+                            <p className="text-xs text-amber-400">تنتهي {formatPortalDate(emp.healthCertExpiryDate)} ({describeDaysLeft(daysUntil(emp.healthCertExpiryDate))})</p>
                           </div>
                         ))}
                       </div>
@@ -1071,19 +1171,20 @@ export default function AdminEmployeePortal() {
                         {expiringDocs?.expired?.contract?.map((emp: any) => (
                           <div key={emp.id} className="p-2 bg-red-500/10 rounded border border-red-500/30">
                             <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-red-400">منتهية</p>
+                            <p className="text-xs text-red-400">منتهية منذ {formatPortalDate(emp.contractExpiryDate)}</p>
                           </div>
                         ))}
                         {expiringDocs?.expiring?.contract?.map((emp: any) => (
                           <div key={emp.id} className="p-2 bg-amber-500/10 rounded border border-amber-500/30">
                             <p className="font-medium text-white text-sm">{emp.name}</p>
-                            <p className="text-xs text-amber-400">قريبة الانتهاء</p>
+                            <p className="text-xs text-amber-400">تنتهي {formatPortalDate(emp.contractExpiryDate)} ({describeDaysLeft(daysUntil(emp.contractExpiryDate))})</p>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
                 </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1119,7 +1220,7 @@ export default function AdminEmployeePortal() {
 
           {/* My Profile Tab - ملفي */}
           <TabsContent value="myProfile" className="space-y-6">
-            {adminInfo && (
+            {isEmployeeSession && (
               <div className="space-y-6">
                 <Card className="bg-slate-800/50 border-slate-700">
                   <CardHeader>
@@ -1132,8 +1233,8 @@ export default function AdminEmployeePortal() {
                     </CardDescription>
                   </CardHeader>
                 </Card>
-                <EmployeeProfile employeeId={adminInfo.id} />
-                <EmployeeInfoForm employeeId={adminInfo.id} />
+                <EmployeeProfile />
+                <EmployeeInfoForm />
               </div>
             )}
           </TabsContent>
@@ -1190,7 +1291,7 @@ export default function AdminEmployeePortal() {
                   {selectedRequest.advanceAmount && (
                     <div>
                       <span className="text-slate-400">المبلغ:</span>
-                      <span className="text-white mr-2">{selectedRequest.advanceAmount} ر.س</span>
+                      <span className="text-white mr-2">{formatSar(selectedRequest.advanceAmount)}</span>
                     </div>
                   )}
                 </div>
@@ -1209,7 +1310,30 @@ export default function AdminEmployeePortal() {
                   </div>
                 )}
               </div>
-              
+
+              {/* نتيجة المراجعة */}
+              {(selectedRequest.status === 'approved' || selectedRequest.status === 'rejected') && (
+                <div className="p-4 bg-slate-700/50 rounded-lg text-sm space-y-2">
+                  <h4 className="font-bold text-white">المراجعة</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-slate-400">بواسطة:</span>
+                      <span className="text-white mr-2">{selectedRequest.reviewedByName || 'غير مسجل'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">التاريخ:</span>
+                      <span className="text-white mr-2">{formatPortalDateTime(selectedRequest.reviewedAt)}</span>
+                    </div>
+                  </div>
+                  {selectedRequest.rejectionReason && (
+                    <p className="text-red-300">سبب الرفض: {selectedRequest.rejectionReason}</p>
+                  )}
+                  {selectedRequest.reviewNotes && (
+                    <p className="text-slate-300">ملاحظات: {selectedRequest.reviewNotes}</p>
+                  )}
+                </div>
+              )}
+
               {isEndOfServiceRequest(selectedRequest) && (
                 <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-slate-300">
                   يُدار طلب إنهاء الخدمة (الخطاب والمخالصة النهائية والاعتماد والإلغاء) من صفحة إنهاء الخدمة في نظام الإدارة.
@@ -1358,17 +1482,21 @@ export default function AdminEmployeePortal() {
                     </div>
                     <div>
                       <span className="text-slate-400">الراتب الأساسي:</span>
-                      <span className="text-white mr-2">{(employee as any).baseSalary?.toLocaleString() || 0} ر.س</span>
+                      <span className="text-white mr-2">
+                        {employee.baseSalary !== null && employee.baseSalary !== undefined
+                          ? formatSar(employee.baseSalary)
+                          : 'غير محدد'}
+                      </span>
                     </div>
                     <div>
                       <span className="text-slate-400">تاريخ الالتحاق:</span>
                       <span className="text-white mr-2">
-                        {(employee as any).joinDate ? new Date((employee as any).joinDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        {formatPortalDate(employee.hireDate, 'غير محدد')}
                       </span>
                     </div>
                     <div>
                       <span className="text-slate-400">الجنسية:</span>
-                      <span className="text-white mr-2">{(employee as any).nationality || 'غير محدد'}</span>
+                      <span className="text-white mr-2">{employee.nationality || 'غير محدد'}</span>
                     </div>
                   </div>
                 </div>
@@ -1388,8 +1516,8 @@ export default function AdminEmployeePortal() {
                       </div>
                       <div className="text-xs text-slate-400 mb-2">
                         <div>الرقم: {employee.iqamaNumber || 'غير محدد'}</div>
-                        <div className={employee.iqamaExpiryDate && new Date(employee.iqamaExpiryDate) < new Date() ? 'text-red-400' : ''}>
-                          الانتهاء: {employee.iqamaExpiryDate ? new Date(employee.iqamaExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        <div className={(daysUntil(employee.iqamaExpiryDate) ?? 0) < 0 ? 'text-red-400' : ''}>
+                          الانتهاء: {formatPortalDate(employee.iqamaExpiryDate, 'غير محدد')}
                         </div>
                       </div>
                       {(employee as any).iqamaImageUrl ? (
@@ -1414,8 +1542,8 @@ export default function AdminEmployeePortal() {
                         <span className="text-sm font-medium text-white">الشهادة الصحية</span>
                       </div>
                       <div className="text-xs text-slate-400 mb-2">
-                        <div className={employee.healthCertExpiryDate && new Date(employee.healthCertExpiryDate) < new Date() ? 'text-red-400' : ''}>
-                          الانتهاء: {employee.healthCertExpiryDate ? new Date(employee.healthCertExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        <div className={(daysUntil(employee.healthCertExpiryDate) ?? 0) < 0 ? 'text-red-400' : ''}>
+                          الانتهاء: {formatPortalDate(employee.healthCertExpiryDate, 'غير محدد')}
                         </div>
                       </div>
                       {(employee as any).healthCertImageUrl ? (
@@ -1440,8 +1568,8 @@ export default function AdminEmployeePortal() {
                         <span className="text-sm font-medium text-white">عقد العمل</span>
                       </div>
                       <div className="text-xs text-slate-400 mb-2">
-                        <div className={employee.contractExpiryDate && new Date(employee.contractExpiryDate) < new Date() ? 'text-red-400' : ''}>
-                          الانتهاء: {employee.contractExpiryDate ? new Date(employee.contractExpiryDate).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        <div className={(daysUntil(employee.contractExpiryDate) ?? 0) < 0 ? 'text-red-400' : ''}>
+                          الانتهاء: {formatPortalDate(employee.contractExpiryDate, 'غير محدد')}
                         </div>
                       </div>
                       {(employee as any).contractImageUrl ? (
@@ -1457,24 +1585,6 @@ export default function AdminEmployeePortal() {
                           لا توجد صورة
                         </div>
                       )}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* بيانات البنك */}
-                <div className="p-4 bg-slate-700/50 rounded-lg">
-                  <h4 className="font-bold text-white mb-3 flex items-center gap-2">
-                    <CreditCard className="h-4 w-4 text-amber-500" />
-                    بيانات البنك
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-slate-400">اسم البنك:</span>
-                      <span className="text-white mr-2">{(employee as any).bankName || 'غير محدد'}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">رقم الحساب (IBAN):</span>
-                      <span className="text-white mr-2 font-mono text-xs">{(employee as any).iban || 'غير محدد'}</span>
                     </div>
                   </div>
                 </div>
@@ -1494,12 +1604,12 @@ export default function AdminEmployeePortal() {
         </DialogContent>
       </Dialog>
 
-      {/* Symbol AI Footer */}
+      {/* هوية النظام */}
       <div className="fixed bottom-4 left-4 z-40">
         <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/90 backdrop-blur-sm rounded-full border border-slate-700/50 shadow-lg">
           <Sparkles className="h-4 w-4 text-amber-500" />
           <span className="text-xs text-slate-400">Powered by</span>
-          <span className="text-xs font-bold text-amber-400">Symbol AI</span>
+          <span className="text-xs font-bold text-amber-400">{SYSTEM_BRAND.name}</span>
         </div>
       </div>
     </div>
