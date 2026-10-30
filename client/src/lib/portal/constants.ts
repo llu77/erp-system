@@ -10,6 +10,7 @@ export const REQUEST_TYPE_NAMES: Record<string, string> = {
   permission: 'استئذان',
   objection: 'اعتراض على مخالفة',
   resignation: 'استقالة',
+  end_of_service: 'إنهاء خدمة',
 } as const;
 
 // Request type icons (Lucide icon names)
@@ -20,6 +21,7 @@ export const REQUEST_TYPE_ICONS: Record<string, string> = {
   permission: 'Clock',
   objection: 'AlertCircle',
   resignation: 'LogOut',
+  end_of_service: 'UserX',
 } as const;
 
 // Status names in Arabic
