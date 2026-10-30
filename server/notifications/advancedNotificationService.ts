@@ -312,19 +312,19 @@ function generateNotificationContent(data: NotificationData): { subject: string;
       
     case "payroll_created":
       return {
-        subject: `💰 تم إنشاء مسيرة رواتب${branchText} | Payroll Created`,
+        subject: `💰 تم إنشاء مسير رواتب${branchText} | Payroll Created`,
         bodyArabic: `
           <div style="direction: rtl; text-align: right; font-family: 'Segoe UI', Tahoma, sans-serif;">
-            <h2 style="color: #27ae60;">💰 تم إنشاء مسيرة رواتب</h2>
+            <h2 style="color: #27ae60;">💰 تم إنشاء مسير رواتب</h2>
             <p>عزيزي مشرف النظام،</p>
-            <p>تم إنشاء مسيرة رواتب جديدة.</p>
+            <p>تم إنشاء مسير رواتب جديد.</p>
             <ul>
               <li><strong>الفرع:</strong> ${data.branchName || 'غير محدد'}</li>
               <li><strong>الشهر:</strong> ${data.customData?.month || 'غير محدد'}</li>
               <li><strong>إجمالي المبلغ:</strong> ${data.amount?.toFixed(2)} ر.س.</li>
               <li><strong>عدد الموظفين:</strong> ${data.customData?.employeeCount || 0}</li>
             </ul>
-            <p>الرجاء مراجعة المسيرة والموافقة عليها.</p>
+            <p>الرجاء مراجعة المسير والموافقة عليه.</p>
             <hr style="border: 1px solid #eee; margin: 20px 0;">
             <p style="color: #666; font-size: 12px;">Symbol AI - نظام إدارة الأعمال</p>
           </div>

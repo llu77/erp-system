@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc";
+import { downloadBase64Pdf } from "@/lib/downloadPdf";
+import type { ExpenseCategory } from "@shared/expenses";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useIsMobile } from "@/hooks/useMobile";
 import { ResponsiveTable, Column } from "@/components/ResponsiveTable";
@@ -48,7 +50,6 @@ import {
   TrendingDown,
   Clock,
   Filter,
-  Printer,
   FileText,
   Upload,
   Image,
@@ -58,41 +59,27 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { FixedExpensesSection } from "@/components/expenses/FixedExpensesSection";
+import {
+  EXPENSE_CATEGORIES,
+  EXPENSE_CATEGORY_LABELS,
+  EXPENSE_PAYMENT_METHODS,
+  EXPENSE_PAYMENT_METHOD_LABELS,
+  EXPENSE_SOURCE_LABELS,
+  MANUAL_EXPENSE_CATEGORIES,
+  type ExpensePaymentMethod,
+  type ManualExpenseCategory,
+} from "@shared/expenses";
+import { arabicMonthName } from "@shared/employeeDocumentBase";
+import { formatVoucherAmount, formatVoucherDate } from "@shared/vouchers";
 
-// تصنيفات المصاريف
-const expenseCategories = [
-  { value: "shop_supplies", label: "اغراض محل" },
-  { value: "printing", label: "طباعة ورق" },
-  { value: "carpet_cleaning", label: "غسيل سجاد" },
-  { value: "small_needs", label: "احتياجات بسيطة" },
-  { value: "residency", label: "اقامة" },
-  { value: "medical_exam", label: "فحص طبي" },
-  { value: "transportation", label: "مواصلات" },
-  { value: "electricity", label: "كهرباء" },
-  { value: "internet", label: "انترنت" },
-  { value: "license_renewal", label: "تجديد رخصة" },
-  { value: "visa", label: "تاشيره" },
-  { value: "residency_renewal", label: "تجديد اقامة" },
-  { value: "health_cert_renewal", label: "تجديد شهادة صحيه" },
-  { value: "maintenance", label: "صيانة" },
-  { value: "health_cert", label: "شهادة صحية" },
-  { value: "violation", label: "مخالفة" },
-  { value: "emergency", label: "طوارىء" },
-  { value: "shop_rent", label: "ايجار محل" },
-  { value: "housing_rent", label: "ايجار سكن" },
-  { value: "improvements", label: "تحسينات" },
-  { value: "bonus", label: "مكافأة" },
-  { value: "other", label: "أخرى" },
-];
+// تصنيفات المصاريف (من المصدر المشترك): الإدخال اليدوي بدون الرواتب (تأتي من مسير الرواتب المعتمد)
+const expenseCategories = MANUAL_EXPENSE_CATEGORIES.map(value => ({ value, label: EXPENSE_CATEGORY_LABELS[value] }));
+// التصفية تشمل الرواتب
+const filterCategories = EXPENSE_CATEGORIES.map(value => ({ value, label: EXPENSE_CATEGORY_LABELS[value] }));
 
 // طرق الدفع
-const paymentMethods = [
-  { value: "cash", label: "نقدي" },
-  { value: "bank_transfer", label: "تحويل بنكي" },
-  { value: "check", label: "شيك" },
-  { value: "credit_card", label: "بطاقة ائتمان" },
-  { value: "other", label: "أخرى" },
-];
+const paymentMethods = EXPENSE_PAYMENT_METHODS.map(value => ({ value, label: EXPENSE_PAYMENT_METHOD_LABELS[value] }));
 
 // أسماء الحالات
 const statusNames: Record<string, string> = {
@@ -110,31 +97,21 @@ const statusColors: Record<string, string> = {
   paid: "bg-blue-100 text-blue-800",
 };
 
-// أسماء التصنيفات
-const categoryNames: Record<string, string> = {
-  shop_supplies: "اغراض محل",
-  printing: "طباعة ورق",
-  carpet_cleaning: "غسيل سجاد",
-  small_needs: "احتياجات بسيطة",
-  residency: "اقامة",
-  medical_exam: "فحص طبي",
-  transportation: "مواصلات",
-  electricity: "كهرباء",
-  internet: "انترنت",
-  license_renewal: "تجديد رخصة",
-  visa: "تاشيره",
-  residency_renewal: "تجديد اقامة",
-  health_cert_renewal: "تجديد شهادة صحيه",
-  maintenance: "صيانة",
-  health_cert: "شهادة صحية",
-  violation: "مخالفة",
-  emergency: "طوارىء",
-  shop_rent: "ايجار محل",
-  housing_rent: "ايجار سكن",
-  improvements: "تحسينات",
-  bonus: "مكافأة",
-  other: "أخرى",
-};
+// أسماء التصنيفات (تشمل "رواتب" لمصروف المسير)
+const categoryNames: Record<string, string> = EXPENSE_CATEGORY_LABELS;
+
+/** شارة المصروف التلقائي: "تلقائي" + مصدره (مصاريف ثابتة / مسير رواتب) */
+function AutoSourceBadge({ source }: { source?: string | null }) {
+  if (source !== "fixed" && source !== "payroll") return null;
+  return (
+    <span className="inline-flex items-center gap-1 align-middle">
+      <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-medium">
+        تلقائي
+      </Badge>
+      <span className="text-[11px] text-muted-foreground">{EXPENSE_SOURCE_LABELS[source]}</span>
+    </span>
+  );
+}
 
 interface ExpenseAttachment {
   url: string;
@@ -162,6 +139,8 @@ export default function Expenses() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<number | null>(null);
+  // مصدر المصروف المفتوح للتعديل: الثابت يُعدّل مبلغه وتفاصيله فقط
+  const [editingSource, setEditingSource] = useState<string>("manual");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterBranch, setFilterBranch] = useState<string>("all");
@@ -175,6 +154,7 @@ export default function Expenses() {
   const canEdit = user?.role === 'admin';
   const canDelete = user?.role === 'admin';
   const canApprove = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin';
 
   const { register, handleSubmit, reset, setValue, watch } = useForm<ExpenseFormData>({
     defaultValues: {
@@ -307,8 +287,8 @@ export default function Expenses() {
     const branch = branches?.find(b => b.id === data.branchId);
     createMutation.mutate({
       ...data,
-      category: data.category as "shop_supplies" | "printing" | "carpet_cleaning" | "small_needs" | "residency" | "medical_exam" | "transportation" | "electricity" | "internet" | "license_renewal" | "visa" | "residency_renewal" | "health_cert_renewal" | "maintenance" | "health_cert" | "violation" | "emergency" | "shop_rent" | "housing_rent" | "improvements" | "bonus" | "other",
-      paymentMethod: data.paymentMethod as "cash" | "bank_transfer" | "check" | "credit_card" | "other",
+      category: data.category as ManualExpenseCategory,
+      paymentMethod: data.paymentMethod as ExpensePaymentMethod,
       branchName: branch?.nameAr || branch?.name,
       attachments: attachments.length > 0 ? JSON.stringify(attachments) : undefined,
     }, {
@@ -324,14 +304,16 @@ export default function Expenses() {
     updateMutation.mutate({
       id: selectedExpense,
       ...data,
-      category: data.category as "shop_supplies" | "printing" | "carpet_cleaning" | "small_needs" | "residency" | "medical_exam" | "transportation" | "electricity" | "internet" | "license_renewal" | "visa" | "residency_renewal" | "health_cert_renewal" | "maintenance" | "health_cert" | "violation" | "emergency" | "shop_rent" | "housing_rent" | "improvements" | "bonus" | "other",
-      paymentMethod: data.paymentMethod as "cash" | "bank_transfer" | "check" | "credit_card" | "other",
+      category: data.category as ManualExpenseCategory,
+      paymentMethod: data.paymentMethod as ExpensePaymentMethod,
     });
   };
 
-  // فتح نافذة التعديل
+  // فتح نافذة التعديل (مصروف المسير لا يُعدّل من هنا)
   const openEditDialog = (expense: NonNullable<typeof expenses>[0]) => {
+    if (expense.source === 'payroll') return;
     setSelectedExpense(expense.id);
+    setEditingSource(expense.source);
     setValue("category", expense.category);
     setValue("title", expense.title);
     setValue("description", expense.description || "");
@@ -344,15 +326,18 @@ export default function Expenses() {
     setIsEditOpen(true);
   };
 
-  // تنسيق المبلغ
-  const formatAmount = (amount: string | number) => {
-    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return num.toLocaleString('ar-SA', { minimumFractionDigits: 2 });
-  };
+  // تنسيق المبلغ (أرقام لاتينية)
+  const formatAmount = (amount: string | number) => formatVoucherAmount(amount);
 
-  // تنسيق التاريخ
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString('ar-SA');
+  // تنسيق التاريخ DD/MM/YYYY
+  const formatDate = (date: Date | string) => formatVoucherDate(date);
+
+  // فلتر الشهر (بدون شهر محدد = كل الشهور)
+  const isInFilterMonth = (date: Date | string) => {
+    if (!filterMonth) return true;
+    const expenseDate = new Date(date);
+    const [year, month] = filterMonth.split('-').map(Number);
+    return expenseDate.getFullYear() === year && expenseDate.getMonth() + 1 === month;
   };
 
   // تصفية المصاريف
@@ -361,13 +346,21 @@ export default function Expenses() {
     if (filterStatus !== "all" && expense.status !== filterStatus) return false;
     if (filterBranch !== "all" && expense.branchId?.toString() !== filterBranch) return false;
     // فلتر الشهر
-    if (filterMonth) {
-      const expenseDate = new Date(expense.expenseDate);
-      const [year, month] = filterMonth.split('-').map(Number);
-      if (expenseDate.getFullYear() !== year || expenseDate.getMonth() + 1 !== month) return false;
-    }
+    if (!isInFilterMonth(expense.expenseDate)) return false;
     return true;
   });
+
+  // قسم "مصاريف ثابتة": الصفوف الثابتة للشهر المحدد (يتبع فلتر الفرع والشهر فقط)
+  const fixedMonthRows = (expenses ?? []).filter(expense =>
+    expense.source === 'fixed' &&
+    (filterBranch === "all" || expense.branchId?.toString() === filterBranch) &&
+    isInFilterMonth(expense.expenseDate)
+  );
+  const fixedMonthLabel = (() => {
+    if (!filterMonth) return "جميع الشهور";
+    const [year, month] = filterMonth.split('-').map(Number);
+    return `${arabicMonthName(month)} ${year}`;
+  })();
 
   // حساب إجمالي المصاريف المفلترة (فقط المعتمدة والمدفوعة)
   const filteredTotal = filteredExpenses?.reduce((sum, exp) => {
@@ -614,228 +607,93 @@ export default function Expenses() {
     toast.success('تم فتح التقرير بنجاح');
   };
 
-  // طباعة تقرير المصاريف
-  const printExpensesReport = () => {
+  // تقرير المصاريف PDF: يُولَّد في الخادم بالقالب الرسمي (ترويسة مؤسسة الفرع) حسب فلاتر الشهر والفرع والتصنيف
+  // التقرير للمعتمدة والمدفوعة فقط، فلا يُصدَّر مع فلتر "قيد المراجعة" أو "مرفوض"
+  const reportPdfMutation = trpc.expenses.reportPdf.useMutation();
+  const downloadExpensesReport = async () => {
     const [year, month] = filterMonth.split('-').map(Number);
-    const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-    const monthName = monthNames[month - 1];
-    const branchName = filterBranch === 'all' ? 'جميع الفروع' : branches?.find(b => b.id.toString() === filterBranch)?.nameAr || 'غير محدد';
-    
-    // تجميع المصاريف حسب التصنيف (فقط المعتمدة والمدفوعة)
-    const approvedAndPaidExpenses = filteredExpenses?.filter(exp => exp.status === 'approved' || exp.status === 'paid') || [];
-    const expensesByCategory: Record<string, { count: number; total: number; items: typeof filteredExpenses }> = {};
-    approvedAndPaidExpenses.forEach(exp => {
-      if (!expensesByCategory[exp.category]) {
-        expensesByCategory[exp.category] = { count: 0, total: 0, items: [] };
-      }
-      expensesByCategory[exp.category].count++;
-      expensesByCategory[exp.category].total += parseFloat(exp.amount || '0');
-      expensesByCategory[exp.category].items?.push(exp);
-    });
-    
-    // حساب الإجمالي للمعتمدة والمدفوعة فقط
-    const reportTotal = approvedAndPaidExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount || '0'), 0);
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error('يرجى السماح بالنوافذ المنبثقة');
+    if (!year || !month) {
+      toast.error('يرجى اختيار الشهر');
       return;
     }
+    if (filterStatus !== 'all' && filterStatus !== 'approved' && filterStatus !== 'paid') {
+      toast.error('تقرير المصاريف يشمل المعتمدة والمدفوعة فقط، اختر حالة "معتمد" أو "مدفوع" أو جميع الحالات');
+      return;
+    }
+    const toastId = `expense-report-pdf-${filterMonth}-${filterBranch}`;
+    try {
+      toast.loading('جاري توليد ملف PDF...', { id: toastId });
+      const result = await reportPdfMutation.mutateAsync({
+        year,
+        month,
+        branchId: filterBranch === 'all' ? null : Number(filterBranch),
+        category: filterCategory === 'all' ? null : (filterCategory as ExpenseCategory),
+        status: filterStatus === 'approved' || filterStatus === 'paid' ? filterStatus : null,
+      });
+      downloadBase64Pdf(result.pdf, result.filename);
+      toast.success('تم تحميل تقرير المصاريف', { id: toastId });
+    } catch (error: any) {
+      toast.error(error?.message || 'فشل توليد ملف PDF', { id: toastId });
+    }
+  };
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="UTF-8">
-        <title>تقرير المصاريف - ${monthName} ${year}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800;900&display=swap');
-          body { 
-            font-family: 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif; 
-            padding: 20px; 
-            background: #fff;
-            color: #000;
-            font-size: 14px;
-          }
-          .header { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            padding-bottom: 20px;
-            border-bottom: 3px solid #000;
-          }
-          .logo { font-size: 28px; font-weight: 800; color: #000; margin-bottom: 5px; }
-          .report-title { font-size: 20px; color: #000; margin: 10px 0; font-weight: 700; }
-          .report-info { color: #6b7280; font-size: 14px; }
-          .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 25px;
-          }
-          .summary-card {
-            background: #f5f5f5;
-            border: 2px solid #000;
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-          }
-          .summary-card .label { color: #333; font-size: 12px; margin-bottom: 5px; font-weight: 600; }
-          .summary-card .value { font-size: 22px; font-weight: 800; color: #000; }
-          .category-section {
-            margin-bottom: 25px;
-            page-break-inside: avoid;
-          }
-          .category-header {
-            background: #1a1a1a;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px 8px 0 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-          .category-name { font-weight: 700; font-size: 14px; }
-          .category-total { font-size: 16px; font-weight: 800; }
-          table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-bottom: 10px;
-            background: white;
-          }
-          th { 
-            background: #f5f5f5; 
-            padding: 10px 8px; 
-            text-align: right; 
-            font-weight: 700;
-            color: #000;
-            border: 1px solid #ccc;
-          }
-          td { 
-            padding: 10px 8px; 
-            border: 1px solid #ccc; 
-            text-align: right;
-            font-weight: 600;
-            color: #000;
-          }
-          tr:nth-child(even) { background: #f8fafc; }
-          .amount { color: #cc0000; font-weight: 800; font-size: 15px; }
-          .status-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: 500;
-          }
-          .status-pending { background: #fef3c7; color: #92400e; }
-          .status-approved { background: #d1fae5; color: #065f46; }
-          .status-paid { background: #dbeafe; color: #1e40af; }
-          .status-rejected { background: #fee2e2; color: #991b1b; }
-          .grand-total {
-            background: #1a1a1a;
-            color: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 20px;
-            font-weight: 800;
-            margin-top: 20px;
-            border: 2px solid #000;
-          }
-          .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #e2e8f0;
-            text-align: center;
-            color: #9ca3af;
-            font-size: 11px;
-          }
-          @media print {
-            body { padding: 10px; }
-            .summary-cards { grid-template-columns: repeat(4, 1fr); }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="logo">Symbol AI</div>
-          <div class="report-title">تقرير المصاريف الشهري</div>
-          <div class="report-info">
-            <strong>الشهر:</strong> ${monthName} ${year} | 
-            <strong>الفرع:</strong> ${branchName} | 
-            <strong>تاريخ الطباعة:</strong> ${new Date().toLocaleDateString('ar-SA')}
-          </div>
-        </div>
-
-        <div class="summary-cards">
-          <div class="summary-card">
-            <div class="label">عدد المصاريف (معتمدة/مدفوعة)</div>
-            <div class="value">${approvedAndPaidExpenses.length}</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">عدد التصنيفات</div>
-            <div class="value">${Object.keys(expensesByCategory).length}</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">متوسط المصروف</div>
-            <div class="value">${approvedAndPaidExpenses.length ? (reportTotal / approvedAndPaidExpenses.length).toFixed(2) : '0.00'} ر.س</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">إجمالي المصاريف (معتمدة/مدفوعة)</div>
-            <div class="value">${reportTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</div>
-          </div>
-        </div>
-
-        ${Object.entries(expensesByCategory).map(([category, data]) => `
-          <div class="category-section">
-            <div class="category-header">
-              <span class="category-name">${categoryNames[category] || category}</span>
-              <span class="category-total">${data.count} مصروف | ${data.total.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>رقم المصروف</th>
-                  <th>العنوان</th>
-                  <th>التاريخ</th>
-                  <th>طريقة الدفع</th>
-                  <th>الحالة</th>
-                  <th>المبلغ</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${data.items?.map(exp => `
-                  <tr>
-                    <td>${exp.expenseNumber}</td>
-                    <td>${exp.title}</td>
-                    <td>${new Date(exp.expenseDate).toLocaleDateString('ar-SA')}</td>
-                    <td>${paymentMethods.find(p => p.value === exp.paymentMethod)?.label || exp.paymentMethod}</td>
-                    <td><span class="status-badge status-${exp.status}">${statusNames[exp.status]}</span></td>
-                    <td class="amount">${parseFloat(exp.amount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        `).join('')}
-
-        <div class="grand-total">
-          <span>إجمالي المصاريف المعتمدة والمدفوعة لشهر ${monthName} ${year}</span>
-          <span>${reportTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ريال سعودي</span>
-        </div>
-
-        <div class="footer">
-          <p>تم إنشاء هذا التقرير بواسطة نظام Symbol AI لإدارة الموارد</p>
-          <p>جميع الحقوق محفوظة © ${new Date().getFullYear()}</p>
-        </div>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 500);
+  // إجراءات صف المصروف (الجوال والجدول)
+  // - مصروف المسير: بلا تعديل أو حذف أو تغيير حالة (يتبع المسير: يُدفع أو يُلغى من صفحة المسيرات)
+  // - المصروف الثابت: يُعدّل مبلغه وتفاصيله ويُرفض لهذا الشهر، ولا يُحذف (يُوقف قالبه من إدارة المصاريف الثابتة)
+  const renderRowActions = (expense: NonNullable<typeof expenses>[0], size: "sm" | "icon") => {
+    if (expense.source === 'payroll') {
+      return <span className="text-xs text-muted-foreground">يُدار من مسيرات الرواتب</span>;
+    }
+    const isFixed = expense.source === 'fixed';
+    const isPending = expense.status === 'pending';
+    const canEditRow = canEdit && (isPending || (isFixed && expense.status !== 'rejected'));
+    const canApproveRow = canApprove && (isPending || (isFixed && expense.status === 'rejected'));
+    const canRejectRow = canApprove && (isPending || (isFixed && expense.status === 'approved'));
+    const canDeleteRow = canDelete && isPending && !isFixed;
+    return (
+      <>
+        {canEditRow && (
+          <Button variant="ghost" size={size} onClick={() => openEditDialog(expense)} title={isFixed ? "تعديل المبلغ أو التفاصيل" : "تعديل"}>
+            <Edit className="h-4 w-4" />
+          </Button>
+        )}
+        {canApproveRow && (
+          <Button variant="ghost" size={size} onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })} title="اعتماد">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          </Button>
+        )}
+        {canRejectRow && (
+          <Button
+            variant="ghost"
+            size={size}
+            onClick={() => {
+              const reason = prompt(isFixed ? 'سبب رفض المصروف الثابت لهذا الشهر:' : 'سبب الرفض:');
+              if (reason) updateStatusMutation.mutate({ id: expense.id, status: 'rejected', rejectionReason: reason });
+            }}
+            title={isFixed ? "رفض لهذا الشهر" : "رفض"}
+          >
+            <XCircle className="h-4 w-4 text-red-600" />
+          </Button>
+        )}
+        {canDeleteRow && (
+          <Button
+            variant="ghost"
+            size={size}
+            onClick={() => {
+              if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) deleteMutation.mutate({ id: expense.id });
+            }}
+            title="حذف"
+          >
+            <Trash2 className="h-4 w-4 text-red-600" />
+          </Button>
+        )}
+        {expense.status === 'approved' && canApprove && (
+          <Button variant="ghost" size={size} onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'paid' })} title="تأكيد الدفع">
+            <DollarSign className="h-4 w-4 text-blue-600" />
+          </Button>
+        )}
+      </>
+    );
   };
 
   return (
@@ -1149,7 +1007,7 @@ export default function Expenses() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">جميع التصنيفات</SelectItem>
-                  {expenseCategories.map((cat) => (
+                  {filterCategories.map((cat) => (
                     <SelectItem key={cat.value} value={cat.value}>
                       {cat.label}
                     </SelectItem>
@@ -1169,9 +1027,9 @@ export default function Expenses() {
                 </SelectContent>
               </Select>
               <div className="flex-1" />
-              <Button variant="outline" onClick={printExpensesReport} className="gap-2">
-                <Printer className="h-4 w-4" />
-                طباعة التقرير
+              <Button variant="outline" onClick={downloadExpensesReport} disabled={reportPdfMutation.isPending} className="gap-2">
+                {reportPdfMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                تصدير PDF
               </Button>
             </div>
             {/* عرض إجمالي المصاريف المفلترة */}
@@ -1182,13 +1040,21 @@ export default function Expenses() {
               </div>
               <div className="text-left">
                 <span className="text-xs text-muted-foreground block">إجمالي المعتمدة والمدفوعة فقط</span>
-                <span className="text-lg font-bold text-red-600">
-                  {filteredTotal.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س
+                <span className="text-lg font-bold text-red-600" dir="ltr">
+                  {formatAmount(filteredTotal)} ر.س
                 </span>
               </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* مصاريف ثابتة: تُضاف تلقائياً أول كل شهر لكل فرع (المسؤول يدير بنودها) */}
+        <FixedExpensesSection
+          rows={fixedMonthRows}
+          monthLabel={fixedMonthLabel}
+          isAdmin={isAdmin}
+          branches={branches ?? []}
+        />
 
         {/* جدول المصاريف */}
         <Card className="card-professional">
@@ -1215,6 +1081,7 @@ export default function Expenses() {
                         <div>
                           <p className="font-bold text-lg">{expense.title}</p>
                           <p className="text-sm text-muted-foreground">{expense.expenseNumber}</p>
+                          <AutoSourceBadge source={expense.source} />
                         </div>
                         <Badge className={statusColors[expense.status]}>
                           {statusNames[expense.status]}
@@ -1266,40 +1133,7 @@ export default function Expenses() {
                         )}
                       </div>
                       <div className="flex items-center justify-end gap-1 mt-3 pt-3 border-t">
-                        {expense.status === 'pending' && (
-                          <>
-                            {canEdit && (
-                              <Button variant="ghost" size="sm" onClick={() => openEditDialog(expense)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {canApprove && (
-                              <>
-                                <Button variant="ghost" size="sm" onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}>
-                                  <CheckCircle className="h-4 w-4 text-green-600" />
-                                </Button>
-                                <Button variant="ghost" size="sm" onClick={() => {
-                                  const reason = prompt('سبب الرفض:');
-                                  if (reason) updateStatusMutation.mutate({ id: expense.id, status: 'rejected', rejectionReason: reason });
-                                }}>
-                                  <XCircle className="h-4 w-4 text-red-600" />
-                                </Button>
-                              </>
-                            )}
-                            {canDelete && (
-                              <Button variant="ghost" size="sm" onClick={() => {
-                                if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) deleteMutation.mutate({ id: expense.id });
-                              }}>
-                                <Trash2 className="h-4 w-4 text-red-600" />
-                              </Button>
-                            )}
-                          </>
-                        )}
-                        {expense.status === 'approved' && canApprove && (
-                          <Button variant="ghost" size="sm" onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'paid' })}>
-                            <DollarSign className="h-4 w-4 text-blue-600" />
-                          </Button>
-                        )}
+                        {renderRowActions(expense, "sm")}
                       </div>
                     </Card>
                   ))}
@@ -1326,7 +1160,10 @@ export default function Expenses() {
                       {filteredExpenses.map((expense) => (
                         <TableRow key={expense.id}>
                           <TableCell className="font-medium">{expense.expenseNumber}</TableCell>
-                          <TableCell>{expense.title}</TableCell>
+                          <TableCell>
+                            <div>{expense.title}</div>
+                            <AutoSourceBadge source={expense.source} />
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline">
                               {categoryNames[expense.category]}
@@ -1388,69 +1225,7 @@ export default function Expenses() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              {expense.status === 'pending' && (
-                                <>
-                                  {canEdit && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => openEditDialog(expense)}
-                                      title="تعديل"
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                  {canApprove && (
-                                    <>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'approved' })}
-                                        title="اعتماد"
-                                      >
-                                        <CheckCircle className="h-4 w-4 text-green-600" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          const reason = prompt('سبب الرفض:');
-                                          if (reason) {
-                                            updateStatusMutation.mutate({ id: expense.id, status: 'rejected', rejectionReason: reason });
-                                          }
-                                        }}
-                                        title="رفض"
-                                      >
-                                        <XCircle className="h-4 w-4 text-red-600" />
-                                      </Button>
-                                    </>
-                                  )}
-                                  {canDelete && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => {
-                                        if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
-                                          deleteMutation.mutate({ id: expense.id });
-                                        }
-                                      }}
-                                      title="حذف"
-                                    >
-                                      <Trash2 className="h-4 w-4 text-red-600" />
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                              {expense.status === 'approved' && canApprove && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => updateStatusMutation.mutate({ id: expense.id, status: 'paid' })}
-                                  title="تأكيد الدفع"
-                                >
-                                  <DollarSign className="h-4 w-4 text-blue-600" />
-                                </Button>
-                              )}
+                              {renderRowActions(expense, "icon")}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1731,12 +1506,18 @@ export default function Expenses() {
               <DialogTitle>تعديل المصروف</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmitEdit)} className="space-y-4">
+              {editingSource === 'fixed' && (
+                <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                  مصروف ثابت لهذا الشهر: يُعدّل مبلغه وتفاصيله فقط. لتغيير البند أو طريقة الدفع للشهور القادمة عدّل القالب من «إدارة المصاريف الثابتة».
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">التصنيف *</label>
                   <Select
                     value={watch("category")}
                     onValueChange={(v) => setValue("category", v)}
+                    disabled={editingSource === 'fixed'}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="اختر التصنيف" />
@@ -1764,6 +1545,7 @@ export default function Expenses() {
                 <label className="text-sm font-medium">العنوان *</label>
                 <Input
                   placeholder="وصف مختصر للمصروف"
+                  readOnly={editingSource === 'fixed'}
                   {...register("title", { required: true })}
                 />
               </div>
@@ -1779,6 +1561,7 @@ export default function Expenses() {
                   <label className="text-sm font-medium">التاريخ *</label>
                   <Input
                     type="date"
+                    readOnly={editingSource === 'fixed'}
                     {...register("expenseDate", { required: true })}
                   />
                 </div>
@@ -1787,6 +1570,7 @@ export default function Expenses() {
                   <Select
                     value={watch("paymentMethod")}
                     onValueChange={(v) => setValue("paymentMethod", v)}
+                    disabled={editingSource === 'fixed'}
                   >
                     <SelectTrigger>
                       <SelectValue />

@@ -366,7 +366,7 @@ async function notifyAdvanceRequestCreated(params: {
 
 // ==================== المستندات (PDF) ====================
 
-const PAYSLIP_NOT_FOUND = "مسيرة الراتب غير متاحة";
+const PAYSLIP_NOT_FOUND = "مسير الراتب غير متاح";
 
 function wrapDocumentError(error: unknown, message: string): never {
   if (error instanceof TRPCError) throw error;
@@ -383,7 +383,7 @@ export async function getOwnPayslipData(employeeId: number, payrollId: number): 
     const { getPayslipDocumentData } = await import("../employeeDocumentsPdf");
     data = await getPayslipDocumentData(payrollId, employeeId);
   } catch (error) {
-    wrapDocumentError(error, "تعذر تحميل مسيرة الراتب");
+    wrapDocumentError(error, "تعذر تحميل مسير الراتب");
   }
   if (!data || data.employee.id !== employeeId || (data.status !== "approved" && data.status !== "paid")) {
     throw new TRPCError({ code: "NOT_FOUND", message: PAYSLIP_NOT_FOUND });
@@ -398,7 +398,7 @@ export async function getOwnPayslipPdf(employeeId: number, payrollId: number): P
     const pdf = await generatePayslipPDF(data);
     return { pdf: pdf.toString("base64"), filename: payslipFileName(data) };
   } catch (error) {
-    wrapDocumentError(error, "تعذر إنشاء ملف PDF لمسيرة الراتب");
+    wrapDocumentError(error, "تعذر إنشاء ملف PDF لمسير الراتب");
   }
 }
 

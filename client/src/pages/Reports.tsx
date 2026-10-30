@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { expenseCategoryLabel } from "@shared/expenses";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -94,8 +95,10 @@ export default function ReportsPage() {
     const totalSales = salesReport?.summary?.total || 0;
     const totalPurchases = purchasesReport?.summary?.total || 0;
     
-    // تصفية المصاريف حسب التاريخ
+    // تصفية المصاريف المعتمدة والمدفوعة حسب التاريخ (بدون صفوف مسير الرواتب: الرواتب تُحسب من المسيرات أدناه)
     const filteredExpenses = expenses.filter((e: any) => {
+      if (e.source === 'payroll') return false;
+      if (e.status !== 'approved' && e.status !== 'paid') return false;
       const expenseDate = new Date(e.expenseDate);
       return expenseDate >= new Date(dateRange.startDate) && expenseDate <= new Date(dateRange.endDate);
     });
@@ -201,7 +204,7 @@ export default function ReportsPage() {
             ["مصاريف التشغيل", formatCurrency(profitLossReport.operatingExpenses.total)],
             ["الرواتب والأجور", formatCurrency(profitLossReport.operatingExpenses.payroll)],
             ...Object.entries(profitLossReport.operatingExpenses.byCategory).map(([cat, val]) => [
-              cat,
+              expenseCategoryLabel(cat),
               formatCurrency(val),
             ]),
             ["صافي الربح", formatCurrency(profitLossReport.netProfit)],
@@ -651,7 +654,7 @@ export default function ReportsPage() {
                     </div>
                     {Object.entries(profitLossReport.operatingExpenses.byCategory).map(([category, amount]) => (
                       <div key={category} className="flex justify-between items-center">
-                        <span>{category}</span>
+                        <span>{expenseCategoryLabel(category)}</span>
                         <span className="font-semibold">{formatCurrency(amount)}</span>
                       </div>
                     ))}

@@ -306,7 +306,7 @@ export function EmployeeProfile() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-4 space-y-3">
-          {/* للعرض فقط: الإدارة تحدد الراتب والبدلات في ملف الموظف، وهي نفس قيم المسيرة */}
+          {/* للعرض فقط: الإدارة تحدد الراتب والبدلات في ملف الموظف، وهي نفس قيم المسير */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-lg border border-amber-500/20">
               <p className="text-xs text-amber-400/70">الراتب الأساسي</p>
@@ -330,7 +330,7 @@ export function EmployeeProfile() {
           <p className="text-xs text-slate-400">
             {profile.salaryConfigured
               ? 'تحدد الإدارة الراتب والبدلات في ملفك الوظيفي، وتظهر هنا للاطلاع فقط.'
-              : 'لم تحدد الإدارة راتبك في ملفك الوظيفي بعد؛ القيم المعروضة هي القيم الافتراضية للمسيرة.'}
+              : 'لم تحدد الإدارة راتبك في ملفك الوظيفي بعد؛ القيم المعروضة هي القيم الافتراضية للمسير.'}
           </p>
         </CardContent>
       </Card>

@@ -508,6 +508,16 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     
+    // المصاريف التلقائية عند كل تشغيل (كل البيئات): القوالب الافتراضية، المصاريف الثابتة للشهر الحالي،
+    // ومصاريف المسيرات المعتمدة السابقة. آمنة للتكرار، والفشل يُسجل ولا يوقف الخادم
+    import('../expenses/autoExpenses').then(({ runAutoExpensesMaintenance }) =>
+      runAutoExpensesMaintenance({ backfillPayroll: true })
+    ).then(result => {
+      console.log(`[AutoExpenses] قوالب جديدة: ${result.templates.created}، مصاريف ثابتة أُضيفت: ${result.fixed.created}، مسيرات سُجلت: ${result.payroll?.created ?? 0}`);
+    }).catch(err => {
+      console.error('[AutoExpenses] تعذر تجهيز المصاريف التلقائية:', err);
+    });
+
     // تشغيل نظام الجدولة في بيئة الإنتاج
     if (process.env.NODE_ENV === 'production') {
       import('../scheduler/cronScheduler').then(({ startScheduler }) => {

@@ -216,7 +216,7 @@ export function generatePayrollHTML(data: PayrollReportData): string {
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>مسيرة رواتب - ${payroll.branchName} - ${monthName} ${payroll.year}</title>
+  <title>مسير رواتب - ${payroll.branchName} - ${monthName} ${payroll.year}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -369,8 +369,8 @@ export function generatePayrollHTML(data: PayrollReportData): string {
       </div>
     </div>
     <div class="report-title">
-      <h2>مسيرة رواتب</h2>
-      <p>رقم المسيرة: ${payroll.payrollNumber}</p>
+      <h2>مسير رواتب</h2>
+      <p>رقم المسير: ${payroll.payrollNumber}</p>
       <p>تاريخ الإنشاء: ${formatDate(payroll.createdAt)}</p>
     </div>
   </div>
@@ -447,7 +447,7 @@ export function generatePayrollHTML(data: PayrollReportData): string {
       <span>${formatAmount(payroll.totalDeductions)} ر.س</span>
     </div>
     <div class="summary-item">
-      <label>صافي المسيرة</label>
+      <label>صافي المسير</label>
       <span>${formatAmount(payroll.totalNetSalary)} ر.س</span>
     </div>
   </div>

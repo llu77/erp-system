@@ -30,9 +30,9 @@ const ARABIC_MONTHS = [
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
   pending: "تحت الإجراء",
-  approved: "معتمدة",
-  paid: "مدفوعة",
-  cancelled: "ملغاة",
+  approved: "معتمد",
+  paid: "مدفوع",
+  cancelled: "ملغى",
 };
 
 export interface PrintablePayroll {
@@ -230,7 +230,7 @@ function signaturesBlock(
           // الختم نفسه يحمل اسم الإدارة؛ إزالة التسمية تعطي الختم الأكبر مساحته دون زيادة ارتفاع الصف
           ? `<img src="${escapeHtml(assetUrl(stamp))}" alt="${escapeHtml(SIGNATURES.stamp.label)}" onerror="this.style.display='none'" />`
           : `<div class="ph">الختم بعد الاعتماد</div><div class="role" style="font-size:10px;color:#555;margin-top:4px">${escapeHtml(SIGNATURES.stamp.label)}</div>`}
-        ${approved && approvedByName ? `<div style="font-size:9.5px;color:#333;margin-top:2px">اعتمدها: ${escapeHtml(approvedByName)} — ${fmtDate(approvedAt)}</div>` : ""}
+        ${approved && approvedByName ? `<div style="font-size:9.5px;color:#333;margin-top:2px">اعتمده: ${escapeHtml(approvedByName)} — ${fmtDate(approvedAt)}</div>` : ""}
       </div>
       ${sigBox(SIGNATURES.manager)}
     </div>`;
@@ -257,7 +257,7 @@ function headerBlock(titleAr: string, titleEn: string, payroll: PrintablePayroll
       ${brandBlock(company)}
       <div class="title"><h1>${escapeHtml(titleAr)}</h1><div class="en">${escapeHtml(titleEn)}</div></div>
       <div class="meta">
-        <div><b>رقم المسيرة:</b> ${escapeHtml(payroll.payrollNumber)}</div>
+        <div><b>رقم المسير:</b> ${escapeHtml(payroll.payrollNumber)}</div>
         <div><b>الفترة:</b> ${ARABIC_MONTHS[payroll.month - 1]} ${payroll.year}</div>
         <div><b>الحالة:</b> <span class="badge ${approved ? "ok" : ""}">${escapeHtml(STATUS_LABELS[payroll.status] ?? payroll.status)}</span></div>
       </div>
@@ -265,17 +265,17 @@ function headerBlock(titleAr: string, titleEn: string, payroll: PrintablePayroll
 }
 
 function watermark(status: string) {
-  if (status === "cancelled") return `<div class="watermark">ملغاة</div>`;
+  if (status === "cancelled") return `<div class="watermark">ملغى</div>`;
   if (!isPayrollApproved(status)) return `<div class="watermark">مسودة</div>`;
   return "";
 }
 
 function footer(company: Establishment) {
   const now = new Date();
-  return `<div class="footer"><span>${escapeHtml(company.nameAr)}</span><span>طُبعت في ${now.toLocaleDateString("ar-SA-u-ca-gregory")} ${now.toLocaleTimeString("ar-SA")}</span></div>`;
+  return `<div class="footer"><span>${escapeHtml(company.nameAr)}</span><span>طُبع في ${now.toLocaleDateString("ar-SA-u-ca-gregory")} ${now.toLocaleTimeString("ar-SA")}</span></div>`;
 }
 
-/** مسيرة الرواتب الكاملة (أفقي A4) */
+/** مسير الرواتب الكامل (أفقي A4) */
 export function buildPayrollSheetHtml(payroll: PrintablePayroll, details: PrintableDetail[]): string {
   const approved = isPayrollApproved(payroll.status);
   const company = payrollEstablishment(payroll);
@@ -310,16 +310,16 @@ export function buildPayrollSheetHtml(payroll: PrintablePayroll, details: Printa
   const totalNet = sum("netSalary");
 
   return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8" />
-<title>مسيرة رواتب ${escapeHtml(payroll.branchName)} - ${ARABIC_MONTHS[payroll.month - 1]} ${payroll.year}</title>
+<title>مسير رواتب ${escapeHtml(payroll.branchName)} - ${ARABIC_MONTHS[payroll.month - 1]} ${payroll.year}</title>
 <style>${BASE_STYLES} @page { size: A4 landscape; margin: 7mm; }</style></head><body>
 ${watermark(payroll.status)}
 <div class="doc">
-  ${headerBlock("مسيرة رواتب الموظفين", "Monthly Payroll Sheet", payroll, company)}
+  ${headerBlock("مسير رواتب الموظفين", "Monthly Payroll Sheet", payroll, company)}
   <div class="info">
     <div><label>الفرع</label><span>${escapeHtml(payroll.branchName)}</span></div>
     <div><label>عدد الموظفين</label><span>${details.length}</span></div>
-    <div><label>أُعدت بواسطة</label><span>${escapeHtml(payroll.createdByName || "—")} — ${fmtDate(payroll.createdAt)}</span></div>
-    <div><label>صافي المسيرة</label><span>${money(totalNet)} ر.س</span></div>
+    <div><label>أُعد بواسطة</label><span>${escapeHtml(payroll.createdByName || "—")} — ${fmtDate(payroll.createdAt)}</span></div>
+    <div><label>صافي المسير</label><span>${money(totalNet)} ر.س</span></div>
   </div>
   <table>
     <thead><tr>
@@ -337,7 +337,7 @@ ${watermark(payroll.status)}
       <td>${money(sum("totalDeductions"))}</td><td>${money(totalNet)}</td><td></td>
     </tr></tfoot>
   </table>
-  <div style="margin-top:8px;font-size:11px;font-weight:700">صافي المسيرة كتابةً: ${escapeHtml(netInWords(totalNet))}</div>
+  <div style="margin-top:8px;font-size:11px;font-weight:700">صافي المسير كتابةً: ${escapeHtml(netInWords(totalNet))}</div>
   ${signaturesBlock(company, approved, payroll.approvedByName, payroll.approvedAt)}
   ${footer(company)}
 </div></body></html>`;

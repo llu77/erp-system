@@ -158,15 +158,15 @@ function payrollLineJobTitle(detail: Pick<PayslipDetailSource, "position" | "isS
   return employeeJobTitle(detail.isSupervisor);
 }
 
-/** اسم مستند راتب الموظف الشهري (مسيرة الراتب، وليس قسيمة) */
-export const PAYROLL_STATEMENT_TITLE = "مسيرة راتب";
+/** اسم مستند راتب الموظف الشهري (مسير الراتب، وليس قسيمة) */
+export const PAYROLL_STATEMENT_TITLE = "مسير راتب";
 
 export const PAYSLIP_STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
   pending: "تحت الإجراء",
-  approved: "معتمدة",
-  paid: "مدفوعة",
-  cancelled: "ملغاة",
+  approved: "معتمد",
+  paid: "مدفوع",
+  cancelled: "ملغى",
 };
 
 export function payslipStatusLabel(status: string | null | undefined): string {
@@ -603,11 +603,11 @@ function renderApproval(
   data: PayslipDocumentData
 ): string {
   if (ctx.cancelled)
-    return `<div class="alert-box"><b>المسيرة ملغاة</b> - هذا المستند غير صالح للاستخدام.</div>`;
+    return `<div class="alert-box"><b>المسير ملغى</b> - هذا المستند غير صالح للاستخدام.</div>`;
   if (!ctx.signed)
-    return `<div class="pending-note">بانتظار اعتماد المسيرة - لا يُعد هذا المستند رسمياً قبل الاعتماد</div>`;
+    return `<div class="pending-note">بانتظار اعتماد المسير - لا يُعد هذا المستند رسمياً قبل الاعتماد</div>`;
   const approvedBy = present(data.approvedByName);
-  let note = `&#10004; اعتُمدت المسيرة${approvedBy ? ` بواسطة ${esc(approvedBy)}` : ""}${data.approvedAt ? ` بتاريخ ${esc(dateTimeText(data.approvedAt))}` : ""}`;
+  let note = `&#10004; اعتُمد المسير${approvedBy ? ` بواسطة ${esc(approvedBy)}` : ""}${data.approvedAt ? ` بتاريخ ${esc(dateTimeText(data.approvedAt))}` : ""}`;
   if (ctx.status === "paid") {
     const method = paymentMethodText(data.paymentMethod);
     const reference = present(data.paymentReference);
@@ -620,10 +620,10 @@ function renderSignatures(
   ctx: EmployeeDocContext,
   data: PayslipDocumentData
 ): string {
-  const pendingText = ctx.cancelled ? "ملغاة" : "بانتظار الاعتماد";
+  const pendingText = ctx.cancelled ? "ملغى" : "بانتظار الاعتماد";
   const preparedBy = `
       <div class="sig sig-prepared">
-        <div class="sig-title">${bi("أعدّها", "Prepared By")}</div>
+        <div class="sig-title">${bi("أعدّه", "Prepared By")}</div>
         <div class="sig-area"></div>
         <div class="sig-line"></div>
         <div class="sig-name">${present(data.createdByName) ? esc(present(data.createdByName)) : "&nbsp;"}</div>
@@ -637,7 +637,7 @@ function renderSignatures(
     </section>`;
 }
 
-/** مسيرة راتب الموظف (HTML كامل، صفحة A4 واحدة للحالات المعتادة) */
+/** مسير راتب الموظف (HTML كامل، صفحة A4 واحدة للحالات المعتادة) */
 export function renderPayslipHtml(
   data: PayslipDocumentData,
   options: EmployeeDocumentTemplateOptions = {}
@@ -657,9 +657,9 @@ export function renderPayslipHtml(
       : `${String(data.month).padStart(2, "0")}/${data.year}`;
 
   const watermark = ctx.cancelled
-    ? renderWatermark("ملغاة", "cancelled")
+    ? renderWatermark("ملغى", "cancelled")
     : !ctx.signed
-      ? renderWatermark("مسودة - غير معتمدة", "draft")
+      ? renderWatermark("مسودة - غير معتمد", "draft")
       : "";
 
   const notes = present(data.notes)
@@ -669,7 +669,7 @@ export function renderPayslipHtml(
   const body = `
     <div class="title-row">
       <div class="info-box">
-        <div class="lbl">${bi("رقم المسيرة", "Payroll No.")}</div>
+        <div class="lbl">${bi("رقم المسير", "Payroll No.")}</div>
         <div class="val ltr">${esc(data.payrollNumber)}</div>
       </div>
       <div class="doc-title">
@@ -701,7 +701,7 @@ export function renderPayslipHtml(
     kind: "payslip",
     watermark,
     body,
-    footer: renderFooter(ctx, PAYROLL_STATEMENT_TITLE, "رقم المسيرة", data.payrollNumber),
+    footer: renderFooter(ctx, PAYROLL_STATEMENT_TITLE, "رقم المسير", data.payrollNumber),
     extraCss: PAYSLIP_STYLES,
     autoPrint: options.autoPrint,
   });

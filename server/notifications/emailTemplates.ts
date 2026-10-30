@@ -1123,13 +1123,13 @@ export function getPayrollReminderTemplate(data: {
       </div>
       
       <div class="alert-box info" style="margin-top: 20px;">
-        <div style="font-weight: 600; margin-bottom: 8px;">📋 خطوات إنشاء المسيرة:</div>
+        <div style="font-weight: 600; margin-bottom: 8px;">📋 خطوات إنشاء المسير:</div>
         <ol style="color: #374151; line-height: 2; padding-right: 20px;">
           <li>اذهب إلى صفحة "مسيرات الرواتب" في النظام</li>
-          <li>اضغط على "إنشاء مسيرة جديدة"</li>
+          <li>اضغط على "إنشاء مسير جديد"</li>
           <li>اختر الفرع والشهر</li>
           <li>أدخل بيانات الموظفين (أيام العمل، الساعات الإضافية، الحوافز، الخصومات)</li>
-          <li>راجع المسيرة وأرسلها للاعتماد</li>
+          <li>راجع المسير وأرسله للاعتماد</li>
         </ol>
       </div>
     </div>
@@ -1142,7 +1142,7 @@ export function getPayrollReminderTemplate(data: {
 }
 
 
-// ==================== قالب إشعار إنشاء مسيرة رواتب ====================
+// ==================== قالب إشعار إنشاء مسير رواتب ====================
 export function getNewPayrollCreatedTemplate(data: {
   recipientName: string;
   createdByName: string;
@@ -1158,7 +1158,7 @@ export function getNewPayrollCreatedTemplate(data: {
       <div class="logo">
         <span class="logo-text">💰</span>
       </div>
-      <h1>مسيرة رواتب جديدة</h1>
+      <h1>مسير رواتب جديد</h1>
       <div class="subtitle">${data.branchName} - ${data.month} ${data.year}</div>
     </div>
     
@@ -1166,19 +1166,19 @@ export function getNewPayrollCreatedTemplate(data: {
       <div class="greeting">
         السلام عليكم ورحمة الله وبركاته،<br><br>
         <strong>${data.recipientName}</strong><br><br>
-        تم إنشاء مسيرة رواتب جديدة وهي بانتظار الاعتماد.
+        تم إنشاء مسير رواتب جديد وهو بانتظار الاعتماد.
       </div>
       
       <div class="alert-box purple">
         <div style="font-size: 18px; font-weight: 700; color: #7c3aed; margin-bottom: 10px;">
-          📝 تفاصيل المسيرة
+          📝 تفاصيل المسير
         </div>
         <div style="font-size: 14px; color: #374151; line-height: 1.8;">
-          تم إنشاء مسيرة رواتب جديدة بواسطة <strong>${data.createdByName}</strong> (${data.createdByRole})
+          تم إنشاء مسير رواتب جديد بواسطة <strong>${data.createdByName}</strong> (${data.createdByRole})
         </div>
       </div>
       
-      <h3 style="color: #1a1a2e; margin: 25px 0 15px; font-size: 16px;">📊 ملخص المسيرة</h3>
+      <h3 style="color: #1a1a2e; margin: 25px 0 15px; font-size: 16px;">📊 ملخص المسير</h3>
       <div class="info-grid">
         <div class="info-item">
           <div class="label">🏢 الفرع</div>
@@ -1201,22 +1201,22 @@ export function getNewPayrollCreatedTemplate(data: {
       <div class="divider"></div>
       
       <div style="text-align: center;">
-        <p style="color: #64748b; margin-bottom: 15px;">يرجى مراجعة المسيرة واعتمادها:</p>
-        <a href="#" class="cta-button">مراجعة المسيرة</a>
+        <p style="color: #64748b; margin-bottom: 15px;">يرجى مراجعة المسير واعتماده:</p>
+        <a href="#" class="cta-button">مراجعة المسير</a>
       </div>
       
       <div class="alert-box info" style="margin-top: 20px;">
         <div style="font-weight: 600; margin-bottom: 8px;">⚠️ ملاحظة هامة:</div>
         <div style="color: #374151; line-height: 1.8;">
-          هذه المسيرة بانتظار الاعتماد من المسؤول. يرجى مراجعة البيانات والتأكد من صحتها قبل الاعتماد.
+          هذا المسير بانتظار الاعتماد من المسؤول. يرجى مراجعة البيانات والتأكد من صحتها قبل الاعتماد.
         </div>
       </div>
     </div>
   `;
   
   return {
-    subject: `💰 مسيرة رواتب جديدة - ${data.branchName} - ${data.month} ${data.year} | Symbol AI`,
-    html: getBaseTemplate(content, 'مسيرة رواتب جديدة'),
+    subject: `💰 مسير رواتب جديد - ${data.branchName} - ${data.month} ${data.year} | Symbol AI`,
+    html: getBaseTemplate(content, 'مسير رواتب جديد'),
   };
 }
 
@@ -1501,7 +1501,7 @@ export function getEmployeePayslipTemplate(data: {
       <div class="logo">
         <span class="logo-text">💰</span>
       </div>
-      <h1>مسيرة راتب</h1>
+      <h1>مسير راتب</h1>
       <div class="subtitle">${data.month} ${data.year}</div>
     </div>
     
@@ -1509,7 +1509,7 @@ export function getEmployeePayslipTemplate(data: {
       <div class="greeting">
         السلام عليكم ورحمة الله وبركاته،<br><br>
         <strong>${data.employeeName}</strong><br><br>
-        نود إعلامكم بأنه تم اعتماد مسيرة رواتب شهر ${data.month} ${data.year}. فيما يلي تفاصيل راتبكم:
+        نود إعلامكم بأنه تم اعتماد مسير رواتب شهر ${data.month} ${data.year}. فيما يلي تفاصيل راتبكم:
       </div>
       
       <!-- معلومات الموظف -->
@@ -1527,7 +1527,7 @@ export function getEmployeePayslipTemplate(data: {
           <div class="value">${data.branchName}</div>
         </div>
         <div class="info-item">
-          <div class="label">📋 رقم المسيرة</div>
+          <div class="label">📋 رقم المسير</div>
           <div class="value">${data.payrollNumber}</div>
         </div>
       </div>
@@ -1613,8 +1613,8 @@ export function getEmployeePayslipTemplate(data: {
   `;
   
   return {
-    subject: `💰 مسيرة راتب - ${data.month} ${data.year} | ${data.netSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س`,
-    html: getBaseTemplate(content, 'مسيرة راتب'),
+    subject: `💰 مسير راتب - ${data.month} ${data.year} | ${data.netSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س`,
+    html: getBaseTemplate(content, 'مسير راتب'),
   };
 }
 

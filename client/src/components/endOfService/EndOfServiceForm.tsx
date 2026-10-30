@@ -1022,7 +1022,7 @@ export default function EndOfServiceForm({
                               value={form.salaryNote}
                               onChange={e => set("salaryNote", e.target.value)}
                               maxLength={2000}
-                              placeholder="مثال: صُرف له نصف الشهر في المسيرة"
+                              placeholder="مثال: صُرف له نصف الشهر في المسير"
                             />
                           </Field>
                         </div>

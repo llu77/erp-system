@@ -415,11 +415,11 @@ export function calculateEndOfServiceSettlement(
   const salaryDue = roundMoney(perDay * salaryDays);
   if (unpaid.payrollAfterLastMonth && input.lastPayrollMonth) {
     warnings.push(
-      `الموظف مشمول بمسيرة رواتب لشهر ${input.lastPayrollMonth.month}/${input.lastPayrollMonth.year} بعد آخر يوم عمل؛ عدّل أيام عمله في تلك المسيرة إلى صفر حتى لا يُصرف له أجر شهر لم يعمل فيه`
+      `الموظف مشمول بمسير رواتب لشهر ${input.lastPayrollMonth.month}/${input.lastPayrollMonth.year} بعد آخر يوم عمل؛ عدّل أيام عمله في ذلك المسير إلى صفر حتى لا يُصرف له أجر شهر لم يعمل فيه`
     );
   } else if (unpaid.coveredByPayroll && salaryOverride === null) {
     warnings.push(
-      "الموظف مشمول بمسيرة رواتب لشهر آخر يوم عمل؛ تأكد من أيام العمل في تلك المسيرة حتى لا يُصرف له أكثر من مستحقه"
+      "الموظف مشمول بمسير رواتب لشهر آخر يوم عمل؛ تأكد من أيام العمل في ذلك المسير حتى لا يُصرف له أكثر من مستحقه"
     );
   }
   if (
@@ -429,7 +429,7 @@ export function calculateEndOfServiceSettlement(
     unpaid.fromDate > input.hireDate
   ) {
     warnings.push(
-      "لا توجد مسيرة رواتب سابقة للموظف في النظام؛ الأجر المستحق محسوب من بداية شهر آخر يوم عمل فقط، تأكد من صرف رواتب الأشهر السابقة"
+      "لا يوجد مسير رواتب سابق للموظف في النظام؛ الأجر المستحق محسوب من بداية شهر آخر يوم عمل فقط، تأكد من صرف رواتب الأشهر السابقة"
     );
   }
   const otherAdditions = roundMoney(nonNegative(input.otherAdditions));
