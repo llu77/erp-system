@@ -149,11 +149,11 @@ type DocumentViewer = { role: string; branchId: number | null };
 // مسيرة راتب موظف في مسيرة: صلاحية عرض المسيرات + فرع المسيرة (أي حالة؛ الختم بعد الاعتماد فقط)
 async function loadPayslipForStaff(user: DocumentViewer, payrollId: number, employeeId: number) {
   const payroll = await db.getPayrollById(payrollId);
-  if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
+  if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسير غير موجود' });
   assertPayrollBranchAccess(user, payroll.branchId);
   const { getPayslipDocumentData } = await import('./employeeDocumentsPdf');
   const data = await getPayslipDocumentData(payrollId, employeeId);
-  if (!data) throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود في هذه المسيرة' });
+  if (!data) throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود في هذا المسير' });
   return data;
 }
 
@@ -3860,7 +3860,7 @@ export const appRouter = router({
           totalNetSalary: parseFloat(payroll.totalNetSalary || '0'),
         }).catch(err => payrollLogger.error('خطأ في إرسال إشعار مسيرة الرواتب', err));
 
-        return { success: true, message: 'تم إنشاء مسيرة الرواتب وإرسالها للمراجعة', payroll };
+        return { success: true, message: 'تم إنشاء مسير الرواتب وإرساله للمراجعة', payroll };
       }),
 
     // تعديل المدخلات اليدوية لموظف في مسيرة مفتوحة ثم إعادة الحساب
@@ -3869,9 +3869,9 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { detailId, ...adjustment } = input;
         const detail = await db.getPayrollDetailById(detailId);
-        if (!detail) throw new TRPCError({ code: 'NOT_FOUND', message: 'سطر المسيرة غير موجود' });
+        if (!detail) throw new TRPCError({ code: 'NOT_FOUND', message: 'سطر المسير غير موجود' });
         const payroll = await db.getPayrollById(detail.payrollId);
-        if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
+        if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسير غير موجود' });
         assertPayrollBranchAccess(ctx.user, payroll.branchId);
         await runPayrollAction(() => payrollService.updatePayrollLine(detailId, stripDeferralUnlessManager(ctx.user, adjustment)));
         return { success: true, message: 'تم تحديث بيانات الراتب وإعادة الحساب' };
@@ -3887,9 +3887,9 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         const detail = await db.getPayrollDetailById(input.id);
-        if (!detail) throw new TRPCError({ code: 'NOT_FOUND', message: 'سطر المسيرة غير موجود' });
+        if (!detail) throw new TRPCError({ code: 'NOT_FOUND', message: 'سطر المسير غير موجود' });
         const payroll = await db.getPayrollById(detail.payrollId);
-        if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
+        if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسير غير موجود' });
         assertPayrollBranchAccess(ctx.user, payroll.branchId);
         await runPayrollAction(() => payrollService.updatePayrollLine(input.id, {
           otherDeduction: input.deductionAmount !== undefined ? parseFloat(input.deductionAmount) || 0 : undefined,
@@ -3904,10 +3904,10 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const payroll = await db.getPayrollById(input.id);
-        if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
+        if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسير غير موجود' });
         assertPayrollBranchAccess(ctx.user, payroll.branchId);
         await runPayrollAction(() => payrollService.recalculatePayroll(input.id));
-        return { success: true, message: 'تمت إعادة حساب المسيرة' };
+        return { success: true, message: 'تمت إعادة حساب المسير' };
       }),
 
     // تحديث حالة المسيرة وفق مسار الاعتماد: مسودة ← تحت الإجراء ← معتمدة ← مدفوعة
@@ -3918,7 +3918,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         const existing = await db.getPayrollById(input.id);
-        if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
+        if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسير غير موجود' });
         assertPayrollBranchAccess(ctx.user, existing.branchId);
         await runPayrollAction(() => payrollService.transitionPayrollStatus(input.id, input.status, payrollActor(ctx.user)));
 
@@ -3970,19 +3970,19 @@ export const appRouter = router({
         const statusNames: Record<string, string> = {
           draft: 'مسودة',
           pending: 'تحت الإجراء',
-          approved: 'معتمدة',
-          paid: 'مدفوعة',
-          cancelled: 'ملغاة',
+          approved: 'معتمد',
+          paid: 'مدفوع',
+          cancelled: 'ملغى',
         };
         return { success: true, message: `تم تحديث الحالة إلى: ${statusNames[input.status]}` };
       }),
 
-    // حذف مسيرة (غير مدفوعة) مع تحرير السلف والمخالفات المرتبطة بها
+    // حذف مسير (غير مدفوع) مع تحرير السلف والمخالفات المرتبطة به
     delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await runPayrollAction(() => payrollService.deletePayrollSafely(input.id));
-        return { success: true, message: 'تم حذف مسيرة الرواتب وتحرير السلف والمخالفات المرتبطة بها' };
+        return { success: true, message: 'تم حذف مسير الرواتب وتحرير السلف والمخالفات المرتبطة به' };
       }),
   }),
 
@@ -4044,7 +4044,7 @@ export const appRouter = router({
         return {
           success: true,
           ...result,
-          message: result.status === 'approved' ? 'تم تسجيل المخالفة واعتمادها، وستُخصم في مسيرة الرواتب' : 'تم تسجيل المخالفة وإرسالها للمدير للاعتماد',
+          message: result.status === 'approved' ? 'تم تسجيل المخالفة واعتمادها، وستُخصم في مسير الرواتب' : 'تم تسجيل المخالفة وإرسالها للمدير للاعتماد',
         };
       }),
 

@@ -589,7 +589,7 @@ async function linkItems(tx: Tx, payrollId: number, lines: PayrollPreviewLine[])
         .from(employeeRequests)
         .where(and(inArray(employeeRequests.id, advanceIds), eq(employeeRequests.deductedInPayrollId, payrollId)));
       if (linked.length < advanceIds.length) {
-        throw new PayrollError("تم خصم بعض السلف في مسيرة أخرى، يرجى إعادة المحاولة", "CONFLICT");
+        throw new PayrollError("تم خصم بعض السلف في مسير آخر، يرجى إعادة المحاولة", "CONFLICT");
       }
     }
   }
@@ -610,7 +610,7 @@ async function linkItems(tx: Tx, payrollId: number, lines: PayrollPreviewLine[])
       .from(employeeViolations)
       .where(and(inArray(employeeViolations.id, violationIds), eq(employeeViolations.deductedInPayrollId, payrollId)));
     if (linked.length < violationIds.length) {
-      throw new PayrollError("تم خصم بعض المخالفات في مسيرة أخرى، يرجى إعادة المحاولة", "CONFLICT");
+      throw new PayrollError("تم خصم بعض المخالفات في مسير آخر، يرجى إعادة المحاولة", "CONFLICT");
     }
   }
 }
@@ -683,7 +683,7 @@ export async function createPayroll(input: {
 
         const existing = await findActivePayroll(tx, input.branchId, input.year, input.month);
         if (existing) {
-          throw new PayrollError(`توجد مسيرة رواتب لهذا الشهر بالفعل (${existing.payrollNumber})`, "CONFLICT");
+          throw new PayrollError(`يوجد مسير رواتب لهذا الشهر بالفعل (${existing.payrollNumber})`, "CONFLICT");
         }
 
         const branchEmps = await getActiveBranchEmployees(tx, input.branchId);
@@ -723,7 +723,7 @@ export async function createPayroll(input: {
           createdByName: input.actor.name || "مستخدم",
         });
         const id = insertId(headerResult);
-        if (!id) throw new PayrollError("فشل في إنشاء مسيرة الرواتب");
+        if (!id) throw new PayrollError("فشل في إنشاء مسير الرواتب");
 
         await tx.insert(payrollDetails).values(lines.map(line => ({ ...lineToDetailValues(line), payrollId: id })));
         await linkItems(tx, id, lines);
@@ -732,11 +732,11 @@ export async function createPayroll(input: {
         return created;
       });
     } catch (error) {
-      if (isDuplicateKeyError(error) && attempt < 2) continue; // تعارض رقم المسيرة - إعادة المحاولة
+      if (isDuplicateKeyError(error) && attempt < 2) continue; // تعارض رقم المسير - إعادة المحاولة
       throw error;
     }
   }
-  throw new PayrollError("تعذر إنشاء رقم مسيرة فريد، يرجى إعادة المحاولة", "CONFLICT");
+  throw new PayrollError("تعذر إنشاء رقم مسير فريد، يرجى إعادة المحاولة", "CONFLICT");
 }
 
 // ==================== إعادة الحساب والتعديل ====================
@@ -792,7 +792,7 @@ async function rebuildPayrollInTx(
 async function loadEditablePayroll(tx: Tx, payrollId: number): Promise<Payroll> {
   const payroll = await loadPayrollForUpdate(tx, payrollId);
   if (!isPayrollEditable(payroll.status)) {
-    throw new PayrollError("لا يمكن تعديل مسيرة معتمدة أو مدفوعة أو ملغاة", "CONFLICT");
+    throw new PayrollError("لا يمكن تعديل مسير معتمد أو مدفوع أو ملغى", "CONFLICT");
   }
   return payroll;
 }
@@ -803,13 +803,13 @@ async function loadEditablePayroll(tx: Tx, payrollId: number): Promise<Payroll> 
  */
 async function getPayrollBranchId(db: Db, payrollId: number): Promise<number> {
   const rows = await db.select({ branchId: payrolls.branchId }).from(payrolls).where(eq(payrolls.id, payrollId)).limit(1);
-  if (!rows[0]) throw new PayrollError("المسيرة غير موجودة", "NOT_FOUND");
+  if (!rows[0]) throw new PayrollError("المسير غير موجود", "NOT_FOUND");
   return rows[0].branchId;
 }
 
 async function loadPayrollForUpdate(tx: Tx, payrollId: number): Promise<Payroll> {
   const rows = await tx.select().from(payrolls).where(eq(payrolls.id, payrollId)).for("update").limit(1);
-  if (!rows[0]) throw new PayrollError("المسيرة غير موجودة", "NOT_FOUND");
+  if (!rows[0]) throw new PayrollError("المسير غير موجود", "NOT_FOUND");
   return rows[0];
 }
 
@@ -830,7 +830,7 @@ export async function updatePayrollLine(detailId: number, adjustment: Omit<Payro
   const db = await requireDb();
   const rows = await db.select().from(payrollDetails).where(eq(payrollDetails.id, detailId)).limit(1);
   const detail = rows[0];
-  if (!detail) throw new PayrollError("سطر المسيرة غير موجود", "NOT_FOUND");
+  if (!detail) throw new PayrollError("سطر المسير غير موجود", "NOT_FOUND");
   const branchId = await getPayrollBranchId(db, detail.payrollId);
   return await db.transaction(async tx => {
     await lockBranch(tx, branchId);
@@ -924,7 +924,7 @@ async function assertNoSettlementDependsOnPayroll(tx: Tx, payroll: Payroll) {
     .limit(1);
   if (rows[0]) {
     throw new PayrollError(
-      `لا يمكن إلغاء المسيرة أو حذفها: المخالصة النهائية ${rows[0].settlementNumber} للموظف ${rows[0].employeeName} احتسبت أن راتب هذا الشهر يُصرف ضمن هذه المسيرة. ألغِ المخالصة أولاً`,
+      `لا يمكن إلغاء المسير أو حذفه: المخالصة النهائية ${rows[0].settlementNumber} للموظف ${rows[0].employeeName} احتسبت أن راتب هذا الشهر يُصرف ضمن هذا المسير. ألغِ المخالصة أولاً`,
       "CONFLICT"
     );
   }
@@ -953,7 +953,7 @@ export async function assertSourceNotLocked(kind: "advance" | "violation", sourc
     .limit(1);
   if (p[0] && (p[0].status === "approved" || p[0].status === "paid")) {
     throw new PayrollError(
-      `لا يمكن إلغاء ${kind === "advance" ? "السلفة" : "المخالفة"} لأنها مخصومة في المسيرة المعتمدة ${p[0].payrollNumber}`,
+      `لا يمكن إلغاء ${kind === "advance" ? "السلفة" : "المخالفة"} لأنها مخصومة في المسير المعتمد ${p[0].payrollNumber}`,
       "CONFLICT"
     );
   }
@@ -984,7 +984,7 @@ export async function transitionPayrollStatus(payrollId: number, to: PayrollStat
       const current = await loadPayrollForUpdate(tx, payrollId);
       if (!isPayrollEditable(current.status)) return false;
       if (!canActorTransition(actor, current, to)) {
-        throw new PayrollError("ليس لديك صلاحية لتنفيذ هذا الإجراء على المسيرة", "FORBIDDEN");
+        throw new PayrollError("ليس لديك صلاحية لتنفيذ هذا الإجراء على المسير", "FORBIDDEN");
       }
       await rebuildPayrollInTx(tx, current);
       const after = await loadPayrollForUpdate(tx, payrollId);
@@ -996,7 +996,7 @@ export async function transitionPayrollStatus(payrollId: number, to: PayrollStat
     });
     if (changed) {
       throw new PayrollError(
-        "تغيّرت بيانات المسيرة منذ إعدادها (سلف أو مخالفات أو إجازات)، وتمت إعادة حسابها. يرجى مراجعة الأرقام الجديدة ثم الاعتماد",
+        "تغيّرت بيانات المسير منذ إعداده (سلف أو مخالفات أو إجازات)، وتمت إعادة حسابه. يرجى مراجعة الأرقام الجديدة ثم الاعتماد",
         "CONFLICT"
       );
     }
@@ -1007,10 +1007,10 @@ export async function transitionPayrollStatus(payrollId: number, to: PayrollStat
     const payroll = await loadPayrollForUpdate(tx, payrollId);
 
     if (!canActorTransition(actor, payroll, to)) {
-      throw new PayrollError("ليس لديك صلاحية لتنفيذ هذا الإجراء على المسيرة", "FORBIDDEN");
+      throw new PayrollError("ليس لديك صلاحية لتنفيذ هذا الإجراء على المسير", "FORBIDDEN");
     }
     if (!canTransitionPayroll(payroll.status, to)) {
-      throw new PayrollError(`لا يمكن تحويل المسيرة من "${payroll.status}" إلى "${to}"`, "CONFLICT");
+      throw new PayrollError(`لا يمكن تحويل المسير من "${payroll.status}" إلى "${to}"`, "CONFLICT");
     }
 
     const now = new Date();
@@ -1031,7 +1031,7 @@ export async function transitionPayrollStatus(payrollId: number, to: PayrollStat
       .update(payrolls)
       .set(update)
       .where(and(eq(payrolls.id, payrollId), eq(payrolls.status, payroll.status)));
-    if (affectedRows(res) === 0) throw new PayrollError("تم تعديل المسيرة من مستخدم آخر، يرجى التحديث", "CONFLICT");
+    if (affectedRows(res) === 0) throw new PayrollError("تم تعديل المسير من مستخدم آخر، يرجى التحديث", "CONFLICT");
     return { from: payroll.status, to, payroll };
   });
 }
@@ -1043,7 +1043,7 @@ export async function deletePayrollSafely(payrollId: number) {
   await db.transaction(async tx => {
     await lockBranch(tx, branchId);
     const payroll = await loadPayrollForUpdate(tx, payrollId);
-    if (payroll.status === "paid") throw new PayrollError("لا يمكن حذف مسيرة مدفوعة", "CONFLICT");
+    if (payroll.status === "paid") throw new PayrollError("لا يمكن حذف مسير مدفوع", "CONFLICT");
     await assertNoSettlementDependsOnPayroll(tx, payroll);
     await releaseLinkedItems(tx, payrollId);
     await tx.delete(payrollDetails).where(eq(payrollDetails.payrollId, payrollId));

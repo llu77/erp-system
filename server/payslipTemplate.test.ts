@@ -233,7 +233,8 @@ describe("قالب قسيمة الراتب", () => {
     const html = render();
     expect(html).toContain('<html dir="rtl" lang="ar">');
     expect(html).toContain("size: A4");
-    expect(html).toContain("مسيرة راتب");
+    expect(html).toContain("<h1>مسير راتب</h1>");
+    expect(html).not.toContain("مسيرة");
     expect(html).toContain("PAYROLL STATEMENT");
     expect(html).not.toContain("قسيمة");
     expect(html).not.toContain("PAYSLIP");
@@ -332,7 +333,7 @@ describe("قالب قسيمة الراتب", () => {
       expect(html).toContain(ASSETS.managerSignature);
       expect(html).toContain(ASSETS.supervisorSignature);
       expect(html).not.toContain('class="watermark');
-      expect(html).toContain("اعتُمدت المسيرة بواسطة عمر المطيري");
+      expect(html).toContain("اعتُمد المسير بواسطة عمر المطيري");
     }
     expect(
       render(payroll({ status: "paid", paidAt: "2026-10-30T07:00:00Z" }))
@@ -345,13 +346,13 @@ describe("قالب قسيمة الراتب", () => {
       expect(html).not.toContain(ASSETS.supervisorSignature);
     }
     expect(render(payroll({ status: "pending" }))).toContain(
-      '<div class="watermark draft">مسودة - غير معتمدة</div>'
+      '<div class="watermark draft">مسودة - غير معتمد</div>'
     );
     expect(render(payroll({ status: "pending" }))).toContain(
-      "بانتظار اعتماد المسيرة"
+      "بانتظار اعتماد المسير -"
     );
     expect(render(payroll({ status: "cancelled" }))).toContain(
-      '<div class="watermark cancelled">ملغاة</div>'
+      '<div class="watermark cancelled">ملغى</div>'
     );
   });
 

@@ -87,9 +87,9 @@ const arabicMonths = [
 const statusNames: Record<string, string> = {
   draft: "مسودة",
   pending: "تحت الإجراء",
-  approved: "معتمدة",
-  paid: "مدفوعة",
-  cancelled: "ملغاة",
+  approved: "معتمد",
+  paid: "مدفوع",
+  cancelled: "ملغى",
 };
 
 // ألوان الحالات
@@ -307,7 +307,7 @@ export default function Payrolls() {
   const handlePrint = async (payrollId: number) => {
     const payroll = payrolls?.find(p => p.id === payrollId);
     if (!payroll) {
-      toast.error("لم يتم العثور على المسيرة");
+      toast.error("لم يتم العثور على المسير");
       return;
     }
     // فتح النافذة مباشرة من حدث النقر لتجنب حظر النوافذ المنبثقة
@@ -320,7 +320,7 @@ export default function Payrolls() {
       const details = await utils.payrolls.details.fetch({ payrollId });
       if (!details || details.length === 0) {
         win.close();
-        toast.error("لا توجد تفاصيل لهذه المسيرة");
+        toast.error("لا توجد تفاصيل لهذا المسير");
         return;
       }
       writeAndPrint(win, buildPayrollSheetHtml(payroll, details));
@@ -344,7 +344,7 @@ export default function Payrolls() {
       writePrintDocument(win, buildPayslipDocumentHtml(data));
     } catch (error: any) {
       win.close();
-      toast.error(error?.message || "تعذر تجهيز مسيرة راتب الموظف للطباعة");
+      toast.error(error?.message || "تعذر تجهيز مسير راتب الموظف للطباعة");
     }
   };
 
@@ -357,7 +357,7 @@ export default function Payrolls() {
       toast.loading("جاري توليد ملف PDF...", { id: toastId });
       const result = await payslipPdfMutation.mutateAsync({ payrollId: payroll.id, employeeId: detail.employeeId });
       downloadBase64Pdf(result.pdf, result.filename);
-      toast.success("تم تحميل مسيرة راتب الموظف", { id: toastId });
+      toast.success("تم تحميل مسير راتب الموظف", { id: toastId });
     } catch (error: any) {
       toast.error(error?.message || "فشل توليد ملف PDF", { id: toastId });
     }
@@ -465,13 +465,13 @@ export default function Payrolls() {
               <DialogTrigger asChild>
                 <Button size="sm">
                   <Plus className="ml-2 h-4 w-4" />
-                  إنشاء مسيرة جديدة
+                  إنشاء مسير جديد
                 </Button>
               </DialogTrigger>
               <DialogContent className={step === 'form' ? "max-w-7xl max-h-[92vh] overflow-y-auto" : "sm:max-w-md"}>
                 <DialogHeader>
                   <DialogTitle>
-                    {step === 'select' ? 'إنشاء مسيرة رواتب جديدة' : `مسيرة رواتب ${arabicMonths[selectedMonth - 1]} ${selectedYear}`}
+                    {step === 'select' ? 'إنشاء مسير رواتب جديد' : `مسير رواتب ${arabicMonths[selectedMonth - 1]} ${selectedYear}`}
                   </DialogTitle>
                 </DialogHeader>
 
@@ -495,7 +495,7 @@ export default function Payrolls() {
                             return (
                               <SelectItem key={branch.id} value={branch.id.toString()} disabled={hasPayroll}>
                                 {branch.nameAr || branch.name}
-                                {hasPayroll && " (توجد مسيرة)"}
+                                {hasPayroll && " (يوجد مسير)"}
                               </SelectItem>
                             );
                           })}
@@ -541,7 +541,7 @@ export default function Payrolls() {
                           (p: any) => p.branchId === selectedBranch && p.year === selectedYear && p.month === selectedMonth && p.status !== 'cancelled'
                         );
                         if (existingPayroll) {
-                          toast.error(`توجد مسيرة رواتب لهذا الفرع في ${arabicMonths[selectedMonth - 1]} ${selectedYear}`);
+                          toast.error(`يوجد مسير رواتب لهذا الفرع في ${arabicMonths[selectedMonth - 1]} ${selectedYear}`);
                           return;
                         }
                         setInputsByEmployee({});
@@ -554,7 +554,7 @@ export default function Payrolls() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* معلومات المسيرة */}
+                    {/* معلومات المسير */}
                     <div className="bg-muted/50 rounded-lg p-3 text-sm">
                       <div className="flex items-center gap-4 flex-wrap">
                         <span><strong>الفرع:</strong> {branches?.find(b => b.id === selectedBranch)?.nameAr}</span>
@@ -568,7 +568,7 @@ export default function Payrolls() {
 
                     {(previewQuery.data?.excludedEmployees?.length ?? 0) > 0 && (
                       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-xs text-yellow-500">
-                        مستبعدون لوجودهم في مسيرة أخرى لنفس الشهر (منقولون بين الفروع):{' '}
+                        مستبعدون لوجودهم في مسير آخر لنفس الشهر (منقولون بين الفروع):{' '}
                         {previewQuery.data!.excludedEmployees.map(e => `${e.employeeName} (${e.payrollNumber})`).join('، ')}
                       </div>
                     )}
@@ -576,7 +576,7 @@ export default function Payrolls() {
                     {previewQuery.data?.existingPayroll && (
                       <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400 flex items-center gap-2">
                         <AlertCircle className="h-4 w-4" />
-                        توجد مسيرة لهذا الشهر بالفعل: {previewQuery.data.existingPayroll.payrollNumber}
+                        يوجد مسير لهذا الشهر بالفعل: {previewQuery.data.existingPayroll.payrollNumber}
                       </div>
                     )}
 
@@ -782,7 +782,7 @@ export default function Payrolls() {
                             <div className="font-bold text-red-500">{formatAmount(formTotals.totalDeductions)}</div>
                           </div>
                           <div className="text-center">
-                            <div className="text-muted-foreground text-xs">صافي المسيرة</div>
+                            <div className="text-muted-foreground text-xs">صافي المسير</div>
                             <div className="font-bold text-xl text-green-500">{formatAmount(formTotals.totalNetSalary)} ر.س</div>
                           </div>
                         </div>
@@ -898,7 +898,7 @@ export default function Payrolls() {
               <FileText className="h-4 w-4" />
               قائمة مسيرات الرواتب
               {isFiltered && (
-                <span className="text-xs text-muted-foreground font-normal">({filteredPayrolls?.length || 0} مسيرة)</span>
+                <span className="text-xs text-muted-foreground font-normal">({filteredPayrolls?.length || 0} مسير)</span>
               )}
             </CardTitle>
           </CardHeader>
@@ -912,13 +912,13 @@ export default function Payrolls() {
                 <Table>
                   <TableHeader>
                     <TableRow className="text-xs">
-                      <TableHead>رقم المسيرة</TableHead>
+                      <TableHead>رقم المسير</TableHead>
                       <TableHead>الفرع</TableHead>
                       <TableHead>الشهر</TableHead>
                       <TableHead className="text-center">الموظفين</TableHead>
                       <TableHead>الإضافي</TableHead>
                       <TableHead>الخصومات</TableHead>
-                      <TableHead>صافي المسيرة</TableHead>
+                      <TableHead>صافي المسير</TableHead>
                       <TableHead>الحالة</TableHead>
                       <TableHead>التاريخ</TableHead>
                       <TableHead>الإجراءات</TableHead>
@@ -960,7 +960,7 @@ export default function Payrolls() {
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
                             {payroll.status !== 'cancelled' && (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handlePrint(payroll.id)} title="طباعة المسيرة">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handlePrint(payroll.id)} title="طباعة المسير">
                                 <Printer className="h-3.5 w-3.5" />
                               </Button>
                             )}
@@ -991,7 +991,7 @@ export default function Payrolls() {
                                   size="icon"
                                   className="h-7 w-7"
                                   onClick={() => {
-                                    if (confirm('سيتم رفض المسيرة وتحرير السلف والمخالفات المرتبطة بها. متابعة؟')) {
+                                    if (confirm('سيتم رفض المسير وتحرير السلف والمخالفات المرتبطة به. متابعة؟')) {
                                       updateStatusMutation.mutate({ id: payroll.id, status: 'cancelled' });
                                     }
                                   }}
@@ -1024,7 +1024,7 @@ export default function Payrolls() {
                                 size="icon"
                                 className="h-7 w-7"
                                 onClick={() => {
-                                  if (confirm('هل أنت متأكد من حذف هذه المسيرة؟ سيتم تحرير السلف والمخالفات المرتبطة بها.')) {
+                                  if (confirm('هل أنت متأكد من حذف هذا المسير؟ سيتم تحرير السلف والمخالفات المرتبطة به.')) {
                                     deleteMutation.mutate({ id: payroll.id });
                                   }
                                 }}
@@ -1044,18 +1044,18 @@ export default function Payrolls() {
               <div className="text-center py-8 text-muted-foreground">
                 <FileText className="h-10 w-10 mx-auto mb-3 opacity-50" />
                 <p className="text-sm">لا توجد مسيرات رواتب</p>
-                <p className="text-xs">قم بإنشاء مسيرة جديدة للبدء</p>
+                <p className="text-xs">قم بإنشاء مسير جديد للبدء</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* نافذة تفاصيل المسيرة */}
+        {/* نافذة تفاصيل المسير */}
         <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
           <DialogContent className="max-w-7xl max-h-[92vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 flex-wrap">
-                تفاصيل مسيرة الرواتب
+                تفاصيل مسير الرواتب
                 {currentPayroll && (
                   <>
                     <span className="text-sm text-muted-foreground">{currentPayroll.payrollNumber} — {currentPayroll.branchName} — {arabicMonths[currentPayroll.month - 1]} {currentPayroll.year}</span>
@@ -1067,7 +1067,7 @@ export default function Payrolls() {
             {currentEditable && (
               <div className="flex items-center justify-between gap-2 bg-muted/40 rounded-lg p-2 text-xs">
                 <span className="text-muted-foreground">
-                  المسيرة مفتوحة: أي سلفة أو مخالفة أو إجازة تُعتمد الآن تُضاف تلقائياً. يمكنك أيضاً تعديل سطر أي موظف.
+                  المسير مفتوح: أي سلفة أو مخالفة أو إجازة تُعتمد الآن تُضاف تلقائياً. يمكنك أيضاً تعديل سطر أي موظف.
                 </span>
                 <Button
                   size="sm"
@@ -1149,7 +1149,7 @@ export default function Payrolls() {
                                 size="icon"
                                 className="h-7 w-7"
                                 onClick={() => currentPayroll && handlePrintPayslip(detail, currentPayroll)}
-                                title="طباعة مسيرة راتب الموظف"
+                                title="طباعة مسير راتب الموظف"
                               >
                                 <Printer className="h-3.5 w-3.5 text-blue-500" />
                               </Button>
@@ -1159,8 +1159,8 @@ export default function Payrolls() {
                                 className="h-7 w-7"
                                 onClick={() => currentPayroll && handleDownloadPayslipPdf(detail, currentPayroll)}
                                 disabled={payslipPdfPendingFor === detail.employeeId}
-                                title="تحميل مسيرة راتب الموظف PDF"
-                                aria-label="تحميل مسيرة راتب الموظف PDF"
+                                title="تحميل مسير راتب الموظف PDF"
+                                aria-label="تحميل مسير راتب الموظف PDF"
                               >
                                 {payslipPdfPendingFor === detail.employeeId ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1175,7 +1175,7 @@ export default function Payrolls() {
                     </TableBody>
                   </Table>
                 </div>
-                {/* إجماليات التفاصيل - مطابقة لإجماليات المسيرة */}
+                {/* إجماليات التفاصيل - مطابقة لإجماليات المسير */}
                 {currentPayroll && (
                   <div className="bg-muted/50 rounded-lg p-3">
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
@@ -1196,7 +1196,7 @@ export default function Payrolls() {
                         <div className="font-bold text-red-500">{formatAmount(currentPayroll.totalDeductions)}</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-muted-foreground text-xs">صافي المسيرة</div>
+                        <div className="text-muted-foreground text-xs">صافي المسير</div>
                         <div className="font-bold text-xl text-green-500">{formatAmount(currentPayroll.totalNetSalary)} ر.س</div>
                       </div>
                     </div>
@@ -1266,7 +1266,7 @@ export default function Payrolls() {
                 </div>
                 {isManager && allLinked<PayrollAdvanceItem>(editingDetail.advanceDetails).length > 0 && (
                   <div className="space-y-1">
-                    <div className="text-xs font-bold">السلف المخصومة (ألغِ التحديد لتأجيل السلفة لمسيرة لاحقة)</div>
+                    <div className="text-xs font-bold">السلف المخصومة (ألغِ التحديد لتأجيل السلفة لمسير لاحق)</div>
                     {allLinked<PayrollAdvanceItem>(editingDetail.advanceDetails).map(a => (
                       <label key={a.id} className="flex items-center gap-2 text-xs">
                         <Checkbox

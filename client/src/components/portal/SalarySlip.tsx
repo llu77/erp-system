@@ -94,7 +94,7 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
       const result: { pdf: string; filename: string } =
         await pdfMutation.mutateAsync({ payrollId: slip.payrollId });
       downloadBase64Pdf(result.pdf, result.filename);
-      toast.success("تم تحميل مسيرة الراتب", { id: toastId });
+      toast.success("تم تحميل مسير الراتب", { id: toastId });
     } catch (error) {
       toast.error(errorMessage(error, "فشل توليد ملف PDF"), { id: toastId });
     }
@@ -111,7 +111,7 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
       });
     } catch (error) {
       console.error("[Portal] payslip print render failed", error);
-      toast.error("تعذر تجهيز مسيرة الراتب للطباعة، استخدم تحميل PDF");
+      toast.error("تعذر تجهيز مسير الراتب للطباعة، استخدم تحميل PDF");
       return;
     }
     if (!openHtmlDocument(html)) {
@@ -149,7 +149,7 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
           <Receipt className="h-12 w-12 text-slate-600 mx-auto mb-4" />
           <p className="text-slate-300">لا توجد مسيرات رواتب معتمدة بعد</p>
           <p className="text-slate-500 text-sm mt-2">
-            تظهر مسيرة الراتب هنا بعد اعتماد مسير الرواتب من الإدارة
+            يظهر مسير الراتب هنا بعد اعتماد مسير الرواتب من الإدارة
           </p>
         </CardContent>
       </Card>
@@ -206,18 +206,18 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
         </CardContent>
       </Card>
 
-      {/* مسيرة الراتب المفصلة */}
+      {/* مسير الراتب المفصل */}
       <div className="min-w-0">
         {slipQuery.isLoading ? (
           <Card className="bg-slate-800/50 border-slate-700">
             <CardContent>
-              <PortalLoading label="جاري تحميل مسيرة الراتب..." />
+              <PortalLoading label="جاري تحميل مسير الراتب..." />
             </CardContent>
           </Card>
         ) : slipQuery.error ? (
           <PortalQueryError
             error={slipQuery.error}
-            title="تعذر تحميل مسيرة الراتب"
+            title="تعذر تحميل مسير الراتب"
             onRetry={() => slipQuery.refetch()}
             isRetrying={slipQuery.isFetching}
           />
@@ -326,7 +326,7 @@ function PayslipDetail({
           <div className="min-w-0">
             <CardTitle className="text-white flex items-center gap-2">
               <FileText className="h-5 w-5 text-amber-500" />
-              مسيرة راتب {payrollPeriodLabel(slip.year, slip.month)}
+              مسير راتب {payrollPeriodLabel(slip.year, slip.month)}
             </CardTitle>
             <p className="mt-1 text-sm text-slate-400">
               {establishment.nameAr}
@@ -450,7 +450,7 @@ function PayslipDetail({
           <div className="space-y-3">
             {deductions.length === 0 ? (
               <p className="text-sm text-slate-500">
-                لا توجد خصومات على هذه المسيرة
+                لا توجد خصومات على هذا المسير
               </p>
             ) : (
               deductions.map(line => (

@@ -399,7 +399,7 @@ function renderEntitlements(data: EndOfServiceDocumentData): string {
   } else if (c.salaryFromDate && c.salaryDays > 0) {
     salaryDetail = `من ${esc(dateText(c.salaryFromDate))} حتى ${esc(dateText(data.lastWorkingDay))}`;
   } else if (c.salaryCoveredByPayroll) {
-    salaryDetail = "(مصروف ضمن مسيرة الرواتب)";
+    salaryDetail = "(مصروف ضمن مسير الرواتب)";
   }
 
   const otherRow =

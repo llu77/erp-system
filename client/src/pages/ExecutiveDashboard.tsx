@@ -671,7 +671,7 @@ export default function ExecutiveDashboard() {
                   </div>
                   {kpis?.payrollMonth && kpis?.payrollYear && (
                     <div className="text-[10px] text-muted-foreground/70 mt-1">
-                      مسيرة {kpis.payrollMonth}/{kpis.payrollYear} - {kpis.payrollEmployeeCount || 0} موظف
+                      مسير {kpis.payrollMonth}/{kpis.payrollYear} - {kpis.payrollEmployeeCount || 0} موظف
                     </div>
                   )}
                 </div>

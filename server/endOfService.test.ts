@@ -224,7 +224,7 @@ describe("calculateEndOfServiceSettlement", () => {
     });
     expect(c.salaryDays).toBe(0);
     expect(c.salaryCoveredByPayroll).toBe(true);
-    expect(c.warnings.join(" ")).toContain("مسيرة");
+    expect(c.warnings.join(" ")).toContain("مشمول بمسير رواتب");
   });
 
   it("allows a negative net (employee owes) and words use the absolute value", () => {
@@ -260,7 +260,7 @@ describe("calculateEndOfServiceSettlement", () => {
   it("warns when no payroll ever paid the months before the last one", () => {
     const c = calc({ lastPayrollMonth: null });
     expect(c.salaryFromDate).toBe("2026-10-01");
-    expect(c.warnings.join(" ")).toContain("لا توجد مسيرة رواتب سابقة");
+    expect(c.warnings.join(" ")).toContain("لا يوجد مسير رواتب سابق");
   });
 
   it("rejects invalid input", () => {

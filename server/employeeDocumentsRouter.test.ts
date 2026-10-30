@@ -134,7 +134,7 @@ describe("payrolls.payslipPdf", () => {
       caller("admin").payrolls.payslipPdf({ payrollId: 99, employeeId: 7 })
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
-      message: "المسيرة غير موجودة",
+      message: "المسير غير موجود",
     });
     vi.mocked(db.getPayrollById).mockResolvedValue({
       id: 12,
@@ -145,7 +145,7 @@ describe("payrolls.payslipPdf", () => {
       caller("admin").payrolls.payslipPdf({ payrollId: 12, employeeId: 8 })
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
-      message: "الموظف غير موجود في هذه المسيرة",
+      message: "الموظف غير موجود في هذا المسير",
     });
   });
 
