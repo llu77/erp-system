@@ -281,6 +281,8 @@ export const employees = mysqlTable("employees", {
   hasPortalAccess: boolean("hasPortalAccess").default(false).notNull(),
   isSupervisor: boolean("isSupervisor").default(false).notNull(),
   lastLogin: timestamp("lastLogin"),
+  // إصدار جلسة بوابة الموظفين: يُزاد عند تغيير/إعادة تعيين كلمة المرور أو إيقاف الدخول فتُلغى الجلسات القائمة
+  sessionVersion: int("sessionVersion").default(0).notNull(),
   // صورة الموظف
   photoUrl: varchar("photoUrl", { length: 500 }),
   // حقول الإقامة والوثائق
@@ -291,6 +293,11 @@ export const employees = mysqlTable("employees", {
   healthCertImageUrl: varchar("healthCertImageUrl", { length: 500 }),
   contractExpiryDate: timestamp("contractExpiryDate"),
   contractImageUrl: varchar("contractImageUrl", { length: 500 }),
+  // مفاتيح التخزين لتجديد روابط الصور (الرابط المحفوظ قد ينتهي)
+  photoKey: varchar("photoKey", { length: 500 }),
+  iqamaImageKey: varchar("iqamaImageKey", { length: 500 }),
+  healthCertImageKey: varchar("healthCertImageKey", { length: 500 }),
+  contractImageKey: varchar("contractImageKey", { length: 500 }),
   // تاريخ مباشرة العمل (YYYY-MM-DD) والجنسية - لخطاب إنهاء الخدمة والمخالصة النهائية
   hireDate: date("hireDate", { mode: "string" }),
   nationality: varchar("nationality", { length: 100 }),

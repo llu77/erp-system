@@ -477,6 +477,13 @@
       "when": 1793337001730,
       "tag": "0067_end_of_service",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "5",
+      "when": 1793338004166,
+      "tag": "0068_employee_portal",
+      "breakpoints": true
     }
   ]
 }
