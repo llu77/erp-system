@@ -53,7 +53,7 @@ export function BonusReport() {
   const { data: bonusHistory } = historyQuery;
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ar-SA', {
+    return new Intl.NumberFormat('ar-SA-u-nu-latn', {
       style: 'decimal',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,

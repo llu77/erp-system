@@ -140,14 +140,14 @@ export function buildTabHref(
 
 // ==================== التواريخ والمبالغ ====================
 
-const DATE_FORMAT = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
+const DATE_FORMAT = new Intl.DateTimeFormat("ar-SA-u-ca-gregory-nu-latn", {
   year: "numeric",
   month: "long",
   day: "numeric",
   timeZone: "UTC",
 });
 
-const DATE_TIME_FORMAT = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat("ar-SA-u-ca-gregory-nu-latn", {
   year: "numeric",
   month: "short",
   day: "numeric",
@@ -193,7 +193,7 @@ export function daysUntil(
   return Math.round((toUtc(target) - toUtc(today)) / 86_400_000);
 }
 
-const AMOUNT_FORMAT = new Intl.NumberFormat("ar-SA", {
+const AMOUNT_FORMAT = new Intl.NumberFormat("ar-SA-u-nu-latn", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
