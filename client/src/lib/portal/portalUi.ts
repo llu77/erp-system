@@ -9,7 +9,7 @@
 import { EMPLOYEE_UNAUTHED_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { LEAVE_KIND_LABELS, type LeaveKind } from "@shared/payroll";
 import type { PayslipDocumentData, PayslipItem } from "@shared/payslipTemplate";
-import { toVoucherDateString, VOUCHER_TIMEZONE } from "@shared/vouchers";
+import { amountToArabicWords, toVoucherDateString, VOUCHER_TIMEZONE } from "@shared/vouchers";
 
 // ==================== المسارات ====================
 
@@ -332,6 +332,13 @@ export function buildPayslipDeductions(data: PayslipDocumentData): PayslipLine[]
     });
   }
   return lines;
+}
+
+/** صافي الراتب كتابةً (الصافي السالب مبلغ مستحق على الموظف) */
+export function netSalaryInWords(net: number): string {
+  const value = toAmount(net);
+  if (value < 0) return `لا يوجد صافي مستحق — مستحق على الموظف: ${amountToArabicWords(Math.abs(value))}`;
+  return amountToArabicWords(value);
 }
 
 /** القسيمة المختارة: المطلوبة إن وُجدت في القائمة، وإلا الأحدث (القائمة مرتبة من الأحدث) */

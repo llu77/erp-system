@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Paperclip, Upload, Trash2, FileText, Image, File, Download, X } from "lucide-react";
+import { errorMessage } from "@/lib/portal/portalUi";
 
+/** مرفقات طلب الموظف المسجل في البوابة (الملكية يتحقق منها الخادم من الجلسة) */
 interface RequestAttachmentsProps {
   requestId: number;
-  employeeId: number;
   canEdit?: boolean; // هل يمكن إضافة/حذف مرفقات
 }
 
@@ -31,14 +32,14 @@ const formatFileSize = (bytes?: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export function RequestAttachments({ requestId, employeeId, canEdit = false }: RequestAttachmentsProps) {
+export function RequestAttachments({ requestId, canEdit = false }: RequestAttachmentsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const utils = trpc.useUtils();
   
-  const { data: attachments, isLoading } = trpc.employeePortal.getAttachments.useQuery(
+  const { data: attachments, isLoading, error, refetch, isFetching } = trpc.employeePortal.getAttachments.useQuery(
     { requestId },
     { enabled: isOpen }
   );
@@ -49,7 +50,7 @@ export function RequestAttachments({ requestId, employeeId, canEdit = false }: R
       utils.employeePortal.getAttachments.invalidate({ requestId });
     },
     onError: (error) => {
-      toast.error(error.message || "فشل رفع الملف");
+      toast.error(errorMessage(error, "فشل رفع الملف"));
     },
   });
 
@@ -59,7 +60,7 @@ export function RequestAttachments({ requestId, employeeId, canEdit = false }: R
       utils.employeePortal.getAttachments.invalidate({ requestId });
     },
     onError: (error) => {
-      toast.error(error.message || "فشل حذف المرفق");
+      toast.error(errorMessage(error, "فشل حذف المرفق"));
     },
   });
 
@@ -81,28 +82,24 @@ export function RequestAttachments({ requestId, employeeId, canEdit = false }: R
     }
 
     setIsUploading(true);
-    try {
-      // تحويل الملف إلى base64
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64Data = reader.result as string;
-        await uploadMutation.mutateAsync({
+    // تحويل الملف إلى base64 (أخطاء الرفع تُعرض من onError)
+    const reader = new FileReader();
+    reader.onload = () => {
+      uploadMutation.mutate(
+        {
           requestId,
-          employeeId,
           fileName: file.name,
-          base64Data,
+          base64Data: reader.result as string,
           contentType: file.type,
-        });
-        setIsUploading(false);
-      };
-      reader.onerror = () => {
-        toast.error("فشل قراءة الملف");
-        setIsUploading(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
+        },
+        { onSettled: () => setIsUploading(false) }
+      );
+    };
+    reader.onerror = () => {
+      toast.error("فشل قراءة الملف");
       setIsUploading(false);
-    }
+    };
+    reader.readAsDataURL(file);
 
     // إعادة تعيين input
     if (fileInputRef.current) {
@@ -110,9 +107,9 @@ export function RequestAttachments({ requestId, employeeId, canEdit = false }: R
     }
   };
 
-  const handleDelete = async (attachmentId: number) => {
+  const handleDelete = (attachmentId: number) => {
     if (!confirm("هل أنت متأكد من حذف هذا المرفق؟")) return;
-    await deleteMutation.mutateAsync({ attachmentId, employeeId });
+    deleteMutation.mutate({ attachmentId });
   };
 
   const attachmentCount = attachments?.length || 0;
@@ -178,6 +175,13 @@ export function RequestAttachments({ requestId, employeeId, canEdit = false }: R
           {isLoading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center gap-2 py-6 text-center">
+              <p className="text-sm text-destructive">{errorMessage(error, "تعذر تحميل المرفقات")}</p>
+              <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+                إعادة المحاولة
+              </Button>
             </div>
           ) : attachments && attachments.length > 0 ? (
             <div className="space-y-2">

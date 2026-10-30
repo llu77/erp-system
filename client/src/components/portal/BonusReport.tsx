@@ -12,10 +12,8 @@ import {
   Award,
   AlertCircle
 } from 'lucide-react';
-
-interface BonusReportProps {
-  employeeId: number;
-}
+import { shouldRetryQuery, trpcErrorCode } from '@/lib/portal/portalUi';
+import { PortalQueryError } from './PortalQueryState';
 
 const MONTHS = [
   { value: 1, label: 'يناير' },
@@ -32,21 +30,27 @@ const MONTHS = [
   { value: 12, label: 'ديسمبر' },
 ];
 
-export function BonusReport({ employeeId }: BonusReportProps) {
+/** تقرير بونص الموظف المسجل في البوابة */
+export function BonusReport() {
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
 
   // جلب تقرير البونص
-  const { data: bonusReport, isLoading, error } = trpc.employeePortal.getBonusReport.useQuery(
-    { employeeId, year: selectedYear, month: selectedMonth },
-    { retry: false }
+  const reportQuery = trpc.employeePortal.getBonusReport.useQuery(
+    { year: selectedYear, month: selectedMonth },
+    { retry: shouldRetryQuery }
   );
+  const { data: bonusReport, isLoading, error } = reportQuery;
+  // "غير موجود" يعني لا يوجد تقرير لهذا الشهر، وغيره خطأ يُعرض مع إعادة المحاولة
+  const reportFailed = !!error && trpcErrorCode(error) !== 'NOT_FOUND';
 
   // جلب سجل البونص
-  const { data: bonusHistory } = trpc.employeePortal.getBonusHistory.useQuery(
-    { employeeId, limit: 6 }
+  const historyQuery = trpc.employeePortal.getBonusHistory.useQuery(
+    { limit: 6 },
+    { retry: shouldRetryQuery }
   );
+  const { data: bonusHistory } = historyQuery;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ar-SA', {
@@ -123,6 +127,13 @@ export function BonusReport({ employeeId }: BonusReportProps) {
             <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
           </CardContent>
         </Card>
+      ) : reportFailed ? (
+        <PortalQueryError
+          error={error}
+          title="تعذر تحميل تقرير البونص"
+          onRetry={() => reportQuery.refetch()}
+          isRetrying={reportQuery.isFetching}
+        />
       ) : error || !bonusReport ? (
         <Card className="bg-slate-800/50 border-slate-700">
           <CardContent className="text-center py-12">
@@ -233,6 +244,14 @@ export function BonusReport({ employeeId }: BonusReportProps) {
       )}
 
       {/* سجل البونص */}
+      {historyQuery.error && (
+        <PortalQueryError
+          error={historyQuery.error}
+          title="تعذر تحميل سجل البونص"
+          onRetry={() => historyQuery.refetch()}
+          isRetrying={historyQuery.isFetching}
+        />
+      )}
       {bonusHistory && bonusHistory.length > 0 && (
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader className="border-b border-slate-700">
