@@ -373,18 +373,26 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
 
     // ========== تقرير البونص ==========
     if (input.reportType === 'bonus') {
-      const currentWeekStart = getWeekStart(now);
+      // الفترة الحالية حسب فترات البونص الموحدة (1-7، 8-14، 15-21، 22-28، 29-نهاية الشهر)
+      const { getCurrentBonusPeriod } = await import('../bonus/calculator');
+      const { getTierDisplayName, getBonusStatusLabel, isFinalBonusStatus } = await import('../../shared/bonusHelpers');
+      const { formatBonusPeriodLabel } = await import('../../shared/bonus');
+      const currentPeriod = getCurrentBonusPeriod(now);
       
       const bonusDetail = await db.select({
         revenue: bonusDetails.weeklyRevenue,
         bonusAmount: bonusDetails.bonusAmount,
         tier: bonusDetails.bonusTier,
+        tierName: bonusDetails.tierName,
+        status: weeklyBonuses.status,
       })
       .from(bonusDetails)
       .innerJoin(weeklyBonuses, eq(bonusDetails.weeklyBonusId, weeklyBonuses.id))
       .where(and(
         eq(bonusDetails.employeeId, input.employeeId),
-        eq(weeklyBonuses.weekStart, currentWeekStart)
+        eq(weeklyBonuses.year, currentPeriod.year),
+        eq(weeklyBonuses.month, currentPeriod.month),
+        eq(weeklyBonuses.weekNumber, currentPeriod.weekNumber)
       ))
       .limit(1);
 
@@ -394,12 +402,16 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
           revenue: bonusDetails.weeklyRevenue,
           bonusAmount: bonusDetails.bonusAmount,
           tier: bonusDetails.bonusTier,
-          weekStart: weeklyBonuses.weekStart,
+          tierName: bonusDetails.tierName,
+          status: weeklyBonuses.status,
+          weekNumber: weeklyBonuses.weekNumber,
+          month: weeklyBonuses.month,
+          year: weeklyBonuses.year,
         })
         .from(bonusDetails)
         .innerJoin(weeklyBonuses, eq(bonusDetails.weeklyBonusId, weeklyBonuses.id))
         .where(eq(bonusDetails.employeeId, input.employeeId))
-        .orderBy(desc(weeklyBonuses.weekStart))
+        .orderBy(desc(weeklyBonuses.year), desc(weeklyBonuses.month), desc(weeklyBonuses.weekNumber))
         .limit(1);
 
         if (lastBonus.length === 0) {
@@ -413,41 +425,29 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
         }
 
         const bonus = lastBonus[0];
-        const tierNames: Record<string, string> = {
-          'none': 'لم يصل للحد الأدنى',
-          'tier_1': 'المستوى الأول',
-          'tier_2': 'المستوى الثاني',
-          'tier_3': 'المستوى الثالث',
-          'tier_4': 'المستوى الرابع',
-          'tier_5': 'المستوى الخامس'
-        };
+        const tierLabel = bonus.tier === 'none' ? 'لم يصل للحد الأدنى' : getTierDisplayName(bonus.tier, bonus.tierName);
+        const amountLabel = isFinalBonusStatus(bonus.status) ? 'البونص' : 'البونص (تقديري - لم يُعتمد بعد)';
 
         return {
           success: true,
           hasData: true,
           dataCount: 1,
           data: bonus,
-          message: `📊 تقرير البونص للموظف ${emp.name}:\n\n⚠️ لا يوجد بونص مسجل لهذا الأسبوع بعد.\n\n📌 آخر بونص مسجل (${new Date(bonus.weekStart).toLocaleDateString('ar-SA')}):\n💰 الإيرادات: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierNames[bonus.tier || 'none']}\n💵 البونص: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`,
+          message: `📊 تقرير البونص للموظف ${emp.name}:\n\n⚠️ لا يوجد بونص مسجل لهذه الفترة بعد.\n\n📌 آخر بونص مسجل (${formatBonusPeriodLabel(bonus.weekNumber, bonus.month, bonus.year)} - ${getBonusStatusLabel(bonus.status)}):\n💰 الإيرادات: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierLabel}\n💵 ${amountLabel}: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`,
           source: 'جدول تفاصيل البونص'
         };
       }
 
       const bonus = bonusDetail[0];
-      const tierNames: Record<string, string> = {
-        'none': 'لم يصل للحد الأدنى',
-        'tier_1': 'المستوى الأول',
-        'tier_2': 'المستوى الثاني',
-        'tier_3': 'المستوى الثالث',
-        'tier_4': 'المستوى الرابع',
-        'tier_5': 'المستوى الخامس'
-      };
+      const tierLabel = bonus.tier === 'none' ? 'لم يصل للحد الأدنى' : getTierDisplayName(bonus.tier, bonus.tierName);
+      const amountLabel = isFinalBonusStatus(bonus.status) ? 'البونص المستحق' : 'البونص المتوقع (تقديري - لم يُعتمد بعد)';
 
       return {
         success: true,
         hasData: true,
         dataCount: 1,
         data: bonus,
-        message: `📊 تقرير البونص الأسبوعي للموظف ${emp.name}:\n\n💰 إيراداتك هذا الأسبوع: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierNames[bonus.tier || 'none']}\n💵 البونص المستحق: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`,
+        message: `📊 تقرير البونص للموظف ${emp.name} (${formatBonusPeriodLabel(currentPeriod.weekNumber, currentPeriod.month, currentPeriod.year)}):\n\n💰 إيراداتك في هذه الفترة: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierLabel}\n💵 ${amountLabel}: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`,
         source: 'جدول تفاصيل البونص'
       };
     }
@@ -625,14 +625,6 @@ export async function calculatePrice(input: PriceCalculationInput): Promise<Tool
   } catch (error) {
     return errorResult(`حدث خطأ: ${error}`);
   }
-}
-
-// ========== دالة مساعدة لحساب بداية الأسبوع ==========
-function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff));
 }
 
 // ========== دوال مساعدة للتصدير (للاختبارات) ==========

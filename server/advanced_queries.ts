@@ -508,15 +508,10 @@ export async function reconcileBonusCalculations(
     .from(bonusDetails)
     .where(eq(bonusDetails.weeklyBonusId, bonusId));
 
-  // التحقق من صحة كل حساب بونص
-  const tierRules = [
-    { tier: "tier_5", min: 2400, bonus: 180 },
-    { tier: "tier_4", min: 2100, bonus: 135 },
-    { tier: "tier_3", min: 1800, bonus: 95 },
-    { tier: "tier_2", min: 1500, bonus: 60 },
-    { tier: "tier_1", min: 1200, bonus: 35 },
-    { tier: "none", min: 0, bonus: 0 },
-  ];
+  // التحقق من صحة كل حساب بونص حسب مستويات المدير (bonusTierSettings)
+  const { getActiveTierRules } = await import("./bonus/tiers");
+  const { resolveBonusTier } = await import("../shared/bonus");
+  const tierRules = await getActiveTierRules();
 
   let calculatedTotal = 0;
   let matched = 0;
@@ -526,15 +521,9 @@ export async function reconcileBonusCalculations(
     const actualBonus = Number(detail.bonusAmount || 0);
 
     // حساب البونص المتوقع
-    let expectedBonus = 0;
-    let expectedTier = "none";
-    for (const rule of tierRules) {
-      if (revenue >= rule.min) {
-        expectedBonus = rule.bonus;
-        expectedTier = rule.tier;
-        break;
-      }
-    }
+    const expected = resolveBonusTier(revenue, tierRules);
+    const expectedBonus = expected.amount;
+    const expectedTier: string = expected.tier;
 
     calculatedTotal += expectedBonus;
 

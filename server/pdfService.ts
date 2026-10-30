@@ -1,4 +1,6 @@
 import puppeteer from 'puppeteer';
+import { formatBonusPeriodLabel } from '../shared/bonus';
+import { getTierDisplayName, getTierColorHex } from '../shared/bonusHelpers';
 
 interface ReceiptVoucherData {
   voucherId: string;
@@ -1056,6 +1058,8 @@ interface WeeklyBonusReportData {
     code: string;
     weeklyRevenue: number;
     tier: string;
+    /** اسم المستوى المحفوظ وقت الاحتساب */
+    tierName?: string | null;
     bonusAmount: number;
     isEligible: boolean;
   }>;
@@ -1072,33 +1076,9 @@ const getBonusStatusLabel = (status: string): string => {
   }
 };
 
-const getTierLabel = (tier: string): string => {
-  switch (tier) {
-    case 'tier_7': return 'المستوى 7';
-    case 'tier_6': return 'المستوى 6';
-    case 'tier_5': return 'المستوى 5';
-    case 'tier_4': return 'المستوى 4';
-    case 'tier_3': return 'المستوى 3';
-    case 'tier_2': return 'المستوى 2';
-    case 'tier_1': return 'المستوى 1';
-    case 'none': return 'غير مؤهل';
-    default: return tier || '-';
-  }
-};
-
-const getTierColor = (tier: string): string => {
-  switch (tier) {
-    case 'tier_7': return '#9333ea'; // purple
-    case 'tier_6': return '#a855f7';
-    case 'tier_5': return '#2563eb'; // blue
-    case 'tier_4': return '#3b82f6';
-    case 'tier_3': return '#22c55e'; // green
-    case 'tier_2': return '#eab308'; // yellow
-    case 'tier_1': return '#f97316'; // orange
-    case 'none': return '#9ca3af'; // gray
-    default: return '#6b7280';
-  }
-};
+// أسماء وألوان المستويات من الاسم المحفوظ وقت الاحتساب (وليس خريطة ثابتة)
+const getTierLabel = (tier: string, tierName?: string | null): string => getTierDisplayName(tier, tierName);
+const getTierColor = (tier: string): string => getTierColorHex(tier);
 
 const getPaymentMethodLabel = (method: string | undefined): string => {
   switch (method) {
@@ -1140,12 +1120,12 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
   // تجميع حسب المستوى
   const tierStats = eligibleEmployees.reduce((acc, emp) => {
     if (!acc[emp.tier]) {
-      acc[emp.tier] = { count: 0, total: 0 };
+      acc[emp.tier] = { count: 0, total: 0, name: getTierLabel(emp.tier, emp.tierName) };
     }
     acc[emp.tier].count++;
     acc[emp.tier].total += emp.bonusAmount;
     return acc;
-  }, {} as Record<string, { count: number; total: number }>);
+  }, {} as Record<string, { count: number; total: number; name: string }>);
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -1580,8 +1560,8 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
         <div class="info-value">${data.branchName}</div>
       </div>
       <div class="info-item">
-        <div class="info-label">الأسبوع</div>
-        <div class="info-value">الأسبوع ${data.weekNumber}</div>
+        <div class="info-label">الفترة</div>
+        <div class="info-value">${formatBonusPeriodLabel(data.weekNumber, data.month, data.year)}</div>
       </div>
       <div class="info-item">
         <div class="info-label">الشهر</div>
@@ -1626,7 +1606,7 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
           .map(([tier, stats]) => `
             <div class="tier-card" style="background: ${getTierColor(tier)}">
               <div class="tier-count">${stats.count}</div>
-              <div class="tier-name">${getTierLabel(tier)}</div>
+              <div class="tier-name">${stats.name}</div>
               <div class="tier-amount">${formatCurrencyLocal(stats.total)}</div>
             </div>
           `).join('')}
@@ -1656,7 +1636,7 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
               <td class="employee-code">${emp.code || '-'}</td>
               <td>${formatCurrencyLocal(emp.weeklyRevenue)}</td>
               <td>
-                <span class="tier-badge" style="background: ${getTierColor(emp.tier)}">${getTierLabel(emp.tier)}</span>
+                <span class="tier-badge" style="background: ${getTierColor(emp.tier)}">${getTierLabel(emp.tier, emp.tierName)}</span>
               </td>
               <td class="bonus-amount">${emp.isEligible ? formatCurrencyLocal(emp.bonusAmount) : '-'}</td>
             </tr>
