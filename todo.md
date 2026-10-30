@@ -5220,4 +5220,4 @@ node scripts/scheduledTasks.mjs weekly-report
 - [x] توليد migration من مخطط Drizzle الحالي وقراءة SQL الناتج (لا توجد تغييرات schema جديدة؛ تم reconciliation للـ drift الموجود)
 - [x] تطبيق migration على قاعدة البيانات والتحقق من نجاحها (76 migration مسجلة، وإعادة التشغيل idempotent بلا pending)
 - [x] تشغيل فحوص TypeScript والاختبارات وبناء الإنتاج (TypeScript/build ناجحان، و99 ملف اختبار داخليًا / 1505 اختبار ناجح؛ اختبار Resend الخارجي أعاد 403 من الخدمة)
-- [ ] حفظ checkpoint نهائي بعد اكتمال التحقق
+- [x] حفظ checkpoint نهائي بعد اكتمال التحقق (version 25af53e8)
