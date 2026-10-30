@@ -148,11 +148,20 @@ export async function resolveStoredFileUrl(
     const { url } = await withTimeout(storageGet(key), STORAGE_TIMEOUT_MS);
     rememberUrl(key, url || null, URL_CACHE_TTL_MS);
     return url || fallback;
-  } catch {
+  } catch (error) {
     rememberUrl(key, null, URL_FAILURE_TTL_MS);
-    storageDownUntil = Date.now() + URL_FAILURE_TTL_MS;
+    if (isStorageOutage(error)) storageDownUntil = Date.now() + URL_FAILURE_TTL_MS;
     return fallback;
   }
+}
+
+/**
+ * تعطل عام لخدمة التخزين (مهلة، فشل اتصال، 5xx، 429، 401) وليس خطأ ملف واحد (مثل 404 لمفتاح غير موجود)
+ */
+function isStorageOutage(error: unknown): boolean {
+  const status = (error as { details?: { statusCode?: unknown } } | null)?.details?.statusCode;
+  if (typeof status !== "number") return true;
+  return status >= 500 || status === 429 || status === 401;
 }
 
 /** للاختبارات: إعادة ضبط حالة خدمة التخزين */

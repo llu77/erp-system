@@ -198,6 +198,7 @@ describe("employee portal session", () => {
     await expectTrpcError(caller.employeeAuth.me(), "INTERNAL_SERVER_ERROR");
     await expectTrpcError(caller.employeePortal.getSalarySlips(), "INTERNAL_SERVER_ERROR");
     await expectTrpcError(caller.portalAdmin.getRequests({}), "INTERNAL_SERVER_ERROR");
+    await expectTrpcError(caller.employeeAssistant.chat({ message: "كم راتبي؟" }), "INTERNAL_SERVER_ERROR");
     await expectTrpcError(caller.employeeAssistant.startNewConversation(), "INTERNAL_SERVER_ERROR");
 
     // مستخدم نظام ليس مراجعاً في نفس المتصفح: الجلسة غير المتحقق منها قد تكون لمشرف
@@ -210,6 +211,26 @@ describe("employee portal session", () => {
       employeeLookupFailed: true,
     });
     await expectTrpcError(lookupFailedWithEmployeeUser.portalAdmin.getRequests({}), "INTERNAL_SERVER_ERROR");
+  });
+
+  it("a login that fails on a server error does not use up the attempt limit", async () => {
+    const previousSecret = process.env.JWT_SECRET;
+    process.env.JWT_SECRET = "test-secret-for-login-limit";
+    try {
+      // قاعدة البيانات غير متاحة (getDb = null): كل محاولة خطأ خادم، ولا تُحسب محاولة فاشلة
+      const caller = appRouter.createCaller({
+        ...baseCtx(),
+        req: { protocol: "https", headers: {}, ip: "10.9.8.7" } as TrpcContext["req"],
+        user: null,
+        employee: null,
+      });
+      for (let attempt = 0; attempt < 7; attempt++) {
+        await expectTrpcError(caller.employeeAuth.login({ username: "db-outage-user", password: "x" }), "INTERNAL_SERVER_ERROR");
+      }
+    } finally {
+      if (previousSecret === undefined) delete process.env.JWT_SECRET;
+      else process.env.JWT_SECRET = previousSecret;
+    }
   });
 
   it("logout clears the portal cookie", async () => {

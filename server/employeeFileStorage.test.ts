@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./storage", () => ({ storageGet: vi.fn() }));
 
 import { storageGet } from "./storage";
+import { StorageException } from "./exceptions";
 import { URL_FAILURE_TTL_MS, resetStorageCircuitForTests, resolveStoredFileUrl } from "./employeeFile/service";
 
 const IQAMA_KEY = "employees/10/iqama.jpg";
@@ -45,6 +46,24 @@ describe("resolveStoredFileUrl", () => {
     vi.mocked(storageGet).mockResolvedValue({ key: IQAMA_KEY, url: "" });
     await expect(resolveStoredFileUrl(IQAMA_KEY, STORED_IQAMA_URL)).resolves.toBe(STORED_IQAMA_URL);
     await expect(resolveStoredFileUrl(IQAMA_KEY, "")).resolves.toBeNull();
+  });
+
+  it("a missing file (404) falls back for that file only; other files still get fresh URLs", async () => {
+    const notFound = new StorageException("missing", "download", undefined, IQAMA_KEY, undefined, { statusCode: 404 });
+    vi.mocked(storageGet).mockRejectedValueOnce(notFound);
+    await expect(resolveStoredFileUrl(IQAMA_KEY, STORED_IQAMA_URL)).resolves.toBe(STORED_IQAMA_URL);
+
+    vi.mocked(storageGet).mockResolvedValue({ key: PHOTO_KEY, url: FRESH_PHOTO_URL });
+    await expect(resolveStoredFileUrl(PHOTO_KEY, STORED_PHOTO_URL)).resolves.toBe(FRESH_PHOTO_URL);
+    expect(storageGet).toHaveBeenCalledTimes(2);
+  });
+
+  it("a storage server error (5xx) trips the fallback for every file", async () => {
+    const unavailable = new StorageException("down", "download", undefined, IQAMA_KEY, undefined, { statusCode: 503 });
+    vi.mocked(storageGet).mockRejectedValueOnce(unavailable);
+    await expect(resolveStoredFileUrl(IQAMA_KEY, STORED_IQAMA_URL)).resolves.toBe(STORED_IQAMA_URL);
+    await expect(resolveStoredFileUrl(PHOTO_KEY, STORED_PHOTO_URL)).resolves.toBe(STORED_PHOTO_URL);
+    expect(storageGet).toHaveBeenCalledTimes(1);
   });
 
   it("after a storage failure, falls back for other files too until the retry interval has passed", async () => {
