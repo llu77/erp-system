@@ -470,6 +470,13 @@
       "when": 1793328111609,
       "tag": "0066_payroll_bonus_vouchers",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "5",
+      "when": 1793332624763,
+      "tag": "0067_end_of_service",
+      "breakpoints": true
     }
   ]
 }
