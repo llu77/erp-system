@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { UNAUTHED_ERR_MSG } from '@shared/const';
+import { PORTAL_LOGIN_PATH, resolveAuthRedirect } from "@/lib/portal/portalUi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
@@ -10,15 +10,18 @@ import "./index.css";
 
 const queryClient = new QueryClient();
 
+let redirectingToLogin = false;
+
+// انتهاء جلسة البوابة -> دخول الموظفين، وانتهاء جلسة النظام -> دخول النظام (خارج صفحات البوابة فقط)
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || redirectingToLogin) return;
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
+  const target = resolveAuthRedirect(error.message, window.location.pathname);
+  if (!target) return;
 
-  if (!isUnauthorized) return;
-
-  window.location.href = getLoginUrl();
+  redirectingToLogin = true;
+  window.location.href = target === "employee-login" ? PORTAL_LOGIN_PATH : getLoginUrl();
 };
 
 queryClient.getQueryCache().subscribe(event => {
