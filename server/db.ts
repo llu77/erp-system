@@ -6823,16 +6823,27 @@ export async function getAdvancesStats(branchId?: number): Promise<{
 }
 
 
-// إحصائيات سندات القبض للفترة المحددة
-export async function getReceiptVouchersStats(startDate: Date, endDate: Date, branchId?: number) {
+// إحصائيات سندات القبض للفترة المحددة (السندات الملغاة لا تدخل في الإجماليات)
+// voucherType: الافتراضي سندات القبض فقط (مبالغ مُسلّمة من الفروع للإدارة)
+export async function getReceiptVouchersStats(
+  startDate: Date,
+  endDate: Date,
+  branchId?: number,
+  voucherType: 'receipt' | 'payment' | 'all' = 'receipt'
+) {
   const db = await getDb();
   if (!db) return { count: 0, totalAmount: 0 };
-  
-  const conditions = [
+
+  const conditions: SQL[] = [
     gte(receiptVouchers.voucherDate, startDate),
     lte(receiptVouchers.voucherDate, endDate),
+    sql`${receiptVouchers.status} <> 'cancelled'`,
   ];
-  
+
+  if (voucherType !== 'all') {
+    conditions.push(eq(receiptVouchers.voucherType, voucherType));
+  }
+
   if (branchId) {
     conditions.push(eq(receiptVouchers.branchId, branchId));
   }
@@ -10390,12 +10401,19 @@ export interface VoucherReportData {
   vouchers: Array<{
     id: number;
     voucherId: string;
+    voucherType: 'receipt' | 'payment';
     voucherDate: Date;
     dueDate: Date | null;
     dueDateTo: Date | null;
+    partyName: string | null;
     payeeName: string;
     payeePhone: string | null;
+    description: string | null;
     totalAmount: string;
+    paymentMethod: string | null;
+    cashAmount: string;
+    bankAmount: string;
+    checkAmount: string;
     status: string;
     branchName: string | null;
     notes: string | null;
@@ -10403,15 +10421,22 @@ export interface VoucherReportData {
     createdAt: Date;
   }>;
   statistics: {
+    /** عدد السندات غير الملغاة */
     totalCount: number;
     draftCount: number;
     approvedCount: number;
     paidCount: number;
     cancelledCount: number;
+    /** إجمالي السندات غير الملغاة */
     totalAmount: number;
     draftAmount: number;
     approvedAmount: number;
     paidAmount: number;
+    cancelledAmount: number;
+    receiptCount: number;
+    receiptAmount: number;
+    paymentCount: number;
+    paymentAmount: number;
   };
   filters: {
     startDate: string;
@@ -10432,6 +10457,10 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
       lte(receiptVouchers.voucherDate, new Date(filters.endDate)),
     ];
 
+    if (filters.voucherType && filters.voucherType !== 'all') {
+      conditions.push(eq(receiptVouchers.voucherType, filters.voucherType));
+    }
+
     if (filters.status && filters.status !== 'all') {
       conditions.push(eq(receiptVouchers.status, filters.status));
     }
@@ -10444,15 +10473,25 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
     const vouchersResult = await db.select({
       id: receiptVouchers.id,
       voucherId: receiptVouchers.voucherId,
+      voucherType: receiptVouchers.voucherType,
       voucherDate: receiptVouchers.voucherDate,
       dueDate: receiptVouchers.dueDate,
+      dueDateTo: receiptVouchers.dueDateTo,
+      partyName: receiptVouchers.partyName,
       payeeName: receiptVouchers.payeeName,
       payeePhone: receiptVouchers.payeePhone,
+      description: receiptVouchers.description,
       totalAmount: receiptVouchers.totalAmount,
+      paymentMethod: receiptVouchers.paymentMethod,
+      cashAmount: receiptVouchers.cashAmount,
+      bankAmount: receiptVouchers.bankAmount,
+      checkAmount: receiptVouchers.checkAmount,
       status: receiptVouchers.status,
       branchId: receiptVouchers.branchId,
+      branchName: receiptVouchers.branchName,
       notes: receiptVouchers.notes,
       createdBy: receiptVouchers.createdBy,
+      createdByName: receiptVouchers.createdByName,
       createdAt: receiptVouchers.createdAt,
     })
       .from(receiptVouchers)
@@ -10482,19 +10521,35 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
       userMap = Object.fromEntries(usersResult.map(u => [u.id, u.name || '']));
     }
 
-    // حساب الإحصائيات
+    // حساب الإحصائيات (السندات الملغاة لا تدخل في الإجماليات)
     let totalAmount = 0;
     let draftAmount = 0;
     let approvedAmount = 0;
     let paidAmount = 0;
+    let cancelledAmount = 0;
     let draftCount = 0;
     let approvedCount = 0;
     let paidCount = 0;
     let cancelledCount = 0;
+    let receiptCount = 0;
+    let receiptAmount = 0;
+    let paymentCount = 0;
+    let paymentAmount = 0;
 
     const vouchers = vouchersResult.map(v => {
       const amount = parseFloat(v.totalAmount || '0');
-      totalAmount += amount;
+      if (v.status === 'cancelled') {
+        cancelledAmount += amount;
+      } else {
+        totalAmount += amount;
+        if (v.voucherType === 'payment') {
+          paymentCount++;
+          paymentAmount += amount;
+        } else {
+          receiptCount++;
+          receiptAmount += amount;
+        }
+      }
 
       switch (v.status) {
         case 'draft':
@@ -10517,16 +10572,23 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
       return {
         id: v.id,
         voucherId: v.voucherId,
+        voucherType: v.voucherType,
         voucherDate: v.voucherDate,
         dueDate: v.dueDate,
-        dueDateTo: null,
+        dueDateTo: v.dueDateTo,
+        partyName: v.partyName,
         payeeName: v.payeeName,
         payeePhone: v.payeePhone,
+        description: v.description,
         totalAmount: v.totalAmount,
+        paymentMethod: v.paymentMethod,
+        cashAmount: v.cashAmount,
+        bankAmount: v.bankAmount,
+        checkAmount: v.checkAmount,
         status: v.status,
-        branchName: v.branchId ? branchMap[v.branchId] || null : null,
+        branchName: (v.branchId ? branchMap[v.branchId] : null) || v.branchName || null,
         notes: v.notes,
-        createdByName: v.createdBy ? userMap[v.createdBy] || 'غير معروف' : 'غير معروف',
+        createdByName: v.createdByName || (v.createdBy ? userMap[v.createdBy] : '') || 'غير معروف',
         createdAt: v.createdAt,
       };
     });
@@ -10546,7 +10608,7 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
     return {
       vouchers,
       statistics: {
-        totalCount: vouchers.length,
+        totalCount: vouchers.length - cancelledCount,
         draftCount,
         approvedCount,
         paidCount,
@@ -10555,6 +10617,11 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
         draftAmount,
         approvedAmount,
         paidAmount,
+        cancelledAmount,
+        receiptCount,
+        receiptAmount,
+        paymentCount,
+        paymentAmount,
       },
       filters: {
         startDate: filters.startDate.toISOString(),
@@ -10642,25 +10709,33 @@ export async function getExpensesByPaymentMethod(
 }
 
 /**
- * الحصول على سندات القبض مجمعة حسب طريقة الدفع
+ * الحصول على السندات مجمعة حسب طريقة الدفع (السندات الملغاة مستبعدة)
+ * - يُستخدم توزيع المبلغ (نقداً / حوالة / شيك) إن وجد، فالسند المختلط يظهر في أكثر من مجموعة
+ * - السندات القديمة بدون توزيع: كامل المبلغ في طريقة الدفع المسجلة
  * @param branchId معرف الفرع (اختياري)
  * @param startDate تاريخ البداية
  * @param endDate تاريخ النهاية
+ * @param voucherType نوع السند (الافتراضي: سندات القبض فقط للتوافق مع التدفق النقدي)
  */
 export async function getVouchersByPaymentMethod(
   startDate: string,
   endDate: string,
-  branchId?: number
+  branchId?: number,
+  voucherType: 'receipt' | 'payment' | 'all' = 'receipt'
 ) {
   const db = await getDb();
   if (!db) return null;
 
   try {
-    const conditions = [
+    const conditions: SQL[] = [
       gte(receiptVouchers.voucherDate, new Date(startDate)),
       lte(receiptVouchers.voucherDate, new Date(endDate)),
       inArray(receiptVouchers.status, ['draft', 'approved', 'paid']),
     ];
+
+    if (voucherType !== 'all') {
+      conditions.push(eq(receiptVouchers.voucherType, voucherType));
+    }
 
     if (branchId) {
       conditions.push(eq(receiptVouchers.branchId, branchId));
@@ -10681,21 +10756,31 @@ export async function getVouchersByPaymentMethod(
 
     let grandTotal = 0;
 
+    const addTo = (method: string, amount: number, voucher: (typeof allVouchers)[number]) => {
+      const bucket = byPaymentMethod[method] || byPaymentMethod.other;
+      bucket.count++;
+      bucket.total = Math.round((bucket.total + amount) * 100) / 100;
+      bucket.vouchers.push(voucher);
+    };
+
     for (const voucher of allVouchers) {
-      const method = voucher.paymentMethod || 'cash';
-      const amount = parseFloat(voucher.totalAmount);
-      
-      if (byPaymentMethod[method]) {
-        byPaymentMethod[method].count++;
-        byPaymentMethod[method].total += amount;
-        byPaymentMethod[method].vouchers.push(voucher);
+      const amount = parseFloat(voucher.totalAmount) || 0;
+      const cash = parseFloat(voucher.cashAmount || '0') || 0;
+      const bank = parseFloat(voucher.bankAmount || '0') || 0;
+      const check = parseFloat(voucher.checkAmount || '0') || 0;
+
+      if (cash > 0 || bank > 0 || check > 0) {
+        // توزيع صريح على طرق الدفع
+        if (cash > 0) addTo('cash', cash, voucher);
+        if (bank > 0) addTo('bank_transfer', bank, voucher);
+        if (check > 0) addTo('check', check, voucher);
       } else {
-        byPaymentMethod.other.count++;
-        byPaymentMethod.other.total += amount;
-        byPaymentMethod.other.vouchers.push(voucher);
+        // سندات قديمة أو طرق غير موزعة (بطاقة / أخرى)
+        const method = voucher.paymentMethod && voucher.paymentMethod !== 'mixed' ? voucher.paymentMethod : 'cash';
+        addTo(method, amount, voucher);
       }
-      
-      grandTotal += amount;
+
+      grandTotal = Math.round((grandTotal + amount) * 100) / 100;
     }
 
     return {

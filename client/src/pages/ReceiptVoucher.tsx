@@ -149,7 +149,7 @@ export default function ReceiptVoucher() {
           paymentMethod: 'cash',
         });
       } else {
-        toast.error(result.error || 'فشل في إنشاء السند');
+        toast.error('فشل في إنشاء السند');
       }
     } catch (error) {
       toast.error('حدث خطأ أثناء إنشاء السند');
