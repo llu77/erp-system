@@ -84,7 +84,8 @@ interface VoucherForm {
   payeeName: string;
   description: string;
   items: FormItem[];
-  splitTouched: boolean;
+  /** النقد يُحسب تلقائياً (الإجمالي - الحوالة - الشيك) حتى يعدّله المستخدم */
+  cashManual: boolean;
   cashAmount: string;
   bankAmount: string;
   bankName: string;
@@ -110,7 +111,7 @@ function emptyForm(type: VoucherType, branchId: number | null | undefined): Vouc
     payeeName: '',
     description: isReceipt ? 'تسليم مبالغ كاش' : '',
     items: [{ description: isReceipt ? 'تسليم مبالغ كاش' : '', quantity: '1', unitPrice: '' }],
-    splitTouched: false,
+    cashManual: false,
     cashAmount: '',
     bankAmount: '',
     bankName: '',
@@ -780,9 +781,9 @@ function VoucherFormDialog({
   );
 
   // توزيع الدفع: نقداً افتراضياً حتى يعدّل المستخدم التوزيع
-  const cashAmount = form.splitTouched ? toNumber(form.cashAmount) : total;
-  const bankAmount = form.splitTouched ? toNumber(form.bankAmount) : 0;
-  const checkAmount = form.splitTouched ? toNumber(form.checkAmount) : 0;
+  const bankAmount = toNumber(form.bankAmount);
+  const checkAmount = toNumber(form.checkAmount);
+  const cashAmount = form.cashManual ? toNumber(form.cashAmount) : roundMoney(Math.max(0, total - bankAmount - checkAmount));
   const splitSum = roundMoney(cashAmount + bankAmount + checkAmount);
   const splitDiff = roundMoney(total - splitSum);
 
@@ -797,20 +798,11 @@ function VoucherFormDialog({
   const updateItem = (index: number, patch: Partial<FormItem>) =>
     setForm(prev => ({ ...prev, items: prev.items.map((item, i) => (i === index ? { ...item, ...patch } : item)) }));
 
-  const setSplit = (patch: Partial<Pick<VoucherForm, 'cashAmount' | 'bankAmount' | 'checkAmount'>>) =>
-    setForm(prev => ({
-      ...prev,
-      // أول تعديل: نبدأ من التوزيع الحالي (كامل المبلغ نقداً)
-      ...(prev.splitTouched ? {} : { cashAmount: total ? String(total) : '', bankAmount: '', checkAmount: '' }),
-      splitTouched: true,
-      ...patch,
-    }));
-
   const putAllIn = (method: 'cash' | 'bank' | 'check') =>
     setForm(prev => ({
       ...prev,
-      splitTouched: true,
-      cashAmount: method === 'cash' ? String(total) : '',
+      cashManual: false,
+      cashAmount: '',
       bankAmount: method === 'bank' ? String(total) : '',
       checkAmount: method === 'check' ? String(total) : '',
     }));
@@ -1062,13 +1054,13 @@ function VoucherFormDialog({
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
               <div>
-                <Label>نقداً (Cash)</Label>
+                <Label>نقداً (Cash){!form.cashManual && <span className="text-xs text-muted-foreground"> - تلقائي (الباقي)</span>}</Label>
                 <Input
                   type="number"
                   min="0"
                   step="0.01"
-                  value={form.splitTouched ? form.cashAmount : total ? String(total) : ''}
-                  onChange={e => setSplit({ cashAmount: e.target.value })}
+                  value={form.cashManual ? form.cashAmount : cashAmount ? String(cashAmount) : ''}
+                  onChange={e => setForm(prev => ({ ...prev, cashManual: true, cashAmount: e.target.value }))}
                   placeholder="0.00"
                 />
               </div>
@@ -1081,8 +1073,8 @@ function VoucherFormDialog({
                   type="number"
                   min="0"
                   step="0.01"
-                  value={form.splitTouched ? form.bankAmount : ''}
-                  onChange={e => setSplit({ bankAmount: e.target.value })}
+                  value={form.bankAmount}
+                  onChange={e => set('bankAmount', e.target.value)}
                   placeholder="0.00"
                 />
               </div>
@@ -1107,8 +1099,8 @@ function VoucherFormDialog({
                   type="number"
                   min="0"
                   step="0.01"
-                  value={form.splitTouched ? form.checkAmount : ''}
-                  onChange={e => setSplit({ checkAmount: e.target.value })}
+                  value={form.checkAmount}
+                  onChange={e => set('checkAmount', e.target.value)}
                   placeholder="0.00"
                 />
               </div>

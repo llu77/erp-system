@@ -251,7 +251,10 @@ export async function createVoucher(
   if (detailsError) throw new VoucherError(detailsError);
 
   // التواريخ
-  const voucherDateStr = data.voucherDate ? toVoucherDateString(data.voucherDate) : todayVoucherDate();
+  // المشرف لا يختار التاريخ: تاريخ اليوم بتوقيت الرياض (المدير والمسؤول يمكنهم تحديده)
+  const voucherDateStr = data.voucherDate && isVoucherApprover(actor.role)
+    ? toVoucherDateString(data.voucherDate)
+    : todayVoucherDate();
   if (!voucherDateStr) throw new VoucherError('تاريخ السند غير صحيح');
   const dueDateFrom = optionalDateString(data.dueDateFrom ?? data.dueDate, 'تاريخ بداية الفترة');
   const dueDateTo = optionalDateString(data.dueDateTo, 'تاريخ نهاية الفترة');
