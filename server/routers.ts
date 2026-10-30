@@ -138,6 +138,52 @@ function payrollActor(user: { id: number; name: string | null; role: string; bra
   return { id: user.id, name: user.name, role: user.role, branchId: user.branchId ?? null };
 }
 
+// ==================== مستندات الموظف الرسمية (قسيمة الراتب / طلب السلفة) ====================
+
+type DocumentViewer = { role: string; branchId: number | null };
+
+// قسيمة موظف في مسيرة: صلاحية عرض المسيرات + فرع المسيرة (أي حالة؛ الختم بعد الاعتماد فقط)
+async function loadPayslipForStaff(user: DocumentViewer, payrollId: number, employeeId: number) {
+  const payroll = await db.getPayrollById(payrollId);
+  if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
+  assertPayrollBranchAccess(user, payroll.branchId);
+  const { getPayslipDocumentData } = await import('./employeeDocumentsPdf');
+  const data = await getPayslipDocumentData(payrollId, employeeId);
+  if (!data) throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود في هذه المسيرة' });
+  return data;
+}
+
+// طلب سلفة: مشرف الفرع يرى طلبات موظفي فرعه فقط (نفس قاعدة اعتماد الطلبات)
+async function loadAdvanceRequestForStaff(user: DocumentViewer, requestId: number) {
+  const request = await db.getEmployeeRequestById(requestId);
+  if (!request) throw new TRPCError({ code: 'NOT_FOUND', message: 'الطلب غير موجود' });
+  if (request.requestType !== 'advance') {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'مستند طلب السلفة متاح لطلبات السلف فقط' });
+  }
+  if (user.role === 'supervisor') {
+    const requestEmployee = await db.getEmployeeById(request.employeeId);
+    const employeeBranchId = requestEmployee?.branchId ?? request.branchId;
+    if (!employeeBranchId || !checkBranchAccess(user.branchId ?? null, employeeBranchId)) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك عرض طلبات فرع آخر' });
+    }
+  }
+  const { getAdvanceRequestDocumentData } = await import('./employeeDocumentsPdf');
+  const data = await getAdvanceRequestDocumentData(requestId);
+  if (!data) throw new TRPCError({ code: 'NOT_FOUND', message: 'الطلب غير موجود' });
+  return data;
+}
+
+// تحويل خطأ توليد PDF (المتصفح غير متاح مثلاً) إلى رسالة عربية واضحة
+async function renderDocumentPdf(label: string, render: () => Promise<{ pdf: Buffer; filename: string }>) {
+  try {
+    const { pdf, filename } = await render();
+    return { pdf: pdf.toString('base64'), filename };
+  } catch (error) {
+    logger.error(`فشل توليد PDF (${label})`, error);
+    throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'تعذر توليد ملف PDF، استخدم زر الطباعة من المتصفح' });
+  }
+}
+
 // تأجيل السلف والمخالفات قرار للمسؤول والمدير فقط؛ لغيرهم تبقى قيم التأجيل المحفوظة كما هي
 function stripDeferralUnlessManager<T extends { deferredAdvanceIds?: number[]; deferredViolationIds?: number[] }>(
   user: { role: string },
@@ -3777,6 +3823,23 @@ export const appRouter = router({
         }
         return await db.getEmployeeRequestLogs(input.requestId);
       }),
+
+    // بيانات طلب السلفة الرسمي (للطباعة من المتصفح بنفس قالب PDF)
+    advanceDocument: supervisorViewProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => loadAdvanceRequestForStaff(ctx.user, input.id)),
+
+    // PDF طلب السلفة (أي حالة؛ التوقيعات والختم بعد الموافقة فقط)
+    advancePdf: supervisorViewProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const data = await loadAdvanceRequestForStaff(ctx.user, input.id);
+        const { generateAdvanceRequestPDF, advanceRequestFileName } = await import('./employeeDocumentsPdf');
+        return renderDocumentPdf('طلب سلفة', async () => ({
+          pdf: await generateAdvanceRequestPDF(data),
+          filename: advanceRequestFileName(data),
+        }));
+      }),
   }),
 
   // ==================== مسيرات الرواتب ====================
@@ -3811,6 +3874,23 @@ export const appRouter = router({
         if (!payroll) return [];
         assertPayrollBranchAccess(ctx.user, payroll.branchId);
         return await db.getPayrollDetails(input.payrollId);
+      }),
+
+    // بيانات قسيمة راتب موظف (للطباعة من المتصفح بنفس قالب PDF)
+    payslipDocument: payrollViewProcedure
+      .input(z.object({ payrollId: z.number().int().positive(), employeeId: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => loadPayslipForStaff(ctx.user, input.payrollId, input.employeeId)),
+
+    // PDF قسيمة الراتب (أي حالة؛ علامة مائية قبل الاعتماد، والتوقيعات والختم بعده)
+    payslipPdf: payrollViewProcedure
+      .input(z.object({ payrollId: z.number().int().positive(), employeeId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const data = await loadPayslipForStaff(ctx.user, input.payrollId, input.employeeId);
+        const { generatePayslipPDF, payslipFileName } = await import('./employeeDocumentsPdf');
+        return renderDocumentPdf('قسيمة راتب', async () => ({
+          pdf: await generatePayslipPDF(data),
+          filename: payslipFileName(data),
+        }));
       }),
 
     // معاينة المسيرة محسوبة في الخادم (الإعدادات، السلف، المخالفات، الإجازات، الفواتير السالبة)
