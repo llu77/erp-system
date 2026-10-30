@@ -39,15 +39,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ar } from "date-fns/locale";
-import { 
-  PDF_BASE_STYLES, 
-  getPDFHeader, 
-  getPDFFooter, 
-  getPDFInfoSection, 
-  getPDFSummarySection, 
-  openPrintWindow,
-  formatCurrency 
-} from "@/utils/pdfTemplates";
+import { downloadBase64Pdf } from "@/lib/downloadPdf";
 import { S3Image } from "@/components/S3Image";
 import { BalanceImagesDialog } from "@/components/BalanceImagesDialog";
 
@@ -929,9 +921,6 @@ export default function Revenues() {
 // مكون سجل الإيرادات الشهري
 function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: number | null; selectedDate: string; userRole?: string }) {
   const isMobile = useIsMobile();
-  // فرع السجل لترويسة المؤسسة في PDF (نفس استعلام الصفحة الرئيسية من الذاكرة المؤقتة)
-  const { data: branchOptions } = trpc.branches.list.useQuery();
-  const logBranch = branchOptions?.find(b => b.id === branchId) ?? null;
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [revenueToDelete, setRevenueToDelete] = useState<number | null>(null);
   const utils = trpc.useUtils();
@@ -955,7 +944,6 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
       deleteMutation.mutate({ id: revenueToDelete });
     }
   };
-  const [isExporting, setIsExporting] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
 
   // دالة تصدير Excel
@@ -1057,109 +1045,19 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
     { cash: 0, network: 0, balance: 0, paidInvoices: 0, loyalty: 0, total: 0, matched: 0, unmatched: 0 }
   ) || { cash: 0, network: 0, balance: 0, paidInvoices: 0, loyalty: 0, total: 0, matched: 0, unmatched: 0 };
 
-  // دالة تصدير PDF
-  const handleExportPDF = async (
-    revenues: typeof monthlyRevenues,
-    totals: { cash: number; network: number; balance: number; paidInvoices: number; loyalty: number; total: number; matched: number; unmatched: number },
-    monthName: string,
-    monthStart: Date,
-    monthEnd: Date
-  ) => {
-    if (!revenues || revenues.length === 0) return;
-    
-    setIsExporting(true);
+  // تصدير PDF: تقرير الإيرادات الرسمي يُولَّد في الخادم (ترويسة مؤسسة الفرع) لشهر السجل
+  const reportPdfMutation = trpc.revenues.reportPdf.useMutation();
+  const handleExportPDF = async () => {
+    if (!branchId) return;
+    const [year, month] = selectedDate.split("-").map(Number);
+    const toastId = `revenue-report-pdf-${branchId}-${year}-${month}`;
     try {
-      const htmlContent = `
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <title>سجل إيرادات شهر ${monthName}</title>
-  <style>
-    ${PDF_BASE_STYLES}
-    .status-matched { color: #000; font-weight: 700; }
-    .status-unmatched { color: #cc0000; font-weight: 700; }
-  </style>
-</head>
-<body>
-  ${getPDFHeader(`سجل إيرادات شهر ${monthName}`, { reportNumber: `REV-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`, branchName: logBranch })}
-  
-  ${getPDFInfoSection([
-    { label: 'من تاريخ', value: format(monthStart, "d MMMM", { locale: ar }) },
-    { label: 'إلى تاريخ', value: format(monthEnd, "d MMMM yyyy", { locale: ar }) },
-    { label: 'عدد الأيام', value: revenues.length },
-  ])}
-  
-  ${getPDFSummarySection([
-    { label: 'إجمالي النقدي', value: formatCurrency(totals.cash) },
-    { label: 'إجمالي الشبكة', value: formatCurrency(totals.network) },
-    { label: 'إجمالي الرصيد', value: formatCurrency(totals.balance) },
-    { label: 'فواتير المدفوع', value: formatCurrency(totals.paidInvoices) },
-    { label: 'إجمالي الولاء', value: formatCurrency(totals.loyalty) },
-    { label: 'أيام متطابقة', value: totals.matched },
-    { label: 'أيام غير متطابقة', value: totals.unmatched },
-  ])}
-  
-  <table class="pdf-table">
-    <thead>
-      <tr>
-        <th>التاريخ</th>
-        <th>اليوم</th>
-        <th>نقدي</th>
-        <th>شبكة</th>
-        <th>رصيد</th>
-        <th>فواتير المدفوع</th>
-        <th>ولاء</th>
-        <th>الإجمالي</th>
-        <th>الحالة</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${revenues.map(rev => {
-        const revDate = new Date(rev.date);
-        const paidInvoicesAmount = parseFloat(rev.paidInvoices || "0");
-        const loyaltyAmount = parseFloat((rev as any).loyalty || "0");
-        return `
-          <tr>
-            <td>${format(revDate, "d/M/yyyy")}</td>
-            <td>${format(revDate, "EEEE", { locale: ar })}</td>
-            <td class="text-success">${parseFloat(rev.cash || "0").toLocaleString()}</td>
-            <td class="text-primary">${parseFloat(rev.network || "0").toLocaleString()}</td>
-            <td>${parseFloat(rev.balance || "0").toLocaleString()}</td>
-            <td class="text-orange">${paidInvoicesAmount > 0 ? paidInvoicesAmount.toLocaleString() : '-'}</td>
-            <td class="text-purple" style="color: #9333ea;">${loyaltyAmount > 0 ? loyaltyAmount.toLocaleString() : '-'}</td>
-            <td class="font-bold">${formatCurrency(rev.total || "0")}</td>
-            <td class="${rev.isMatched ? 'status-matched' : 'status-unmatched'}">
-              ${rev.isMatched ? '✓ متطابق' : '✗ غير متطابق'}
-            </td>
-          </tr>
-        `;
-      }).join('')}
-      <tr style="background: #1a1a1a; color: white; font-weight: 800;">
-        <td colspan="2" style="border: none;">الإجمالي</td>
-        <td style="border: none;">${totals.cash.toLocaleString()}</td>
-        <td style="border: none;">${totals.network.toLocaleString()}</td>
-        <td style="border: none;">${totals.balance.toLocaleString()}</td>
-        <td style="border: none;">${totals.paidInvoices.toLocaleString()}</td>
-        <td style="border: none;">${totals.loyalty.toLocaleString()}</td>
-        <td style="border: none;">${formatCurrency(totals.total)}</td>
-        <td style="border: none;">${revenues.length} يوم</td>
-      </tr>
-    </tbody>
-  </table>
-  
-  ${getPDFFooter(undefined, { branchName: logBranch })}
-</body>
-</html>
-      `;
-
-      openPrintWindow(htmlContent);
-      toast.success("تم فتح التقرير للطباعة أو الحفظ ك PDF");
-    } catch (error) {
-      console.error('Export error:', error);
-      toast.error("فشل تصدير التقرير");
-    } finally {
-      setIsExporting(false);
+      toast.loading("جاري توليد ملف PDF...", { id: toastId });
+      const result = await reportPdfMutation.mutateAsync({ branchId, year, month });
+      downloadBase64Pdf(result.pdf, result.filename);
+      toast.success("تم تحميل تقرير الإيرادات", { id: toastId });
+    } catch (error: any) {
+      toast.error(error?.message || "فشل توليد ملف PDF", { id: toastId });
     }
   };
 
@@ -1194,11 +1092,11 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleExportPDF(monthlyRevenues, totals, monthName, monthStart, monthEnd)}
-                  disabled={isExporting}
+                  onClick={handleExportPDF}
+                  disabled={reportPdfMutation.isPending}
                   className="gap-2"
                 >
-                  {isExporting ? (
+                  {reportPdfMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Download className="h-4 w-4" />
