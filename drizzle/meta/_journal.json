@@ -463,6 +463,13 @@
       "when": 1770078669246,
       "tag": "0065_pale_doctor_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "5",
+      "when": 1793328111609,
+      "tag": "0066_payroll_bonus_vouchers",
+      "breakpoints": true
     }
   ]
 }
