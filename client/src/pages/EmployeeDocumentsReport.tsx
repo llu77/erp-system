@@ -33,7 +33,7 @@ export default function EmployeeDocumentsReport() {
   const [searchTerm, setSearchTerm] = useState('');
   
   // جلب الموظفين بدون وثائق
-  const { data: employees, isLoading, refetch } = trpc.employees.getWithoutDocuments.useQuery();
+  const { data: employees, isLoading, isError, error, isFetching, refetch } = trpc.employees.getWithoutDocuments.useQuery();
   
   // جلب إحصائيات الوثائق
   const { data: stats } = trpc.employees.getDocumentStatistics.useQuery();
@@ -253,6 +253,15 @@ export default function EmployeeDocumentsReport() {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+            </div>
+          ) : isError ? (
+            <div className="text-center py-12 space-y-3">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+              <p className="text-red-400">تعذر تحميل التقرير: {error?.message}</p>
+              <Button variant="outline" onClick={() => refetch()} disabled={isFetching} className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                <RefreshCw className={`h-4 w-4 ml-2 ${isFetching ? 'animate-spin' : ''}`} />
+                إعادة المحاولة
+              </Button>
             </div>
           ) : filteredEmployees.length === 0 ? (
             <div className="text-center py-12">

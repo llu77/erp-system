@@ -1943,6 +1943,9 @@ export const appRouter = router({
           if (fields.branchId !== undefined && fields.branchId !== ctx.user.branchId) {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكن للمشرف نقل الموظف إلى فرع آخر' });
           }
+          if (fields.isActive !== undefined && fields.isActive !== current!.isActive) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'تفعيل أو إيقاف الموظف متاح للمدير فقط' });
+          }
         }
         const { patch, documentsChanged } = employeeFileSchemas.buildEmployeeUpdatePatch(fields, current ?? null, ctx.user.id);
         if (Object.keys(patch).length > 0) {
