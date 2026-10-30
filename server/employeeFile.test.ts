@@ -397,7 +397,8 @@ describe("employee update patch", () => {
     );
     expect(changed.documentsChanged).toBe(true);
     expect(changed.patch.infoSubmittedBy).toBe(5);
-    expect(changed.patch.infoSubmittedAt).toEqual(now);
+    // إكمال التسجيل في البوابة للموظف وحده: تعديل الإدارة لا يقفل رفع الصور من البوابة
+    expect(changed.patch.infoSubmittedAt).toBeUndefined();
   });
 
   it("for a new employee, only non-empty document data counts", () => {

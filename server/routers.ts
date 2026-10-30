@@ -188,6 +188,11 @@ async function renderDocumentPdf(label: string, render: () => Promise<{ pdf: Buf
   }
 }
 
+// نوع وثيقة البوابة -> نوع الوثيقة في ملف الموظف
+function portalDocumentKind(documentType: 'iqama' | 'healthCert' | 'contract'): 'iqama' | 'health' | 'contract' {
+  return documentType === 'healthCert' ? 'health' : documentType;
+}
+
 // تأجيل السلف والمخالفات قرار للمسؤول والمدير فقط؛ لغيرهم تبقى قيم التأجيل المحفوظة كما هي
 function stripDeferralUnlessManager<T extends { deferredAdvanceIds?: number[]; deferredViolationIds?: number[] }>(
   user: { role: string },
@@ -8200,7 +8205,8 @@ ${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.
         }
 
         const limiterKey = employeeAuth.loginLimiterKey(ctx.req.ip || ctx.req.socket?.remoteAddress, input.username);
-        const blockedMs = employeeAuth.employeeLoginLimiter.blockedForMs(limiterKey);
+        // تُحجز المحاولة قبل أي انتظار حتى لا تتجاوز الطلبات المتوازية الحد
+        const blockedMs = employeeAuth.employeeLoginLimiter.reserveAttempt(limiterKey);
         if (blockedMs > 0) {
           throw new TRPCError({
             code: 'TOO_MANY_REQUESTS',
@@ -8210,7 +8216,6 @@ ${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.
 
         const result = await employeeAuth.employeeLogin(input.username, input.password);
         if (!result.success) {
-          employeeAuth.employeeLoginLimiter.recordFailure(limiterKey);
           throw new TRPCError({ code: 'UNAUTHORIZED', message: result.error });
         }
         employeeAuth.employeeLoginLimiter.reset(limiterKey);
@@ -8753,15 +8758,13 @@ ${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.
         const { randomBytes } = await import('crypto');
         const fileKey = `employees/${employeeId}/documents/${documentType}-${Date.now()}-${randomBytes(4).toString('hex')}.${file.extension}`;
 
-        // رفع الصورة إلى S3
+        // رفع الصورة إلى التخزين
         const { storagePut } = await import('./storage');
-        const { url } = await storagePut(fileKey, file.buffer, file.contentType);
+        const { url, key } = await storagePut(fileKey, file.buffer, file.contentType);
 
-        // تحديث رابط الصورة في قاعدة البيانات
-        const result = await db.updateEmployeeDocumentImage(employeeId, documentType, url);
-        if (!result.success) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في حفظ رابط الصورة' });
-        }
+        // نفس كاتب النظام الرئيسي: الرابط ومفتاح التخزين معاً (المفتاح يُقدّم عند العرض)
+        const { setEmployeeImage } = await import('./employeeFile/service');
+        await setEmployeeImage(employeeId, portalDocumentKind(documentType), { url, key: key || fileKey });
 
         return { success: true, url, message: 'تم رفع الصورة بنجاح' };
       }),
@@ -8784,11 +8787,9 @@ ${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.
           });
         }
 
-        // حذف رابط الصورة من قاعدة البيانات
-        const result = await db.updateEmployeeDocumentImage(employeeId, documentType, null);
-        if (!result.success) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في حذف الصورة' });
-        }
+        // حذف الرابط والمفتاح معاً (حتى لا يعرض النظام الرئيسي الملف القديم)
+        const { setEmployeeImage } = await import('./employeeFile/service');
+        await setEmployeeImage(employeeId, portalDocumentKind(documentType), null);
 
         return { success: true, message: 'تم حذف الصورة بنجاح' };
       }),

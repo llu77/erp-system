@@ -329,13 +329,12 @@ export async function getEmployeeFile(
     .limit(1);
   const settings = settingsRows[0];
   const values = effectiveSalarySettings(settings);
-  // بدون إعدادات محفوظة: علامة المشرف في البوابة هي المصدر الوحيد المتاح
+  // يُعرض ما تطبقه المسيرة فعلاً (إعدادات الراتب، أو الافتراضي بدون حافز إشراف)،
+  // مع تنبيه إن اختلفت علامة المشرف في البوابة
   const salary: EmployeeFileSalary = {
     ...values,
-    isSupervisor: settings ? values.isSupervisor : e.isSupervisor,
     isDefault: !settings,
-    supervisorFlagMismatch:
-      !!settings && settings.isSupervisor !== e.isSupervisor,
+    supervisorFlagMismatch: values.isSupervisor !== e.isSupervisor,
   };
 
   const images = await resolveRowImages(e, [

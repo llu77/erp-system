@@ -27,6 +27,10 @@ import {
 
 // ==================== التواريخ ====================
 
+/** نطاق سنوات تواريخ الوثائق المقبول (حدود أعمدة TIMESTAMP) */
+export const DOCUMENT_MIN_YEAR = 1971;
+export const DOCUMENT_MAX_YEAR = 2037;
+
 const ymdSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "صيغة التاريخ يجب أن تكون YYYY-MM-DD")
@@ -39,6 +43,11 @@ const ymdSchema = z
 export const documentDateInput = z
   .union([z.date(), ymdSchema])
   .transform(value => documentDay(value) as string)
+  // أعمدة الانتهاء من نوع TIMESTAMP (1970-2038): سنة هجرية مكتوبة في حقل ميلادي تُرفض برسالة واضحة
+  .refine(value => {
+    const year = Number(String(value).slice(0, 4));
+    return year >= DOCUMENT_MIN_YEAR && year <= DOCUMENT_MAX_YEAR;
+  }, `أدخل التاريخ بالتقويم الميلادي (بين ${DOCUMENT_MIN_YEAR} و${DOCUMENT_MAX_YEAR})`)
   .nullable()
   .optional();
 
@@ -163,7 +172,7 @@ export function changedDocumentFields(
  * بناء تحديث الموظف من مدخلات الموظفين (الإدارة):
  * - الحقل غير المرسل يبقى كما هو، وnull أو النص الفارغ يمسحه
  * - تواريخ الوثائق تُخزن كمنتصف ليل UTC لنفس اليوم
- * - تعديل بيانات الوثائق يسجل من أدخلها ومتى (infoSubmittedBy / infoSubmittedAt)
+ * - تعديل بيانات الوثائق يسجل من أدخلها (infoSubmittedBy) دون infoSubmittedAt (تسجيل الموظف في البوابة)
  */
 export function buildEmployeeUpdatePatch(
   input: Omit<EmployeeUpdateInput, "id">,
@@ -189,10 +198,11 @@ export function buildEmployeeUpdatePatch(
     patch[field] = value === null ? null : documentDateToTimestamp(value);
   }
 
+  // يُسجَّل من أدخل بيانات الوثائق فقط؛ infoSubmittedAt يعني إكمال الموظف تسجيله في البوابة
+  // (يقفل رفع الصور من البوابة)، فلا تضبطه تعديلات الإدارة
   const documentsChanged = changedDocumentFields(input, current).length > 0;
   if (documentsChanged) {
     patch.infoSubmittedBy = actorId;
-    patch.infoSubmittedAt = now;
   }
   return { patch, documentsChanged };
 }

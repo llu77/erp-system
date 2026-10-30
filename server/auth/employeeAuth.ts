@@ -2,7 +2,7 @@ import { randomInt } from 'crypto';
 import { TRPCError } from '@trpc/server';
 import { getDb } from '../db';
 import { employees, branches } from '../../drizzle/schema';
-import { eq, and, ne, sql } from 'drizzle-orm';
+import { eq, and, ne, isNull, sql } from 'drizzle-orm';
 import { hashPassword, verifyPassword } from './localAuth';
 import { getEstablishmentForBranch } from '../../shared/branding';
 
@@ -10,11 +10,12 @@ import { getEstablishmentForBranch } from '../../shared/branding';
 
 // إنشاء اسم مستخدم من اسم الموظف
 export function generateUsername(name: string, code: string = ''): string {
-  // إزالة المسافات والأحرف الخاصة
-  const cleanName = name.replace(/\s+/g, '').toLowerCase();
-  // استخدام أول 8 أحرف من الاسم + الكود
-  const shortName = cleanName.substring(0, 8);
-  return `${shortName}${code}`.toLowerCase();
+  // اسم دخول بأحرف إنجليزية صغيرة وأرقام فقط (يطابق PORTAL_USERNAME_PATTERN):
+  // أول 8 أحرف لاتينية من الاسم (أو emp للأسماء العربية) + الكود
+  const latinName = name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 8);
+  const cleanCode = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const username = `${latinName || 'emp'}${cleanCode}`.substring(0, 30);
+  return username.length >= 3 ? username : username.padEnd(3, '0');
 }
 
 // أحرف كلمة المرور المولدة (بدون الأحرف المتشابهة: 0 O o 1 l I)
@@ -100,6 +101,18 @@ export class LoginFailureLimiter {
         if (now - value.firstAt >= this.windowMs) this.failures.delete(k);
       });
     }
+  }
+
+  /**
+   * يحجز محاولة قبل التحقق من كلمة المرور (بشكل متزامن قبل أي انتظار): تُحسب المحاولة فاشلة
+   * إلى أن تنجح فيُصفّر العداد. هكذا لا تتجاوز المحاولات المتوازية (طلبات مجمّعة) الحد.
+   * يُرجع مدة الحظر المتبقية (0 = مسموح)
+   */
+  reserveAttempt(key: string, now: number = Date.now()): number {
+    const blocked = this.blockedForMs(key, now);
+    if (blocked > 0) return blocked;
+    this.recordFailure(key, now);
+    return 0;
   }
 
   reset(key: string): void {
@@ -339,12 +352,6 @@ export async function saveEmployeeAccount(
 ): Promise<{ success: true; generatedPassword?: string }> {
   const db = await requireDb();
   const username = normalizePortalUsername(input.username);
-  if (!PORTAL_USERNAME_PATTERN.test(username)) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'اسم المستخدم يجب أن يكون من 3 إلى 30 حرفاً إنجليزياً صغيراً أو رقماً أو (. _ -)',
-    });
-  }
   const newPassword = input.password ? input.password : null;
   if (newPassword) {
     const policyError = validatePortalPassword(newPassword);
@@ -352,13 +359,25 @@ export async function saveEmployeeAccount(
   }
 
   const rows = await db
-    .select({ id: employees.id, password: employees.password, hasPortalAccess: employees.hasPortalAccess })
+    .select({ id: employees.id, username: employees.username, password: employees.password, hasPortalAccess: employees.hasPortalAccess })
     .from(employees)
     .where(eq(employees.id, input.employeeId))
     .limit(1);
   const existing = rows[0];
   if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
 
+  // اسم الدخول المحفوظ سابقاً (قد يكون بصيغة قديمة) يُقبل كما هو حتى يمكن إيقاف الحساب أو تغيير كلمة مروره؛
+  // النمط يُطبق على الاسم الجديد فقط
+  const usernameChanged = username !== normalizePortalUsername(existing.username ?? '');
+  if (usernameChanged && !PORTAL_USERNAME_PATTERN.test(username)) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'اسم المستخدم يجب أن يكون من 3 إلى 30 حرفاً إنجليزياً صغيراً أو رقماً أو (. _ -)',
+    });
+  }
+  if (!username) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'اسم المستخدم مطلوب' });
+  }
   const taken = await db
     .select({ id: employees.id })
     .from(employees)
@@ -420,7 +439,10 @@ export async function createEmployeeAccounts(): Promise<{
       .from(employees)
       .where(and(
         eq(employees.isActive, true),
-        eq(employees.hasPortalAccess, false)
+        eq(employees.hasPortalAccess, false),
+        // فقط من لا حساب له أصلاً: الحساب الذي أوقفه المدير لا يُعاد تفعيله تلقائياً
+        isNull(employees.username),
+        isNull(employees.password)
       ));
 
     for (const emp of employeesWithoutAccount) {

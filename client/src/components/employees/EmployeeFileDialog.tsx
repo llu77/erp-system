@@ -441,6 +441,8 @@ function DocumentsTab({
                 <Input
                   id={`doc-${field}`}
                   type="date"
+                  min="1971-01-01"
+                  max="2037-12-31"
                   value={form[field]}
                   onChange={e => update(field, e.target.value)}
                   disabled={!canEdit || busy}

@@ -226,6 +226,16 @@ describe("LoginFailureLimiter", () => {
     expect(limiter.blockedForMs(key, t0 + 15 * 60 * 1000 + 1)).toBe(0);
   });
 
+  it("reserves each attempt before the password check so parallel attempts cannot exceed the cap", () => {
+    const limiter = new LoginFailureLimiter(5, 60_000);
+    // 50 محاولة متزامنة (طلب مجمّع): تُحجز كل محاولة قبل أي انتظار، فلا يمر منها إلا 5
+    const allowed = Array.from({ length: 50 }, () => limiter.reserveAttempt("burst", 100)).filter(ms => ms === 0).length;
+    expect(allowed).toBe(5);
+    // نجاح الدخول يصفّر العداد
+    limiter.reset("burst");
+    expect(limiter.reserveAttempt("burst", 101)).toBe(0);
+  });
+
   it("clears failures after a successful login", () => {
     const limiter = new LoginFailureLimiter(2, 60_000);
     limiter.recordFailure("k", 0);

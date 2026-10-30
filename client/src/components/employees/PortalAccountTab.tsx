@@ -204,8 +204,11 @@ export function PortalAccountTab({
   }
 
   const normalizedUsername = username.trim().toLowerCase();
+  // الاسم المحفوظ سابقاً (قد يكون بصيغة قديمة) مقبول كما هو؛ النمط للاسم الجديد فقط
+  const usernameUnchanged =
+    normalizedUsername === (account?.username ?? "").trim().toLowerCase();
   const usernameError =
-    normalizedUsername && !USERNAME_RE.test(normalizedUsername)
+    normalizedUsername && !usernameUnchanged && !USERNAME_RE.test(normalizedUsername)
       ? "من 3 إلى 30 حرفاً: أحرف إنجليزية صغيرة وأرقام و . _ - فقط"
       : null;
   const passwordError =

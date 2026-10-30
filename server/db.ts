@@ -9360,15 +9360,28 @@ export async function cancelEmployeeRequest(requestId: number, employeeId: numbe
     return { success: false, error: 'لا يمكن إلغاء طلب إنهاء الخدمة من بوابة الموظف' };
   }
 
-  // إلغاء الطلب
-  await db.update(employeeRequests)
+  // إلغاء الطلب: مشروط بأنه ما زال قيد المراجعة (لا يتغلب على اعتماد متزامن)
+  const cancelResult = await db.update(employeeRequests)
     .set({
       status: 'cancelled',
       updatedAt: new Date(),
     })
-    .where(eq(employeeRequests.id, requestId));
+    .where(and(
+      eq(employeeRequests.id, requestId),
+      eq(employeeRequests.employeeId, employeeId),
+      eq(employeeRequests.status, 'pending'),
+      isNull(employeeRequests.reviewedAt)
+    ));
+  if (portalUpdateAffectedRows(cancelResult) === 0) {
+    return { success: false, error: 'تمت مراجعة الطلب للتو، لا يمكن إلغاؤه' };
+  }
 
   return { success: true };
+}
+
+function portalUpdateAffectedRows(result: unknown): number {
+  const header = Array.isArray(result) ? result[0] : result;
+  return Number((header as { affectedRows?: number })?.affectedRows ?? 0);
 }
 
 // تحديث طلب موظف من بوابة الموظفين (فقط إذا كان قيد المراجعة)
@@ -9413,13 +9426,21 @@ export async function updateEmployeeRequestFromPortal(
     return { success: false, error: 'لا يمكن تعديل طلب إنهاء الخدمة من بوابة الموظف' };
   }
 
-  // تحديث الطلب
-  await db.update(employeeRequests)
+  // تحديث الطلب: مشروط بأنه ما زال قيد المراجعة (لا يغيّر طلباً اعتُمد للتو)
+  const updateResult = await db.update(employeeRequests)
     .set({
       ...data,
       updatedAt: new Date(),
     })
-    .where(eq(employeeRequests.id, requestId));
+    .where(and(
+      eq(employeeRequests.id, requestId),
+      eq(employeeRequests.employeeId, employeeId),
+      eq(employeeRequests.status, 'pending'),
+      isNull(employeeRequests.reviewedAt)
+    ));
+  if (portalUpdateAffectedRows(updateResult) === 0) {
+    return { success: false, error: 'تمت مراجعة الطلب للتو، لا يمكن تعديله' };
+  }
 
   return { success: true };
 }
@@ -10103,7 +10124,10 @@ export async function getEmployeesWithoutDocuments() {
       and(
         eq(employees.isActive, true),
         or(
-          isNull(employees.infoSubmittedAt),
+          // بيانات الوثائق ناقصة (أياً كان من أدخلها: الموظف أو الإدارة)
+          isNull(employees.iqamaExpiryDate),
+          isNull(employees.healthCertExpiryDate),
+          isNull(employees.contractExpiryDate),
           and(
             isNull(employees.iqamaImageUrl),
             isNull(employees.healthCertImageUrl),
@@ -10126,7 +10150,7 @@ export async function getEmployeesWithoutDocuments() {
     ...emp,
     branchName: branchMap.get(emp.branchId) || 'غير محدد',
     missingDocuments: {
-      info: !emp.infoSubmittedAt,
+      info: !emp.iqamaExpiryDate || !emp.healthCertExpiryDate || !emp.contractExpiryDate,
       iqamaImage: !emp.iqamaImageUrl,
       healthCertImage: !emp.healthCertImageUrl,
       contractImage: !emp.contractImageUrl,
@@ -10148,7 +10172,9 @@ export async function getDocumentStatistics() {
     .where(
       and(
         eq(employees.isActive, true),
-        isNotNull(employees.infoSubmittedAt)
+        isNotNull(employees.iqamaExpiryDate),
+        isNotNull(employees.healthCertExpiryDate),
+        isNotNull(employees.contractExpiryDate)
       )
     );
   
