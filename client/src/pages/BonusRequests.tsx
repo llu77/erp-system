@@ -87,7 +87,7 @@ export default function BonusRequests() {
   // السجل الكامل
   const { data: allRequests, isLoading: allLoading, error: allError, refetch: refetchAll } = trpc.bonuses.all.useQuery({ limit: 100 }, { enabled: isManager });
   // الإحصائيات
-  const { data: bonusStats, isLoading: statsLoading, error: statsError } = trpc.bonuses.stats.useQuery(undefined, { enabled: isManager });
+  const { data: bonusStats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = trpc.bonuses.stats.useQuery(undefined, { enabled: isManager });
   // المستويات الحالية (ألوان الشارات ودليل التقرير)
   const { data: tiersData } = trpc.bonuses.getTiers.useQuery(undefined, { enabled: isManager });
   const tiers = tiersData?.tiers ?? null;
@@ -472,7 +472,7 @@ export default function BonusRequests() {
             ) : (
               <>
                 <div className="text-2xl font-bold text-green-600">{statsError ? 'تعذر التحميل' : formatSar(bonusStats?.totalPaidThisMonth)}</div>
-                <p className="text-xs text-muted-foreground mt-1">{bonusStats?.totalBeneficiariesThisMonth || 0} موظف مستفيد</p>
+                {statsError ? <button type="button" className="text-xs text-primary underline mt-1" onClick={() => refetchStats()}>إعادة المحاولة</button> : <p className="text-xs text-muted-foreground mt-1">{bonusStats?.totalBeneficiariesThisMonth || 0} موظف مستفيد</p>}
               </>
             )}
           </CardContent>
@@ -491,7 +491,7 @@ export default function BonusRequests() {
             ) : (
               <>
                 <div className="text-2xl font-bold text-blue-600">{statsError ? 'تعذر التحميل' : formatSar(bonusStats?.totalPaidThisYear)}</div>
-                <p className="text-xs text-muted-foreground mt-1">{bonusStats?.totalBeneficiariesThisYear || 0} موظف مستفيد</p>
+                {statsError ? <button type="button" className="text-xs text-primary underline mt-1" onClick={() => refetchStats()}>إعادة المحاولة</button> : <p className="text-xs text-muted-foreground mt-1">{bonusStats?.totalBeneficiariesThisYear || 0} موظف مستفيد</p>}
               </>
             )}
           </CardContent>
@@ -510,7 +510,7 @@ export default function BonusRequests() {
             ) : (
               <>
                 <div className="text-2xl font-bold text-orange-600">{statsError ? '—' : bonusStats?.pendingRequestsCount || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">بقيمة {formatSar(bonusStats?.pendingRequestsAmount)}</p>
+                {statsError ? <button type="button" className="text-xs text-primary underline mt-1" onClick={() => refetchStats()}>إعادة المحاولة</button> : <p className="text-xs text-muted-foreground mt-1">بقيمة {formatSar(bonusStats?.pendingRequestsAmount)}</p>}
               </>
             )}
           </CardContent>
@@ -529,7 +529,7 @@ export default function BonusRequests() {
             ) : (
               <>
                 <div className="text-2xl font-bold text-purple-600">{statsError ? '—' : bonusStats?.approvedNotPaidCount || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">بقيمة {formatSar(bonusStats?.approvedNotPaidAmount)}</p>
+                {statsError ? <button type="button" className="text-xs text-primary underline mt-1" onClick={() => refetchStats()}>إعادة المحاولة</button> : <p className="text-xs text-muted-foreground mt-1">بقيمة {formatSar(bonusStats?.approvedNotPaidAmount)}</p>}
               </>
             )}
           </CardContent>

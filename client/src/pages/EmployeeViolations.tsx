@@ -163,15 +163,15 @@ export default function EmployeeViolations() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card className="bg-card/50"><CardContent className="p-3">
           <p className="text-xs text-muted-foreground">بانتظار الاعتماد</p>
-          <p className="text-lg font-bold text-yellow-500">{stats.pending}</p>
+          <p className="text-lg font-bold text-yellow-500">{listQuery.error ? "—" : stats.pending}</p>
         </CardContent></Card>
         <Card className="bg-card/50"><CardContent className="p-3">
           <p className="text-xs text-muted-foreground">معتمدة لم تُخصم بعد</p>
-          <p className="text-lg font-bold text-orange-500">{stats.awaitingDeduction}</p>
+          <p className="text-lg font-bold text-orange-500">{listQuery.error ? "—" : stats.awaitingDeduction}</p>
         </CardContent></Card>
         <Card className="bg-card/50"><CardContent className="p-3">
           <p className="text-xs text-muted-foreground">إجمالي المعتمد</p>
-          <p className="text-lg font-bold">{formatAmount(stats.approvedAmount)} ر.س</p>
+          <p className="text-lg font-bold">{listQuery.error ? "—" : `${formatAmount(stats.approvedAmount)} ر.س`}</p>
         </CardContent></Card>
       </div>
 
@@ -202,6 +202,12 @@ export default function EmployeeViolations() {
         <CardContent className="p-0">
           {listQuery.isLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          ) : listQuery.error ? (
+            // فشل التحميل لا يُعرض كـ"لا توجد مخالفات"
+            <div className="text-center py-8 space-y-3">
+              <p className="text-sm text-destructive">تعذر تحميل المخالفات: {listQuery.error.message}</p>
+              <Button variant="outline" size="sm" onClick={() => listQuery.refetch()}>إعادة المحاولة</Button>
+            </div>
           ) : rows.length === 0 ? (
             <div className="text-center py-8 text-sm text-muted-foreground">لا توجد مخالفات</div>
           ) : (

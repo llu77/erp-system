@@ -183,8 +183,14 @@ export default function Revenues() {
 
   // حفظ الإيرادات
   const saveMutation = trpc.revenues.createDaily.useMutation({
-    onSuccess: () => {
-      toast.success("تم حفظ الإيرادات بنجاح وتحديث البونص تلقائياً");
+    onSuccess: (result) => {
+      // تحذيرات البونص (مثل تعذر إعادة الاحتساب) تظهر بعد رسالة الحفظ
+      if (result.bonusWarnings?.length) {
+        toast.success("تم حفظ الإيرادات بنجاح");
+        toast.warning(result.bonusWarnings.join("\n"));
+      } else {
+        toast.success("تم حفظ الإيرادات بنجاح وتحديث البونص تلقائياً");
+      }
       // إعادة تعيين النموذج
       setBranchRevenue({ cash: "", network: "", paidInvoices: "", paidInvoicesNote: "", paidInvoicesCustomer: "", loyalty: "" });
       setEmployeeRevenues([]);
@@ -929,8 +935,9 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
   
   // حذف الإيراد
   const deleteMutation = trpc.revenues.deleteDaily.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success("تم حذف الإيراد بنجاح");
+      if (result.bonusWarnings?.length) toast.warning(result.bonusWarnings.join("\n"));
       setDeleteDialogOpen(false);
       setRevenueToDelete(null);
       utils.revenues.getByDateRange.invalidate();

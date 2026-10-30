@@ -464,7 +464,8 @@ export default function ReceiptVoucher({ initialType }: { initialType?: VoucherT
           </TabsList>
         </Tabs>
 
-        {/* بطاقات الملخص */}
+        {/* بطاقات الملخص (لا تُعرض أصفاراً عند فشل التحميل) */}
+        {!vouchersQuery.error && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-6">
@@ -496,6 +497,7 @@ export default function ReceiptVoucher({ initialType }: { initialType?: VoucherT
             </CardContent>
           </Card>
         </div>
+        )}
 
         {/* الفلاتر */}
         <Card>
@@ -552,7 +554,7 @@ export default function ReceiptVoucher({ initialType }: { initialType?: VoucherT
         <Card>
           <CardHeader>
             <CardTitle>{activeType === 'receipt' ? 'قائمة سندات القبض' : 'قائمة سندات الصرف'}</CardTitle>
-            <CardDescription>{vouchers.length} سند</CardDescription>
+            <CardDescription>{vouchersQuery.error ? "—" : `${vouchers.length} سند`}</CardDescription>
             {vouchers.length >= VOUCHER_LIST_LIMIT && (
               <p className="text-xs text-yellow-600">
                 يُعرض أحدث {VOUCHER_LIST_LIMIT} سند فقط، والملخص أعلاه يشملها وحدها. ضيّق نطاق التاريخ لعرض النتائج كاملة.
@@ -563,7 +565,10 @@ export default function ReceiptVoucher({ initialType }: { initialType?: VoucherT
             {vouchersQuery.isLoading ? (
               <div className="text-center py-8">جاري التحميل...</div>
             ) : vouchersQuery.error ? (
-              <div className="text-center py-8 text-red-600">{vouchersQuery.error.message}</div>
+              <div className="text-center py-8 space-y-3">
+                <p className="text-red-600">تعذر تحميل السندات: {vouchersQuery.error.message}</p>
+                <Button variant="outline" size="sm" onClick={() => vouchersQuery.refetch()}>إعادة المحاولة</Button>
+              </div>
             ) : vouchers.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 {activeType === 'receipt' ? 'لا توجد سندات قبض' : 'لا توجد سندات صرف'}

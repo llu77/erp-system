@@ -674,7 +674,7 @@ export async function createPayroll(input: {
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const payrollId = await db.transaction(async tx => {
+      return await db.transaction(async tx => {
         await lockBranch(tx, input.branchId);
 
         const existing = await findActivePayroll(tx, input.branchId, input.year, input.month);
@@ -723,11 +723,10 @@ export async function createPayroll(input: {
 
         await tx.insert(payrollDetails).values(lines.map(line => ({ ...lineToDetailValues(line), payrollId: id })));
         await linkItems(tx, id, lines);
-        return id;
+        // القراءة داخل المعاملة: فشلها يتراجع عن الإنشاء بدلاً من إبلاغ المستخدم بفشل مسيرة حُفظت
+        const [created] = await tx.select().from(payrolls).where(eq(payrolls.id, id)).limit(1);
+        return created;
       });
-
-      const created = await db.select().from(payrolls).where(eq(payrolls.id, payrollId)).limit(1);
-      return created[0];
     } catch (error) {
       if (isDuplicateKeyError(error) && attempt < 2) continue; // تعارض رقم المسيرة - إعادة المحاولة
       throw error;

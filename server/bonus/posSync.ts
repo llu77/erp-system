@@ -107,6 +107,11 @@ export async function rebuildEmployeeRevenuesFromPos(params: {
     r => r.posConfirmed && !hasEmployees.has(r.id)
   );
 
+  // المستويات تُقرأ قبل أي كتابة: إذا تعذرت قراءتها يتوقف البناء قبل أن تُحفظ
+  // إيرادات أيام لن يُعاد احتساب بونصها (ولا تعود مرشحة عند إعادة المحاولة)
+  const tiers =
+    candidates.length > 0 ? (await loadActiveBonusTiers()).tiers : [];
+
   const days: PosRebuildDayResult[] = [];
   const affectedDates = new Map<number, Date[]>();
   const warnings: string[] = [];
@@ -236,7 +241,6 @@ export async function rebuildEmployeeRevenuesFromPos(params: {
   }
 
   // إعادة احتساب الفترات المتأثرة (مرة واحدة لكل فترة)
-  const tiers = (await loadActiveBonusTiers()).tiers;
   const periods: RecomputeResult[] = [];
   for (const [branchId, dates] of Array.from(affectedDates.entries())) {
     periods.push(

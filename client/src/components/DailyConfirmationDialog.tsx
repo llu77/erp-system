@@ -112,8 +112,10 @@ export default function DailyConfirmationDialog({
   const uploadImageMutation = trpc.pos.confirmation.uploadBalanceImage.useMutation();
   
   const submitMutation = trpc.pos.confirmation.submit.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success('تم تأكيد فواتير اليوم بنجاح وإرسالها للإيرادات');
+      // تحذيرات البونص (مثل تعذر إعادة الاحتساب أو اختلاف الإجماليات)
+      if (result.bonusWarnings?.length) toast.warning(result.bonusWarnings.join('\n'));
       resetForm();
       onSuccess();
       onOpenChange(false);

@@ -235,10 +235,16 @@ export default function Payrolls() {
   const updateStatusMutation = trpc.payrolls.updateStatus.useMutation({
     onSuccess: (data) => {
       toast.success(data.message);
-      refetch();
-      refetchDetails();
+      void utils.payrolls.list.invalidate();
+      void utils.payrolls.details.invalidate();
     },
-    onError: (error: any) => toast.error(error.message),
+    onError: (error: any) => {
+      toast.error(error.message);
+      // رفض الاعتماد لتغير الأرقام (CONFLICT) يأتي بعد إعادة احتساب المسير؛
+      // نعرض الأرقام الجديدة حتى لا يُعتمد المسير بأرقام لم يرها المدير
+      void utils.payrolls.list.invalidate();
+      void utils.payrolls.details.invalidate();
+    },
   });
 
   const deleteMutation = trpc.payrolls.delete.useMutation({

@@ -327,7 +327,8 @@ export default function ReceiptVoucherReports() {
         </CardContent>
       </Card>
 
-      {/* الإحصائيات */}
+      {/* الإحصائيات (لا تُعرض أصفاراً عند فشل التحميل؛ الخطأ يظهر في الجدول) */}
+      {!receiptsError && (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -366,6 +367,7 @@ export default function ReceiptVoucherReports() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* أزرار التصدير */}
       <div className="flex gap-2">

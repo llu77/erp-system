@@ -2286,6 +2286,7 @@ export const appRouter = router({
           }
         } catch (error: any) {
           bonusLogger.error('خطأ في احتساب البونص', error);
+          bonusWarnings.push('تم حفظ الإيراد لكن تعذر احتساب البونص؛ استخدم زر المزامنة في صفحة البونص');
         }
 
         await db.createActivityLog({
@@ -2373,6 +2374,7 @@ export const appRouter = router({
           bonusWarnings = bonusResults.flatMap(r => r.success ? r.warnings : [r.message]);
         } catch (error: any) {
           bonusLogger.error('خطأ في احتساب البونص بعد حذف الإيراد', error);
+          bonusWarnings = ['تم حذف الإيراد لكن تعذر إعادة احتساب البونص؛ استخدم زر المزامنة في صفحة البونص'];
         }
         
         return { success: true, message: 'تم حذف الإيراد بنجاح', bonusWarnings };
@@ -2797,7 +2799,7 @@ export const appRouter = router({
           action: 'sync',
           entityType: 'bonus',
           details: `إعادة احتساب من الكاشير لشهر ${input.month}/${input.year}: ${result.rebuilt} يوم، ${result.periods.length} فترة`,
-        });
+        }).catch(error => bonusLogger.error('خطأ في تسجيل نشاط إعادة الاحتساب من الكاشير', error));
 
         return {
           success: true,
@@ -10130,6 +10132,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
             bonusWarnings = bonusResults.flatMap(r => r.success ? r.warnings : (r.errors || [r.message]));
           } catch (error: any) {
             bonusLogger.error('خطأ في احتساب البونص بعد تأكيد الكاشير', error);
+            bonusWarnings = ['تم حفظ الإيراد لكن تعذر احتساب البونص؛ استخدم زر المزامنة في صفحة البونص'];
           }
 
           // إرسال إشعار للمشرف إذا لم يتم رفع صورة الموازنة
