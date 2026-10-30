@@ -71,14 +71,15 @@ function present(value: unknown): string | null {
   return s ? s : null;
 }
 
-/** تاريخ DD/MM/YYYY (أو "-") */
+/** تاريخ DD/MM/YYYY (أو "-" إن كان فارغاً أو تاريخاً مستحيلاً مثل 2026-13-01) */
 function dateText(value: Date | string | null | undefined): string {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) && !parseDateOnly(value)) return "-";
   return formatVoucherDate(value);
 }
 
 /** تاريخ ميلادي داخل النص: DD/MM/YYYYم */
 function proseDate(value: Date | string | null | undefined): string {
-  const s = formatVoucherDate(value);
+  const s = dateText(value);
   return s === "-" ? "-" : `${s}م`;
 }
 
@@ -303,9 +304,9 @@ export function renderEndOfServiceLetterHtml(data: EndOfServiceDocumentData, opt
     <section class="ack">
       <div class="ack-text"><b>إقرار استلام:</b> أقر أنا الموقع أدناه بأنني استلمت أصل هذا الإشعار وعلمت بما ورد فيه.</div>
       <div class="ack-fields">
-        <div class="ack-field"><span>الاسم:</span><span class="blank">${esc(data.employeeName)}</span></div>
-        <div class="ack-field"><span>التوقيع:</span><span class="blank">&nbsp;</span></div>
-        <div class="ack-field short"><span>التاريخ:</span><span class="blank">&nbsp;</span></div>
+        <div class="ack-field"><span>الاسم:</span> <span class="blank">${esc(data.employeeName)}</span></div>
+        <div class="ack-field"><span>التوقيع:</span> <span class="blank">&nbsp;</span></div>
+        <div class="ack-field short"><span>التاريخ:</span> <span class="blank">&nbsp;</span></div>
       </div>
     </section>`;
 
@@ -455,9 +456,9 @@ function renderDeclaration(ctx: DocContext): string {
       <div class="fingerprint"><span>البصمة</span></div>
       <p class="decl-text">${text}</p>
       <div class="emp-fields">
-        <div class="ack-field"><span>اسم الموظف:</span><span class="blank">${esc(d.employeeName)}</span></div>
-        <div class="ack-field"><span>التوقيع:</span><span class="blank">&nbsp;</span></div>
-        <div class="ack-field short"><span>التاريخ:</span><span class="blank">&nbsp;</span></div>
+        <div class="ack-field"><span>اسم الموظف:</span> <span class="blank">${esc(d.employeeName)}</span></div>
+        <div class="ack-field"><span>التوقيع:</span> <span class="blank">&nbsp;</span></div>
+        <div class="ack-field short"><span>التاريخ:</span> <span class="blank">&nbsp;</span></div>
       </div>
     </section>`;
 }
@@ -553,10 +554,10 @@ export function renderFinalSettlementHtml(data: EndOfServiceDocumentData, option
 
     <section class="sec basis">
       <div class="basis-title">${bi("أساس الحساب", "Basis")}</div>
-      <div class="basis-item"><span class="lbl">الأجر الأساسي</span><b>${money(data.baseSalary)}</b></div>
-      <div class="basis-item"><span class="lbl">البدلات الثابتة</span><b>${money(data.fixedAllowances)}</b></div>
-      <div class="basis-item main"><span class="lbl">الأجر الشهري المعتمد</span><b>${money(c.monthlyWage)}</b></div>
-      <div class="basis-item"><span class="lbl">أجر اليوم (الأجر ÷ 30)</span><b>${money(c.dailyWage)}</b></div>
+      <div class="basis-item"><span class="lbl">الأجر الأساسي</span> <b>${money(data.baseSalary)}</b></div>
+      <div class="basis-item"><span class="lbl">البدلات الثابتة</span> <b>${money(data.fixedAllowances)}</b></div>
+      <div class="basis-item main"><span class="lbl">الأجر الشهري المعتمد</span> <b>${money(c.monthlyWage)}</b></div>
+      <div class="basis-item"><span class="lbl">أجر اليوم (الأجر ÷ 30)</span> <b>${money(c.dailyWage)}</b></div>
     </section>
 
     ${renderEntitlements(data)}
