@@ -50,10 +50,11 @@ export type AdminPortalAccess =
  * الموظف العادي يُعاد لبوابته، ومن لا جلسة له لصفحة الدخول
  */
 export function resolveAdminPortalAccess(
-  me: { isSupervisor: boolean } | null | undefined,
+  me: { isSupervisor: boolean; branchId?: number | null } | null | undefined,
   staffRole: string | null | undefined
 ): AdminPortalAccess {
-  if (me?.isSupervisor) return { kind: "employee" };
+  // نفس أولوية الخادم (resolvePortalReviewer): مشرف البوابة المرتبط بفرع أولاً ثم مستخدم النظام
+  if (me?.isSupervisor && me.branchId != null) return { kind: "employee" };
   if (isStaffReviewerRole(staffRole)) return { kind: "staff" };
   if (me) return { kind: "redirect", to: EMPLOYEE_PORTAL_PATH };
   return { kind: "redirect", to: PORTAL_LOGIN_PATH };

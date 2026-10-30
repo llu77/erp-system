@@ -112,9 +112,15 @@ describe("portal auth redirects", () => {
   });
 
   it("lets supervisor sessions and staff reviewers into the supervisor dashboard", () => {
-    expect(resolveAdminPortalAccess({ isSupervisor: true }, null)).toEqual({
+    expect(resolveAdminPortalAccess({ isSupervisor: true, branchId: 2 }, null)).toEqual({
       kind: "employee",
     });
+    // مثل الخادم: مشرف بلا فرع لا يراجع، ومع جلسة نظام يُعامل كمستخدم النظام
+    expect(resolveAdminPortalAccess({ isSupervisor: true, branchId: null }, null)).toEqual({
+      kind: "redirect",
+      to: "/employee-portal",
+    });
+    expect(resolveAdminPortalAccess({ isSupervisor: true, branchId: 2 }, "manager")).toEqual({ kind: "employee" });
     expect(resolveAdminPortalAccess(null, "admin")).toEqual({ kind: "staff" });
     expect(resolveAdminPortalAccess(null, "viewer")).toEqual({ kind: "staff" });
     expect(
