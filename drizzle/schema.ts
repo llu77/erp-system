@@ -915,7 +915,8 @@ export const expenses = mysqlTable("expenses", {
     "housing_rent",       // ايجار سكن
     "improvements",       // تحسينات
     "bonus",              // مكافأة
-    "other"               // أخرى
+    "other",              // أخرى
+    "salaries"            // رواتب (من مسير معتمد فقط، لا تُدخل يدوياً)
   ]).notNull(),
   
   // التفاصيل
@@ -967,10 +968,42 @@ export const expenses = mysqlTable("expenses", {
   createdByName: varchar("createdByName", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+
+  // المصدر: يدوي، أو مصروف ثابت شهري، أو مسير رواتب معتمد (تلقائي)
+  source: mysqlEnum("source", ["manual", "fixed", "payroll"]).default("manual").notNull(),
+  // مفتاح فريد للمصاريف التلقائية حتى لا تتكرر (fixed:فرع:شهر:قالب / payroll:رقم)
+  sourceKey: varchar("sourceKey", { length: 100 }).unique(),
 });
 
 export type Expense = typeof expenses.$inferSelect;
 export type InsertExpense = typeof expenses.$inferInsert;
+
+// ==================== المصاريف الثابتة الشهرية (قوالب لكل فرع) ====================
+/**
+ * Recurring expenses - المصاريف الثابتة: تُضاف تلقائياً كل شهر لفرعها (إيجار، سكن، إنترنت...)
+ */
+export const recurringExpenses = mysqlTable("recurringExpenses", {
+  id: int("id").autoincrement().primaryKey(),
+  branchId: int("branchId").notNull(),
+  category: mysqlEnum("category", [
+    "shop_supplies", "printing", "carpet_cleaning", "small_needs", "residency", "medical_exam",
+    "transportation", "electricity", "internet", "license_renewal", "visa", "residency_renewal",
+    "health_cert_renewal", "maintenance", "health_cert", "violation", "emergency", "shop_rent",
+    "housing_rent", "improvements", "bonus", "other",
+  ]).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  paymentMethod: mysqlEnum("paymentMethod", ["cash", "bank_transfer", "check", "credit_card", "other"]).default("cash").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  // أول شهر يُضاف فيه (YYYY-MM)؛ الشهور السابقة لا تُنشأ بأثر رجعي
+  startsOn: varchar("startsOn", { length: 7 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RecurringExpense = typeof recurringExpenses.$inferSelect;
+export type InsertRecurringExpense = typeof recurringExpenses.$inferInsert;
 
 // ==================== جدول سجل المصاريف ====================
 export const expenseLogs = mysqlTable("expenseLogs", {

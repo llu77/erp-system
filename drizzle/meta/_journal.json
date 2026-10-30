@@ -491,6 +491,13 @@
       "when": 1793354563040,
       "tag": "0069_job_titles",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "5",
+      "when": 1793359982668,
+      "tag": "0070_fixed_expenses",
+      "breakpoints": true
     }
   ]
 }
