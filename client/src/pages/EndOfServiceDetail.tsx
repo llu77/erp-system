@@ -733,7 +733,6 @@ export default function EndOfServiceDetail() {
                     advances={doc.advances}
                     violations={doc.violations}
                     notes={{
-                      leaveNote: doc.leaveNote,
                       salaryNote: doc.salaryNote,
                       otherAdditionsNote: doc.otherAdditionsNote,
                       otherDeductionsNote: doc.otherDeductionsNote,

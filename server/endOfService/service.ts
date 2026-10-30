@@ -17,7 +17,6 @@ import {
   employeeRequestLogs,
   employeeRequests,
   employeeSalarySettings,
-  employeeLeaveBalance,
   employeeViolations,
   endOfServiceSettlements,
   payrollDetails,
@@ -33,8 +32,6 @@ import {
   END_OF_SERVICE_STATUSES,
   calculateEndOfServiceSettlement,
   canTransitionEndOfService,
-  computeExcludedServiceDays,
-  computeServicePeriod,
   formatEndOfServiceNumber,
   getEndOfServiceStatusLabel,
   isEndOfServiceEditable,
@@ -49,7 +46,6 @@ import {
 } from "../../shared/endOfService";
 import {
   DEFAULT_BASE_SALARY,
-  normalizeLeaveKind,
   parseJsonArray,
   roundMoney,
   toAmount,
@@ -98,8 +94,6 @@ export interface EndOfServiceForm {
   position?: string | null;
   baseSalary: number;
   fixedAllowances: number;
-  leaveBalanceDaysOverride?: number | null;
-  leaveNote?: string | null;
   salaryDaysOverride?: number | null;
   salaryNote?: string | null;
   otherAdditions?: number;
@@ -131,20 +125,16 @@ export interface EmployeeContext {
   employee: Employee;
   branchName: string | null;
   wage: WageDefaults;
-  annualLeaveDaysTaken: number;
-  /** أيام لا تُحتسب من الخدمة: الإجازات بدون أجر فيما زاد على 20 يوماً (المادة 116) */
-  excludedServiceDays: number;
   lastPayroll: LastPayrollRef | null;
   advances: EndOfServiceDeductionItem[];
   violations: EndOfServiceDeductionItem[];
 }
 
-/** بيانات الحساب المطلوبة من قاعدة البيانات (الاستبعاد اختياري للمخالصات القديمة) */
+/** بيانات الحساب المطلوبة من قاعدة البيانات */
 type CalcContext = Pick<
   EmployeeContext,
-  "annualLeaveDaysTaken" | "lastPayroll" | "advances" | "violations"
-> &
-  Partial<Pick<EmployeeContext, "excludedServiceDays">>;
+  "lastPayroll" | "advances" | "violations"
+>;
 
 export interface EndOfServiceListRow {
   id: number;
@@ -337,76 +327,6 @@ export function buildWageDefaults(
   };
 }
 
-export interface VacationRow {
-  vacationType: string | null;
-  vacationStartDate: Date | string | null;
-  vacationEndDate: Date | string | null;
-  vacationDays: number | null;
-}
-
-/** عدد أيام طلب إجازة: الأيام المسجلة، وإلا من تاريخي البداية والنهاية (شاملاً اليومين) */
-export function vacationRowDays(row: VacationRow): number {
-  const recorded = Number(row.vacationDays);
-  if (Number.isFinite(recorded) && recorded > 0) return recorded;
-  const start = toVoucherDateString(row.vacationStartDate);
-  if (!start) return 0;
-  const end = toVoucherDateString(row.vacationEndDate) ?? start;
-  return computeServicePeriod(start, end)?.totalDays ?? 1;
-}
-
-/**
- * أيام الإجازة السنوية المستخدمة (الإجازات المعتمدة من النوع السنوي)
- * untilDate: تُستبعد الإجازات التي تبدأ بعد آخر يوم عمل
- */
-export function sumAnnualLeaveDays(
-  rows: VacationRow[],
-  untilDate?: string | null
-): number {
-  const until = untilDate && parseDateOnly(untilDate) ? untilDate : null;
-  let total = 0;
-  for (const row of rows) {
-    if (normalizeLeaveKind(row.vacationType) !== "annual") continue;
-    const start = toVoucherDateString(row.vacationStartDate);
-    if (until && start && start > until) continue;
-    total += vacationRowDays(row);
-  }
-  return Math.round(total * 100) / 100;
-}
-
-/**
- * أيام وقف العقد (المادة 116): لكل إجازة بدون أجر معتمدة، ما زاد على 20 يوماً
- * untilDate: تُستبعد الإجازات التي تبدأ بعد آخر يوم عمل
- */
-export function sumExcludedServiceDays(
-  rows: VacationRow[],
-  untilDate?: string | null
-): number {
-  const until = untilDate && parseDateOnly(untilDate) ? untilDate : null;
-  const unpaid: number[] = [];
-  for (const row of rows) {
-    if (normalizeLeaveKind(row.vacationType) !== "unpaid") continue;
-    const start = toVoucherDateString(row.vacationStartDate);
-    if (until && start && start > until) continue;
-    unpaid.push(vacationRowDays(row));
-  }
-  return computeExcludedServiceDays(unpaid);
-}
-
-/**
- * الإجازات السنوية المستخدمة: الأكبر بين طلبات الإجازة المعتمدة وأرصدة الإجازات السنوية المسجلة.
- * المصدران قد يسجلان نفس الإجازة، فلا يُجمعان حتى لا تُخصم مرتين
- */
-export function annualLeaveDaysTaken(
-  fromRequests: number,
-  fromBalances: unknown
-): number {
-  const balances = Number(fromBalances);
-  return Math.max(
-    fromRequests,
-    Number.isFinite(balances) && balances > 0 ? balances : 0
-  );
-}
-
 /** تحقق التواريخ قبل الحساب */
 export function validateFormDates(
   form: Pick<
@@ -444,9 +364,6 @@ export function toCalcInput(
     lastWorkingDay: form.lastWorkingDay,
     baseSalary: form.baseSalary,
     fixedAllowances: form.fixedAllowances,
-    annualLeaveDaysTaken: ctx.annualLeaveDaysTaken,
-    excludedServiceDays: ctx.excludedServiceDays ?? 0,
-    leaveBalanceDaysOverride: form.leaveBalanceDaysOverride ?? null,
     lastPayrollMonth: ctx.lastPayroll
       ? { year: ctx.lastPayroll.year, month: ctx.lastPayroll.month }
       : null,
@@ -475,7 +392,6 @@ export function buildSettlementValues(
   calc: EndOfServiceCalculation
 ) {
   const emp = ctx.employee;
-  const leaveOverride = form.leaveBalanceDaysOverride ?? null;
   const salaryOverride = form.salaryDaysOverride ?? null;
   return {
     employeeId: emp.id,
@@ -508,10 +424,6 @@ export function buildSettlementValues(
     serviceDays: calc.service.days,
     serviceTotalDays: calc.service.totalDays,
     eosAward: money(calc.eosAward),
-    leaveBalanceDays: calc.leaveBalanceDays.toFixed(2),
-    leaveBalanceDaysOverride:
-      leaveOverride === null ? null : Number(leaveOverride).toFixed(2),
-    leaveCompensation: money(calc.leaveCompensation),
     salaryDays: calc.salaryDays.toFixed(2),
     salaryDaysOverride:
       salaryOverride === null ? null : Number(salaryOverride).toFixed(2),
@@ -523,7 +435,6 @@ export function buildSettlementValues(
     totalEntitlements: money(calc.totalEntitlements),
     totalDeductions: money(calc.totalDeductions),
     netAmount: money(calc.netAmount),
-    leaveNote: cleanText(form.leaveNote),
     salaryNote: cleanText(form.salaryNote),
     otherAdditionsNote: cleanText(form.otherAdditionsNote),
     otherDeductionsNote: cleanText(form.otherDeductionsNote),
@@ -533,7 +444,6 @@ export function buildSettlementValues(
     calculationSnapshot: JSON.stringify(calc),
     lastPayrollYear: ctx.lastPayroll?.year ?? null,
     lastPayrollMonth: ctx.lastPayroll?.month ?? null,
-    annualLeaveDaysTaken: calc.annualLeaveDaysTaken.toFixed(2),
   } satisfies Partial<InsertEndOfServiceSettlement>;
 }
 
@@ -554,8 +464,6 @@ export function settlementToForm(
     position: row.position ?? null,
     baseSalary: toAmount(row.baseSalary),
     fixedAllowances: toAmount(row.fixedAllowances),
-    leaveBalanceDaysOverride: optionalNumber(row.leaveBalanceDaysOverride),
-    leaveNote: row.leaveNote ?? null,
     salaryDaysOverride: optionalNumber(row.salaryDaysOverride),
     salaryNote: row.salaryNote ?? null,
     otherAdditions: toAmount(row.otherAdditions),
@@ -620,7 +528,6 @@ export function storedCalculation(
   if (snapshot) return snapshot;
   const result = calculateEndOfServiceSettlement(
     toCalcInput(settlementToForm(row), {
-      annualLeaveDaysTaken: toAmount(row.annualLeaveDaysTaken),
       lastPayroll: storedLastPayroll(row),
       advances: storedAdvances(row),
       violations: storedViolations(row),
@@ -660,7 +567,6 @@ export function toDocumentData(
     violations: storedViolations(row),
     otherAdditionsNote: row.otherAdditionsNote ?? null,
     otherDeductionsNote: row.otherDeductionsNote ?? null,
-    leaveNote: row.leaveNote ?? null,
     salaryNote: row.salaryNote ?? null,
     notes: row.notes ?? null,
     paymentMethod: row.paymentMethod ?? null,
@@ -773,7 +679,6 @@ async function loadLastPayroll(
 /**
  * بيانات الحساب للموظف (داخل المعاملة عند التعديل)
  * - السلف والمخالفات: المعتمدة غير المخصومة في مسيرة ولا في مخالصة أخرى
- * - الإجازات السنوية المعتمدة حتى آخر يوم عمل
  */
 async function loadEmployeeContext(
   q: Exec,
@@ -781,92 +686,57 @@ async function loadEmployeeContext(
   options: {
     lock?: boolean;
     employee?: Employee;
-    untilDate?: string | null;
   } = {}
 ): Promise<EmployeeContext> {
   const employee =
     options.employee ?? (await loadEmployee(q, employeeId, !!options.lock));
 
-  const [
-    branchName,
-    settingsRows,
-    vacationRows,
-    lastPayroll,
-    advanceRows,
-    violationRows,
-    balanceRows,
-  ] = await Promise.all([
-    loadBranchName(q, employee.branchId ?? null),
-    q
-      .select()
-      .from(employeeSalarySettings)
-      .where(eq(employeeSalarySettings.employeeId, employeeId))
-      .limit(1),
-    q
-      .select({
-        vacationType: employeeRequests.vacationType,
-        vacationStartDate: employeeRequests.vacationStartDate,
-        vacationEndDate: employeeRequests.vacationEndDate,
-        vacationDays: employeeRequests.vacationDays,
-      })
-      .from(employeeRequests)
-      .where(
-        and(
-          eq(employeeRequests.employeeId, employeeId),
-          eq(employeeRequests.requestType, "vacation"),
-          eq(employeeRequests.status, "approved")
+  const [branchName, settingsRows, lastPayroll, advanceRows, violationRows] =
+    await Promise.all([
+      loadBranchName(q, employee.branchId ?? null),
+      q
+        .select()
+        .from(employeeSalarySettings)
+        .where(eq(employeeSalarySettings.employeeId, employeeId))
+        .limit(1),
+      loadLastPayroll(q, employeeId),
+      q
+        .select({
+          id: employeeRequests.id,
+          requestNumber: employeeRequests.requestNumber,
+          amount: employeeRequests.advanceAmount,
+          reviewedAt: employeeRequests.reviewedAt,
+          createdAt: employeeRequests.createdAt,
+        })
+        .from(employeeRequests)
+        .where(
+          and(
+            eq(employeeRequests.employeeId, employeeId),
+            eq(employeeRequests.requestType, "advance"),
+            eq(employeeRequests.status, "approved"),
+            eq(employeeRequests.isDeductedFromSalary, false),
+            isNull(employeeRequests.settledInEndOfServiceId)
+          )
         )
-      ),
-    loadLastPayroll(q, employeeId),
-    q
-      .select({
-        id: employeeRequests.id,
-        requestNumber: employeeRequests.requestNumber,
-        amount: employeeRequests.advanceAmount,
-        reviewedAt: employeeRequests.reviewedAt,
-        createdAt: employeeRequests.createdAt,
-      })
-      .from(employeeRequests)
-      .where(
-        and(
-          eq(employeeRequests.employeeId, employeeId),
-          eq(employeeRequests.requestType, "advance"),
-          eq(employeeRequests.status, "approved"),
-          eq(employeeRequests.isDeductedFromSalary, false),
-          isNull(employeeRequests.settledInEndOfServiceId)
+        .orderBy(employeeRequests.id),
+      q
+        .select({
+          id: employeeViolations.id,
+          violationType: employeeViolations.violationType,
+          amount: employeeViolations.amount,
+          violationDate: employeeViolations.violationDate,
+        })
+        .from(employeeViolations)
+        .where(
+          and(
+            eq(employeeViolations.employeeId, employeeId),
+            eq(employeeViolations.status, "approved"),
+            eq(employeeViolations.isDeductedFromSalary, false),
+            isNull(employeeViolations.settledInEndOfServiceId)
+          )
         )
-      )
-      .orderBy(employeeRequests.id),
-    q
-      .select({
-        id: employeeViolations.id,
-        violationType: employeeViolations.violationType,
-        amount: employeeViolations.amount,
-        violationDate: employeeViolations.violationDate,
-      })
-      .from(employeeViolations)
-      .where(
-        and(
-          eq(employeeViolations.employeeId, employeeId),
-          eq(employeeViolations.status, "approved"),
-          eq(employeeViolations.isDeductedFromSalary, false),
-          isNull(employeeViolations.settledInEndOfServiceId)
-        )
-      )
-      .orderBy(employeeViolations.violationDate, employeeViolations.id),
-    // أرصدة الإجازات السنوية المسجلة لكل سنة (قد تشمل سنوات قبل استخدام النظام)
-    q
-      .select({
-        usedDays: sql<number>`COALESCE(SUM(${employeeLeaveBalance.usedDays}), 0)`,
-      })
-      .from(employeeLeaveBalance)
-      .where(
-        and(
-          eq(employeeLeaveBalance.employeeId, employeeId),
-          eq(employeeLeaveBalance.leaveType, "annual")
-        )
-      ),
-  ]);
+        .orderBy(employeeViolations.violationDate, employeeViolations.id),
+    ]);
 
   const advances: EndOfServiceDeductionItem[] = [];
   for (const a of advanceRows) {
@@ -895,14 +765,6 @@ async function loadEmployeeContext(
     employee,
     branchName,
     wage: buildWageDefaults(settingsRows[0]),
-    annualLeaveDaysTaken: annualLeaveDaysTaken(
-      sumAnnualLeaveDays(vacationRows, options.untilDate),
-      balanceRows[0]?.usedDays
-    ),
-    excludedServiceDays: sumExcludedServiceDays(
-      vacationRows,
-      options.untilDate
-    ),
     lastPayroll,
     advances,
     violations,
@@ -1081,7 +943,6 @@ export async function getDefaults(employeeId: number) {
       isActive: emp.isActive,
     },
     wage: ctx.wage,
-    annualLeaveDaysTaken: ctx.annualLeaveDaysTaken,
     lastPayroll: ctx.lastPayroll,
     advances: ctx.advances,
     violations: ctx.violations,
@@ -1093,16 +954,13 @@ export async function getDefaults(employeeId: number) {
 export async function previewSettlement(form: EndOfServiceForm) {
   const db = await requireDb();
   validateFormDates(form);
-  const ctx = await loadEmployeeContext(db, form.employeeId, {
-    untilDate: form.lastWorkingDay,
-  });
+  const ctx = await loadEmployeeContext(db, form.employeeId);
   const calculation = calculateOrThrow(form, ctx);
   return {
     calculation,
     advances: ctx.advances,
     violations: ctx.violations,
     lastPayroll: ctx.lastPayroll,
-    annualLeaveDaysTaken: ctx.annualLeaveDaysTaken,
   };
 }
 
@@ -1226,7 +1084,6 @@ export async function createSettlement(
 
         const ctx = await loadEmployeeContext(tx, employee.id, {
           employee,
-          untilDate: form.lastWorkingDay,
         });
         const calc = calculateOrThrow(form, ctx);
         const year = Number(todayVoucherDate().slice(0, 4));
@@ -1324,7 +1181,6 @@ export async function updateSettlement(
 
     const ctx = await loadEmployeeContext(tx, employee.id, {
       employee,
-      untilDate: form.lastWorkingDay,
     });
     const calc = calculateOrThrow(form, ctx);
 
@@ -1502,7 +1358,6 @@ export async function approveSettlement(id: number, actor: EndOfServiceActor) {
     const form = settlementToForm(settlement);
     const ctx = await loadEmployeeContext(tx, employee.id, {
       employee,
-      untilDate: form.lastWorkingDay,
     });
     const calc = calculateOrThrow(form, ctx);
     const values = buildSettlementValues(form, ctx, calc);

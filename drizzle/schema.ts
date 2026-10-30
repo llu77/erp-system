@@ -821,9 +821,6 @@ export const endOfServiceSettlements = mysqlTable("endOfServiceSettlements", {
 
   // المستحقات
   eosAward: decimal("eosAward", { precision: 12, scale: 2 }).default("0.00").notNull(),
-  leaveBalanceDays: decimal("leaveBalanceDays", { precision: 8, scale: 2 }).default("0.00").notNull(),
-  leaveBalanceDaysOverride: decimal("leaveBalanceDaysOverride", { precision: 8, scale: 2 }),
-  leaveCompensation: decimal("leaveCompensation", { precision: 12, scale: 2 }).default("0.00").notNull(),
   salaryDays: decimal("salaryDays", { precision: 8, scale: 2 }).default("0.00").notNull(),
   salaryDaysOverride: decimal("salaryDaysOverride", { precision: 8, scale: 2 }),
   salaryDue: decimal("salaryDue", { precision: 12, scale: 2 }).default("0.00").notNull(),
@@ -840,7 +837,6 @@ export const endOfServiceSettlements = mysqlTable("endOfServiceSettlements", {
   netAmount: decimal("netAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
 
   // الملاحظات
-  leaveNote: text("leaveNote"),
   salaryNote: text("salaryNote"),
   otherAdditionsNote: text("otherAdditionsNote"),
   otherDeductionsNote: text("otherDeductionsNote"),
@@ -854,7 +850,6 @@ export const endOfServiceSettlements = mysqlTable("endOfServiceSettlements", {
   // مصادر الحساب
   lastPayrollYear: int("lastPayrollYear"),
   lastPayrollMonth: int("lastPayrollMonth"),
-  annualLeaveDaysTaken: decimal("annualLeaveDaysTaken", { precision: 8, scale: 2 }).default("0.00").notNull(),
 
   // الصرف
   paymentMethod: varchar("paymentMethod", { length: 30 }),

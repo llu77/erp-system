@@ -52,7 +52,6 @@ const BASE_INPUT: EndOfServiceCalcInput = {
   lastWorkingDay: "2026-10-31",
   baseSalary: 4500,
   fixedAllowances: 1250,
-  annualLeaveDaysTaken: 96,
   lastPayrollMonth: { year: 2026, month: 9 },
   otherAdditions: 300,
   otherDeductions: 200,
@@ -201,8 +200,9 @@ describe("خطاب انتهاء العقد وعدم التجديد", () => {
       "وبناءً عليه، يكون آخر يوم عمل لكم لدى المنشأة هو يوم السبت الموافق 31/10/2026م، وتنتهي العلاقة التعاقدية بانتهاء هذا اليوم."
     );
     expect(text).toContain(
-      `مكافأة نهاية الخدمة عن كامل مدة خدمتكم البالغة (${d.calculation.serviceText})`
+      `والتي تشمل مكافأة نهاية الخدمة عن مدة خدمتكم البالغة (${d.calculation.serviceText})، والأجر المستحق حتى آخر يوم عمل،`
     );
+    expect(text).not.toContain("الإجازات");
     expect(d.calculation.serviceText).toBe("7 سنوات و7 أشهر و22 يوماً");
     expect(text).toContain(
       "وذلك وفق المخالصة النهائية المرفقة وخلال المدة المحددة نظاماً."
@@ -257,7 +257,6 @@ describe("خطاب انتهاء العقد وعدم التجديد", () => {
   it("does not print the settlement figures or calculation warnings", () => {
     expect(html).not.toContain(formatVoucherAmount(d.calculation.netAmount));
     for (const warning of calc({
-      annualLeaveDaysTaken: 0,
       lastPayrollMonth: { year: 2026, month: 10 },
     }).warnings) {
       expect(html).not.toContain(warning);
@@ -311,21 +310,11 @@ describe("المخالصة النهائية", () => {
   });
 
   it("explains each entitlement and totals them", () => {
-    expect(text).toContain("مكافأة نهاية الخدمة (المادة 84 من نظام العمل)");
-    // المدة بالسنوات والأشهر والأيام: أجر شهر × (2 + 7/12 + 22/365) يطابق المبلغ المطبوع
-    expect(text).toContain("نصف أجر شهر × 5 سنوات = 14,375.00");
-    expect(text).toContain(
-      `أجر شهر × سنتان و7 أشهر و22 يوماً = ${formatVoucherAmount(c.eosAfterFiveYears)}`
-    );
-    expect(Math.round(5750 * (2 + 7 / 12 + 22 / 365) * 100) / 100).toBe(
-      c.eosAfterFiveYears
-    );
-    expect(text).toContain(formatVoucherAmount(c.eosAward));
-    expect(text).toContain("مقابل الإجازة السنوية غير المستخدمة (المادة 111)");
-    expect(text).toContain(
-      `${String(c.leaveBalanceDays)} يوم × (5,750.00 ÷ 30)`
-    );
-    expect(text).toContain(`(المستحق ${c.accruedLeaveDays} − المستخدم 96)`);
+    expect(text).toContain("مكافأة نهاية الخدمة مبلغ ثابت حسب سياسة المنشأة");
+    expect(text).toContain(`عن مدة الخدمة: ${c.serviceText} 2,000.00`);
+    expect(c.eosAward).toBe(2000);
+    expect(text).not.toContain("المادة");
+    expect(text).not.toContain("الإجازة");
     expect(text).toContain("الأجر المستحق حتى آخر يوم عمل");
     expect(text).toContain(`30 يوم × (5,750.00 ÷ 30)`);
     expect(text).toContain("من 01/10/2026 حتى 31/10/2026");
@@ -355,7 +344,7 @@ describe("المخالصة النهائية", () => {
     expect(text).toContain(formatVoucherAmount(c.netAmount));
     expect(text).toContain(c.netAmountWords);
     expect(text).toContain(
-      `أقر أنا الموقع أدناه / محمد عبدالله القحطاني، رقم الهوية / الإقامة (1087654321)، بأنني استلمت من ${COMPANY_INFO.nameAr} كامل مستحقاتي العمالية عن كامل مدة خدمتي لديها من تاريخ 10/03/2019م حتى تاريخ 31/10/2026م، بما في ذلك مكافأة نهاية الخدمة ومقابل الإجازات والأجور وجميع البدلات، بمبلغ صافٍ وقدره (${formatVoucherAmount(c.netAmount)} ريال سعودي) ${c.netAmountWords}، وأنه لم يعد لي أي حق أو مطالبة من أي نوع قِبَل المنشأة، وأبرئ ذمتها إبراءً عاماً شاملاً نهائياً.`
+      `أقر أنا الموقع أدناه / محمد عبدالله القحطاني، رقم الهوية / الإقامة (1087654321)، بأنني استلمت من ${COMPANY_INFO.nameAr} كامل مستحقاتي العمالية عن كامل مدة خدمتي لديها من تاريخ 10/03/2019م حتى تاريخ 31/10/2026م، بما في ذلك مكافأة نهاية الخدمة والأجور وجميع البدلات، بمبلغ صافٍ وقدره (${formatVoucherAmount(c.netAmount)} ريال سعودي) ${c.netAmountWords}، وأنه لم يعد لي أي حق أو مطالبة من أي نوع قِبَل المنشأة، وأبرئ ذمتها إبراءً عاماً شاملاً نهائياً.`
     );
   });
 
@@ -381,22 +370,12 @@ describe("المخالصة النهائية", () => {
     expect(t2).not.toContain("مستحقات أخرى");
   });
 
-  it("omits the after-five-years line for shorter service", () => {
-    const d2 = doc({}, { hireDate: "2023-11-01" });
-    const t2 = visibleText(settlement(d2));
-    expect(t2).toContain("نصف أجر شهر × 3 سنوات");
-    expect(t2).not.toContain("أجر شهر × 0");
-  });
-
-  it("explains manual leave and salary figures with their notes", () => {
+  it("explains manual salary days with their note", () => {
     const d2 = doc(
-      { leaveNote: "حسب سجل الموارد البشرية", salaryNote: "أيام عمل فعلية" },
-      { leaveBalanceDaysOverride: 12.5, salaryDaysOverride: 18 }
+      { salaryNote: "أيام عمل فعلية" },
+      { salaryDaysOverride: 18 }
     );
     const t2 = visibleText(settlement(d2));
-    expect(t2).toContain(`12.5 يوم × (5,750.00 ÷ 30)`);
-    expect(t2).toContain("(رصيد معتمد يدوياً: حسب سجل الموارد البشرية)");
-    expect(t2).not.toContain("(المستحق");
     expect(t2).toContain(`18 يوم × (5,750.00 ÷ 30)`);
     expect(t2).toContain("(أيام عمل فعلية)");
   });
@@ -412,17 +391,6 @@ describe("المخالصة النهائية", () => {
     expect(t2).not.toContain("طريقة الصرف");
     expect(t2).toContain("قد سددت لـ");
     expect(t2).not.toContain("وأتعهد بسداده");
-  });
-
-  it("prints years with decimals and the Article 116 note when unpaid leave is excluded", () => {
-    const d2 = doc({}, { excludedServiceDays: 70 });
-    const t2 = visibleText(settlement(d2));
-    expect(t2).toContain(
-      "بعد استبعاد 70 يوم إجازة بدون أجر تزيد على 20 يوماً - المادة 116"
-    );
-    expect(t2).toContain(
-      `أجر شهر × ${d2.calculation.awardYears > 5 ? (d2.calculation.awardYears - 5).toFixed(4) : "0"} سنة`
-    );
   });
 
   it("uses the 'owed by the employee' wording when deductions exceed entitlements", () => {
@@ -468,12 +436,11 @@ describe("المخالصة النهائية", () => {
     const d2 = doc(
       {},
       {
-        annualLeaveDaysTaken: 0,
         lastPayrollMonth: { year: 2026, month: 10 },
         otherDeductions: 90000,
       }
     );
-    expect(d2.calculation.warnings.length).toBe(3);
+    expect(d2.calculation.warnings.length).toBe(2);
     const html2 = settlement(d2) + letter(d2);
     for (const warning of d2.calculation.warnings)
       expect(html2).not.toContain(warning);
@@ -576,7 +543,6 @@ describe("التهريب وبيانات الشركة", () => {
     notes: `ملاحظة ${evil}`,
     otherAdditionsNote: evilImg,
     otherDeductionsNote: evilImg,
-    leaveNote: evil,
     salaryNote: evil,
     paymentMethod: evil,
     paymentReference: evilImg,

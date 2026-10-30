@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "7b494884-5d17-456f-8e0d-f9ef902ceace",
+  "id": "3ef84b28-da60-4f73-9ae8-7dc7b4d649c2",
   "prevId": "9403de82-a7bb-4811-a6da-058e5ee7de49",
   "tables": {
     "activityLogs": {
@@ -4062,29 +4062,6 @@
           "autoincrement": false,
           "default": "'0.00'"
         },
-        "leaveBalanceDays": {
-          "name": "leaveBalanceDays",
-          "type": "decimal(8,2)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'0.00'"
-        },
-        "leaveBalanceDaysOverride": {
-          "name": "leaveBalanceDaysOverride",
-          "type": "decimal(8,2)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "leaveCompensation": {
-          "name": "leaveCompensation",
-          "type": "decimal(12,2)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'0.00'"
-        },
         "salaryDays": {
           "name": "salaryDays",
           "type": "decimal(8,2)",
@@ -4164,13 +4141,6 @@
           "autoincrement": false,
           "default": "'0.00'"
         },
-        "leaveNote": {
-          "name": "leaveNote",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "salaryNote": {
           "name": "salaryNote",
           "type": "text",
@@ -4233,14 +4203,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "annualLeaveDaysTaken": {
-          "name": "annualLeaveDaysTaken",
-          "type": "decimal(8,2)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'0.00'"
         },
         "paymentMethod": {
           "name": "paymentMethod",

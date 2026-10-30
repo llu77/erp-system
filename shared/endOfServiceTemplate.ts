@@ -17,7 +17,6 @@ import {
   END_OF_SERVICE_DOCUMENT_TITLES,
   END_OF_SERVICE_PAYMENT_METHODS,
   END_OF_SERVICE_REASON_LABELS,
-  formatServicePeriod,
   getEndOfServiceStatusLabel,
   isEndOfServiceSigned,
   parseDateOnly,
@@ -338,7 +337,7 @@ export function renderEndOfServiceLetterHtml(
 
       <p class="para">وبناءً عليه، يكون آخر يوم عمل لكم لدى المنشأة هو ${lastDayText}، وتنتهي العلاقة التعاقدية بانتهاء هذا اليوم.</p>
 
-      <p class="para">وستُصرف لكم كامل مستحقاتكم النظامية، والتي تشمل مكافأة نهاية الخدمة عن كامل مدة خدمتكم البالغة (${strong(esc(data.calculation.serviceText))})، ومقابل رصيد الإجازات السنوية غير المستخدمة، والأجر المستحق حتى آخر يوم عمل، بعد خصم ما قد يكون عليكم من التزامات للمنشأة، وذلك وفق المخالصة النهائية المرفقة وخلال المدة المحددة نظاماً.</p>
+      <p class="para">وستُصرف لكم كامل مستحقاتكم النظامية، والتي تشمل مكافأة نهاية الخدمة عن مدة خدمتكم البالغة (${strong(esc(data.calculation.serviceText))})، والأجر المستحق حتى آخر يوم عمل، بعد خصم ما قد يكون عليكم من التزامات للمنشأة، وذلك وفق المخالصة النهائية المرفقة وخلال المدة المحددة نظاماً.</p>
 
       <p class="para tight">ونأمل منكم التكرم بما يلي قبل آخر يوم عمل:</p>
       <ol class="duties">
@@ -395,42 +394,6 @@ function renderEntitlements(data: EndOfServiceDocumentData): string {
   const c = data.calculation;
   // صيغة تُعيد إنتاج المبلغ: الأيام × (الأجر ÷ 30) بدل أجر يوم مقرّب
   const perDay = `(${money(c.monthlyWage)} ÷ 30)`;
-  // سنوات الخدمة المحتسبة بعد استبعاد أيام وقف العقد (المادة 116)؛ المخالصات القديمة بلا استبعاد
-  const awardYears = Number.isFinite(c.awardYears)
-    ? c.awardYears
-    : c.service.yearsDecimal;
-  const excludedDays = Number(c.excludedServiceDays) || 0;
-  const firstFive = Math.min(awardYears, 5);
-  const afterFive = Math.max(0, awardYears - 5);
-  // بدون استبعاد تُكتب المدة بالسنوات والأشهر والأيام (سنوات + أشهر/12 + أيام/365) فتطابق المبلغ تماماً
-  const s = c.service;
-  const firstFiveText =
-    excludedDays > 0
-      ? `${firstFive.toFixed(4)} سنة`
-      : s.years >= 5
-        ? formatServicePeriod({ years: 5, months: 0, days: 0 })
-        : formatServicePeriod(s);
-  const afterFiveText =
-    excludedDays > 0
-      ? `${afterFive.toFixed(4)} سنة`
-      : formatServicePeriod({
-          years: Math.max(0, s.years - 5),
-          months: s.months,
-          days: s.days,
-        });
-
-  const eosLines =
-    (afterFive > 0
-      ? `<div>نصف أجر شهر × ${firstFiveText} <span class="sub">= ${money(c.eosFirstFiveYears)}</span></div>
-              <div>أجر شهر × ${afterFiveText} <span class="sub">= ${money(c.eosAfterFiveYears)}</span></div>`
-      : `<div>نصف أجر شهر × ${firstFiveText}</div>`) +
-    (excludedDays > 0
-      ? `<div class="sub">(بعد استبعاد ${formatDays(excludedDays)} يوم إجازة بدون أجر تزيد على 20 يوماً - المادة 116)</div>`
-      : "");
-
-  const leaveDetail = c.leaveBalanceIsManual
-    ? `(رصيد معتمد يدوياً${present(data.leaveNote) ? `: ${esc(present(data.leaveNote))}` : ""})`
-    : `(المستحق ${formatDays(c.accruedLeaveDays)} − المستخدم ${formatDays(c.annualLeaveDaysTaken)})`;
 
   let salaryDetail = "";
   if (c.salaryDaysIsManual) {
@@ -465,14 +428,9 @@ function renderEntitlements(data: EndOfServiceDocumentData): string {
         </thead>
         <tbody>
           <tr>
-            <td>مكافأة نهاية الخدمة (المادة 84 من نظام العمل)</td>
-            <td class="calc">${eosLines}</td>
+            <td>مكافأة نهاية الخدمة</td>
+            <td class="calc"><div>مبلغ ثابت حسب سياسة المنشأة</div><div class="sub">عن مدة الخدمة: ${esc(c.serviceText)}</div></td>
             <td class="amt">${money(c.eosAward)}</td>
-          </tr>
-          <tr>
-            <td>مقابل الإجازة السنوية غير المستخدمة (المادة 111)</td>
-            <td class="calc"><div>${formatDays(c.leaveBalanceDays)} يوم × ${perDay}</div><div class="sub">${leaveDetail}</div></td>
-            <td class="amt">${money(c.leaveCompensation)}</td>
           </tr>
           <tr>
             <td>الأجر المستحق حتى آخر يوم عمل</td>
@@ -545,7 +503,7 @@ function renderDeclaration(ctx: DocContext): string {
   const period = `عن كامل مدة خدمتي لديها من تاريخ <strong>${esc(proseDate(d.hireDate))}</strong> حتى تاريخ <strong>${esc(proseDate(d.lastWorkingDay))}</strong>`;
   let text: string;
   if (c.netAmount >= 0) {
-    text = `أقر أنا الموقع أدناه / ${name}${idClause}، بأنني استلمت من ${company} كامل مستحقاتي العمالية ${period}، بما في ذلك مكافأة نهاية الخدمة ومقابل الإجازات والأجور وجميع البدلات، بمبلغ صافٍ وقدره (${amount}) ${words}، وأنه لم يعد لي أي حق أو مطالبة من أي نوع قِبَل المنشأة، وأبرئ ذمتها إبراءً عاماً شاملاً نهائياً.`;
+    text = `أقر أنا الموقع أدناه / ${name}${idClause}، بأنني استلمت من ${company} كامل مستحقاتي العمالية ${period}، بما في ذلك مكافأة نهاية الخدمة والأجور وجميع البدلات، بمبلغ صافٍ وقدره (${amount}) ${words}، وأنه لم يعد لي أي حق أو مطالبة من أي نوع قِبَل المنشأة، وأبرئ ذمتها إبراءً عاماً شاملاً نهائياً.`;
   } else if (ctx.status === "paid") {
     // صافٍ سالب تم تحصيله: الموظف سدّد المتبقي عليه
     text = `أقر أنا الموقع أدناه / ${name}${idClause}، بأنه بعد تسوية جميع مستحقاتي العمالية ${period} مع ما عليّ من التزامات، قد سددت لـ${company} المتبقي عليّ وقدره (${amount}) ${words}، وبذلك لم يعد لأي من الطرفين حق أو مطالبة قِبَل الآخر.`;

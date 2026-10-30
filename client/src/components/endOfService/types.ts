@@ -22,8 +22,6 @@ export interface EosFormInput {
   position?: string | null;
   baseSalary: number;
   fixedAllowances: number;
-  leaveBalanceDaysOverride?: number | null;
-  leaveNote?: string | null;
   salaryDaysOverride?: number | null;
   salaryNote?: string | null;
   otherAdditions?: number;
@@ -64,7 +62,6 @@ export interface EosDefaults {
     fixedAllowances: number;
     breakdown: EosWageBreakdownLine[];
   };
-  annualLeaveDaysTaken: number;
   lastPayroll: EosLastPayroll | null;
   advances: EndOfServiceDeductionItem[];
   violations: EndOfServiceDeductionItem[];
@@ -77,7 +74,6 @@ export interface EosPreview {
   advances: EndOfServiceDeductionItem[];
   violations: EndOfServiceDeductionItem[];
   lastPayroll: EosLastPayroll | null;
-  annualLeaveDaysTaken: number;
 }
 
 /** صف في endOfService.list */

@@ -2,11 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   calculateEndOfServiceSettlement,
   canTransitionEndOfService,
-  computeAccruedAnnualLeaveDays,
-  computeEndOfServiceAward,
-  computeExcludedServiceDays,
   computeServicePeriod,
   computeUnpaidSalaryPeriod,
+  END_OF_SERVICE_FIXED_AWARD,
   formatEndOfServiceNumber,
   formatServicePeriod,
   isEndOfServiceSigned,
@@ -21,7 +19,6 @@ const base: EndOfServiceCalcInput = {
   lastWorkingDay: "2026-10-31",
   baseSalary: 2000,
   fixedAllowances: 1000,
-  annualLeaveDaysTaken: 0,
   lastPayrollMonth: { year: 2026, month: 9 },
   advances: [],
   violations: [],
@@ -98,33 +95,6 @@ describe("formatServicePeriod", () => {
   });
 });
 
-describe("computeEndOfServiceAward (Article 84)", () => {
-  it("half a month per year for the first five years", () => {
-    expect(computeEndOfServiceAward(3000, 5)).toBe(7500);
-    expect(computeEndOfServiceAward(3000, 2)).toBe(3000);
-  });
-  it("a full month per year after five years", () => {
-    expect(computeEndOfServiceAward(3000, 7)).toBe(7500 + 6000);
-  });
-  it("pro-rates fractions of a year", () => {
-    expect(computeEndOfServiceAward(3000, 0.5)).toBe(750);
-    expect(computeEndOfServiceAward(3000, 5.5)).toBe(7500 + 1500);
-  });
-  it("is zero for zero wage or service", () => {
-    expect(computeEndOfServiceAward(0, 4)).toBe(0);
-    expect(computeEndOfServiceAward(3000, 0)).toBe(0);
-  });
-});
-
-describe("computeAccruedAnnualLeaveDays (Article 109)", () => {
-  it("21 days per year for five years, then 30", () => {
-    expect(computeAccruedAnnualLeaveDays(1)).toBe(21);
-    expect(computeAccruedAnnualLeaveDays(5)).toBe(105);
-    expect(computeAccruedAnnualLeaveDays(6)).toBe(135);
-    expect(computeAccruedAnnualLeaveDays(0.5)).toBe(10.5);
-  });
-});
-
 describe("computeUnpaidSalaryPeriod", () => {
   it("pays the final partial month after the last payroll", () => {
     expect(
@@ -196,23 +166,35 @@ describe("computeUnpaidSalaryPeriod", () => {
 });
 
 describe("calculateEndOfServiceSettlement", () => {
-  it("computes a five-year contract expiry with leave and final month", () => {
-    const c = calc({ annualLeaveDaysTaken: 84 });
+  it("pays the fixed 2000 award whatever the service length, plus the final month", () => {
+    expect(END_OF_SERVICE_FIXED_AWARD).toBe(2000);
+    const c = calc();
     expect(c.monthlyWage).toBe(3000);
-    expect(c.eosAward).toBe(7500);
-    expect(c.accruedLeaveDays).toBe(105);
-    expect(c.leaveBalanceDays).toBe(21);
-    expect(c.leaveCompensation).toBe(2100);
+    expect(c.eosAward).toBe(2000);
     expect(c.salaryDays).toBe(30);
     expect(c.salaryDue).toBe(3000);
-    expect(c.totalEntitlements).toBe(12600);
-    expect(c.netAmount).toBe(12600);
-    expect(c.netAmountWords).toBe("فقط اثنا عشر ألف وستمائة ريال سعودي لا غير");
+    expect(c.totalEntitlements).toBe(5000);
+    expect(c.netAmount).toBe(5000);
+    expect(c.netAmountWords).toBe("فقط خمسة آلاف ريال سعودي لا غير");
+    // مدة قصيرة أو طويلة: نفس المكافأة
+    expect(calc({ hireDate: "2026-09-01" }).eosAward).toBe(2000);
+    expect(calc({ hireDate: "2010-01-01" }).eosAward).toBe(2000);
+  });
+
+  it("has no leave figures in the calculation", () => {
+    const c = calc() as unknown as Record<string, unknown>;
+    for (const key of [
+      "leaveCompensation",
+      "leaveBalanceDays",
+      "accruedLeaveDays",
+      "annualLeaveDaysTaken",
+    ]) {
+      expect(c[key]).toBeUndefined();
+    }
   });
 
   it("deducts outstanding advances, violations and other deductions exactly once", () => {
     const c = calc({
-      annualLeaveDaysTaken: 105,
       advances: [
         { id: 1, label: "سلفة REQ-1", amount: 1000 },
         { id: 2, label: "سلفة REQ-2", amount: 500 },
@@ -224,17 +206,15 @@ describe("calculateEndOfServiceSettlement", () => {
     expect(c.advancesDeduction).toBe(1500);
     expect(c.violationsDeduction).toBe(100);
     expect(c.totalDeductions).toBe(1650);
-    expect(c.totalEntitlements).toBe(7500 + 0 + 3000 + 200);
-    expect(c.netAmount).toBe(10700 - 1650);
+    expect(c.totalEntitlements).toBe(2000 + 3000 + 200);
+    expect(c.netAmount).toBe(5200 - 1650);
   });
 
-  it("honours manual leave balance and salary days, including zero", () => {
-    const c = calc({ leaveBalanceDaysOverride: 0, salaryDaysOverride: 0 });
-    expect(c.leaveBalanceDays).toBe(0);
-    expect(c.leaveBalanceIsManual).toBe(true);
+  it("honours manual salary days, including zero", () => {
+    const c = calc({ salaryDaysOverride: 0 });
     expect(c.salaryDays).toBe(0);
     expect(c.salaryDaysIsManual).toBe(true);
-    expect(c.netAmount).toBe(7500);
+    expect(c.netAmount).toBe(2000);
   });
 
   it("warns when a payroll already covers the last month", () => {
@@ -250,7 +230,6 @@ describe("calculateEndOfServiceSettlement", () => {
   it("allows a negative net (employee owes) and words use the absolute value", () => {
     const c = calc({
       hireDate: "2026-10-01",
-      leaveBalanceDaysOverride: 0,
       salaryDaysOverride: 0,
       advances: [{ id: 1, label: "سلفة", amount: 5000 }],
     });
@@ -264,7 +243,6 @@ describe("calculateEndOfServiceSettlement", () => {
       hireDate: "2026-10-20",
       lastWorkingDay: "2026-10-31",
       lastPayrollMonth: null,
-      leaveBalanceDaysOverride: 0,
     });
     expect(c.salaryDays).toBe(12);
     expect(c.salaryDue).toBe(1200);
@@ -283,20 +261,6 @@ describe("calculateEndOfServiceSettlement", () => {
     const c = calc({ lastPayrollMonth: null });
     expect(c.salaryFromDate).toBe("2026-10-01");
     expect(c.warnings.join(" ")).toContain("لا توجد مسيرة رواتب سابقة");
-  });
-
-  it("excludes unpaid leave beyond 20 days from the service years (Article 116)", () => {
-    expect(computeExcludedServiceDays([90, 15, 21])).toBe(70 + 0 + 1);
-    const c = calc({ excludedServiceDays: 73, annualLeaveDaysTaken: 0 });
-    expect(c.excludedServiceDays).toBe(73);
-    expect(c.awardYears).toBeCloseTo(5 - 73 / 365, 10);
-    expect(c.eosAward).toBe(
-      Math.round(3000 * (5 - 73 / 365) * 0.5 * 100) / 100
-    );
-    expect(c.accruedLeaveDays).toBeCloseTo(21 * (5 - 73 / 365), 1);
-    expect(c.warnings.join(" ")).toContain("المادة 116");
-    // لا يتجاوز الاستبعاد مدة الخدمة
-    expect(calc({ excludedServiceDays: 99999 }).awardYears).toBe(0);
   });
 
   it("rejects invalid input", () => {

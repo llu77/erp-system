@@ -58,9 +58,6 @@ interface FormState {
   position: string;
   baseSalary: string;
   fixedAllowances: string;
-  leaveManual: boolean;
-  leaveDays: string;
-  leaveNote: string;
   salaryManual: boolean;
   salaryDays: string;
   salaryNote: string;
@@ -88,9 +85,6 @@ function emptyState(): FormState {
     position: "",
     baseSalary: "",
     fixedAllowances: "",
-    leaveManual: false,
-    leaveDays: "",
-    leaveNote: "",
     salaryManual: false,
     salaryDays: "",
     salaryNote: "",
@@ -121,9 +115,6 @@ function stateFromDefaults(d: EosDefaults): FormState {
 }
 
 function stateFromForm(f: EosFormInput): FormState {
-  const leaveManual =
-    f.leaveBalanceDaysOverride !== null &&
-    f.leaveBalanceDaysOverride !== undefined;
   const salaryManual =
     f.salaryDaysOverride !== null && f.salaryDaysOverride !== undefined;
   return {
@@ -136,9 +127,6 @@ function stateFromForm(f: EosFormInput): FormState {
     position: f.position ?? "",
     baseSalary: numberText(f.baseSalary),
     fixedAllowances: numberText(f.fixedAllowances),
-    leaveManual,
-    leaveDays: leaveManual ? numberText(f.leaveBalanceDaysOverride) : "",
-    leaveNote: f.leaveNote ?? "",
     salaryManual,
     salaryDays: salaryManual ? numberText(f.salaryDaysOverride) : "",
     salaryNote: f.salaryNote ?? "",
@@ -209,16 +197,6 @@ function buildInput(
   if (!fixedAllowances.ok)
     fail("fixedAllowances", "قيمة البدلات غير صحيحة", true);
 
-  let leaveOverride: number | null = null;
-  if (s.leaveManual) {
-    const r = parseNonNegative(s.leaveDays, MAX_DAYS, null);
-    if (!r.ok || r.value === null)
-      fail("leaveDays", "أدخل رصيد الإجازة بالأيام", false);
-    else leaveOverride = r.value;
-    if (!s.leaveNote.trim())
-      fail("leaveNote", "سبب تعديل رصيد الإجازة مطلوب", false);
-  }
-
   let salaryOverride: number | null = null;
   if (s.salaryManual) {
     const r = parseNonNegative(s.salaryDays, MAX_DAYS, null);
@@ -258,8 +236,6 @@ function buildInput(
       position: textOrNull(s.position),
       baseSalary: num(baseSalary),
       fixedAllowances: num(fixedAllowances),
-      leaveBalanceDaysOverride: leaveOverride,
-      leaveNote: s.leaveManual ? textOrNull(s.leaveNote) : null,
       salaryDaysOverride: salaryOverride,
       salaryNote: s.salaryManual ? textOrNull(s.salaryNote) : null,
       otherAdditions: num(otherAdditions),
@@ -580,7 +556,6 @@ export default function EndOfServiceForm({
     previewInput && !waitingForDefaults && !blockedReason
       ? JSON.stringify({
           ...previewInput,
-          leaveNote: null,
           salaryNote: null,
           otherAdditionsNote: null,
           otherDeductionsNote: null,
@@ -621,16 +596,6 @@ export default function EndOfServiceForm({
     setLastDayFollowsContract(value === form.contractEndDate);
     set("lastWorkingDay", value);
   };
-
-  const toggleLeaveManual = (checked: boolean) =>
-    setForm(prev => ({
-      ...prev,
-      leaveManual: checked,
-      leaveDays:
-        checked && !prev.leaveDays && previewData
-          ? formatDays(previewData.calculation.computedLeaveBalanceDays)
-          : prev.leaveDays,
-    }));
 
   const toggleSalaryManual = (checked: boolean) =>
     setForm(prev => ({
@@ -1014,60 +979,6 @@ export default function EndOfServiceForm({
                     <div className="rounded-lg border p-3 space-y-3">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <Checkbox
-                          checked={form.leaveManual}
-                          onCheckedChange={value =>
-                            toggleLeaveManual(value === true)
-                          }
-                        />
-                        <span className="text-sm font-medium">
-                          تعديل رصيد الإجازة يدوياً
-                        </span>
-                        {previewData && !form.leaveManual && (
-                          <span className="text-xs text-muted-foreground">
-                            (المحسوب{" "}
-                            {formatDays(
-                              previewData.calculation.computedLeaveBalanceDays
-                            )}{" "}
-                            يوم)
-                          </span>
-                        )}
-                      </label>
-                      {form.leaveManual && (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <Field
-                            label="رصيد الإجازة (يوم)"
-                            required
-                            error={fieldError("leaveDays")}
-                          >
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              min="0"
-                              step="0.5"
-                              value={form.leaveDays}
-                              onChange={e => set("leaveDays", e.target.value)}
-                            />
-                          </Field>
-                          <Field
-                            label="سبب التعديل"
-                            required
-                            error={fieldError("leaveNote")}
-                            className="sm:col-span-2"
-                          >
-                            <Input
-                              value={form.leaveNote}
-                              onChange={e => set("leaveNote", e.target.value)}
-                              maxLength={2000}
-                              placeholder="مثال: حسب سجل الإجازات الورقي"
-                            />
-                          </Field>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="rounded-lg border p-3 space-y-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox
                           checked={form.salaryManual}
                           onCheckedChange={value =>
                             toggleSalaryManual(value === true)
@@ -1217,7 +1128,6 @@ export default function EndOfServiceForm({
                       isLoading: previewQuery.isLoading,
                     }}
                     notes={{
-                      leaveNote: form.leaveNote,
                       salaryNote: form.salaryNote,
                       otherAdditionsNote: form.otherAdditionsNote,
                       otherDeductionsNote: form.otherDeductionsNote,

@@ -15,7 +15,6 @@ import type { EosLastPayroll } from "./types";
 import { formatDays, formatPayrollMonth, formatSar } from "./utils";
 
 export interface CalculationNotes {
-  leaveNote?: string | null;
   salaryNote?: string | null;
   otherAdditionsNote?: string | null;
   otherDeductionsNote?: string | null;
@@ -208,13 +207,6 @@ export function CalculationBreakdown({
           value={<span dir="rtl">{c.serviceText}</span>}
           hint={`${c.service.totalDays.toLocaleString("en-US")} يوماً (${c.service.yearsDecimal.toFixed(2)} سنة)`}
         />
-        {c.excludedServiceDays > 0 && (
-          <Row
-            label="سنوات الخدمة المحتسبة"
-            value={`${c.awardYears.toFixed(2)} سنة`}
-            hint={`بعد استبعاد ${c.excludedServiceDays} يوماً إجازة بدون أجر تزيد على 20 يوماً (المادة 116)`}
-          />
-        )}
         <Row
           label="الأجر الشهري المعتمد للحساب"
           value={formatSar(c.monthlyWage)}
@@ -224,48 +216,9 @@ export function CalculationBreakdown({
 
       <Section title="المستحقات">
         <Row
-          label="مكافأة نهاية الخدمة (المادة 84)"
+          label="مكافأة نهاية الخدمة"
           value={formatSar(c.eosAward)}
-          hint={
-            <>
-              نصف أجر شهر عن كل سنة من الخمس الأولى:{" "}
-              {formatSar(c.eosFirstFiveYears)}
-              {c.eosAfterFiveYears > 0 && (
-                <>
-                  {" "}
-                  - أجر شهر عن كل سنة بعدها: {formatSar(c.eosAfterFiveYears)}
-                </>
-              )}
-            </>
-          }
-        />
-        <Row
-          label={
-            <span className="inline-flex items-center gap-1.5">
-              مقابل رصيد الإجازة
-              {c.leaveBalanceIsManual && (
-                <Badge variant="outline" className="text-[10px]">
-                  يدوي
-                </Badge>
-              )}
-            </span>
-          }
-          value={formatSar(c.leaveCompensation)}
-          hint={
-            c.leaveBalanceIsManual ? (
-              <>
-                الرصيد {formatDays(c.leaveBalanceDays)} يوم (يدوي)
-                {notes.leaveNote ? ` - ${notes.leaveNote}` : ""} - المحسوب{" "}
-                {formatDays(c.computedLeaveBalanceDays)} يوم
-              </>
-            ) : (
-              <>
-                المستحق {formatDays(c.accruedLeaveDays)} - المستخدم{" "}
-                {formatDays(c.annualLeaveDaysTaken)} = الرصيد{" "}
-                {formatDays(c.leaveBalanceDays)} يوم
-              </>
-            )
-          }
+          hint="مبلغ ثابت حسب سياسة المنشأة"
         />
         <Row
           label={

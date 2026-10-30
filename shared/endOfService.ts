@@ -2,11 +2,9 @@
  * إنهاء الخدمة (انتهاء العقد وعدم التجديد) والمخالصة النهائية
  * مصدر الحساب الوحيد للواجهة والخادم وقالب الطباعة.
  *
- * - مكافأة نهاية الخدمة (المادة 84 من نظام العمل): نصف أجر شهر عن كل سنة من السنوات
- *   الخمس الأولى، وأجر شهر عن كل سنة بعدها، وتُحسب أجزاء السنة بنسبتها.
- *   انتهاء العقد بعدم التجديد من صاحب العمل يستحق المكافأة كاملة (تخفيض المادة 85 للاستقالة فقط).
- * - الإجازة السنوية (المادة 109): 21 يوماً عن كل سنة، و30 يوماً بعد خمس سنوات متصلة.
- * - مقابل الإجازة غير المستخدمة (المادة 111) بأجر اليوم = الأجر الشهري ÷ 30.
+ * - مكافأة نهاية الخدمة مبلغ ثابت حسب سياسة المنشأة (END_OF_SERVICE_FIXED_AWARD = 2000 ريال)
+ *   مهما كانت مدة الخدمة.
+ * - الإجازات لا تدخل المخالصة: الموظف يستنفد إجازاته خلال الخدمة.
  * - الأجر المستحق حتى آخر يوم عمل: من أول شهر بعد آخر مسيرة شملت الموظف،
  *   بنظام 30 يوماً للشهر (مثل مسيرات الرواتب).
  * - التواريخ نصوص YYYY-MM-DD (يوم الرياض) حتى لا تتأثر بمنطقة الخادم أو المتصفح.
@@ -91,9 +89,8 @@ export function getEndOfServiceStatusLabel(status: string | null | undefined): {
   );
 }
 
-/** الإجازة السنوية: 21 يوماً للسنوات الخمس الأولى، و30 يوماً بعدها (المادة 109) */
-export const ANNUAL_LEAVE_DAYS_FIRST_FIVE_YEARS = 21;
-export const ANNUAL_LEAVE_DAYS_AFTER_FIVE_YEARS = 30;
+/** مكافأة نهاية الخدمة: مبلغ ثابت حسب سياسة المنشأة */
+export const END_OF_SERVICE_FIXED_AWARD = 2000;
 export const SERVICE_YEAR_DAYS = 365;
 
 // ==================== التواريخ (YYYY-MM-DD) ====================
@@ -231,33 +228,7 @@ export function formatServicePeriod(
   return parts.length > 0 ? parts.join(" و") : "أقل من يوم";
 }
 
-// ==================== المكافأة والإجازة ====================
-
-/** مكافأة نهاية الخدمة لانتهاء العقد (المادة 84) */
-export function computeEndOfServiceAward(
-  monthlyWage: number,
-  yearsDecimal: number
-): number {
-  const wage = Math.max(0, Number(monthlyWage) || 0);
-  const years = Math.max(0, Number(yearsDecimal) || 0);
-  const firstFive = Math.min(years, 5);
-  const afterFive = Math.max(0, years - 5);
-  return roundMoney(wage * (firstFive * 0.5 + afterFive));
-}
-
-/** أيام الإجازة السنوية المستحقة عن مدة الخدمة كاملة (قبل خصم المستخدم) */
-export function computeAccruedAnnualLeaveDays(yearsDecimal: number): number {
-  const years = Math.max(0, Number(yearsDecimal) || 0);
-  const firstFive = Math.min(years, 5);
-  const afterFive = Math.max(0, years - 5);
-  return (
-    Math.round(
-      (firstFive * ANNUAL_LEAVE_DAYS_FIRST_FIVE_YEARS +
-        afterFive * ANNUAL_LEAVE_DAYS_AFTER_FIVE_YEARS) *
-        100
-    ) / 100
-  );
-}
+// ==================== الأجر ====================
 
 /** أجر اليوم = الأجر الشهري ÷ 30 */
 export function dailyWage(monthlyWage: number): number {
@@ -336,22 +307,6 @@ export function computeUnpaidSalaryPeriod(
   return { fromDate: formatDateOnly(from), days, coveredByPayroll: false };
 }
 
-/**
- * أيام لا تُحتسب من مدة الخدمة (المادة 116): الإجازة بدون أجر يوقف فيها العقد فيما زاد على 20 يوماً
- * (لكل إجازة على حدة)
- */
-export const UNPAID_LEAVE_SUSPENSION_THRESHOLD_DAYS = 20;
-
-export function computeExcludedServiceDays(unpaidLeaveDays: number[]): number {
-  let total = 0;
-  for (const raw of unpaidLeaveDays) {
-    const days = Number(raw);
-    if (Number.isFinite(days) && days > UNPAID_LEAVE_SUSPENSION_THRESHOLD_DAYS)
-      total += days - UNPAID_LEAVE_SUSPENSION_THRESHOLD_DAYS;
-  }
-  return Math.round(total * 100) / 100;
-}
-
 // ==================== المخالصة ====================
 
 export interface EndOfServiceDeductionItem {
@@ -370,12 +325,6 @@ export interface EndOfServiceCalcInput {
   baseSalary: number;
   /** البدلات الثابتة الشهرية (الساعات الإضافية الثابتة + حافز الإشراف ...) */
   fixedAllowances: number;
-  /** أيام الإجازة السنوية المستخدمة خلال الخدمة (من سجل الإجازات) */
-  annualLeaveDaysTaken: number;
-  /** أيام لا تُحتسب من الخدمة: الإجازة بدون أجر فيما زاد على 20 يوماً (المادة 116) */
-  excludedServiceDays?: number;
-  /** رصيد إجازة يدوي (يتجاوز المحسوب) */
-  leaveBalanceDaysOverride?: number | null;
   /** آخر شهر صُرف فيه راتب للموظف (من المسيرات غير الملغاة) */
   lastPayrollMonth: PayrollMonthRef | null;
   /** أيام أجر مستحق يدوية (تتجاوز المحسوب) */
@@ -389,22 +338,10 @@ export interface EndOfServiceCalcInput {
 export interface EndOfServiceCalculation {
   service: ServicePeriod;
   serviceText: string;
-  /** أيام مستبعدة من مدة الخدمة (المادة 116) */
-  excludedServiceDays: number;
-  /** سنوات الخدمة المحتسبة للمكافأة والإجازة (بعد الاستبعاد) */
-  awardYears: number;
   monthlyWage: number;
   dailyWage: number;
+  /** مكافأة نهاية الخدمة (مبلغ ثابت) */
   eosAward: number;
-  /** المكافأة مفصلة: السنوات الخمس الأولى / ما بعدها */
-  eosFirstFiveYears: number;
-  eosAfterFiveYears: number;
-  accruedLeaveDays: number;
-  annualLeaveDaysTaken: number;
-  computedLeaveBalanceDays: number;
-  leaveBalanceDays: number;
-  leaveBalanceIsManual: boolean;
-  leaveCompensation: number;
   salaryFromDate: string | null;
   computedSalaryDays: number;
   salaryDays: number;
@@ -464,33 +401,8 @@ export function calculateEndOfServiceSettlement(
   const perDay = dailyWage(monthlyWage);
   const warnings: string[] = [];
 
-  // سنوات الخدمة المحتسبة: المدة الفعلية ناقص أيام وقف العقد (المادة 116)
-  const excludedServiceDays = Math.min(
-    nonNegative(input.excludedServiceDays),
-    service.totalDays
-  );
-  const awardYears = Math.max(
-    0,
-    service.yearsDecimal - excludedServiceDays / SERVICE_YEAR_DAYS
-  );
-
-  // المكافأة
-  const firstFiveYears = Math.min(awardYears, 5);
-  const afterFiveYears = Math.max(0, awardYears - 5);
-  const eosFirstFiveYears = roundMoney(monthlyWage * firstFiveYears * 0.5);
-  const eosAfterFiveYears = roundMoney(monthlyWage * afterFiveYears);
-  const eosAward = roundMoney(eosFirstFiveYears + eosAfterFiveYears);
-
-  // الإجازة
-  const accruedLeaveDays = computeAccruedAnnualLeaveDays(awardYears);
-  const annualLeaveDaysTaken = nonNegative(input.annualLeaveDaysTaken);
-  const computedLeaveBalanceDays = Math.max(
-    0,
-    Math.round((accruedLeaveDays - annualLeaveDaysTaken) * 100) / 100
-  );
-  const leaveOverride = optionalNonNegative(input.leaveBalanceDaysOverride);
-  const leaveBalanceDays = leaveOverride ?? computedLeaveBalanceDays;
-  const leaveCompensation = roundMoney(perDay * leaveBalanceDays);
+  // مكافأة نهاية الخدمة: مبلغ ثابت حسب سياسة المنشأة
+  const eosAward = END_OF_SERVICE_FIXED_AWARD;
 
   // الأجر المستحق
   const unpaid = computeUnpaidSalaryPeriod(
@@ -520,21 +432,6 @@ export function calculateEndOfServiceSettlement(
       "لا توجد مسيرة رواتب سابقة للموظف في النظام؛ الأجر المستحق محسوب من بداية شهر آخر يوم عمل فقط، تأكد من صرف رواتب الأشهر السابقة"
     );
   }
-  if (excludedServiceDays > 0) {
-    warnings.push(
-      `استُبعد ${excludedServiceDays} يوماً من مدة الخدمة (إجازات بدون أجر تزيد على 20 يوماً - المادة 116)`
-    );
-  }
-  if (
-    leaveOverride === null &&
-    annualLeaveDaysTaken === 0 &&
-    accruedLeaveDays > 0
-  ) {
-    warnings.push(
-      "لم تُسجل إجازات سنوية مستخدمة في النظام؛ راجع رصيد الإجازة قبل الاعتماد"
-    );
-  }
-
   const otherAdditions = roundMoney(nonNegative(input.otherAdditions));
   const advancesDeduction = roundMoney(
     input.advances.reduce((s, a) => s + nonNegative(a.amount), 0)
@@ -544,9 +441,7 @@ export function calculateEndOfServiceSettlement(
   );
   const otherDeductions = roundMoney(nonNegative(input.otherDeductions));
 
-  const totalEntitlements = roundMoney(
-    eosAward + leaveCompensation + salaryDue + otherAdditions
-  );
+  const totalEntitlements = roundMoney(eosAward + salaryDue + otherAdditions);
   const totalDeductions = roundMoney(
     advancesDeduction + violationsDeduction + otherDeductions
   );
@@ -559,19 +454,9 @@ export function calculateEndOfServiceSettlement(
     calculation: {
       service,
       serviceText: formatServicePeriod(service),
-      excludedServiceDays,
-      awardYears,
       monthlyWage,
       dailyWage: roundMoney(perDay),
       eosAward,
-      eosFirstFiveYears,
-      eosAfterFiveYears,
-      accruedLeaveDays,
-      annualLeaveDaysTaken,
-      computedLeaveBalanceDays,
-      leaveBalanceDays,
-      leaveBalanceIsManual: leaveOverride !== null,
-      leaveCompensation,
       salaryFromDate: unpaid.fromDate,
       computedSalaryDays: unpaid.days,
       salaryDays,
@@ -655,7 +540,6 @@ export interface EndOfServiceDocumentData {
   violations: EndOfServiceDeductionItem[];
   otherAdditionsNote?: string | null;
   otherDeductionsNote?: string | null;
-  leaveNote?: string | null;
   salaryNote?: string | null;
   notes?: string | null;
   // الدفع

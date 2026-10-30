@@ -211,8 +211,6 @@ const eosFormSchema = z.object({
   position: z.string().max(100).nullable().optional(),
   baseSalary: eosAmountSchema,
   fixedAllowances: eosAmountSchema,
-  leaveBalanceDaysOverride: eosDaysSchema.nullable().optional(),
-  leaveNote: eosNoteSchema,
   salaryDaysOverride: eosDaysSchema.nullable().optional(),
   salaryNote: eosNoteSchema,
   otherAdditions: eosAmountSchema.optional(),

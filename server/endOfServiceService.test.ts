@@ -19,13 +19,9 @@ import {
   resolveViewScope,
   settlementToForm,
   storedCalculation,
-  sumAnnualLeaveDays,
-  annualLeaveDaysTaken,
   canViewEndOfServiceRequest,
-  sumExcludedServiceDays,
   toDocumentData,
   toListRow,
-  vacationRowDays,
   validateFormDates,
   type EmployeeContext,
   type EndOfServiceForm,
@@ -68,7 +64,6 @@ const ctx: EmployeeContext = {
   employee,
   branchName: "فرع لبن",
   wage: { baseSalary: 2000, fixedAllowances: 1000, breakdown: [] },
-  annualLeaveDaysTaken: 30,
   lastPayroll: { year: 2026, month: 9, payrollNumber: "PAY-202609-0001" },
   advances: [
     { id: 11, label: "سلفة REQ-260901-0001", amount: 500, date: "2026-09-01" },
@@ -87,8 +82,6 @@ const form: EndOfServiceForm = {
   position: "حلاق",
   baseSalary: 2000,
   fixedAllowances: 1000,
-  leaveBalanceDaysOverride: null,
-  leaveNote: null,
   salaryDaysOverride: null,
   salaryNote: null,
   otherAdditions: 250,
@@ -166,79 +159,6 @@ describe("wage defaults", () => {
     });
     expect(w.fixedAllowances).toBe(0);
     expect(w.breakdown).toHaveLength(1);
-  });
-});
-
-describe("annual leave taken", () => {
-  it("counts recorded days, or the inclusive span between the dates", () => {
-    expect(
-      vacationRowDays({
-        vacationType: "سنوية",
-        vacationStartDate: null,
-        vacationEndDate: null,
-        vacationDays: 10,
-      })
-    ).toBe(10);
-    expect(
-      vacationRowDays({
-        vacationType: "annual",
-        vacationStartDate: new Date("2026-03-01T00:00:00+03:00"),
-        vacationEndDate: new Date("2026-03-07T00:00:00+03:00"),
-        vacationDays: null,
-      })
-    ).toBe(7);
-    expect(
-      vacationRowDays({
-        vacationType: "annual",
-        vacationStartDate: "2026-03-01",
-        vacationEndDate: null,
-        vacationDays: 0,
-      })
-    ).toBe(1);
-  });
-
-  it("sums only annual leave and skips leave starting after the last working day", () => {
-    const rows = [
-      {
-        vacationType: "إجازة سنوية",
-        vacationStartDate: "2025-01-01",
-        vacationEndDate: null,
-        vacationDays: 21,
-      },
-      {
-        vacationType: "annual",
-        vacationStartDate: "2026-02-01",
-        vacationEndDate: null,
-        vacationDays: 9.5,
-      },
-      {
-        vacationType: "مرضية",
-        vacationStartDate: "2026-03-01",
-        vacationEndDate: null,
-        vacationDays: 5,
-      },
-      {
-        vacationType: "بدون راتب",
-        vacationStartDate: "2026-04-01",
-        vacationEndDate: null,
-        vacationDays: 3,
-      },
-      {
-        vacationType: "سنوية",
-        vacationStartDate: "2026-11-15",
-        vacationEndDate: null,
-        vacationDays: 10,
-      },
-    ];
-    expect(sumAnnualLeaveDays(rows)).toBe(40.5);
-    expect(sumAnnualLeaveDays(rows, "2026-10-31")).toBe(30.5);
-  });
-
-  it("takes the larger of approved requests and recorded balances, never their sum", () => {
-    expect(annualLeaveDaysTaken(30, 21)).toBe(30);
-    expect(annualLeaveDaysTaken(10, "63")).toBe(63);
-    expect(annualLeaveDaysTaken(12, null)).toBe(12);
-    expect(annualLeaveDaysTaken(12, -5)).toBe(12);
   });
 });
 
@@ -333,15 +253,15 @@ describe("settlement rows", () => {
   it("stores the calculated figures as decimals and the manual inputs as given", () => {
     const calc = calculateOrThrow(form, ctx);
     const values = buildSettlementValues(form, ctx, calc);
-    // 5 سنوات: نصف أجر شهر عن كل سنة = 2.5 × 3000
-    expect(values.eosAward).toBe("7500.00");
+    // مكافأة نهاية الخدمة مبلغ ثابت
+    expect(values.eosAward).toBe("2000.00");
     expect(values.monthlyWage).toBe("3000.00");
     expect(values.serviceYears).toBe(5);
     expect(values.advancesDeduction).toBe("500.00");
     expect(values.violationsDeduction).toBe("100.00");
     expect(values.otherAdditions).toBe("250.00");
     expect(values.netAmount).toBe(calc.netAmount.toFixed(2));
-    expect(values.leaveBalanceDaysOverride).toBeNull();
+    expect(values.salaryDaysOverride).toBeNull();
     expect(values.lastPayrollYear).toBe(2026);
     expect(values.lastPayrollMonth).toBe(9);
     expect(values.branchName).toBe("فرع لبن");
@@ -373,12 +293,11 @@ describe("settlement rows", () => {
   it("round-trips the saved form for editing and approval recompute", () => {
     const withOverrides: EndOfServiceForm = {
       ...form,
-      leaveBalanceDaysOverride: 12.5,
       salaryDaysOverride: 15,
-      leaveNote: "حسب الاتفاق",
+      salaryNote: "حسب الاتفاق",
     };
     const row = settlementRow({}, withOverrides);
-    expect(row.leaveBalanceDaysOverride).toBe("12.50");
+    expect(row.salaryDaysOverride).toBe("15.00");
     expect(settlementToForm(row)).toEqual(withOverrides);
   });
 
@@ -437,39 +356,6 @@ describe("settlement rows", () => {
     expect(_internal.riyadhMidnight("2026-10-31").toISOString()).toBe(
       "2026-10-30T21:00:00.000Z"
     );
-  });
-});
-
-describe("Article 116 excluded service days", () => {
-  it("counts only approved unpaid leave beyond 20 days, per leave, up to the last working day", () => {
-    const rows = [
-      {
-        vacationType: "بدون راتب",
-        vacationStartDate: "2024-01-01",
-        vacationEndDate: null,
-        vacationDays: 50,
-      },
-      {
-        vacationType: "unpaid",
-        vacationStartDate: "2025-01-01",
-        vacationEndDate: null,
-        vacationDays: 20,
-      },
-      {
-        vacationType: "سنوية",
-        vacationStartDate: "2025-06-01",
-        vacationEndDate: null,
-        vacationDays: 40,
-      },
-      {
-        vacationType: "unpaid",
-        vacationStartDate: "2026-12-01",
-        vacationEndDate: null,
-        vacationDays: 45,
-      },
-    ];
-    expect(sumExcludedServiceDays(rows)).toBe(30 + 0 + 25);
-    expect(sumExcludedServiceDays(rows, "2026-10-31")).toBe(30);
   });
 });
 
