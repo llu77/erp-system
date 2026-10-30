@@ -23,6 +23,7 @@ import {
   type PayrollDetail,
   type InsertPayrollDetail,
 } from "../../drizzle/schema";
+import { employeeJobTitle } from "../../shared/employeeFile";
 import {
   calculatePayrollLine,
   sumPayrollTotals,
@@ -401,7 +402,7 @@ function buildLine(
     employeeId: emp.id,
     employeeName: emp.name,
     employeeCode: emp.code,
-    position: emp.position,
+    position: employeeJobTitle(settings?.isSupervisor),
     isSupervisor: !!settings?.isSupervisor,
     overtimeRate,
     inputs: cleanedInputs,
@@ -1034,7 +1035,7 @@ export async function deletePayrollSafely(payrollId: number) {
   });
 }
 
-/** تفاصيل المسيرة مع البريد الإلكتروني للموظفين (لإرسال القسائم) */
+/** تفاصيل المسيرة مع البريد الإلكتروني للموظفين (لإرسال مسيرات الرواتب) */
 export async function getPayrollDetailsWithEmails(payrollId: number) {
   const db = await requireDb();
   return await db

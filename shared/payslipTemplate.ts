@@ -1,5 +1,6 @@
 /**
- * قسيمة الراتب الرسمية (صفحة A4 RTL) - مشتركة بين بوابة الموظفين والنظام الرئيسي والخادم (PDF)
+ * مسيرة الراتب الرسمية للموظف (صفحة A4 RTL) - مشتركة بين بوابة الموظفين والنظام الرئيسي والخادم (PDF)
+ * - مستند صادر من الإدارة: بلا إقرار استلام من الموظف
  * - الترويسة باسم مؤسسة فرع المسيرة (getEstablishmentForBranch) وليس فرع الموظف الحالي
  * - البيانات من لقطة سطر المسيرة وقت إصدارها (buildPayslipDocumentData)
  * - التوقيعات والختم فقط للمسيرة المعتمدة أو المصروفة، وإلا علامة مائية
@@ -7,6 +8,7 @@
  */
 
 import type { Establishment } from "./branding";
+import { employeeJobTitle } from "./employeeFile";
 import {
   LEAVE_DEDUCTION_RATE,
   LEAVE_KIND_LABELS,
@@ -59,7 +61,7 @@ export interface PayslipItem {
   days?: number | null;
 }
 
-/** بيانات القسيمة (من لقطة المسيرة وقت إصدارها، لا من بيانات الموظف الحالية) */
+/** بيانات مسيرة الراتب (من لقطة المسيرة وقت إصدارها، لا من بيانات الموظف الحالية) */
 export interface PayslipDocumentData {
   payrollId: number;
   payrollNumber: string;
@@ -127,7 +129,7 @@ export interface PayslipDocumentData {
   paymentReference?: string | null;
 }
 
-/** خيارات قوالب مستندات الموظف (القسيمة وطلب السلفة) */
+/** خيارات قوالب مستندات الموظف (مسيرة الراتب وطلب السلفة) */
 export interface EmployeeDocumentTemplateOptions {
   /** أساس روابط الصور (مثال: window.location.origin). يُتجاهل للصور المُمررة صراحةً في assets */
   assetBaseUrl?: string;
@@ -146,6 +148,9 @@ export function isPayslipSigned(status: string | null | undefined): boolean {
   return status === "approved" || status === "paid";
 }
 
+/** اسم مستند راتب الموظف الشهري (مسيرة الراتب، وليس قسيمة) */
+export const PAYROLL_STATEMENT_TITLE = "مسيرة راتب";
+
 export const PAYSLIP_STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
   pending: "تحت الإجراء",
@@ -158,7 +163,7 @@ export function payslipStatusLabel(status: string | null | undefined): string {
   return PAYSLIP_STATUS_LABELS[String(status ?? "")] ?? String(status ?? "-");
 }
 
-// ==================== تحويل صفوف المسيرة إلى بيانات القسيمة ====================
+// ==================== تحويل صفوف المسيرة إلى بيانات مسيرة الراتب ====================
 
 type Money = number | string | null | undefined;
 type DateLike = Date | string | null | undefined;
@@ -230,7 +235,7 @@ const ymd = (value: DateLike): string | null =>
 const text = (value: unknown): string | null => present(value);
 
 /**
- * بيانات القسيمة من صف المسيرة وسطر الموظف (الأرقام كما حُفظت، بدون إعادة حساب)
+ * بيانات مسيرة الراتب من صف المسيرة وسطر الموظف (الأرقام كما حُفظت، بدون إعادة حساب)
  * - تفاصيل السلف والمخالفات والإجازات والفواتير من لقطات JSON في السطر
  * - مبلغ كل إجازة = أجر اليوم × الأيام × نسبة خصم نوعها (للعرض؛ الإجمالي من السطر)
  */
@@ -309,7 +314,8 @@ export function buildPayslipDocumentData(
       id: detail.employeeId ?? 0,
       name: detail.employeeName,
       code: detail.employeeCode,
-      position: text(detail.position),
+      // المسمى الثابت من علامة المشرف في سطر المسيرة (حلاق / مشرف)
+      position: employeeJobTitle(detail.isSupervisor),
       iqamaNumber: text(extras.iqamaNumber),
       nationality: text(extras.nationality),
       hireDate: ymd(extras.hireDate),
@@ -587,9 +593,9 @@ function renderApproval(
   data: PayslipDocumentData
 ): string {
   if (ctx.cancelled)
-    return `<div class="alert-box"><b>المسيرة ملغاة</b> - هذه القسيمة غير صالحة للاستخدام.</div>`;
+    return `<div class="alert-box"><b>المسيرة ملغاة</b> - هذا المستند غير صالح للاستخدام.</div>`;
   if (!ctx.signed)
-    return `<div class="pending-note">بانتظار اعتماد المسيرة - لا تُعد هذه القسيمة مستنداً رسمياً قبل الاعتماد</div>`;
+    return `<div class="pending-note">بانتظار اعتماد المسيرة - لا يُعد هذا المستند رسمياً قبل الاعتماد</div>`;
   const approvedBy = present(data.approvedByName);
   let note = `&#10004; اعتُمدت المسيرة${approvedBy ? ` بواسطة ${esc(approvedBy)}` : ""}${data.approvedAt ? ` بتاريخ ${esc(dateTimeText(data.approvedAt))}` : ""}`;
   if (ctx.status === "paid") {
@@ -621,27 +627,7 @@ function renderSignatures(
     </section>`;
 }
 
-function renderReceiver(data: PayslipDocumentData, periodText: string): string {
-  const net = data.totals.netSalary;
-  const name = `<strong>${esc(data.employee.name)}</strong>`;
-  const amount = `<strong>${money(Math.abs(net))} ريال سعودي</strong>`;
-  const words = esc(amountToArabicWords(Math.abs(net)));
-  const textBody =
-    net >= 0
-      ? `أقر أنا الموقع أدناه / ${name} بأنني استلمت صافي راتبي عن ${esc(periodText)} وقدره (${amount}) ${words}، وأنني اطلعت على تفاصيل المستحقات والخصومات الواردة أعلاه.`
-      : `أقر أنا الموقع أدناه / ${name} بأنني اطلعت على تفاصيل راتبي عن ${esc(periodText)}، وأن صافي المستحق عليّ بعد الخصومات (${amount}) ${words}.`;
-  return `
-    <section class="ack">
-      <div class="ack-text"><b>إقرار استلام:</b> ${textBody}</div>
-      <div class="ack-fields">
-        <div class="ack-field"><span>الاسم:</span> <span class="blank">${esc(data.employee.name)}</span></div>
-        <div class="ack-field"><span>التوقيع:</span> <span class="blank">&nbsp;</span></div>
-        <div class="ack-field short"><span>التاريخ:</span> <span class="blank">&nbsp;</span></div>
-      </div>
-    </section>`;
-}
-
-/** قسيمة الراتب (HTML كامل، صفحة A4 واحدة للحالات المعتادة) */
+/** مسيرة راتب الموظف (HTML كامل، صفحة A4 واحدة للحالات المعتادة) */
 export function renderPayslipHtml(
   data: PayslipDocumentData,
   options: EmployeeDocumentTemplateOptions = {}
@@ -677,8 +663,8 @@ export function renderPayslipHtml(
         <div class="val ltr">${esc(data.payrollNumber)}</div>
       </div>
       <div class="doc-title">
-        <h1>قسيمة راتب</h1>
-        <h2>PAYSLIP</h2>
+        <h1>${PAYROLL_STATEMENT_TITLE}</h1>
+        <h2>PAYROLL STATEMENT</h2>
         <div class="period">${esc(periodText)}</div>
       </div>
       <div class="info-box">
@@ -697,16 +683,15 @@ export function renderPayslipHtml(
     <div class="closing-block">
       ${renderApproval(ctx, data)}
       ${renderSignatures(ctx, data)}
-      ${renderReceiver(data, periodText)}
     </div>`;
 
   return renderDocumentShell({
     ctx,
-    title: `قسيمة راتب - ${data.employee.name} - ${monthYear}`,
+    title: `${PAYROLL_STATEMENT_TITLE} - ${data.employee.name} - ${monthYear}`,
     kind: "payslip",
     watermark,
     body,
-    footer: renderFooter(ctx, "قسيمة راتب", "رقم المسيرة", data.payrollNumber),
+    footer: renderFooter(ctx, PAYROLL_STATEMENT_TITLE, "رقم المسيرة", data.payrollNumber),
     extraCss: PAYSLIP_STYLES,
     autoPrint: options.autoPrint,
   });

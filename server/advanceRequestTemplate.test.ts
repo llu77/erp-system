@@ -44,7 +44,7 @@ function request(
 
 const EMPLOYEE: AdvanceRequestEmployeeSource = {
   code: "EMP-0007",
-  position: "حلاق",
+  isSupervisor: false,
   iqamaNumber: "2412345678",
   nationality: "باكستاني",
   phone: "0551234567",
@@ -162,6 +162,15 @@ describe("قالب طلب السلفة", () => {
     }
   });
 
+  it("shows the fixed job title: barber, or supervisor for a supervisor account", () => {
+    const titleCell = (title: string) =>
+      `<div class="lbl">المسمى الوظيفي</div><div class="val">${title}</div>`;
+    expect(render()).toContain(titleCell("حلاق"));
+    const supervisor = render(request(), {}, { ...EMPLOYEE, isSupervisor: true });
+    expect(supervisor).toContain(titleCell("مشرف"));
+    expect(supervisor).not.toContain(titleCell("حلاق"));
+  });
+
   it("approved: decision with reviewer, notes, deduction reference, signatures and stamp", () => {
     const html = render(request(), {
       payroll: {
@@ -183,6 +192,12 @@ describe("قالب طلب السلفة", () => {
     expect(html).toContain(ASSETS.stamp);
     expect(html).toContain(ASSETS.managerSignature);
     expect(html).toContain(ASSETS.supervisorSignature);
+    // نص الاعتماد عادي بلا تظليل أخضر
+    expect(html).toContain('class="decision decision-approved"');
+    expect(html).not.toContain("ok-box");
+    const approvedRule = html.match(/\.decision-approved \{[^}]*\}/)?.[0] ?? "";
+    expect(approvedRule).not.toBe("");
+    expect(approvedRule).not.toMatch(/background|border|color/);
     expect(html).not.toContain('class="watermark');
     // مسيرة لم تُعتمد بعد: مُدرجة للخصم
     expect(

@@ -57,6 +57,7 @@ import {
   DOCUMENT_KIND_LABELS,
   DOCUMENT_STATUS_LABELS,
   EXPIRING_DOCUMENT_KINDS,
+  JOB_TITLE_BARBER,
   describeDocumentExpiry,
   formatDaysLeft,
   worstDocumentStatus,
@@ -83,7 +84,6 @@ interface NewEmployeeForm {
   code: string;
   name: string;
   branchId: string;
-  position: string;
   phone: string;
   hireDate: string;
   nationality: string;
@@ -93,7 +93,6 @@ const EMPTY_NEW_EMPLOYEE: NewEmployeeForm = {
   code: "",
   name: "",
   branchId: "",
-  position: "",
   phone: "",
   hireDate: "",
   nationality: "",
@@ -266,7 +265,6 @@ export default function Employees() {
       code: newEmployee.code.trim(),
       name: newEmployee.name.trim(),
       branchId: newEmployee.branchId ? Number(newEmployee.branchId) : undefined,
-      position: newEmployee.position.trim() || null,
       phone: newEmployee.phone.trim() || null,
       hireDate: newEmployee.hireDate || null,
       nationality: newEmployee.nationality.trim() || null,
@@ -692,14 +690,10 @@ export default function Employees() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="new-position">المسمى الوظيفي</Label>
-              <Input
-                id="new-position"
-                value={newEmployee.position}
-                maxLength={100}
-                onChange={e =>
-                  setNewEmployee({ ...newEmployee, position: e.target.value })
-                }
-              />
+              <Input id="new-position" value={JOB_TITLE_BARBER} readOnly disabled />
+              <p className="text-xs text-muted-foreground">
+                يصبح "مشرف" عند تفعيل "مشرف فرع" في تبويب الراتب بملف الموظف
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="new-phone">رقم الجوال</Label>

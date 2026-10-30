@@ -294,7 +294,7 @@ describe("توليد PDF لمستندات الموظف", () => {
         payrollNumber: "PAY-2026-10-0003",
         employee: { code: "EMP/7" } as never,
       })
-    ).toBe("payslip-PAY-2026-10-0003-EMP_7.pdf");
+    ).toBe("payroll-statement-PAY-2026-10-0003-EMP_7.pdf");
     expect(advanceRequestFileName({ requestNumber: "../REQ 1" })).toBe(
       "advance-request-___REQ_1.pdf"
     );

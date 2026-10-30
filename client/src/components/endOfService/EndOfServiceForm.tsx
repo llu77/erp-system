@@ -55,7 +55,6 @@ interface FormState {
   letterDate: string;
   nationality: string;
   idNumber: string;
-  position: string;
   baseSalary: string;
   fixedAllowances: string;
   salaryManual: boolean;
@@ -82,7 +81,6 @@ function emptyState(): FormState {
     letterDate: todayVoucherDate(),
     nationality: "",
     idNumber: "",
-    position: "",
     baseSalary: "",
     fixedAllowances: "",
     salaryManual: false,
@@ -108,7 +106,6 @@ function stateFromDefaults(d: EosDefaults): FormState {
     lastWorkingDay: contractEndDate,
     nationality: d.employee.nationality ?? "",
     idNumber: d.employee.idNumber ?? "",
-    position: d.employee.position ?? "",
     baseSalary: numberText(d.wage.baseSalary),
     fixedAllowances: numberText(d.wage.fixedAllowances),
   };
@@ -124,7 +121,6 @@ function stateFromForm(f: EosFormInput): FormState {
     letterDate: f.letterDate,
     nationality: f.nationality ?? "",
     idNumber: f.idNumber ?? "",
-    position: f.position ?? "",
     baseSalary: numberText(f.baseSalary),
     fixedAllowances: numberText(f.fixedAllowances),
     salaryManual,
@@ -233,7 +229,6 @@ function buildInput(
       letterDate: s.letterDate.trim(),
       nationality: textOrNull(s.nationality),
       idNumber: textOrNull(s.idNumber),
-      position: textOrNull(s.position),
       baseSalary: num(baseSalary),
       fixedAllowances: num(fixedAllowances),
       salaryDaysOverride: salaryOverride,
@@ -904,10 +899,12 @@ export default function EndOfServiceForm({
                         />
                       </Field>
                       <Field label="المسمى الوظيفي">
+                        {/* ثابت من علامة المشرف في ملف الموظف: حلاق أو مشرف */}
                         <Input
-                          value={form.position}
-                          onChange={e => set("position", e.target.value)}
-                          maxLength={100}
+                          value={defaults?.employee.position ?? ""}
+                          readOnly
+                          disabled
+                          title="يتحدد تلقائياً: مشرف لحساب المشرف، وحلاق لغيره"
                         />
                       </Field>
                     </div>

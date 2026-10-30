@@ -19,7 +19,6 @@ export interface EosFormInput {
   letterDate: string;
   nationality?: string | null;
   idNumber?: string | null;
-  position?: string | null;
   baseSalary: number;
   fixedAllowances: number;
   salaryDaysOverride?: number | null;

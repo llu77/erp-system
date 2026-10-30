@@ -229,17 +229,38 @@ describe("بيانات قسيمة الراتب من سطر المسيرة", () =
 });
 
 describe("قالب قسيمة الراتب", () => {
-  it("is an RTL A4 Arabic payslip with title, month and payroll number", () => {
+  it("is an RTL A4 Arabic payroll statement with title, month and payroll number", () => {
     const html = render();
     expect(html).toContain('<html dir="rtl" lang="ar">');
     expect(html).toContain("size: A4");
-    expect(html).toContain("قسيمة راتب");
-    expect(html).toContain("PAYSLIP");
+    expect(html).toContain("مسيرة راتب");
+    expect(html).toContain("PAYROLL STATEMENT");
+    expect(html).not.toContain("قسيمة");
+    expect(html).not.toContain("PAYSLIP");
     expect(html).toContain("شهر أكتوبر 2026");
     expect(html).toContain("PAY-2026-10-0003");
     expect(html).toContain("01/10/2026 - 31/10/2026");
     // بدون @import للخطوط من الشبكة
     expect(html).not.toContain("@import");
+  });
+
+  it("has no employee acknowledgement (issued by management)", () => {
+    for (const status of ["draft", "approved", "paid"]) {
+      const html = render(payroll({ status }));
+      expect(html).not.toContain("إقرار");
+      expect(html).not.toContain("أقر أنا");
+      expect(html).not.toContain('class="ack"');
+    }
+  });
+
+  it("shows the fixed job title from the payroll line's supervisor flag", () => {
+    const titleCell = (title: string) =>
+      `<div class="lbl">المسمى الوظيفي</div><div class="val">${title}</div>`;
+    const supervisor = render(payroll(), detail({ isSupervisor: true, position: "حلاق" }));
+    expect(supervisor).toContain(titleCell("مشرف"));
+    const barber = render(payroll(), detail({ isSupervisor: false, position: "مدير صالون" }));
+    expect(barber).toContain(titleCell("حلاق"));
+    expect(barber).not.toContain("مدير صالون");
   });
 
   it("brands the payslip with the establishment of the payroll branch", () => {

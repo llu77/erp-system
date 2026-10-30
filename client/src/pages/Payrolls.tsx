@@ -330,7 +330,7 @@ export default function Payrolls() {
     }
   };
 
-  // طباعة قسيمة راتب فردية: بيانات الخادم (ملف الموظف + لقطة المسيرة) بنفس قالب PDF الرسمي
+  // طباعة مسيرة راتب فردية للموظف: بيانات الخادم (ملف الموظف + لقطة المسيرة) بنفس قالب PDF الرسمي
   const handlePrintPayslip = async (detail: any, payroll: any) => {
     // فتح النافذة مباشرة من حدث النقر لتجنب حظر النوافذ المنبثقة
     const win = openPrintWindow();
@@ -344,11 +344,11 @@ export default function Payrolls() {
       writePrintDocument(win, buildPayslipDocumentHtml(data));
     } catch (error: any) {
       win.close();
-      toast.error(error?.message || "تعذر تجهيز قسيمة الراتب للطباعة");
+      toast.error(error?.message || "تعذر تجهيز مسيرة راتب الموظف للطباعة");
     }
   };
 
-  // تحميل قسيمة الراتب PDF (مولّدة في الخادم)
+  // تحميل مسيرة راتب الموظف PDF (مولّدة في الخادم)
   const payslipPdfMutation = trpc.payrolls.payslipPdf.useMutation();
   const payslipPdfPendingFor = payslipPdfMutation.isPending ? payslipPdfMutation.variables?.employeeId ?? null : null;
   const handleDownloadPayslipPdf = async (detail: any, payroll: any) => {
@@ -357,7 +357,7 @@ export default function Payrolls() {
       toast.loading("جاري توليد ملف PDF...", { id: toastId });
       const result = await payslipPdfMutation.mutateAsync({ payrollId: payroll.id, employeeId: detail.employeeId });
       downloadBase64Pdf(result.pdf, result.filename);
-      toast.success("تم تحميل قسيمة الراتب", { id: toastId });
+      toast.success("تم تحميل مسيرة راتب الموظف", { id: toastId });
     } catch (error: any) {
       toast.error(error?.message || "فشل توليد ملف PDF", { id: toastId });
     }
@@ -1149,7 +1149,7 @@ export default function Payrolls() {
                                 size="icon"
                                 className="h-7 w-7"
                                 onClick={() => currentPayroll && handlePrintPayslip(detail, currentPayroll)}
-                                title="طباعة قسيمة الراتب"
+                                title="طباعة مسيرة راتب الموظف"
                               >
                                 <Printer className="h-3.5 w-3.5 text-blue-500" />
                               </Button>
@@ -1159,8 +1159,8 @@ export default function Payrolls() {
                                 className="h-7 w-7"
                                 onClick={() => currentPayroll && handleDownloadPayslipPdf(detail, currentPayroll)}
                                 disabled={payslipPdfPendingFor === detail.employeeId}
-                                title="تحميل قسيمة الراتب PDF"
-                                aria-label="تحميل قسيمة الراتب PDF"
+                                title="تحميل مسيرة راتب الموظف PDF"
+                                aria-label="تحميل مسيرة راتب الموظف PDF"
                               >
                                 {payslipPdfPendingFor === detail.employeeId ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

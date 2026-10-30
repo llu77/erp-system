@@ -1,7 +1,7 @@
 /**
- * قسائم الراتب في بوابة الموظفين
+ * مسيرات الراتب في بوابة الموظفين
  * - القائمة من المسيرات المعتمدة/المصروفة فقط (الأحدث أولاً)
- * - القسيمة مفصلة من لقطة المسير (البنود وتفاصيلها، الحضور، الإجماليات، الصافي كتابةً، الاعتماد)
+ * - مسيرة الراتب مفصلة من لقطة المسير (البنود وتفاصيلها، الحضور، الإجماليات، الصافي كتابةً، الاعتماد)
  * - تحميل PDF رسمي من الخادم، والطباعة من نفس القالب المشترك
  */
 
@@ -48,7 +48,7 @@ import {
 } from "@shared/payslipTemplate";
 import { PortalLoading, PortalQueryError } from "./PortalQueryState";
 
-/** صف في قائمة القسائم (employeePortal.getSalarySlips) */
+/** صف في قائمة مسيرات الراتب (employeePortal.getSalarySlips) */
 export interface PortalSalarySlipSummary {
   payrollId: number;
   payrollNumber: string;
@@ -61,7 +61,7 @@ export interface PortalSalarySlipSummary {
 }
 
 interface SalarySlipProps {
-  /** قسيمة محددة من رابط الإشعار (?payrollId=) */
+  /** مسيرة راتب محددة من رابط الإشعار (?payrollId=) */
   initialPayrollId?: number | null;
 }
 
@@ -94,7 +94,7 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
       const result: { pdf: string; filename: string } =
         await pdfMutation.mutateAsync({ payrollId: slip.payrollId });
       downloadBase64Pdf(result.pdf, result.filename);
-      toast.success("تم تحميل القسيمة", { id: toastId });
+      toast.success("تم تحميل مسيرة الراتب", { id: toastId });
     } catch (error) {
       toast.error(errorMessage(error, "فشل توليد ملف PDF"), { id: toastId });
     }
@@ -111,7 +111,7 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
       });
     } catch (error) {
       console.error("[Portal] payslip print render failed", error);
-      toast.error("تعذر تجهيز القسيمة للطباعة، استخدم تحميل PDF");
+      toast.error("تعذر تجهيز مسيرة الراتب للطباعة، استخدم تحميل PDF");
       return;
     }
     if (!openHtmlDocument(html)) {
@@ -125,7 +125,7 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
     return (
       <Card className="bg-slate-800/50 border-slate-700">
         <CardContent>
-          <PortalLoading label="جاري تحميل قسائم الراتب..." />
+          <PortalLoading label="جاري تحميل مسيرات الراتب..." />
         </CardContent>
       </Card>
     );
@@ -135,7 +135,7 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
     return (
       <PortalQueryError
         error={slipsQuery.error}
-        title="تعذر تحميل قسائم الراتب"
+        title="تعذر تحميل مسيرات الراتب"
         onRetry={() => slipsQuery.refetch()}
         isRetrying={slipsQuery.isFetching}
       />
@@ -147,9 +147,9 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
       <Card className="bg-slate-800/50 border-slate-700">
         <CardContent className="py-12 text-center">
           <Receipt className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-          <p className="text-slate-300">لا توجد قسائم رواتب معتمدة بعد</p>
+          <p className="text-slate-300">لا توجد مسيرات رواتب معتمدة بعد</p>
           <p className="text-slate-500 text-sm mt-2">
-            تظهر القسيمة هنا بعد اعتماد مسير الرواتب من الإدارة
+            تظهر مسيرة الراتب هنا بعد اعتماد مسير الرواتب من الإدارة
           </p>
         </CardContent>
       </Card>
@@ -158,12 +158,12 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
-      {/* قائمة القسائم */}
+      {/* قائمة مسيرات الراتب */}
       <Card className="bg-slate-800/50 border-slate-700 h-fit">
         <CardHeader className="pb-3">
           <CardTitle className="text-white text-sm flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-amber-500" />
-            قسائم الراتب
+            مسيرات الراتب
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -206,18 +206,18 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
         </CardContent>
       </Card>
 
-      {/* القسيمة المفصلة */}
+      {/* مسيرة الراتب المفصلة */}
       <div className="min-w-0">
         {slipQuery.isLoading ? (
           <Card className="bg-slate-800/50 border-slate-700">
             <CardContent>
-              <PortalLoading label="جاري تحميل القسيمة..." />
+              <PortalLoading label="جاري تحميل مسيرة الراتب..." />
             </CardContent>
           </Card>
         ) : slipQuery.error ? (
           <PortalQueryError
             error={slipQuery.error}
-            title="تعذر تحميل القسيمة"
+            title="تعذر تحميل مسيرة الراتب"
             onRetry={() => slipQuery.refetch()}
             isRetrying={slipQuery.isFetching}
           />
@@ -234,7 +234,7 @@ export function SalarySlip({ initialPayrollId = null }: SalarySlipProps) {
   );
 }
 
-// ==================== تفاصيل القسيمة ====================
+// ==================== تفاصيل مسيرة الراتب ====================
 
 function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -326,7 +326,7 @@ function PayslipDetail({
           <div className="min-w-0">
             <CardTitle className="text-white flex items-center gap-2">
               <FileText className="h-5 w-5 text-amber-500" />
-              قسيمة راتب {payrollPeriodLabel(slip.year, slip.month)}
+              مسيرة راتب {payrollPeriodLabel(slip.year, slip.month)}
             </CardTitle>
             <p className="mt-1 text-sm text-slate-400">
               {establishment.nameAr}
@@ -450,7 +450,7 @@ function PayslipDetail({
           <div className="space-y-3">
             {deductions.length === 0 ? (
               <p className="text-sm text-slate-500">
-                لا توجد خصومات على هذه القسيمة
+                لا توجد خصومات على هذه المسيرة
               </p>
             ) : (
               deductions.map(line => (

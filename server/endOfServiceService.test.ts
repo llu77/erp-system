@@ -79,7 +79,6 @@ const form: EndOfServiceForm = {
   letterDate: "2026-09-01",
   nationality: "مصري",
   idNumber: "2412345678",
-  position: "حلاق",
   baseSalary: 2000,
   fixedAllowances: 1000,
   salaryDaysOverride: null,
@@ -272,7 +271,7 @@ describe("settlement rows", () => {
   });
 
   it("falls back to the employee file for snapshot fields the form leaves out", () => {
-    const { nationality, idNumber, position, ...rest } = form;
+    const { nationality, idNumber, ...rest } = form;
     const values = buildSettlementValues(
       rest as EndOfServiceForm,
       ctx,
@@ -280,14 +279,20 @@ describe("settlement rows", () => {
     );
     expect(values.nationality).toBe("مصري");
     expect(values.idNumber).toBe("2412345678");
-    expect(values.position).toBe("حلاق");
     const cleared = buildSettlementValues(
-      { ...form, nationality: "  ", position: null },
+      { ...form, nationality: "  " },
       ctx,
       calculateOrThrow(form, ctx)
     );
     expect(cleared.nationality).toBeNull();
-    expect(cleared.position).toBeNull();
+  });
+
+  it("takes the job title from the supervisor flag, never from the form", () => {
+    const calc = calculateOrThrow(form, ctx);
+    const typed = { ...form, position: "مدير عام" } as EndOfServiceForm;
+    expect(buildSettlementValues(typed, ctx, calc).position).toBe("حلاق");
+    const supervisorCtx = { ...ctx, employee: { ...ctx.employee, isSupervisor: true, position: "حلاق" } };
+    expect(buildSettlementValues(form, supervisorCtx, calc).position).toBe("مشرف");
   });
 
   it("round-trips the saved form for editing and approval recompute", () => {

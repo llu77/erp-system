@@ -83,7 +83,6 @@ const employeeDataFields = {
     .max(255, "اسم الموظف طويل جداً"),
   branchId: z.number().int().positive("اختر فرعاً صحيحاً"),
   phone: optionalText(50, "رقم الهاتف طويل جداً"),
-  position: optionalText(100, "المسمى الوظيفي طويل جداً"),
   isActive: z.boolean(),
   iqamaNumber: iqamaNumberInput,
   iqamaExpiryDate: documentDateInput,
@@ -106,7 +105,6 @@ export const employeeUpdateSchema = z.object({
   name: employeeDataFields.name.optional(),
   branchId: employeeDataFields.branchId.optional(),
   phone: employeeDataFields.phone,
-  position: employeeDataFields.position,
   isActive: employeeDataFields.isActive.optional(),
   iqamaNumber: employeeDataFields.iqamaNumber,
   iqamaExpiryDate: employeeDataFields.iqamaExpiryDate,
@@ -186,7 +184,6 @@ export function buildEmployeeUpdatePatch(
   if (input.branchId !== undefined) patch.branchId = input.branchId;
   if (input.isActive !== undefined) patch.isActive = input.isActive;
   if (input.phone !== undefined) patch.phone = textOrNull(input.phone);
-  if (input.position !== undefined) patch.position = textOrNull(input.position);
   if (input.nationality !== undefined)
     patch.nationality = textOrNull(input.nationality);
   if (input.hireDate !== undefined) patch.hireDate = input.hireDate;

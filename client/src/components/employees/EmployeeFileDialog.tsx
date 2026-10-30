@@ -67,7 +67,6 @@ interface BasicForm {
   code: string;
   name: string;
   branchId: string;
-  position: string;
   phone: string;
   hireDate: string;
   nationality: string;
@@ -79,7 +78,6 @@ function toBasicForm(e: EmployeeFileData["employee"]): BasicForm {
     code: e.code,
     name: e.name,
     branchId: e.branchId ? String(e.branchId) : "",
-    position: e.position ?? "",
     phone: e.phone ?? "",
     hireDate: e.hireDate ?? "",
     nationality: e.nationality ?? "",
@@ -116,7 +114,7 @@ function BasicInfoTab({
       toast.error("الكود والاسم مطلوبان");
       return;
     }
-    const text = (key: "position" | "phone" | "nationality") =>
+    const text = (key: "phone" | "nationality") =>
       form[key].trim() || null;
     save.mutate({
       id: employeeId,
@@ -124,9 +122,6 @@ function BasicInfoTab({
       ...(form.name !== source.name ? { name: form.name.trim() } : {}),
       ...(form.branchId !== source.branchId && form.branchId
         ? { branchId: Number(form.branchId) }
-        : {}),
-      ...(form.position !== source.position
-        ? { position: text("position") }
         : {}),
       ...(form.phone !== source.phone ? { phone: text("phone") } : {}),
       ...(form.nationality !== source.nationality
@@ -204,14 +199,16 @@ function BasicInfoTab({
         </div>
         <div className="space-y-2">
           <Label htmlFor="emp-position">المسمى الوظيفي</Label>
+          {/* ثابت: مشرف عند تفعيل "مشرف فرع" في تبويب الراتب، وإلا حلاق */}
           <Input
             id="emp-position"
-            value={form.position}
-            maxLength={100}
-            onChange={e => update("position", e.target.value)}
-            disabled={busy}
-            placeholder="مثال: حلاق"
+            value={file.employee.position ?? ""}
+            readOnly
+            disabled
           />
+          <p className="text-xs text-muted-foreground">
+            يتحدد تلقائياً: مشرف عند تفعيل "مشرف فرع" في تبويب الراتب، وإلا حلاق
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="emp-phone">رقم الجوال</Label>

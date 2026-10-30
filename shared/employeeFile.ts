@@ -3,6 +3,7 @@
  * - حالة الوثائق (الإقامة / الشهادة الصحية / العقد) حسب يوم الرياض
  * - التحقق من ملفات الصور والوثائق قبل الرفع
  * - القيم الافتراضية لإعدادات الراتب والتحقق من الآيبان
+ * - المسمى الوظيفي الثابت (حلاق / مشرف)
  */
 
 import { toVoucherDateString } from "./vouchers";
@@ -11,6 +12,19 @@ import {
   DEFAULT_OVERTIME_AMOUNT,
   DEFAULT_SUPERVISOR_INCENTIVE,
 } from "./payroll";
+
+// ==================== المسمى الوظيفي ====================
+
+export const JOB_TITLE_BARBER = "حلاق";
+export const JOB_TITLE_SUPERVISOR = "مشرف";
+
+/**
+ * المسمى الوظيفي دائماً من علامة "مشرف فرع" في ملف الموظف (تبويب الراتب)، ولا يُدخل يدوياً:
+ * مشرف لحساب المشرف، وحلاق لغيره
+ */
+export function employeeJobTitle(isSupervisor: boolean | number | null | undefined): string {
+  return isSupervisor ? JOB_TITLE_SUPERVISOR : JOB_TITLE_BARBER;
+}
 
 // ==================== أنواع الوثائق ====================
 

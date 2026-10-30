@@ -484,6 +484,13 @@
       "when": 1793338004166,
       "tag": "0068_employee_portal",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "5",
+      "when": 1793354563040,
+      "tag": "0069_job_titles",
+      "breakpoints": true
     }
   ]
 }

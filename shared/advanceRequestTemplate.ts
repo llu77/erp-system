@@ -5,6 +5,7 @@
  * - جميع النصوص المُدخلة من المستخدم تُهرّب قبل إدراجها في HTML
  */
 
+import { employeeJobTitle } from "./employeeFile";
 import { amountToArabicWords, toVoucherDateString } from "./vouchers";
 import type { EmployeeDocumentTemplateOptions } from "./payslipTemplate";
 import {
@@ -136,7 +137,8 @@ export interface AdvanceRequestSource {
 /** بيانات الموظف من ملفه (اختيارية) */
 export interface AdvanceRequestEmployeeSource {
   code?: string | null;
-  position?: string | null;
+  /** علامة المشرف في ملف الموظف: تحدد المسمى (مشرف / حلاق) */
+  isSupervisor?: boolean | null;
   iqamaNumber?: string | null;
   nationality?: string | null;
   phone?: string | null;
@@ -192,7 +194,7 @@ export function buildAdvanceRequestDocumentData(
       id: request.employeeId,
       name: request.employeeName,
       code: present(employee?.code) ?? "",
-      position: present(employee?.position),
+      position: employee ? employeeJobTitle(employee.isSupervisor) : null,
       iqamaNumber: present(employee?.iqamaNumber),
       nationality: present(employee?.nationality),
       phone: present(employee?.phone),
@@ -242,8 +244,9 @@ function renderDecision(
     const deduction = data.deduction
       ? `<div class="decision-line">${deductionText(data.deduction)}</div>`
       : "";
+    // نص الاعتماد عادي بلا تظليل (التوقيع والختم أسفله هما علامة الاعتماد)
     return `
-      <div class="ok-box decision">
+      <div class="decision decision-approved">
         <div class="decision-head">&#10004; تمت الموافقة على الطلب${by}</div>
         <div class="decision-line">بمبلغ <b>${money(data.amount)} ريال سعودي</b>، على أن تُسترد ${esc(repaymentPhrase(data.repaymentMethod))}.</div>
         ${notes ? `<div class="decision-line"><b>ملاحظات الاعتماد:</b> <span class="user-text">${esc(notes)}</span></div>` : ""}
@@ -419,6 +422,7 @@ const ADVANCE_STYLES = `
   .applicant { display: flex; gap: 14px; margin-top: 14px; break-inside: avoid; }
   .approval { margin-top: 14px; break-inside: avoid; page-break-inside: avoid; }
   .decision { margin-top: 4px; line-height: 1.75; }
+  .decision-approved { margin-top: 6px; padding: 0 2px; font-size: 11.5px; }
   .decision-head { font-weight: 700; font-size: 12px; }
   .decision-line { font-size: 11.5px; }
   .approval .sign-row { margin-top: 10px; justify-content: space-around; }

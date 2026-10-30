@@ -3,7 +3,7 @@
  * - مسارات البوابة وإعادة التوجيه عند انتهاء الجلسة
  * - التبويبات من رابط الصفحة (?tab=)
  * - تنسيق التواريخ (يوم تقويم الرياض، ميلادي) والمبالغ
- * - بنود قسيمة الراتب وطلب السلفة
+ * - بنود مسيرة الراتب وطلب السلفة
  */
 
 import { LEAVE_KIND_LABELS, type LeaveKind } from "@shared/payroll";
@@ -262,9 +262,9 @@ export function shouldRetryQuery(
   return failureCount < 2;
 }
 
-// ==================== قسيمة الراتب ====================
+// ==================== مسيرة الراتب ====================
 
-/** حالة القسيمة في البوابة: المعتمدة والمصروفة باللون الأخضر */
+/** حالة مسيرة الراتب في البوابة: المعتمدة والمصروفة باللون الأخضر */
 export function payslipStatusInfo(status: string | null | undefined): {
   label: string;
   className: string;
@@ -405,7 +405,7 @@ export function netSalaryInWords(net: number): string {
   return amountToArabicWords(value);
 }
 
-/** القسيمة المختارة: المطلوبة إن وُجدت في القائمة، وإلا الأحدث (القائمة مرتبة من الأحدث) */
+/** مسيرة الراتب المختارة: المطلوبة إن وُجدت في القائمة، وإلا الأحدث (القائمة مرتبة من الأحدث) */
 export function pickPayrollId(
   slips: ReadonlyArray<{ payrollId: number }> | null | undefined,
   preferred: number | null | undefined

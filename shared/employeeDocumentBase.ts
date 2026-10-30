@@ -1,5 +1,5 @@
 /**
- * الأجزاء المشتركة لمستندات الموظف الرسمية (قسيمة الراتب وطلب السلفة)
+ * الأجزاء المشتركة لمستندات الموظف الرسمية (مسيرة الراتب وطلب السلفة)
  * - صفحة A4 طولية RTL بنفس هوية مستندات إنهاء الخدمة (الترويسة والخط والتوقيعات والختم)
  * - الترويسة باسم مؤسسة فرع المستند (getEstablishmentForBranch) ولا تحمل اسم النظام
  * - التوقيعات والختم لا تظهر إلا للمستند المعتمد (signed)، وإلا علامة مائية ونص "بانتظار الاعتماد"
@@ -374,7 +374,6 @@ const BASE_STYLES = (fontFace: string) => `
   .notes { padding: 2px 9px; margin-bottom: 6px; border: 1px solid #cfd6df; border-radius: 4px; font-size: 10.5px; }
   .user-text { white-space: pre-wrap; }
   .alert-box { margin-top: 6px; padding: 6px 9px; border: 1.5px solid #ef4444; background: #fef2f2; color: #7f1d1d; border-radius: 4px; font-size: 11px; break-inside: avoid; }
-  .ok-box { margin-top: 6px; padding: 6px 9px; border: 1.5px solid #10b981; background: #ecfdf5; color: #065f46; border-radius: 4px; font-size: 11px; break-inside: avoid; }
   .wait-box { margin-top: 6px; padding: 6px 9px; border: 1.5px dashed #f59e0b; background: #fffbeb; color: #92400e; border-radius: 4px; font-size: 11px; break-inside: avoid; }
 
   .push { flex: 1 0 8px; }

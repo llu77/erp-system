@@ -1,11 +1,11 @@
 /**
- * قوالب طباعة مسيرات الرواتب وقسائم الرواتب
+ * قوالب طباعة مسيرات الرواتب ومسيرات رواتب الموظفين
  *
  * - تُبنى من القيم المحفوظة في الخادم فقط (لا إعادة حساب في الواجهة)
  * - كل مكوّن خصم له عمود/سطر مستقل حتى يطابق (الإجمالي - الخصومات = الصافي)
  * - التوقيعات والختم تظهر فقط بعد الاعتماد (معتمدة / مدفوعة)
  * - الترويسة باسم مؤسسة فرع المسيرة (getEstablishmentForBranch) وليس اسم النظام
- * - قسيمة الراتب تستخدم القالب الرسمي المشترك مع PDF الخادم (shared/payslipTemplate.ts)
+ * - مسيرة الراتب تستخدم القالب الرسمي المشترك مع PDF الخادم (shared/payslipTemplate.ts)
  */
 import {
   SIGNATURES,
@@ -341,7 +341,7 @@ ${watermark(payroll.status)}
 </div></body></html>`;
 }
 
-/** خيارات قسيمة الراتب في المتصفح */
+/** خيارات مسيرة الراتب في المتصفح */
 export interface PayslipPrintOptions {
   /** طباعة تلقائية بعد تحميل الصفحة والخطوط (الافتراضي: نعم) */
   autoPrint?: boolean;
@@ -350,7 +350,7 @@ export interface PayslipPrintOptions {
 }
 
 /**
- * قسيمة الراتب الرسمية من بيانات الخادم (payrolls.payslipDocument) بنفس قالب PDF
+ * مسيرة الراتب الرسمية من بيانات الخادم (payrolls.payslipDocument) بنفس قالب PDF
  * - الطباعة التلقائية مضمّنة في المستند: اكتبه بـ writePrintDocument (وليس writeAndPrint)
  */
 export function buildPayslipDocumentHtml(data: PayslipDocumentData, options: PayslipPrintOptions = {}): string {
@@ -361,7 +361,7 @@ export function buildPayslipDocumentHtml(data: PayslipDocumentData, options: Pay
 }
 
 /**
- * قسيمة راتب موظف من صفوف المسيرة المحمّلة في الصفحة (للتوافق مع الاستدعاءات القديمة)
+ * مسيرة راتب موظف من صفوف المسيرة المحمّلة في الصفحة (للتوافق مع الاستدعاءات القديمة)
  * - نفس القالب الرسمي؛ بيانات ملف الموظف (الإقامة، الجنسية، البنك) تُمرر في extras إن توفرت
  * - بدون طباعة تلقائية مضمّنة لأن writeAndPrint يطبع بنفسه
  */

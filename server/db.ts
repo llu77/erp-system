@@ -8829,25 +8829,31 @@ export async function getEmployeeProfile(employeeId: number) {
     .where(eq(branches.id, result[0].branchId))
     .limit(1);
 
-  // جلب إعدادات الراتب للموظف
-  const salarySettings = await db.select({
-    baseSalary: employeeSalarySettings.baseSalary,
-    overtimeEnabled: employeeSalarySettings.overtimeEnabled,
-    isSupervisor: employeeSalarySettings.isSupervisor,
-  })
+  // إعدادات الراتب كما أدخلتها الإدارة في ملف الموظف (للعرض فقط؛ لا يعدّلها الموظف)
+  const salarySettings = await db.select()
     .from(employeeSalarySettings)
     .where(eq(employeeSalarySettings.employeeId, employeeId))
     .limit(1);
 
   const { employeeIsSupervisor, ...profile } = result[0];
-  const { getEstablishmentForBranch } = await import('../shared/branding');
+  const [{ getEstablishmentForBranch }, { employeeJobTitle }, { effectiveSalarySettings }] = await Promise.all([
+    import('../shared/branding'),
+    import('../shared/employeeFile'),
+    import('./employeeFile/schemas'),
+  ]);
+  // نفس القيم التي تحسب بها المسيرة (الافتراضية إن لم تحددها الإدارة بعد)
+  const salary = effectiveSalarySettings(salarySettings[0] ?? null);
   return {
     ...profile,
+    position: employeeJobTitle(employeeIsSupervisor),
     branchName: branch[0]?.nameAr || branch[0]?.name || 'غير محدد',
     establishmentName: getEstablishmentForBranch(branch[0] ?? null).nameAr,
-    baseSalary: salarySettings[0]?.baseSalary || '2000.00',
-    overtimeEnabled: salarySettings[0]?.overtimeEnabled || false,
-    isSupervisor: Boolean(employeeIsSupervisor || salarySettings[0]?.isSupervisor),
+    salaryConfigured: salarySettings.length > 0,
+    baseSalary: salary.baseSalary,
+    overtimeEnabled: salary.overtimeEnabled,
+    overtimeAllowance: salary.overtimeEnabled ? salary.overtimeRate : 0,
+    supervisorIncentive: salary.isSupervisor ? salary.supervisorIncentive : 0,
+    isSupervisor: Boolean(employeeIsSupervisor),
     // تاريخ مباشرة العمل الفعلي (YYYY-MM-DD) وليس تاريخ إنشاء السجل
     hireDate: profile.hireDate ?? null,
     nationality: profile.nationality ?? null,
@@ -8870,7 +8876,7 @@ export async function getEmployeeSalarySlip(employeeId: number, year: number, mo
   if (employee.length === 0) return null;
 
   // جلب سطر الموظف في مسيرة الشهر المعتمدة أو المدفوعة فقط
-  // (البحث بالموظف نفسه وليس بفرعه الحالي حتى لا تختفي القسيمة بعد النقل بين الفروع)
+  // (البحث بالموظف نفسه وليس بفرعه الحالي حتى لا تختفي مسيرة الراتب بعد النقل بين الفروع)
   const rows = await db.select({ detail: payrollDetails, payroll: payrolls })
     .from(payrollDetails)
     .innerJoin(payrolls, eq(payrolls.id, payrollDetails.payrollId))
@@ -8998,7 +9004,7 @@ export async function getEmployeeSalaryHistory(employeeId: number, limit: number
   return result;
 }
 
-// قسائم رواتب الموظف في البوابة: المسيرات المعتمدة أو المصروفة التي له فيها سطر (الأحدث أولاً)
+// مسيرات رواتب الموظف في البوابة: المسيرات المعتمدة أو المصروفة التي له فيها سطر (الأحدث أولاً)
 export async function getEmployeeSalarySlips(employeeId: number): Promise<Array<{
   payrollId: number;
   payrollNumber: string;
@@ -9042,7 +9048,7 @@ export async function getEmployeeSalarySlips(employeeId: number): Promise<Array<
   }));
 }
 
-// هل للموظف سطر في مسيرة معتمدة أو مصروفة؟ (شرط عرض القسيمة في البوابة)
+// هل للموظف سطر في مسيرة معتمدة أو مصروفة؟ (شرط عرض مسيرة الراتب في البوابة)
 export async function isEmployeeSlipVisible(employeeId: number, payrollId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;

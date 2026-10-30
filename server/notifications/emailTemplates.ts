@@ -1501,7 +1501,7 @@ export function getEmployeePayslipTemplate(data: {
       <div class="logo">
         <span class="logo-text">💰</span>
       </div>
-      <h1>قسيمة راتب</h1>
+      <h1>مسيرة راتب</h1>
       <div class="subtitle">${data.month} ${data.year}</div>
     </div>
     
@@ -1613,8 +1613,8 @@ export function getEmployeePayslipTemplate(data: {
   `;
   
   return {
-    subject: `💰 قسيمة راتب - ${data.month} ${data.year} | ${data.netSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س`,
-    html: getBaseTemplate(content, 'قسيمة راتب'),
+    subject: `💰 مسيرة راتب - ${data.month} ${data.year} | ${data.netSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س`,
+    html: getBaseTemplate(content, 'مسيرة راتب'),
   };
 }
 

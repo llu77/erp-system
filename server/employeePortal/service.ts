@@ -1,6 +1,6 @@
 /**
  * خدمات بوابة الموظفين: الملكية (الموظف يرى طلباته ومستنداته فقط)، طلب السلفة،
- * قسيمة الراتب وطلب السلفة PDF، تتبع الطلب، والتحقق من الملفات المرفوعة.
+ * مسيرة الراتب وطلب السلفة PDF، تتبع الطلب، والتحقق من الملفات المرفوعة.
  */
 
 import { TRPCError } from "@trpc/server";
@@ -366,7 +366,7 @@ async function notifyAdvanceRequestCreated(params: {
 
 // ==================== المستندات (PDF) ====================
 
-const PAYSLIP_NOT_FOUND = "قسيمة الراتب غير متاحة";
+const PAYSLIP_NOT_FOUND = "مسيرة الراتب غير متاحة";
 
 function wrapDocumentError(error: unknown, message: string): never {
   if (error instanceof TRPCError) throw error;
@@ -374,7 +374,7 @@ function wrapDocumentError(error: unknown, message: string): never {
   throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
 }
 
-/** قسيمة راتب الموظف نفسه في مسيرة معتمدة أو مصروفة فقط */
+/** مسيرة راتب الموظف نفسه في مسيرة معتمدة أو مصروفة فقط */
 export async function getOwnPayslipData(employeeId: number, payrollId: number): Promise<PayslipDocumentData> {
   const visible = await db.isEmployeeSlipVisible(employeeId, payrollId);
   if (!visible) throw new TRPCError({ code: "NOT_FOUND", message: PAYSLIP_NOT_FOUND });
@@ -383,7 +383,7 @@ export async function getOwnPayslipData(employeeId: number, payrollId: number): 
     const { getPayslipDocumentData } = await import("../employeeDocumentsPdf");
     data = await getPayslipDocumentData(payrollId, employeeId);
   } catch (error) {
-    wrapDocumentError(error, "تعذر تحميل قسيمة الراتب");
+    wrapDocumentError(error, "تعذر تحميل مسيرة الراتب");
   }
   if (!data || data.employee.id !== employeeId || (data.status !== "approved" && data.status !== "paid")) {
     throw new TRPCError({ code: "NOT_FOUND", message: PAYSLIP_NOT_FOUND });
@@ -398,7 +398,7 @@ export async function getOwnPayslipPdf(employeeId: number, payrollId: number): P
     const pdf = await generatePayslipPDF(data);
     return { pdf: pdf.toString("base64"), filename: payslipFileName(data) };
   } catch (error) {
-    wrapDocumentError(error, "تعذر إنشاء ملف PDF لقسيمة الراتب");
+    wrapDocumentError(error, "تعذر إنشاء ملف PDF لمسيرة الراتب");
   }
 }
 

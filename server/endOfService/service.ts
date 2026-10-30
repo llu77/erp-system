@@ -51,6 +51,7 @@ import {
   toAmount,
 } from "../../shared/payroll";
 import { todayVoucherDate, toVoucherDateString } from "../../shared/vouchers";
+import { employeeJobTitle } from "../../shared/employeeFile";
 
 // ==================== الأنواع ====================
 
@@ -91,7 +92,6 @@ export interface EndOfServiceForm {
   letterDate: string;
   nationality?: string | null;
   idNumber?: string | null;
-  position?: string | null;
   baseSalary: number;
   fixedAllowances: number;
   salaryDaysOverride?: number | null;
@@ -411,10 +411,7 @@ export function buildSettlementValues(
       form.idNumber !== undefined
         ? cleanText(form.idNumber, 50)
         : cleanText(emp.iqamaNumber, 50),
-    position:
-      form.position !== undefined
-        ? cleanText(form.position, 100)
-        : cleanText(emp.position, 100),
+    position: employeeJobTitle(emp.isSupervisor),
     branchName: cleanText(ctx.branchName, 255),
     baseSalary: money(form.baseSalary),
     fixedAllowances: money(form.fixedAllowances),
@@ -461,7 +458,6 @@ export function settlementToForm(
     letterDate: toVoucherDateString(row.letterDate) ?? String(row.letterDate),
     nationality: row.nationality ?? null,
     idNumber: row.idNumber ?? null,
-    position: row.position ?? null,
     baseSalary: toAmount(row.baseSalary),
     fixedAllowances: toAmount(row.fixedAllowances),
     salaryDaysOverride: optionalNumber(row.salaryDaysOverride),
@@ -935,7 +931,7 @@ export async function getDefaults(employeeId: number) {
       code: emp.code,
       branchId: emp.branchId ?? null,
       branchName: ctx.branchName,
-      position: emp.position ?? null,
+      position: employeeJobTitle(emp.isSupervisor),
       nationality: emp.nationality ?? null,
       idNumber: emp.iqamaNumber ?? null,
       hireDate: toVoucherDateString(emp.hireDate),

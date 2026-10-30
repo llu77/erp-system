@@ -774,17 +774,17 @@ export async function notifyEmployeesPayslip(data: {
       
       if (await sendEmail(employee.email, subject, html)) {
         sentCount++;
-        console.log(`✓ تم إرسال قسيمة الراتب إلى ${employee.employeeName}`);
+        console.log(`✓ تم إرسال مسيرة الراتب إلى ${employee.employeeName}`);
       } else {
         failedCount++;
       }
     } catch (error) {
-      console.error(`خطأ في إرسال قسيمة الراتب للموظف ${employee.employeeName}:`, error);
+      console.error(`خطأ في إرسال مسيرة الراتب للموظف ${employee.employeeName}:`, error);
       failedCount++;
     }
   }
   
-  console.log(`✓ تم إرسال ${sentCount} قسيمة راتب، فشل ${failedCount}`);
+  console.log(`✓ تم إرسال ${sentCount} مسيرة راتب، فشل ${failedCount}`);
   return { success: sentCount > 0, sentCount, failedCount };
 }
 

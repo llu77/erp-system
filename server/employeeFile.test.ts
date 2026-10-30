@@ -5,6 +5,7 @@ import {
   describeDocumentExpiry,
   documentDateToTimestamp,
   documentStatusFor,
+  employeeJobTitle,
   formatArabicDate,
   formatDaysLeft,
   isValidIban,
@@ -14,6 +15,8 @@ import {
   validateEmployeeFile,
   worstDocumentStatus,
   EMPLOYEE_FILE_MAX_BYTES,
+  JOB_TITLE_BARBER,
+  JOB_TITLE_SUPERVISOR,
 } from "../shared/employeeFile";
 import {
   buildDocumentStorageKey,
@@ -45,6 +48,23 @@ function bytes(header: number[], total = 32): Uint8Array {
 function base64Of(header: number[], total = 32): string {
   return Buffer.from(bytes(header, total)).toString("base64");
 }
+
+describe("job title", () => {
+  it("is always barber, or supervisor for a supervisor account", () => {
+    expect(JOB_TITLE_BARBER).toBe("حلاق");
+    expect(JOB_TITLE_SUPERVISOR).toBe("مشرف");
+    expect(employeeJobTitle(true)).toBe("مشرف");
+    expect(employeeJobTitle(1)).toBe("مشرف");
+    expect(employeeJobTitle(false)).toBe("حلاق");
+    expect(employeeJobTitle(0)).toBe("حلاق");
+    expect(employeeJobTitle(null)).toBe("حلاق");
+    expect(employeeJobTitle(undefined)).toBe("حلاق");
+  });
+
+  it("cannot be entered from the employee forms", () => {
+    expect(employeeUpdateSchema.parse({ id: 1, position: "مدير" })).not.toHaveProperty("position");
+  });
+});
 
 describe("daysUntil (Riyadh calendar day)", () => {
   // 2026-10-30 22:30 UTC = 2026-10-31 01:30 Riyadh
@@ -329,7 +349,8 @@ describe("employee update patch", () => {
     const input = employeeUpdateSchema.parse({
       id: 1,
       phone: null,
-      position: "  حلاق  ",
+      // المسمى لا يُدخل يدوياً: يُتجاهل إن أُرسل
+      position: "مدير صالون",
       nationality: "",
     });
     const { id, ...fields } = input;
@@ -339,7 +360,7 @@ describe("employee update patch", () => {
       5,
       now
     );
-    expect(patch).toEqual({ phone: null, position: "حلاق", nationality: null });
+    expect(patch).toEqual({ phone: null, nationality: null });
     expect(documentsChanged).toBe(false);
     expect(id).toBe(1);
   });

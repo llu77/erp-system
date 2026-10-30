@@ -12,7 +12,7 @@ import { parseDateOnly } from "../shared/endOfService";
 import * as employeeFileService from "./employeeFile/service";
 import * as employeeFileSchemas from "./employeeFile/schemas";
 import { employeeFileProcedure, documentsOverviewProcedure, assertEmployeeBranchAccess, scopedBranchFilter, runEmployeeFileAction } from "./employeeFile/access";
-import { DOCUMENT_KIND_LABELS } from "../shared/employeeFile";
+import { DOCUMENT_KIND_LABELS, JOB_TITLE_BARBER } from "../shared/employeeFile";
 import { notifyOwner } from "./_core/notification";
 import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from "./email/scheduledReports";
 import * as advancedNotifications from "./notifications/advancedNotificationService";
@@ -142,11 +142,11 @@ function payrollActor(user: { id: number; name: string | null; role: string; bra
   return { id: user.id, name: user.name, role: user.role, branchId: user.branchId ?? null };
 }
 
-// ==================== مستندات الموظف الرسمية (قسيمة الراتب / طلب السلفة) ====================
+// ==================== مستندات الموظف الرسمية (مسيرة الراتب / طلب السلفة) ====================
 
 type DocumentViewer = { role: string; branchId: number | null };
 
-// قسيمة موظف في مسيرة: صلاحية عرض المسيرات + فرع المسيرة (أي حالة؛ الختم بعد الاعتماد فقط)
+// مسيرة راتب موظف في مسيرة: صلاحية عرض المسيرات + فرع المسيرة (أي حالة؛ الختم بعد الاعتماد فقط)
 async function loadPayslipForStaff(user: DocumentViewer, payrollId: number, employeeId: number) {
   const payroll = await db.getPayrollById(payrollId);
   if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
@@ -263,7 +263,6 @@ const eosFormSchema = z.object({
   letterDate: eosDateSchema,
   nationality: z.string().max(100).nullable().optional(),
   idNumber: z.string().max(50).nullable().optional(),
-  position: z.string().max(100).nullable().optional(),
   baseSalary: eosAmountSchema,
   fixedAllowances: eosAmountSchema,
   salaryDaysOverride: eosDaysSchema.nullable().optional(),
@@ -1974,6 +1973,8 @@ export const appRouter = router({
           name: input.name,
           branchId: input.branchId ?? 0,
           isActive: input.isActive ?? true,
+          // الموظف الجديد حلاق؛ يصبح "مشرف" عند تفعيل علامة المشرف في تبويب الراتب
+          position: JOB_TITLE_BARBER,
         }));
         await db.createActivityLog({
           userId: ctx.user.id,
@@ -3800,18 +3801,18 @@ export const appRouter = router({
         return await db.getPayrollDetails(input.payrollId);
       }),
 
-    // بيانات قسيمة راتب موظف (للطباعة من المتصفح بنفس قالب PDF)
+    // بيانات مسيرة راتب موظف (للطباعة من المتصفح بنفس قالب PDF)
     payslipDocument: payrollViewProcedure
       .input(z.object({ payrollId: z.number().int().positive(), employeeId: z.number().int().positive() }))
       .query(async ({ input, ctx }) => loadPayslipForStaff(ctx.user, input.payrollId, input.employeeId)),
 
-    // PDF قسيمة الراتب (أي حالة؛ علامة مائية قبل الاعتماد، والتوقيعات والختم بعده)
+    // PDF مسيرة الراتب (أي حالة؛ علامة مائية قبل الاعتماد، والتوقيعات والختم بعده)
     payslipPdf: payrollViewProcedure
       .input(z.object({ payrollId: z.number().int().positive(), employeeId: z.number().int().positive() }))
       .mutation(async ({ input, ctx }) => {
         const data = await loadPayslipForStaff(ctx.user, input.payrollId, input.employeeId);
         const { generatePayslipPDF, payslipFileName } = await import('./employeeDocumentsPdf');
-        return renderDocumentPdf('قسيمة راتب', async () => ({
+        return renderDocumentPdf('مسيرة راتب', async () => ({
           pdf: await generatePayslipPDF(data),
           filename: payslipFileName(data),
         }));
@@ -3921,7 +3922,7 @@ export const appRouter = router({
         assertPayrollBranchAccess(ctx.user, existing.branchId);
         await runPayrollAction(() => payrollService.transitionPayrollStatus(input.id, input.status, payrollActor(ctx.user)));
 
-        // إرسال قسائم الرواتب للموظفين عند الاعتماد
+        // إرسال مسيرات رواتب الموظفين للموظفين عند الاعتماد
         if (input.status === 'approved') {
           try {
             const payroll = await db.getPayrollById(input.id);
@@ -3950,7 +3951,7 @@ export const appRouter = router({
                   workDays: d.workDays,
                   absentDays: d.absentDays,
                 })),
-              }).catch(err => payrollLogger.error('خطأ في إرسال قسائم الرواتب', err));
+              }).catch(err => payrollLogger.error('خطأ في إرسال مسيرات رواتب الموظفين', err));
 
               // إشعار بوابة الموظفين لكل موظف: الراتب جاهز (بعد حفظ الاعتماد؛ الفشل لا يؤثر على الاعتماد)
               const salaryMonthLabel = `${monthNames[payroll.month] || `شهر ${payroll.month}`} ${payroll.year}`;
@@ -8411,13 +8412,13 @@ ${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.
 
     // ==================== الرواتب ====================
 
-    // قائمة قسائم الرواتب (المسيرات المعتمدة أو المصروفة فقط، الأحدث أولاً)
+    // قائمة مسيرات رواتب الموظفين (المسيرات المعتمدة أو المصروفة فقط، الأحدث أولاً)
     getSalarySlips: employeeProcedure
       .query(async ({ ctx }) => {
         return await db.getEmployeeSalarySlips(ctx.employee.id);
       }),
 
-    // قسيمة راتب مفصلة لمسيرة (سطر الموظف نفسه فقط)
+    // مسيرة راتب مفصلة لمسيرة (سطر الموظف نفسه فقط)
     getSalarySlip: employeeProcedure
       .input(z.object({ payrollId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
@@ -8425,7 +8426,7 @@ ${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.
         return getOwnPayslipData(ctx.employee.id, input.payrollId);
       }),
 
-    // قسيمة الراتب PDF
+    // مسيرة الراتب PDF
     payslipPdf: employeeProcedure
       .input(z.object({ payrollId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {

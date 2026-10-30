@@ -305,29 +305,33 @@ export function EmployeeProfile() {
             معلومات الراتب
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <CardContent className="p-4 space-y-3">
+          {/* للعرض فقط: الإدارة تحدد الراتب والبدلات في ملف الموظف، وهي نفس قيم المسيرة */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-lg border border-amber-500/20">
               <p className="text-xs text-amber-400/70">الراتب الأساسي</p>
               <p className="text-xl font-bold text-amber-400">{formatCurrency(profile.baseSalary)}</p>
             </div>
-            {profile.isSupervisor && (
+            <div className="p-4 bg-slate-700/30 rounded-lg">
+              <p className="text-xs text-slate-400">بدل الساعات الإضافية</p>
+              {profile.overtimeEnabled ? (
+                <p className="text-lg font-bold text-white">{formatCurrency(profile.overtimeAllowance)}</p>
+              ) : (
+                <p className="text-sm text-slate-400 mt-1">غير مفعّل</p>
+              )}
+            </div>
+            {profile.supervisorIncentive > 0 && (
               <div className="p-4 bg-slate-700/30 rounded-lg">
-                <p className="text-xs text-slate-400">نوع الموظف</p>
-                <Badge className="mt-1 bg-purple-500/20 text-purple-400 border-purple-500/30">
-                  مشرف
-                </Badge>
-              </div>
-            )}
-            {profile.overtimeEnabled && (
-              <div className="p-4 bg-slate-700/30 rounded-lg">
-                <p className="text-xs text-slate-400">الساعات الإضافية</p>
-                <Badge className="mt-1 bg-blue-500/20 text-blue-400 border-blue-500/30">
-                  مفعّلة
-                </Badge>
+                <p className="text-xs text-slate-400">حافز المشرف</p>
+                <p className="text-lg font-bold text-white">{formatCurrency(profile.supervisorIncentive)}</p>
               </div>
             )}
           </div>
+          <p className="text-xs text-slate-400">
+            {profile.salaryConfigured
+              ? 'تحدد الإدارة الراتب والبدلات في ملفك الوظيفي، وتظهر هنا للاطلاع فقط.'
+              : 'لم تحدد الإدارة راتبك في ملفك الوظيفي بعد؛ القيم المعروضة هي القيم الافتراضية للمسيرة.'}
+          </p>
         </CardContent>
       </Card>
 

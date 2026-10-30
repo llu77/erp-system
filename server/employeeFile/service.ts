@@ -17,6 +17,7 @@ import {
   compareDocumentStatus,
   describeDocumentExpiry,
   documentDay,
+  employeeJobTitle,
   worstDocumentStatus,
   type DocumentStatus,
   type EmployeeDocumentKind,
@@ -382,7 +383,7 @@ export async function getEmployeeFile(
       phone: e.phone,
       email: e.email,
       emailVerified: e.emailVerified,
-      position: e.position,
+      position: employeeJobTitle(e.isSupervisor),
       username: e.username,
       hasPortalAccess: e.hasPortalAccess,
       isSupervisor: e.isSupervisor,
@@ -482,7 +483,7 @@ export async function getDocumentsOverview(
       id: employees.id,
       code: employees.code,
       name: employees.name,
-      position: employees.position,
+      isSupervisor: employees.isSupervisor,
       branchId: employees.branchId,
       branchNameAr: branches.nameAr,
       branchName: branches.name,
@@ -518,7 +519,7 @@ export async function getDocumentsOverview(
         employeeId: row.id,
         name: row.name,
         code: row.code,
-        position: row.position,
+        position: employeeJobTitle(row.isSupervisor),
         branchId: row.branchId,
         branchName: branchDisplayName(row.branchNameAr, row.branchName),
         photoUrl: images.photo,
@@ -578,7 +579,7 @@ export async function saveSalarySettings(input: SalarySettingsSaveInput) {
 
   return db.transaction(async tx => {
     const employeeRows = await tx
-      .select({ id: employees.id, isSupervisor: employees.isSupervisor })
+      .select({ id: employees.id, isSupervisor: employees.isSupervisor, position: employees.position })
       .from(employees)
       .where(eq(employees.id, employeeId))
       .for("update")
@@ -617,11 +618,13 @@ export async function saveSalarySettings(input: SalarySettingsSaveInput) {
       .limit(1);
     const next = effectiveSalarySettings(savedRows[0]);
 
-    // علامة "مشرف فرع" واحدة: تمنح حافز المشرف وصلاحية مراجعة طلبات الفرع في البوابة
-    if (employeeRows[0].isSupervisor !== next.isSupervisor) {
+    // علامة "مشرف فرع" واحدة: تمنح حافز المشرف وصلاحية مراجعة طلبات الفرع في البوابة،
+    // وتحدد المسمى الوظيفي (مشرف / حلاق)
+    const jobTitle = employeeJobTitle(next.isSupervisor);
+    if (employeeRows[0].isSupervisor !== next.isSupervisor || employeeRows[0].position !== jobTitle) {
       await tx
         .update(employees)
-        .set({ isSupervisor: next.isSupervisor })
+        .set({ isSupervisor: next.isSupervisor, position: jobTitle })
         .where(eq(employees.id, employeeId));
     }
 

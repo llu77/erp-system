@@ -1,5 +1,5 @@
 /**
- * مستندات الموظف على الخادم: بيانات وPDF قسيمة الراتب وطلب السلفة
+ * مستندات الموظف على الخادم: بيانات وPDF مسيرة الراتب وطلب السلفة
  * - البيانات من لقطة المسيرة / الطلب وقت إصداره (فرع المسيرة أو الطلب، لا فرع الموظف الحالي)
  * - الصور (التوقيعات وختم المؤسسة) والخط تُضمَّن كـ data URI حتى يعمل PDF بدون شبكة
  * - هذه الدوال لا تتحقق من الصلاحية أو الحالة: يتحقق منها الإجراء المستدعي
@@ -35,7 +35,7 @@ async function requireDb() {
   return db;
 }
 
-/** بيانات قسيمة موظف في مسيرة (null إذا لم يكن الموظف في المسيرة) - لا تتحقق من الصلاحية أو الحالة */
+/** بيانات مسيرة راتب موظف في مسيرة (null إذا لم يكن الموظف في المسيرة) - لا تتحقق من الصلاحية أو الحالة */
 export async function getPayslipDocumentData(
   payrollId: number,
   employeeId: number
@@ -103,7 +103,7 @@ export async function getAdvanceRequestDocumentData(
   const [employee] = await db
     .select({
       code: employees.code,
-      position: employees.position,
+      isSupervisor: employees.isSupervisor,
       iqamaNumber: employees.iqamaNumber,
       nationality: employees.nationality,
       phone: employees.phone,
@@ -159,7 +159,7 @@ export async function getAdvanceRequestDocumentData(
   );
 }
 
-/** HTML القسيمة بصور وخط مضمّنة (شعار وختم مؤسسة فرع المسيرة) */
+/** HTML مسيرة الراتب بصور وخط مضمّنة (شعار وختم مؤسسة فرع المسيرة) */
 export function renderPayslipHtmlEmbedded(
   data: PayslipDocumentData,
   options: { includeFont?: boolean; printedAt?: Date } = {}
@@ -201,7 +201,7 @@ export function payslipFileName(
   data: Pick<PayslipDocumentData, "payrollNumber" | "employee">
 ): string {
   const safe = (v: string) => String(v).replace(/[^A-Za-z0-9_-]/g, "_");
-  return `payslip-${safe(data.payrollNumber)}-${safe(data.employee.code)}.pdf`;
+  return `payroll-statement-${safe(data.payrollNumber)}-${safe(data.employee.code)}.pdf`;
 }
 
 export function advanceRequestFileName(

@@ -5,6 +5,7 @@ import { employees, branches } from '../../drizzle/schema';
 import { eq, and, ne, isNull, sql } from 'drizzle-orm';
 import { hashPassword, verifyPassword } from './localAuth';
 import { getEstablishmentForBranch } from '../../shared/branding';
+import { employeeJobTitle } from '../../shared/employeeFile';
 
 // ==================== أدوات عامة ====================
 
@@ -165,7 +166,6 @@ export async function getPortalMe(employeeId: number): Promise<PortalMe | null> 
       id: employees.id,
       name: employees.name,
       code: employees.code,
-      position: employees.position,
       branchId: employees.branchId,
       isSupervisor: employees.isSupervisor,
       photoUrl: employees.photoUrl,
@@ -185,7 +185,7 @@ export async function getPortalMe(employeeId: number): Promise<PortalMe | null> 
     id: row.id,
     name: row.name,
     code: row.code,
-    position: row.position ?? null,
+    position: employeeJobTitle(row.isSupervisor),
     branchId: row.branchId ?? null,
     branchName,
     establishmentName: getEstablishmentForBranch({ nameAr: row.branchNameAr, name: row.branchName }).nameAr,

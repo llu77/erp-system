@@ -89,7 +89,7 @@ describe("payrolls.payslipPdf", () => {
       employeeId: 7,
     });
     expect(Buffer.from(result.pdf, "base64").toString()).toBe("PAYSLIP-PDF");
-    expect(result.filename).toBe("payslip-PAY-2026-10-0003-EMP-0007.pdf");
+    expect(result.filename).toBe("payroll-statement-PAY-2026-10-0003-EMP-0007.pdf");
     expect(docs.getPayslipDocumentData).toHaveBeenCalledWith(12, 7);
   });
 
