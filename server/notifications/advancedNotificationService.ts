@@ -1,6 +1,8 @@
 import * as db from "../db";
 import { Resend } from "resend";
 import { wasNotificationSentToday, markNotificationAsSent } from './notificationTracker';
+import { formatBonusPeriodLabel } from "../../shared/bonus";
+import { getTierDisplayName, getTierColorHex } from "../../shared/bonusHelpers";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "info@symbolai.net";
@@ -723,27 +725,12 @@ export async function notifyBonusCalculationCompleted(data: {
     weeklyRevenue: number;
     bonusAmount: number;
     bonusTier: string;
+    /** اسم المستوى المحفوظ وقت الاحتساب */
+    tierName?: string | null;
   }>;
 }): Promise<{ success: boolean; result?: any }> {
-  console.log(`🎁 إشعار اكتمال حساب البونص: الأسبوع ${data.weekNumber} من ${data.month}/${data.year}`);
-  
-  const tierNames: Record<string, string> = {
-    tier_5: "المستوى 5 (180 ر.س)",
-    tier_4: "المستوى 4 (135 ر.س)",
-    tier_3: "المستوى 3 (95 ر.س)",
-    tier_2: "المستوى 2 (60 ر.س)",
-    tier_1: "المستوى 1 (35 ر.س)",
-    none: "غير مؤهل",
-  };
-  
-  const tierColors: Record<string, string> = {
-    tier_5: "#a855f7",
-    tier_4: "#3b82f6",
-    tier_3: "#22c55e",
-    tier_2: "#eab308",
-    tier_1: "#f97316",
-    none: "#9ca3af",
-  };
+  const periodText = formatBonusPeriodLabel(data.weekNumber, data.month, data.year);
+  console.log(`🎁 إشعار اكتمال حساب البونص: ${periodText}`);
   
   const eligibilityPercentage = data.totalEmployees > 0 
     ? ((data.eligibleCount / data.totalEmployees) * 100).toFixed(0) 
@@ -755,8 +742,8 @@ export async function notifyBonusCalculationCompleted(data: {
       <td style="padding: 10px; text-align: right;">${detail.employeeName}</td>
       <td style="padding: 10px; text-align: right;">${detail.weeklyRevenue.toFixed(2)} ر.س</td>
       <td style="padding: 10px; text-align: right;">
-        <span style="background-color: ${tierColors[detail.bonusTier] || '#9ca3af'}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
-          ${tierNames[detail.bonusTier] || detail.bonusTier}
+        <span style="background-color: ${getTierColorHex(detail.bonusTier)}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
+          ${getTierDisplayName(detail.bonusTier, detail.tierName)}
         </span>
       </td>
       <td style="padding: 10px; text-align: right; font-weight: bold; color: #22c55e;">${detail.bonusAmount.toFixed(2)} ر.س</td>
@@ -801,7 +788,7 @@ export async function notifyBonusCalculationCompleted(data: {
       <div class="container">
         <div class="header">
           <h1>🎁 تقرير البونص الأسبوعي</h1>
-          <div class="subtitle">فرع ${data.branchName || 'غير محدد'} - الأسبوع ${data.weekNumber} من ${data.month}/${data.year}</div>
+          <div class="subtitle">فرع ${data.branchName || 'غير محدد'} - الفترة ${periodText}</div>
         </div>
         
         <div class="content">
@@ -861,7 +848,7 @@ export async function notifyBonusCalculationCompleted(data: {
       await resend.emails.send({
         from: FROM_EMAIL,
         to: recipient.email,
-        subject: `🎁 تقرير البونص الأسبوعي - ${data.branchName || 'غير محدد'} - الأسبوع ${data.weekNumber}`,
+        subject: `🎁 تقرير البونص الأسبوعي - ${data.branchName || 'غير محدد'} - ${periodText}`,
         html: htmlContent,
       });
       console.log(`✓ تم إرسال تقرير البونص إلى: ${recipient.name} (${recipient.email})`);

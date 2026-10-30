@@ -1,6 +1,9 @@
 // قوالب البريد الإلكتروني الرسمية والمتقدمة
 // Symbol AI - نظام إدارة الأعمال
 
+import { formatBonusPeriodLabel } from "../../shared/bonus";
+import { getTierDisplayName, getTierColorHex } from "../../shared/bonusHelpers";
+
 // ==================== القالب الأساسي ====================
 export function getBaseTemplate(content: string, title: string): string {
   return `
@@ -581,15 +584,10 @@ export function getBonusRequestTemplate(data: {
   recipientRole: string;
   weeklyRevenue?: number;
   tier?: string;
+  /** اسم المستوى المحفوظ وقت الاحتساب */
+  tierName?: string;
 }): { subject: string; html: string } {
-  const tierNames: Record<string, string> = {
-    tier_5: 'المستوى 5 (180 ر.س)',
-    tier_4: 'المستوى 4 (135 ر.س)',
-    tier_3: 'المستوى 3 (95 ر.س)',
-    tier_2: 'المستوى 2 (60 ر.س)',
-    tier_1: 'المستوى 1 (35 ر.س)',
-    none: 'غير مؤهل',
-  };
+  const periodText = formatBonusPeriodLabel(data.weekNumber, data.month, data.year);
   
   const content = `
     <div class="header">
@@ -597,7 +595,7 @@ export function getBonusRequestTemplate(data: {
         <span class="logo-text">🎁</span>
       </div>
       <h1>طلب صرف بونص</h1>
-      <div class="subtitle">الأسبوع ${data.weekNumber} - ${data.month}/${data.year}</div>
+      <div class="subtitle">الفترة ${periodText}</div>
     </div>
     
     <div class="content">
@@ -627,7 +625,7 @@ export function getBonusRequestTemplate(data: {
         </div>
         <div class="info-item">
           <div class="label">🏆 المستوى</div>
-          <div class="value">${tierNames[data.tier || 'none'] || 'غير محدد'}</div>
+          <div class="value">${getTierDisplayName(data.tier || 'none', data.tierName)}</div>
         </div>
       </div>
       
@@ -659,28 +657,14 @@ export function getWeeklyBonusReportTemplate(data: {
     employeeName: string;
     weeklyRevenue: number;
     tier: string;
+    /** اسم المستوى المحفوظ وقت الاحتساب */
+    tierName?: string;
     bonusAmount: number;
     isEligible: boolean;
   }>;
   recipientName: string;
 }): { subject: string; html: string } {
-  const tierNames: Record<string, string> = {
-    tier_5: 'المستوى 5',
-    tier_4: 'المستوى 4',
-    tier_3: 'المستوى 3',
-    tier_2: 'المستوى 2',
-    tier_1: 'المستوى 1',
-    none: 'غير مؤهل',
-  };
-  
-  const tierColors: Record<string, string> = {
-    tier_5: '#a855f7',
-    tier_4: '#3b82f6',
-    tier_3: '#22c55e',
-    tier_2: '#eab308',
-    tier_1: '#f97316',
-    none: '#9ca3af',
-  };
+  const periodText = formatBonusPeriodLabel(data.weekNumber, data.month, data.year);
   
   const eligibilityPercentage = data.totalEmployees > 0 
     ? Math.round((data.eligibleCount / data.totalEmployees) * 100) 
@@ -691,7 +675,7 @@ export function getWeeklyBonusReportTemplate(data: {
       <td>${i + 1}</td>
       <td>${d.employeeName}</td>
       <td>${d.weeklyRevenue.toFixed(2)} ر.س</td>
-      <td><span style="color: ${tierColors[d.tier] || '#9ca3af'}; font-weight: 600;">${tierNames[d.tier] || 'غير محدد'}</span></td>
+      <td><span style="color: ${getTierColorHex(d.tier)}; font-weight: 600;">${getTierDisplayName(d.tier, d.tierName)}</span></td>
       <td style="font-weight: 600; color: ${d.isEligible ? '#22c55e' : '#9ca3af'};">${d.bonusAmount.toFixed(2)} ر.س</td>
     </tr>
   `).join('');
@@ -702,7 +686,7 @@ export function getWeeklyBonusReportTemplate(data: {
         <span class="logo-text">📊</span>
       </div>
       <h1>تقرير البونص الأسبوعي</h1>
-      <div class="subtitle">${data.branchName} - الأسبوع ${data.weekNumber} من ${data.month}/${data.year}</div>
+      <div class="subtitle">${data.branchName} - الفترة ${periodText}</div>
     </div>
     
     <div class="content">
@@ -761,7 +745,7 @@ export function getWeeklyBonusReportTemplate(data: {
   `;
   
   return {
-    subject: `📊 تقرير البونص الأسبوعي - ${data.branchName} | الأسبوع ${data.weekNumber}`,
+    subject: `📊 تقرير البونص الأسبوعي - ${data.branchName} | ${periodText}`,
     html: getBaseTemplate(content, 'تقرير البونص الأسبوعي'),
   };
 }
@@ -1784,6 +1768,7 @@ export function getAdvancedBonusPaymentRequestTemplate(data: {
   weekNumber: number;
   month: number;
   year: number;
+  periodLabel?: string;
   totalAmount: number;
   eligibleCount: number;
   totalEmployees: number;
@@ -1796,30 +1781,12 @@ export function getAdvancedBonusPaymentRequestTemplate(data: {
     code: string;
     weeklyRevenue: number;
     tier: string;
+    /** اسم المستوى المحفوظ وقت الاحتساب */
+    tierName?: string;
     bonusAmount: number;
   }>;
 }): { subject: string; html: string } {
-  const tierNames: Record<string, string> = {
-    tier_7: 'المستوى 7',
-    tier_6: 'المستوى 6',
-    tier_5: 'المستوى 5',
-    tier_4: 'المستوى 4',
-    tier_3: 'المستوى 3',
-    tier_2: 'المستوى 2',
-    tier_1: 'المستوى 1',
-    none: 'غير مؤهل',
-  };
-
-  const tierColors: Record<string, string> = {
-    tier_7: '#9333ea',
-    tier_6: '#a855f7',
-    tier_5: '#3b82f6',
-    tier_4: '#0ea5e9',
-    tier_3: '#22c55e',
-    tier_2: '#eab308',
-    tier_1: '#f97316',
-    none: '#9ca3af',
-  };
+  const periodText = data.periodLabel || formatBonusPeriodLabel(data.weekNumber, data.month, data.year);
 
   const eligibilityPercentage = data.totalEmployees > 0 
     ? Math.round((data.eligibleCount / data.totalEmployees) * 100) 
@@ -1833,8 +1800,8 @@ export function getAdvancedBonusPaymentRequestTemplate(data: {
       <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-family: monospace;">${emp.code}</td>
       <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; text-align: left; color: #1f2937;">${emp.weeklyRevenue.toFixed(2)} ر.س</td>
       <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; text-align: center;">
-        <span style="display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; color: white; background: ${tierColors[emp.tier] || '#9ca3af'};">
-          ${tierNames[emp.tier] || 'غير محدد'}
+        <span style="display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; color: white; background: ${getTierColorHex(emp.tier)};">
+          ${getTierDisplayName(emp.tier, emp.tierName)}
         </span>
       </td>
       <td style="padding: 12px 15px; border-bottom: 1px solid #e2e8f0; text-align: left; font-weight: 700; color: #22c55e;">${emp.bonusAmount.toFixed(2)} ر.س</td>
@@ -1848,7 +1815,7 @@ export function getAdvancedBonusPaymentRequestTemplate(data: {
         <span style="font-size: 40px;">💰</span>
       </div>
       <h1 style="color: #ffffff; font-size: 26px; font-weight: 700; margin: 0 0 10px;">طلب صرف بونص أسبوعي</h1>
-      <div style="color: rgba(255, 255, 255, 0.8); font-size: 16px;">الأسبوع ${data.weekNumber} - ${data.month}/${data.year}</div>
+      <div style="color: rgba(255, 255, 255, 0.8); font-size: 16px;">الفترة ${periodText}</div>
       <div style="margin-top: 15px; display: inline-block; padding: 8px 20px; background: rgba(255,255,255,0.1); border-radius: 25px; color: #ffffff; font-size: 14px;">
         🏢 ${data.branchName}
       </div>
@@ -1897,7 +1864,7 @@ export function getAdvancedBonusPaymentRequestTemplate(data: {
           </div>
           <div>
             <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">📅 الفترة</div>
-            <div style="font-size: 16px; color: #1f2937; font-weight: 600;">الأسبوع ${data.weekNumber} - ${data.month}/${data.year}</div>
+            <div style="font-size: 16px; color: #1f2937; font-weight: 600;">${periodText}</div>
           </div>
           <div>
             <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">👤 مقدم الطلب</div>
@@ -1958,7 +1925,7 @@ export function getAdvancedBonusPaymentRequestTemplate(data: {
   `;
   
   return {
-    subject: `💰 طلب صرف بونص - ${data.branchName} | الأسبوع ${data.weekNumber} | ${data.totalAmount.toFixed(2)} ر.س`,
+    subject: `💰 طلب صرف بونص - ${data.branchName} | ${periodText} | ${data.totalAmount.toFixed(2)} ر.س`,
     html: getBaseTemplate(content, 'طلب صرف بونص أسبوعي'),
   };
 }

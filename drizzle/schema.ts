@@ -367,12 +367,15 @@ export type InsertEmployeeRevenue = typeof employeeRevenues.$inferInsert;
 // ==================== جدول البونص الأسبوعي ====================
 /**
  * Weekly Bonuses - Tracks weekly bonus calculations per branch
- * Week calculation:
- * - Week 1: Days 1-7
- * - Week 2: Days 8-15
- * - Week 3: Days 16-22
- * - Week 4: Days 23-29
- * - Week 5: Days 30-31 (remaining days)
+ * Bonus periods (shared/bonus.ts):
+ * - Period 1: Days 1-7
+ * - Period 2: Days 8-14
+ * - Period 3: Days 15-21
+ * - Period 4: Days 22-28
+ * - Period 5: Day 29 to end of month (absent in a non-leap February)
+ * weekStart/weekEnd are stored as UTC bounds (00:00:00 of the first day → 23:59:59.999 of the last day)
+ * Status flow: pending → requested → approved → paid (requested → rejected → requested again)
+ * Amounts of requested/approved/paid periods are frozen; approvedAmount/paidAmount snapshot the totals.
  */
 export const weeklyBonuses = mysqlTable("weeklyBonuses", {
   id: int("id").autoincrement().primaryKey(),
@@ -391,6 +394,8 @@ export const weeklyBonuses = mysqlTable("weeklyBonuses", {
   rejectedBy: int("rejectedBy"),
   rejectionReason: text("rejectionReason"),
   totalAmount: decimal("totalAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  approvedAmount: decimal("approvedAmount", { precision: 15, scale: 2 }), // المبلغ المعتمد وقت الموافقة
+  paidAmount: decimal("paidAmount", { precision: 15, scale: 2 }), // المبلغ المصروف فعلياً
   
   // حقول تتبع الصرف
   paidAt: timestamp("paidAt"), // تاريخ الصرف الفعلي
@@ -409,13 +414,8 @@ export type InsertWeeklyBonus = typeof weeklyBonuses.$inferInsert;
 // ==================== جدول تفاصيل البونص ====================
 /**
  * Bonus Details - Individual employee bonus breakdown
- * Bonus tiers:
- * - Tier 5: ≥2400 SAR → 180 SAR
- * - Tier 4: 2100-2399 SAR → 135 SAR
- * - Tier 3: 1800-2099 SAR → 95 SAR
- * - Tier 2: 1500-1799 SAR → 60 SAR
- * - Tier 1: 1200-1499 SAR → 35 SAR
- * - None: <1200 SAR → 0 SAR
+ * Tiers are defined by the manager in bonusTierSettings (up to 7 tiers, keys tier_1..tier_7).
+ * tierName snapshots the tier label in force when the bonus was calculated.
  */
 export const bonusDetails = mysqlTable("bonusDetails", {
   id: int("id").autoincrement().primaryKey(),
@@ -424,6 +424,7 @@ export const bonusDetails = mysqlTable("bonusDetails", {
   weeklyRevenue: decimal("weeklyRevenue", { precision: 15, scale: 2 }).default("0.00").notNull(),
   bonusAmount: decimal("bonusAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
   bonusTier: mysqlEnum("bonusTier", ["tier_1", "tier_2", "tier_3", "tier_4", "tier_5", "tier_6", "tier_7", "none"]).notNull(),
+  tierName: varchar("tierName", { length: 100 }), // اسم المستوى وقت الاحتساب
   isEligible: boolean("isEligible").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -1651,13 +1652,14 @@ export type InsertLoyaltySettingsAuditLog = typeof loyaltySettingsAuditLog.$infe
 // ==================== جدول مستويات البونص ====================
 /**
  * BonusTierSettings - إعدادات مستويات البونص
- * يسمح للأدمن بتعديل حدود ومبالغ كل مستوى
+ * يحددها المدير (admin / manager) من صفحة "إعدادات مستويات البونص"
+ * المفاتيح tier_1..tier_7 تُعين تصاعدياً حسب الحد الأدنى، والحد الأقصى = الحد الأدنى للمستوى التالي - 0.01
  */
 export const bonusTierSettings = mysqlTable("bonusTierSettings", {
   id: int("id").autoincrement().primaryKey(),
   
   // معرف المستوى
-  tierKey: varchar("tierKey", { length: 20 }).notNull().unique(), // tier_1, tier_2, tier_3, tier_4, tier_5
+  tierKey: varchar("tierKey", { length: 20 }).notNull().unique(), // tier_1 .. tier_7
   
   // اسم المستوى
   tierName: varchar("tierName", { length: 100 }).notNull(), // المستوى 1, المستوى 2, ...

@@ -2,6 +2,7 @@ import puppeteer from 'puppeteer';
 import { getDb } from '../db';
 import { dailyRevenues, employeeRevenues, expenses, weeklyBonuses, bonusDetails, employees, branches } from '../../drizzle/schema';
 import { eq, and, gte, lte, sql, desc, asc } from 'drizzle-orm';
+import { getTierDisplayName, getTierColorHex } from '../../shared/bonusHelpers';
 
 // ==================== دوال المساعدة ====================
 
@@ -46,23 +47,10 @@ const getStatusLabel = (status: string): string => {
   return labels[status] || status;
 };
 
-const getTierLabel = (tier: string): string => {
-  const labels: Record<string, string> = {
-    'tier_7': 'المستوى 7 (ممتاز)', 'tier_6': 'المستوى 6', 'tier_5': 'المستوى 5',
-    'tier_4': 'المستوى 4', 'tier_3': 'المستوى 3', 'tier_2': 'المستوى 2',
-    'tier_1': 'المستوى 1', 'none': 'غير مؤهل'
-  };
-  return labels[tier] || tier;
-};
+// أسماء المستويات من الاسم المحفوظ وقت الاحتساب (bonusDetails.tierName) وليس خريطة ثابتة
+const getTierLabel = (tier: string, tierName?: string | null): string => getTierDisplayName(tier, tierName);
 
-const getTierColor = (tier: string): string => {
-  const colors: Record<string, string> = {
-    'tier_7': '#9333ea', 'tier_6': '#a855f7', 'tier_5': '#2563eb',
-    'tier_4': '#3b82f6', 'tier_3': '#22c55e', 'tier_2': '#eab308',
-    'tier_1': '#f97316', 'none': '#9ca3af'
-  };
-  return colors[tier] || '#6b7280';
-};
+const getTierColor = (tier: string): string => getTierColorHex(tier);
 
 // ==================== تقرير الإيرادات الشهري ====================
 
@@ -362,6 +350,7 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
     branchName: string | null;
     weeklyRevenue: string;
     tier: string;
+    tierName: string | null;
     bonusAmount: string;
     isEligible: boolean;
   }> = [];
@@ -376,6 +365,7 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
       branchName: branches.name,
       weeklyRevenue: bonusDetails.weeklyRevenue,
       tier: bonusDetails.bonusTier,
+      tierName: bonusDetails.tierName,
       bonusAmount: bonusDetails.bonusAmount,
       isEligible: bonusDetails.isEligible
     })
@@ -387,6 +377,12 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
     detailsList = await detailsQuery;
   }
   
+  // اسم كل مستوى كما حُفظ وقت الاحتساب
+  const tierNameByKey = new Map<string, string>();
+  for (const d of detailsList) {
+    if (d.tier && d.tierName) tierNameByKey.set(d.tier, d.tierName);
+  }
+
   // تجميع حسب المستوى
   const tierMap = new Map<string, { count: number; total: number }>();
   for (const d of detailsList) {
@@ -401,7 +397,7 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
   const byTier = Array.from(tierMap.entries())
     .map(([tier, data]) => ({
       tier,
-      tierLabel: getTierLabel(tier),
+      tierLabel: getTierLabel(tier, tierNameByKey.get(tier)),
       count: data.count,
       totalAmount: data.total,
       percentage: totalBonusAmount > 0 ? (data.total / totalBonusAmount) * 100 : 0
@@ -444,7 +440,8 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
         branchName: data.branchName,
         totalRevenue: data.revenue,
         totalBonus: data.bonus,
-        averageTier
+        averageTier,
+        averageTierLabel: getTierLabel(averageTier, tierNameByKey.get(averageTier))
       };
     })
     .sort((a, b) => b.totalBonus - a.totalBonus);
@@ -756,7 +753,7 @@ interface BonusHTMLData {
   averageBonus: number;
   byTier: Array<{ tier: string; tierLabel: string; count: number; totalAmount: number; percentage: number }>;
   weeklyBreakdown: Array<{ weekNumber: number; weekStart: string; weekEnd: string; totalAmount: number; employeeCount: number }>;
-  employees: Array<{ employeeId: number; employeeName: string; employeeCode: string; branchName: string; totalRevenue: number; totalBonus: number; averageTier: string }>;
+  employees: Array<{ employeeId: number; employeeName: string; employeeCode: string; branchName: string; totalRevenue: number; totalBonus: number; averageTier: string; averageTierLabel: string }>;
 }
 
 function generateBonusHTML(data: BonusHTMLData): string {
@@ -848,7 +845,7 @@ function generateBonusHTML(data: BonusHTMLData): string {
       <table>
         <thead><tr><th>#</th><th>الموظف</th><th>الكود</th><th>الفرع</th><th>الإيرادات</th><th>المستوى</th><th>البونص</th></tr></thead>
         <tbody>
-          ${data.employees.slice(0, 15).map((e, i) => `<tr><td>${i + 1}</td><td>${e.employeeName}</td><td>${e.employeeCode}</td><td>${e.branchName}</td><td>${formatCurrency(e.totalRevenue)}</td><td><span class="tier-badge" style="background: ${getTierColor(e.averageTier)}">${getTierLabel(e.averageTier)}</span></td><td>${formatCurrency(e.totalBonus)}</td></tr>`).join('')}
+          ${data.employees.slice(0, 15).map((e, i) => `<tr><td>${i + 1}</td><td>${e.employeeName}</td><td>${e.employeeCode}</td><td>${e.branchName}</td><td>${formatCurrency(e.totalRevenue)}</td><td><span class="tier-badge" style="background: ${getTierColor(e.averageTier)}">${e.averageTierLabel}</span></td><td>${formatCurrency(e.totalBonus)}</td></tr>`).join('')}
           <tr class="total-row"><td colspan="6">الإجمالي</td><td>${formatCurrency(data.totalBonusAmount)}</td></tr>
         </tbody>
       </table>

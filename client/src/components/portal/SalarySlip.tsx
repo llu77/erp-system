@@ -263,6 +263,10 @@ export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
       if (salarySlip.negativeInvoicesDeduction > 0) {
         deductionsData.push(['Negative Invoices', formatCurrencyPDF(salarySlip.negativeInvoicesDeduction)]);
       }
+
+      if (salarySlip.violationsDeduction > 0) {
+        deductionsData.push(['Violations', formatCurrencyPDF(salarySlip.violationsDeduction)]);
+      }
       
       if (salarySlip.deductionAmount > 0) {
         const deductionLabel = salarySlip.deductionReason 
@@ -559,6 +563,12 @@ export function SalarySlip({ employeeId, employeeName }: SalarySlipProps) {
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-400">فواتير سالبة</span>
                     <span className="text-red-400">-{formatCurrency(salarySlip.negativeInvoicesDeduction)}</span>
+                  </div>
+                )}
+                {salarySlip.violationsDeduction > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">مخالفات</span>
+                    <span className="text-red-400">-{formatCurrency(salarySlip.violationsDeduction)}</span>
                   </div>
                 )}
                 {salarySlip.deductionAmount > 0 && (

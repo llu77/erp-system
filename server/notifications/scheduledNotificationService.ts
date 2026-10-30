@@ -546,18 +546,9 @@ export async function sendWeeklyBonusReport(): Promise<SendResult> {
   try {
     // جمع بيانات الفروع والفروقات
     const branches = await db.getBranches();
-    const now = new Date();
-    const day = now.getDate();
-    const month = now.getMonth() + 1;
-    const year = now.getFullYear();
-    
-    // حساب رقم الأسبوع الحالي
-    let weekNumber: number;
-    if (day <= 7) weekNumber = 1;
-    else if (day <= 15) weekNumber = 2;
-    else if (day <= 22) weekNumber = 3;
-    else if (day <= 29) weekNumber = 4;
-    else weekNumber = 5;
+    // الفترة الحالية حسب فترات البونص الموحدة (1-7، 8-14، 15-21، 22-28، 29-نهاية الشهر)
+    const { getCurrentBonusPeriod } = await import('../bonus/calculator');
+    const { weekNumber, month, year } = getCurrentBonusPeriod();
     
     // جمع الفروقات من كل الفروع
     const branchReports: Array<{
