@@ -7,12 +7,13 @@
  * 3. الشفافية - نوضح مصدر البيانات والفترة الزمنية
  */
 
-import { getDb } from "../db";
+import { getDb, generateRequestNumber } from "../db";
 import { isRequestVisibleToEmployee } from "../endOfService/service";
 import { 
   employees, 
   branches, 
   employeeRequests, 
+  employeeRequestLogs,
   dailyRevenues,
   employeeRevenues,
   weeklyBonuses,
@@ -186,9 +187,8 @@ export async function submitEmployeeRequest(input: EmployeeRequestInput): Promis
       resignation: 'استقالة'
     };
 
-    // إنشاء رقم الطلب
-    const now = new Date();
-    const requestNumber = `REQ-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Date.now().toString().slice(-6)}`;
+    // إنشاء رقم الطلب (نفس صيغة طلبات النظام)
+    const requestNumber = generateRequestNumber();
 
     // إنشاء الطلب
     const requestData: any = {
@@ -228,6 +228,20 @@ export async function submitEmployeeRequest(input: EmployeeRequestInput): Promis
     }
 
     const result = await db.insert(employeeRequests).values(requestData);
+
+    // سجل إنشاء الطلب (يظهر في تتبع الطلب)
+    try {
+      await db.insert(employeeRequestLogs).values({
+        requestId: Number(result[0]?.insertId),
+        action: 'إنشاء طلب',
+        newStatus: 'pending',
+        performedBy: input.employeeId,
+        performedByName: `${emp.name} (المساعد الذكي)`,
+        notes: `تم رفع ${requestData.title} عبر المساعد الذكي`,
+      });
+    } catch (logError) {
+      console.error('[AssistantTools] تعذر تسجيل إنشاء الطلب:', logError);
+    }
 
     return {
       success: true,
@@ -943,7 +957,8 @@ export async function executeAssistantTool(toolName: string, args: any): Promise
       return prepareRequest(args);
     
     case 'confirm_request':
-      return confirmRequest(args.sessionId, args.employeeId);
+      // نص الموظف الفعلي (لا يُفترض "نعم"): يُنفذ الطلب فقط إذا كان الرد تأكيداً صريحاً
+      return confirmRequest(args.sessionId, args.employeeId, typeof args.userMessage === 'string' ? args.userMessage : '');
     
     case 'cancel_request':
       return cancelRequest(args.sessionId);
@@ -1022,9 +1037,9 @@ async function prepareRequest(args: {
 /**
  * تأكيد وتنفيذ الطلب المعلق
  */
-async function confirmRequest(sessionId: string, employeeId: number): Promise<ToolResult> {
+async function confirmRequest(sessionId: string, employeeId: number, userMessage: string): Promise<ToolResult> {
   try {
-    const result = await handleConfirmationResponse(sessionId, employeeId, 'نعم');
+    const result = await handleConfirmationResponse(sessionId, employeeId, userMessage);
 
     if (result.action === 'confirmed' && result.result) {
       return result.result;

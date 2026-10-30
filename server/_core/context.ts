@@ -3,12 +3,18 @@ import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
 import { COOKIE_NAME } from "../../shared/const";
 import { jwtVerify } from "jose";
+import { parse as parseCookieHeader } from "cookie";
 import { getUserById } from "../auth/localAuth";
+import { isEmployeePortalAudience, resolvePortalEmployee, type PortalEmployee } from "../auth/employeeSession";
+
+export type { PortalEmployee } from "../auth/employeeSession";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
   res: CreateExpressContextOptions["res"];
   user: User | null;
+  /** موظف بوابة الموظفين (من كوكي الجلسة الخاص بالبوابة فقط) */
+  employee?: PortalEmployee | null;
 };
 
 export async function createContext(
@@ -22,21 +28,15 @@ export async function createContext(
   } catch (error) {
     // إذا فشل OAuth، نحاول المصادقة المحلية عبر JWT
     try {
-      const cookies = opts.req.headers.cookie || "";
-      const cookieMap = Object.fromEntries(
-        cookies.split(";").map(c => {
-          const [key, ...val] = c.trim().split("=");
-          return [key, val.join("=")];
-        })
-      );
-      
-      const token = cookieMap[COOKIE_NAME];
-      
+      const cookieHeader = opts.req.headers.cookie;
+      const token = cookieHeader ? parseCookieHeader(cookieHeader)[COOKIE_NAME] : undefined;
+
       if (token) {
         const secret = new TextEncoder().encode(process.env.JWT_SECRET || "fallback-secret");
         const { payload } = await jwtVerify(token, secret);
-        
-        if (payload.userId) {
+
+        // رمز جلسة بوابة الموظفين لا يصلح كجلسة للنظام الرئيسي
+        if (payload.userId && !isEmployeePortalAudience(payload.aud)) {
           // الحصول على بيانات المستخدم من قاعدة البيانات
           const dbUser = await getUserById(Number(payload.userId));
           if (dbUser) {
@@ -50,9 +50,13 @@ export async function createContext(
     }
   }
 
+  // جلسة بوابة الموظفين (قراءة واحدة من قاعدة البيانات فقط عند وجود كوكي البوابة)
+  const employee = await resolvePortalEmployee(opts.req.headers.cookie);
+
   return {
     req: opts.req,
     res: opts.res,
     user,
+    employee,
   };
 }

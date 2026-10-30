@@ -56,6 +56,71 @@ const REQUEST_TYPE_NAMES: Record<string, string> = {
   end_of_service: 'إنهاء خدمة',
 };
 
+// ==================== تحليل رد التأكيد ====================
+
+// كل ما ليس حرفاً أو رقماً أو مسافة (علامات الترقيم العربية والإنجليزية والرموز)
+const NON_WORD_CHARS = new RegExp("[^\\p{L}\\p{N}\\s]+", "gu");
+
+/** توحيد النص العربي للمطابقة: حذف التشكيل والتطويل، توحيد الألف والياء، وفصل علامات الترقيم */
+export function normalizeReplyText(text: string): string {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(NON_WORD_CHARS, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// كلمات وعبارات تُطابق ككلمات كاملة (لا كجزء من كلمة: "صح" لا تطابق "صحيح")
+const CONFIRM_PHRASES = ["نعم", "اكد", "اكده", "اكدها", "موافق", "موافقه", "تمام", "اوكي", "ok", "okay", "yes", "صح", "ايوه", "ايوا", "ماشي", "اكيد"];
+// كلمات قصيرة ملتبسة ("أي" قد تعني "أيّ") تُقبل فقط إذا كانت الرد كاملاً
+const CONFIRM_WHOLE_MESSAGE = ["اي", "ايه", "اي نعم"];
+const CANCEL_PHRASES = ["لا", "لاء", "الغاء", "الغي", "الغيه", "تراجع", "no", "cancel", "مش عايز", "لا اريد", "ما ابغى", "ما ابي", "ما اريد"];
+// النفي قبل كلمة تأكيد يجعلها رفضاً ("غير موافق" / "مو صح")
+const NEGATIONS = ["غير", "مو", "مش", "ما", "ليس", "لست", "مب", "not"];
+
+function containsPhrase(tokens: string[], phrase: string): number[] {
+  const words = normalizeReplyText(phrase).split(" ");
+  const positions: number[] = [];
+  for (let i = 0; i + words.length <= tokens.length; i++) {
+    if (words.every((word, k) => tokens[i + k] === word)) positions.push(i);
+  }
+  return positions;
+}
+
+/**
+ * تصنيف رد الموظف على طلب التأكيد بمطابقة كلمات كاملة:
+ * confirm فقط عند وجود كلمة تأكيد غير منفية وعدم وجود كلمة إلغاء، وإلا cancel أو unclear
+ */
+export function classifyConfirmationReply(text: string): "confirm" | "cancel" | "unclear" {
+  const normalized = normalizeReplyText(text);
+  if (!normalized) return "unclear";
+  const tokens = normalized.split(" ");
+
+  let hasConfirm = CONFIRM_WHOLE_MESSAGE.some(phrase => normalizeReplyText(phrase) === normalized);
+  let hasCancel = false;
+
+  for (const phrase of CONFIRM_PHRASES) {
+    for (const position of containsPhrase(tokens, phrase)) {
+      if (position > 0 && NEGATIONS.includes(tokens[position - 1])) {
+        hasCancel = true;
+      } else {
+        hasConfirm = true;
+      }
+    }
+  }
+  for (const phrase of CANCEL_PHRASES) {
+    if (containsPhrase(tokens, phrase).length > 0) hasCancel = true;
+  }
+
+  if (hasConfirm && !hasCancel) return "confirm";
+  if (hasCancel && !hasConfirm) return "cancel";
+  return "unclear";
+}
+
 // ==================== دوال إنشاء الملخص ====================
 
 /**
@@ -191,17 +256,10 @@ export async function handleConfirmationResponse(
   // أخذ آخر طلب معلق
   const latestRequest = pendingRequests[0];
   
-  // تحليل رد المستخدم
-  const normalizedResponse = userResponse.trim().toLowerCase();
-  
-  // كلمات التأكيد
-  const confirmWords = ['نعم', 'اكد', 'أكد', 'موافق', 'تمام', 'اوكي', 'ok', 'yes', 'صح', 'ايوه', 'أيوه', 'اي', 'أي', 'ماشي'];
-  
-  // كلمات الإلغاء
-  const cancelWords = ['لا', 'الغاء', 'إلغاء', 'تراجع', 'لأ', 'no', 'cancel', 'مش عايز', 'لا اريد', 'لا أريد', 'الغي', 'ألغي'];
-  
-  const isConfirm = confirmWords.some(word => normalizedResponse.includes(word));
-  const isCancel = cancelWords.some(word => normalizedResponse.includes(word));
+  // تحليل رد المستخدم الفعلي (مطابقة كلمات كاملة: "صحيح" أو "لا، المبلغ غير صحيح" ليست تأكيداً)
+  const reply = classifyConfirmationReply(userResponse);
+  const isConfirm = reply === "confirm";
+  const isCancel = reply === "cancel";
   
   if (isConfirm && !isCancel) {
     // تأكيد الطلب

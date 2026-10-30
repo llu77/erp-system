@@ -32,7 +32,10 @@ export async function verifyPassword(password: string, storedHash: string): Prom
   if (!salt || !hash) return false;
   
   const { hash: computedHash } = hashPassword(password, salt);
-  return computedHash === storedHash;
+  // مقارنة ثابتة الزمن (لا تكشف موضع أول اختلاف)
+  const expected = Buffer.from(storedHash, "utf8");
+  const actual = Buffer.from(computedHash, "utf8");
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
 // تسجيل الدخول المحلي
