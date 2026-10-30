@@ -78,12 +78,12 @@ function DeductionList({ title, items, total }: { title: string; items: EndOfSer
   );
 }
 
-export function CalculationWarnings({ warnings }: { warnings: string[] }) {
+export function CalculationWarnings({ warnings, title = 'تنبيهات قبل الاعتماد' }: { warnings: string[]; title?: string }) {
   if (warnings.length === 0) return null;
   return (
     <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
       <AlertTriangle className="h-4 w-4" />
-      <AlertTitle>تنبيهات قبل الاعتماد</AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
       <AlertDescription className="text-amber-900/90 dark:text-amber-200/90">
         <ul className="list-disc pr-4 space-y-1">
           {warnings.map(w => (
