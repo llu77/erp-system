@@ -359,11 +359,14 @@ function Router() {
         </DashboardLayout>
       </Route>
       
-      {/* لوحة الوثائق */}
+      {/* لوحة الوثائق (والمسار القديم من القائمة) */}
       <Route path="/documents">
         <DashboardLayout>
           <LazyPage component={DocumentsDashboard} />
         </DashboardLayout>
+      </Route>
+      <Route path="/documents-dashboard">
+        <Redirect to="/documents" />
       </Route>
       
       {/* تقديم طلب */}

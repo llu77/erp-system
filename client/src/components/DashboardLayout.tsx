@@ -195,16 +195,18 @@ const menuStructure: MenuItem[] = [
   {
     icon: Building2,
     label: "إدارة الموارد",
-    roles: ["admin", "manager", "viewer"],
+    // مشرف الفرع يرى هنا الموظفين ولوحة الوثائق فقط (موظفو فرعه)
+    roles: ["admin", "manager", "viewer", "supervisor"],
     children: [
       { icon: Building2, label: "الفروع", path: "/branches", roles: ["admin", "manager", "viewer"] },
-      { icon: UserCircle, label: "الموظفين", path: "/employees", roles: ["admin", "manager", "viewer"] },
-      { icon: FileWarning, label: "لوحة الوثائق", path: "/documents-dashboard", roles: ["admin", "manager"] },
+      { icon: UserCircle, label: "الموظفين", path: "/employees", roles: ["admin", "manager", "supervisor"] },
+      { icon: FileWarning, label: "لوحة الوثائق", path: "/documents", roles: ["admin", "manager", "viewer", "supervisor"] },
+      { icon: FileText, label: "تقرير وثائق الموظفين", path: "/employee-documents-report", roles: ["admin", "manager"] },
       { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager", "viewer"] },
-      { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee", "supervisor"] },
-      { icon: Brain, label: "Symbol AI", path: "/employee-assistant", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee"] },
+      { icon: Brain, label: "Symbol AI", path: "/employee-assistant", roles: ["admin", "manager", "viewer"] },
       { icon: Key, label: "حسابات الموظفين", path: "/employee-accounts", roles: ["admin"] },
-      { icon: Heart, label: "برنامج الولاء", path: "/loyalty", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: Heart, label: "برنامج الولاء", path: "/loyalty", roles: ["admin", "manager", "viewer"] },
     ]
   },
   
