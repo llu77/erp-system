@@ -1987,6 +1987,15 @@ export const appRouter = router({
             financialValidation.throwValidationError(empNetworkValidation.errors);
           }
         }
+
+        // منع تكرار نفس الموظف في نفس اليوم
+        const employeeIdsInInput = input.employeeRevenues.map(e => e.employeeId);
+        if (new Set(employeeIdsInInput).size !== employeeIdsInInput.length) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'لا يمكن تكرار نفس الموظف في إيرادات اليوم',
+          });
+        }
         // ==================== نهاية التحقق ====================
 
         const date = new Date(input.date);
@@ -2053,52 +2062,70 @@ export const appRouter = router({
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل إنشاء السجل الشهري' });
         }
 
-        // إنشاء الإيراد اليومي باستخدام القيم المحسوبة تلقائياً
-        const result = await db.createDailyRevenue({
-          monthlyRecordId: monthlyRecord.id,
-          branchId: input.branchId,
-          date: new Date(input.date),
-          cash: input.cash,
-          network: input.network,
-          balance: calculatedBalance.toString(), // الرصيد = الشبكة تلقائياً
-          paidInvoices: paidInvoicesAmount.toString(), // فواتير المدفوع
-          paidInvoicesNote: input.paidInvoicesNote || null, // سبب فواتير المدفوع
-          paidInvoicesCustomer: input.paidInvoicesCustomer || null, // اسم العميل
-          loyalty: input.loyalty || '0', // مبلغ الولاء
-          loyaltyInvoiceImage: input.loyaltyInvoiceImage || null, // صورة فاتورة الولاء
-          total: calculatedTotal.toString(), // الإجمالي = الكاش + الشبكة + فواتير المدفوع
-          isMatched, // المطابقة التلقائية
-          unmatchReason: unmatchReason || null,
-          balanceImages: input.balanceImages,
-          imageVerificationNote: input.imageVerificationNote,
-          createdBy: ctx.user.id,
-        });
-
-        // إنشاء إيرادات الموظفين وتزامن البونص
-        const dailyRevenueId = Number((result as any)?.[0]?.insertId || result);
-        
-        for (const empRev of input.employeeRevenues) {
-          await db.createEmployeeRevenue({
-            dailyRevenueId,
-            employeeId: empRev.employeeId,
-            cash: empRev.cash,
-            network: empRev.network,
-            total: empRev.total,
-          });
-
-          // تزامن البونص تلقائياً
-          try {
-            const { syncBonusOnRevenueChange } = await import('./bonus/sync');
-            await syncBonusOnRevenueChange(empRev.employeeId, input.branchId, new Date(input.date));
-          } catch (error: any) {
-            bonusLogger.error('خطأ في مزامنة البونص', error);
-            await db.createSystemLog({
-              level: 'warning',
-              category: 'bonus',
-              message: `فشل تزامن البونص للموظف ${empRev.employeeId}: ${error.message}`,
-              userId: ctx.user.id,
+        // إنشاء الإيراد اليومي وإيرادات الموظفين في معاملة واحدة
+        // إجمالي الموظف يُحسب في الخادم = الكاش + الشبكة (لا يُعتمد على قيمة العميل)
+        let dailyRevenueId: number;
+        try {
+          const created = await db.createDailyRevenueWithEmployees({
+            monthlyRecordId: monthlyRecord.id,
+            branchId: input.branchId,
+            date: new Date(input.date),
+            cash: input.cash,
+            network: input.network,
+            balance: calculatedBalance.toString(), // الرصيد = الشبكة تلقائياً
+            paidInvoices: paidInvoicesAmount.toString(), // فواتير المدفوع
+            paidInvoicesNote: input.paidInvoicesNote || null, // سبب فواتير المدفوع
+            paidInvoicesCustomer: input.paidInvoicesCustomer || null, // اسم العميل
+            loyalty: input.loyalty || '0', // مبلغ الولاء
+            loyaltyInvoiceImage: input.loyaltyInvoiceImage || null, // صورة فاتورة الولاء
+            total: calculatedTotal.toString(), // الإجمالي = الكاش + الشبكة + فواتير المدفوع
+            isMatched, // المطابقة التلقائية
+            unmatchReason: unmatchReason || null,
+            balanceImages: input.balanceImages,
+            imageVerificationNote: input.imageVerificationNote,
+            createdBy: ctx.user.id,
+          }, input.employeeRevenues.map(empRev => {
+            const empCash = parseFloat(empRev.cash) || 0;
+            const empNetwork = parseFloat(empRev.network) || 0;
+            return {
+              employeeId: empRev.employeeId,
+              cash: empCash.toFixed(2),
+              network: empNetwork.toFixed(2),
+              total: (empCash + empNetwork).toFixed(2),
+            };
+          }));
+          dailyRevenueId = created.id;
+        } catch (error: any) {
+          if (String(error?.message || '').startsWith('ALREADY_EXISTS')) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'يوجد إيراد بالفعل لهذا اليوم. فقط المسؤول يمكنه التعديل أو الحذف.',
             });
           }
+          throw error;
+        }
+
+        // إعادة احتساب بونص الفترة مرة واحدة بعد الحفظ (بدون إرسال إشعارات)
+        let bonusWarnings: string[] = [];
+        try {
+          const { recomputeBonusForStoredDates } = await import('./bonus/sync');
+          const bonusResults = await recomputeBonusForStoredDates(input.branchId, [new Date(input.date)], {
+            performedBy: ctx.user.id,
+            reason: `إدخال إيرادات يوم ${input.date}`,
+          });
+          for (const r of bonusResults) {
+            if (!r.success) {
+              await db.createSystemLog({
+                level: 'warning',
+                category: 'bonus',
+                message: `فشل احتساب البونص للفرع ${input.branchId}: ${r.message}`,
+                userId: ctx.user.id,
+              });
+            }
+            bonusWarnings.push(...(r.success ? r.warnings : [r.message]));
+          }
+        } catch (error: any) {
+          bonusLogger.error('خطأ في احتساب البونص', error);
         }
 
         await db.createActivityLog({
@@ -2142,58 +2169,7 @@ export const appRouter = router({
           logger.error('خطأ في المراقبة الذكية', error);
         }
 
-        // فحص الفروقات وإرسال تنبيهات استباقية
-        try {
-          const revenueDate = new Date(input.date);
-          const day = revenueDate.getDate();
-          const month = revenueDate.getMonth() + 1;
-          const year = revenueDate.getFullYear();
-          
-          // حساب رقم الأسبوع
-          let weekNumber: number;
-          if (day <= 7) weekNumber = 1;
-          else if (day <= 14) weekNumber = 2;
-          else if (day <= 21) weekNumber = 3;
-          else if (day <= 28) weekNumber = 4;
-          else weekNumber = 5;
-          
-          // فحص الفروقات بعد التزامن
-          const discrepancyResult = await db.detectBonusDiscrepancies(
-            input.branchId,
-            weekNumber,
-            month,
-            year
-          );
-          
-          // إرسال تنبيه إذا وجدت فروقات
-          if (discrepancyResult.discrepancies && discrepancyResult.discrepancies.length > 0) {
-            const branch = await db.getBranchById(input.branchId);
-            const branchName = branch?.nameAr || 'غير محدد';
-            
-            // إرسال تنبيه بريد إلكتروني للمسؤولين
-            const emailService = await import('./notifications/emailNotificationService');
-            const recipients = await db.getNotificationRecipients();
-            const adminRecipients = recipients.filter(r => r.isActive && (r.role === 'admin' || r.role === 'general_supervisor'));
-            
-            for (const recipient of adminRecipients) {
-              if (recipient.email) {
-                await emailService.sendBonusDiscrepancyAlert(recipient.email, {
-                  branchName,
-                  weekNumber,
-                  month,
-                  year,
-                  discrepancies: discrepancyResult.discrepancies,
-                }).catch(err => notificationLogger.error('خطأ في إرسال تنبيه الفروقات', err));
-              }
-            }
-            
-            logger.info('تنبيه استباقي', { discrepanciesCount: discrepancyResult.discrepancies.length, branchName });
-          }
-        } catch (error: any) {
-          logger.error('خطأ في التنبيه الاستباقي', error);
-        }
-
-        return { success: true, message: 'تم حفظ الإيرادات بنجاح' };
+        return { success: true, message: 'تم حفظ الإيرادات بنجاح', bonusWarnings };
       }),
 
     getByDateRange: protectedProcedure
@@ -2212,11 +2188,11 @@ export const appRouter = router({
         id: z.number(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // حذف إيرادات الموظفين المرتبطة أولاً
-        await db.deleteEmployeeRevenuesByDailyId(input.id);
-        
-        // حذف الإيراد اليومي
-        await db.deleteDailyRevenue(input.id);
+        // حذف إيرادات الموظفين والإيراد اليومي في معاملة واحدة (مع قراءة الفرع والتاريخ قبل الحذف)
+        const deleted = await db.deleteDailyRevenueWithEmployees(input.id);
+        if (!deleted) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الإيراد غير موجود' });
+        }
         
         await db.createActivityLog({
           userId: ctx.user.id,
@@ -2225,8 +2201,21 @@ export const appRouter = router({
           entityType: 'revenue',
           details: `تم حذف إيراد يومي رقم ${input.id}`,
         });
+
+        // إعادة احتساب بونص الفترة بعد الحذف
+        let bonusWarnings: string[] = [];
+        try {
+          const { recomputeBonusForStoredDates } = await import('./bonus/sync');
+          const bonusResults = await recomputeBonusForStoredDates(deleted.branchId, [deleted.date], {
+            performedBy: ctx.user.id,
+            reason: `حذف إيراد يومي رقم ${input.id}`,
+          });
+          bonusWarnings = bonusResults.flatMap(r => r.success ? r.warnings : [r.message]);
+        } catch (error: any) {
+          bonusLogger.error('خطأ في احتساب البونص بعد حذف الإيراد', error);
+        }
         
-        return { success: true, message: 'تم حذف الإيراد بنجاح' };
+        return { success: true, message: 'تم حذف الإيراد بنجاح', bonusWarnings };
       }),
 
     // تجديد رابط صورة S3 منتهي الصلاحية
@@ -2411,347 +2400,168 @@ export const appRouter = router({
   }),
 
   // ==================== إدارة البونص الأسبوعي ====================
+  // الفترات: 1-7، 8-14، 15-21، 22-28، 29-نهاية الشهر | المستويات يحددها المدير (bonusTierSettings)
   bonuses: router({
-    // الحصول على بونص الأسبوع الحالي فقط (متاح للجميع)
+    // بونص الفترة الحالية (مقيد بفرع المشرف)
     current: protectedProcedure
       .input(z.object({ branchId: z.number() }))
-      .query(async ({ input }) => {
-        const now = new Date();
-        const day = now.getDate();
-        const month = now.getMonth() + 1;
-        const year = now.getFullYear();
-        
-        // حساب رقم الأسبوع الحالي
-        let currentWeekNumber: number;
-        if (day <= 7) currentWeekNumber = 1;
-        else if (day <= 15) currentWeekNumber = 2;
-        else if (day <= 22) currentWeekNumber = 3;
-        else if (day <= 29) currentWeekNumber = 4;
-        else currentWeekNumber = 5;
-
-        // البحث عن بونص الأسبوع الحالي فقط
-        let weeklyBonus = await db.getCurrentWeekBonus(input.branchId, year, month, currentWeekNumber);
-        let details = weeklyBonus ? await db.getBonusDetails(weeklyBonus.id) : [];
-        let isCurrentWeek = true;
-        let displayYear = year;
-        let displayMonth = month;
-        let displayWeekNumber = currentWeekNumber;
-        
-        // التحقق من وجود إيرادات في الأسبوع الحالي
-        const hasCurrentWeekRevenues = details.some(d => Number(d.weeklyRevenue) > 0);
-        
-        // إذا لم يكن هناك بونص للأسبوع الحالي، أنشئ واحداً فارغاً
-        if (!weeklyBonus) {
-          // جلب الموظفين النشطين للفرع
-          const branchEmployees = await db.getEmployeesByBranch(input.branchId);
-          const branch = await db.getBranchById(input.branchId);
-          
-          // حساب تواريخ الأسبوع
-          const lastDayOfMonth = new Date(year, month, 0).getDate();
-          const weekRanges: Record<number, { startDay: number; endDay: number }> = {
-            1: { startDay: 1, endDay: 7 },
-            2: { startDay: 8, endDay: 14 },
-            3: { startDay: 15, endDay: 21 },
-            4: { startDay: 22, endDay: 28 },
-            5: { startDay: 29, endDay: lastDayOfMonth },
-          };
-          const range = weekRanges[currentWeekNumber] || weekRanges[1];
-          const weekStart = new Date(year, month - 1, range.startDay);
-          const weekEnd = new Date(year, month - 1, Math.min(range.endDay, lastDayOfMonth));
-          
-          return {
-            id: 0,
-            branchId: input.branchId,
-            branchName: branch?.nameAr || 'غير محدد',
-            year,
-            month,
-            weekNumber: currentWeekNumber,
-            weekStart,
-            weekEnd,
-            totalRevenue: '0',
-            totalAmount: '0',
-            status: 'pending' as const,
-            details: branchEmployees.map(emp => ({
-              id: 0,
-              employeeId: emp.id,
-              employeeName: emp.name,
-              employeeCode: emp.code,
-              weeklyRevenue: '0',
-              bonusAmount: '0',
-              bonusTier: null,
-              isEligible: false,
-            })),
-            eligibleCount: 0,
-            totalEmployees: branchEmployees.length,
-            isCurrentWeek: true,
-            hasRevenues: false,
-            message: 'لم يتم إدخال إيرادات لهذا الأسبوع بعد',
-          };
-        }
-
-        const branch = await db.getBranchById(input.branchId);
-
-        return {
-          ...weeklyBonus,
-          branchName: branch?.nameAr || 'غير محدد',
-          details,
-          eligibleCount: details.filter(d => d.isEligible).length,
-          totalEmployees: details.length,
-          isCurrentWeek,
-          hasRevenues: hasCurrentWeekRevenues,
-        };
+      .query(async ({ input, ctx }) => {
+        const { assertBonusBranchAccess } = await import('./bonus/access');
+        const { getCurrentBonusPeriod } = await import('./bonus/calculator');
+        const { getBonusPeriodView } = await import('./bonus/views');
+        assertBonusBranchAccess(ctx.user, input.branchId);
+        const { year, month, weekNumber } = getCurrentBonusPeriod();
+        return await getBonusPeriodView(input.branchId, year, month, weekNumber);
       }),
 
-    // الحصول على بونص أسبوع محدد (متاح للجميع)
+    // بونص فترة محددة (مقيد بفرع المشرف)
     getWeek: protectedProcedure
       .input(z.object({
         branchId: z.number(),
-        year: z.number(),
-        month: z.number(),
-        weekNumber: z.number().min(1).max(5),
+        year: z.number().int().min(2020).max(2100),
+        month: z.number().int().min(1).max(12),
+        weekNumber: z.number().int().min(1).max(5),
       }))
-      .query(async ({ input }) => {
-        const weeklyBonus = await db.getCurrentWeekBonus(
-          input.branchId,
-          input.year,
-          input.month,
-          input.weekNumber
-        );
-        
-        if (!weeklyBonus) {
-          return null;
-        }
-
-        const details = await db.getBonusDetails(weeklyBonus.id);
-        const branch = await db.getBranchById(input.branchId);
-
-        return {
-          ...weeklyBonus,
-          branchName: branch?.nameAr || 'غير محدد',
-          details,
-          eligibleCount: details.filter(d => d.isEligible).length,
-          totalEmployees: details.length,
-        };
+      .query(async ({ input, ctx }) => {
+        const { assertBonusBranchAccess, assertValidBonusPeriod } = await import('./bonus/access');
+        const { getBonusPeriodView } = await import('./bonus/views');
+        assertBonusBranchAccess(ctx.user, input.branchId);
+        assertValidBonusPeriod(input.weekNumber, input.month, input.year);
+        return await getBonusPeriodView(input.branchId, input.year, input.month, input.weekNumber);
       }),
 
-    // سجل البونص (متاح للجميع)
+    // سجل البونص للفرع (مقيد بفرع المشرف)
     history: protectedProcedure
       .input(z.object({
         branchId: z.number(),
-        limit: z.number().default(10),
+        limit: z.number().int().min(1).max(100).default(10),
       }))
-      .query(async ({ input }) => {
-        return await db.getWeeklyBonusesByBranch(input.branchId, input.limit);
+      .query(async ({ input, ctx }) => {
+        const { assertBonusBranchAccess } = await import('./bonus/access');
+        const { getRequestBlocker } = await import('./bonus/workflow');
+        const { getBusinessDayKey } = await import('./bonus/calculator');
+        const { formatBonusPeriodLabel } = await import('../shared/bonus');
+        const { getBonusStatusLabel } = await import('../shared/bonusHelpers');
+        assertBonusBranchAccess(ctx.user, input.branchId);
+        const rows = await db.getWeeklyBonusesByBranch(input.branchId, input.limit);
+        const todayKey = getBusinessDayKey();
+        return rows.map(row => {
+          const requestBlocker = getRequestBlocker(row, todayKey);
+          return {
+            ...row,
+            periodLabel: formatBonusPeriodLabel(row.weekNumber, row.month, row.year),
+            statusLabel: getBonusStatusLabel(row.status),
+            canRequest: requestBlocker === null,
+            requestBlocker,
+          };
+        });
       }),
 
-    // طلب صرف البونص (متاح للجميع)
+    // طلب صرف البونص (المسؤول / المدير / مشرف الفرع لفرعه) - بعد انتهاء الفترة وبمبلغ > 0
     request: protectedProcedure
       .input(z.object({ weeklyBonusId: z.number() }))
       .mutation(async ({ input, ctx }) => {
-        // الحصول على بيانات البونص أولاً
+        const { assertBonusOperator, assertBonusBranchAccess } = await import('./bonus/access');
+        const { requestWeeklyBonus } = await import('./bonus/workflow');
+        const { recomputeWeeklyBonus } = await import('./bonus/sync');
+        const { dispatchBonusRequestedNotifications, runAfterCommit } = await import('./bonus/notifications');
+        assertBonusOperator(ctx.user);
+
         const weeklyBonus = await db.getWeeklyBonusById(input.weeklyBonusId);
         if (!weeklyBonus) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'البونص غير موجود' });
         }
-        
-        // التحقق من أن البونص في حالة انتظار (مسودة)
-        if (weeklyBonus.status !== 'pending') {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن طلب صرف بونص تم طلبه مسبقاً' });
-        }
-        
-        await db.updateWeeklyBonusStatus(input.weeklyBonusId, 'requested', ctx.user.id);
-        
-        await db.createBonusAuditLog({
-          weeklyBonusId: input.weeklyBonusId,
-          action: 'طلب صرف',
-          oldStatus: 'pending',
-          newStatus: 'requested',
-          performedBy: ctx.user.id,
-          details: 'تم طلب صرف البونص',
-        });
+        assertBonusBranchAccess(ctx.user, weeklyBonus.branchId);
 
-        // إرسال إشعار للمسؤول
-        await notifyOwner({
-          title: 'طلب صرف بونص جديد',
-          content: `تم طلب صرف بونص أسبوعي من ${ctx.user.name || 'مشرف'}`,
-        });
-
-        // إرسال إشعار بريد إلكتروني متقدم
-        const bonusDetails = await db.getBonusDetails(input.weeklyBonusId);
-        if (bonusDetails.length > 0) {
-          const branch = await db.getBranchById(weeklyBonus.branchId);
-          
-          // تحضير بيانات الموظفين للقالب المتقدم
-          const employeesData = bonusDetails
-            .filter(d => d.isEligible)
-            .map(d => ({
-              name: d.employeeName || 'غير محدد',
-              code: d.employeeCode || '',
-              weeklyRevenue: parseFloat(String(d.weeklyRevenue)) || 0,
-              tier: d.bonusTier || 'none',
-              bonusAmount: parseFloat(String(d.bonusAmount)) || 0,
-            }));
-          
-          // إرسال الإشعار المتقدم
-          emailNotifications.notifyAdvancedBonusPaymentRequest({
-            branchId: weeklyBonus.branchId,
-            branchName: branch?.nameAr || 'غير محدد',
-            weekNumber: weeklyBonus.weekNumber,
-            month: weeklyBonus.month,
-            year: weeklyBonus.year,
-            totalAmount: parseFloat(String(weeklyBonus.totalAmount)) || 0,
-            eligibleCount: employeesData.length,
-            totalEmployees: bonusDetails.length,
-            requestedBy: ctx.user.name || 'مشرف',
-            requestedByRole: ctx.user.role === 'admin' ? 'مسؤول النظام' : ctx.user.role === 'manager' ? 'المدير' : ctx.user.role === 'supervisor' ? 'مشرف الفرع' : 'مستخدم',
-            employees: employeesData,
-          }).catch(err => bonusLogger.error('خطأ في إرسال إشعار طلب صرف البونص', err));
+        // تحديث المبالغ من الإيرادات الحالية قبل قفل الفترة بالطلب
+        if (weeklyBonus.status === 'pending' || weeklyBonus.status === 'rejected') {
+          const recompute = await recomputeWeeklyBonus(weeklyBonus.branchId, weeklyBonus.year, weeklyBonus.month, weeklyBonus.weekNumber, {
+            performedBy: ctx.user.id,
+            reason: 'تحديث قبل طلب الصرف',
+          });
+          if (!recompute.success) {
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: recompute.message });
+          }
         }
 
-        return { success: true, message: 'تم إرسال طلب الصرف بنجاح' };
+        const { bonus } = await requestWeeklyBonus(input.weeklyBonusId, ctx.user);
+
+        // الإشعارات بعد نجاح العملية فقط (لا تُفشل الطلب)
+        runAfterCommit('request', () => dispatchBonusRequestedNotifications(bonus, ctx.user));
+
+        return { success: true, message: 'تم إرسال طلب الصرف للمدير بنجاح', totalAmount: bonus.totalAmount };
       }),
 
-    // طلبات البونص المعلقة (للمسؤول والمشرف)
-    pending: supervisorViewProcedure.query(async () => {
-      const requests = await db.getPendingBonusRequests();
-      const result = [];
-      
-      for (const req of requests) {
-        const branch = await db.getBranchById(req.branchId);
-        const details = await db.getBonusDetails(req.id);
-        result.push({
-          ...req,
-          branchName: branch?.nameAr || 'غير محدد',
-          details,
-          eligibleCount: details.filter(d => d.isEligible).length,
-          totalEmployees: details.length,
-        });
-      }
-      
-      return result;
+    // الطلبات بانتظار الموافقة (مقيدة بفرع المشرف)
+    pending: supervisorViewProcedure.query(async ({ ctx }) => {
+      const { getBonusBranchScope } = await import('./bonus/access');
+      const { enrichWeeklyBonusRows } = await import('./bonus/views');
+      const requests = await db.getPendingBonusRequests(getBonusBranchScope(ctx.user));
+      return await enrichWeeklyBonusRows(requests);
     }),
 
-    // جميع طلبات البونص (السجل الكامل) - متاح للمشرف
+    // جميع سجلات البونص (مقيدة بفرع المشرف)
     all: supervisorViewProcedure
-      .input(z.object({ limit: z.number().default(50) }).optional())
-      .query(async ({ input }) => {
-        const requests = await db.getAllBonusRequests(input?.limit || 50);
-        const result = [];
-        
-        for (const req of requests) {
-          const branch = await db.getBranchById(req.branchId);
-          const details = await db.getBonusDetails(req.id);
-          result.push({
-            ...req,
-            branchName: branch?.nameAr || 'غير محدد',
-            details,
-            eligibleCount: details.filter(d => d.isEligible).length,
-            totalEmployees: details.length,
-          });
-        }
-        
-        return result;
+      .input(z.object({ limit: z.number().int().min(1).max(200).default(50) }).optional())
+      .query(async ({ input, ctx }) => {
+        const { getBonusBranchScope } = await import('./bonus/access');
+        const { enrichWeeklyBonusRows } = await import('./bonus/views');
+        const requests = await db.getAllBonusRequests(input?.limit || 50, getBonusBranchScope(ctx.user));
+        return await enrichWeeklyBonusRows(requests);
       }),
 
-    // الموافقة على البونص
-    approve: adminProcedure
+    // الموافقة على البونص (المدير) - من "بانتظار الموافقة" فقط
+    approve: managerProcedure
       .input(z.object({ weeklyBonusId: z.number() }))
       .mutation(async ({ input, ctx }) => {
-        await db.updateWeeklyBonusStatus(input.weeklyBonusId, 'approved', ctx.user.id);
-        
-        await db.createBonusAuditLog({
-          weeklyBonusId: input.weeklyBonusId,
-          action: 'موافقة',
-          oldStatus: 'requested',
-          newStatus: 'approved',
-          performedBy: ctx.user.id,
-          details: 'تمت الموافقة على البونص',
-        });
-
+        const { approveWeeklyBonus } = await import('./bonus/workflow');
+        const { dispatchBonusDecisionNotifications, runAfterCommit } = await import('./bonus/notifications');
+        const { bonus } = await approveWeeklyBonus(input.weeklyBonusId, ctx.user);
+        runAfterCommit('approve', () => dispatchBonusDecisionNotifications(bonus, 'approved', ctx.user));
         return { success: true, message: 'تمت الموافقة على البونص بنجاح' };
       }),
 
-    // رفض البونص
-    reject: adminProcedure
+    // رفض البونص (المدير) - السبب مطلوب
+    reject: managerProcedure
       .input(z.object({
         weeklyBonusId: z.number(),
-        reason: z.string().min(1, 'سبب الرفض مطلوب'),
+        reason: z.string().trim().min(1, 'سبب الرفض مطلوب').max(1000),
       }))
       .mutation(async ({ input, ctx }) => {
-        await db.updateWeeklyBonusStatus(input.weeklyBonusId, 'rejected', ctx.user.id, input.reason);
-        
-        await db.createBonusAuditLog({
-          weeklyBonusId: input.weeklyBonusId,
-          action: 'رفض',
-          oldStatus: 'requested',
-          newStatus: 'rejected',
-          performedBy: ctx.user.id,
-          details: `تم رفض البونص: ${input.reason}`,
-        });
-
-        return { success: true, message: 'تم رفض البونص' };
+        const { rejectWeeklyBonus } = await import('./bonus/workflow');
+        const { dispatchBonusDecisionNotifications, runAfterCommit } = await import('./bonus/notifications');
+        const { bonus } = await rejectWeeklyBonus(input.weeklyBonusId, ctx.user, input.reason);
+        runAfterCommit('reject', () => dispatchBonusDecisionNotifications(bonus, 'rejected', ctx.user));
+        return { success: true, message: 'تم رفض البونص وإشعار مقدم الطلب' };
       }),
 
-    // صرف البونص (تسجيل الصرف الفعلي)
-    markAsPaid: adminProcedure
+    // تسجيل صرف البونص (المدير) - من "موافق عليه" فقط
+    markAsPaid: managerProcedure
       .input(z.object({
         weeklyBonusId: z.number(),
         paymentMethod: z.enum(['cash', 'bank_transfer', 'check']),
-        paymentReference: z.string().optional(),
-        paymentNotes: z.string().optional(),
+        paymentReference: z.string().max(255).optional(),
+        paymentNotes: z.string().max(2000).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // التحقق من أن البونص موافق عليه
-        const bonus = await db.getWeeklyBonusById(input.weeklyBonusId);
-        if (!bonus) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'البونص غير موجود' });
+        const { markWeeklyBonusPaid } = await import('./bonus/workflow');
+        const { dispatchBonusDecisionNotifications, runAfterCommit } = await import('./bonus/notifications');
+        if (input.paymentMethod !== 'cash' && !input.paymentReference?.trim()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'مرجع الدفع مطلوب للتحويل البنكي أو الشيك' });
         }
-        if (bonus.status !== 'approved') {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'يجب الموافقة على البونص قبل الصرف' });
-        }
-
-        // تحديث حالة البونص إلى مصروف
-        await db.markBonusAsPaid(input.weeklyBonusId, {
-          paidBy: ctx.user.id,
-          paymentMethod: input.paymentMethod,
-          paymentReference: input.paymentReference,
-          paymentNotes: input.paymentNotes,
-        });
-        
-        await db.createBonusAuditLog({
-          weeklyBonusId: input.weeklyBonusId,
-          action: 'صرف',
-          oldStatus: 'approved',
-          newStatus: 'paid',
-          performedBy: ctx.user.id,
-          details: `تم صرف البونص - طريقة الدفع: ${input.paymentMethod}${input.paymentReference ? ` - المرجع: ${input.paymentReference}` : ''}`,
-        });
-
+        const { bonus } = await markWeeklyBonusPaid(input.weeklyBonusId, ctx.user, input);
+        runAfterCommit('paid', () => dispatchBonusDecisionNotifications(bonus, 'paid', ctx.user));
         return { success: true, message: 'تم تسجيل صرف البونص بنجاح' };
       }),
 
-    // الحصول على البونصات الموافق عليها (للصرف)
-    approvedForPayment: adminProcedure.query(async () => {
-      const approved = await db.getApprovedBonusesForPayment();
-      const result = [];
-      
-      for (const bonus of approved) {
-        const branch = await db.getBranchById(bonus.branchId);
-        const details = await db.getBonusDetails(bonus.id);
-        result.push({
-          ...bonus,
-          branchName: branch?.nameAr || 'غير محدد',
-          details,
-          eligibleCount: details.filter(d => d.isEligible).length,
-          totalEmployees: details.length,
-        });
-      }
-      
-      return result;
+    // البونصات الموافق عليها بانتظار الصرف
+    approvedForPayment: managerProcedure.query(async () => {
+      const { enrichWeeklyBonusRows } = await import('./bonus/views');
+      return await enrichWeeklyBonusRows(await db.getApprovedBonusesForPayment());
     }),
 
     // سجل البونصات المصروفة
-    paidHistory: adminProcedure
+    paidHistory: managerProcedure
       .input(z.object({
         branchId: z.number().optional(),
         month: z.number().optional(),
@@ -2759,73 +2569,120 @@ export const appRouter = router({
         limit: z.number().optional(),
       }).optional())
       .query(async ({ input }) => {
-        const paid = await db.getPaidBonusHistory(input);
-        const result = [];
-        
-        for (const bonus of paid) {
-          const branch = await db.getBranchById(bonus.branchId);
-          const paidByUser = bonus.paidBy ? await db.getUserById(bonus.paidBy) : null;
-          result.push({
-            ...bonus,
-            branchName: branch?.nameAr || 'غير محدد',
-            paidByName: paidByUser?.name || 'غير محدد',
-          });
-        }
-        
-        return result;
+        const { enrichWeeklyBonusRows } = await import('./bonus/views');
+        return await enrichWeeklyBonusRows(await db.getPaidBonusHistory(input));
       }),
 
-    // تزامن البونص يدوياً (متاح للجميع)
+    // إعادة احتساب بونص فترة (المسؤول / المدير / مشرف الفرع لفرعه) - بدون إرسال إشعارات
     sync: protectedProcedure
       .input(z.object({
         branchId: z.number(),
-        year: z.number(),
-        month: z.number(),
-        weekNumber: z.number().min(1).max(5),
+        year: z.number().int().min(2020).max(2100),
+        month: z.number().int().min(1).max(12),
+        weekNumber: z.number().int().min(1).max(5),
       }))
       .mutation(async ({ input, ctx }) => {
-        const { syncWeeklyBonusForBranch } = await import('./bonus/sync');
-        const result = await syncWeeklyBonusForBranch(
-          input.branchId,
-          input.weekNumber,
-          input.month,
-          input.year
-        );
+        const { assertBonusOperator, assertBonusBranchAccess, assertValidBonusPeriod } = await import('./bonus/access');
+        const { recomputeWeeklyBonus } = await import('./bonus/sync');
+        const { getBusinessDayKey } = await import('./bonus/calculator');
+        const { getBonusPeriodDays, formatBonusPeriodLabel } = await import('../shared/bonus');
+        const { toDayKey } = await import('../shared/bonusHelpers');
+        assertBonusOperator(ctx.user);
+        assertBonusBranchAccess(ctx.user, input.branchId);
+        assertValidBonusPeriod(input.weekNumber, input.month, input.year);
 
-        if (result.success) {
-          await db.createActivityLog({
-            userId: ctx.user.id,
-            userName: ctx.user.name || 'مستخدم',
+        const { startDay } = getBonusPeriodDays(input.weekNumber, input.month, input.year);
+        if (toDayKey(input.year, input.month, startDay) > getBusinessDayKey()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن احتساب بونص فترة لم تبدأ بعد' });
+        }
+
+        const result = await recomputeWeeklyBonus(input.branchId, input.year, input.month, input.weekNumber, {
+          performedBy: ctx.user.id,
+          reason: 'إعادة احتساب يدوية',
+        });
+
+        if (result.success && result.weeklyBonusId) {
+          await db.createBonusAuditLog({
+            weeklyBonusId: result.weeklyBonusId,
             action: 'sync',
-            entityType: 'bonus',
-            details: `تم تزامن بونص الأسبوع ${input.weekNumber}`,
+            oldStatus: result.status,
+            newStatus: result.status,
+            performedBy: ctx.user.id,
+            details: `إعادة احتساب يدوية لفترة ${formatBonusPeriodLabel(input.weekNumber, input.month, input.year)}: ${result.previousTotal.toFixed(2)} ← ${result.totalAmount.toFixed(2)} ر.س${result.locked ? ' (الفترة مقفلة - لم تتغير)' : ''}`,
           });
         }
 
         return result;
       }),
 
-    // سجل تدقيق البونص
+    // إعادة احتساب إيرادات الموظفين من فواتير الكاشير (المدير)
+    rebuildFromPos: managerProcedure
+      .input(z.object({
+        branchId: z.number().optional(),
+        year: z.number().int().min(2020).max(2100),
+        month: z.number().int().min(1).max(12),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { rebuildEmployeeRevenuesFromPos } = await import('./bonus/posSync');
+        const result = await rebuildEmployeeRevenuesFromPos({
+          branchId: input.branchId ?? null,
+          year: input.year,
+          month: input.month,
+          performedBy: ctx.user.id,
+        });
+
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'sync',
+          entityType: 'bonus',
+          details: `إعادة احتساب من الكاشير لشهر ${input.month}/${input.year}: ${result.rebuilt} يوم، ${result.periods.length} فترة`,
+        });
+
+        return {
+          success: true,
+          message: result.rebuilt > 0
+            ? `تمت إعادة بناء إيرادات ${result.rebuilt} يوم من فواتير الكاشير وإعادة احتساب ${result.periods.length} فترة`
+            : 'لا توجد أيام مؤكدة من الكاشير تحتاج إعادة احتساب',
+          ...result,
+        };
+      }),
+
+    // سجل تدقيق البونص (مقيد بفرع المشرف)
     auditLogs: protectedProcedure
       .input(z.object({
         branchId: z.number().optional(),
         weeklyBonusId: z.number().optional(),
-        limit: z.number().optional().default(50),
-        offset: z.number().optional().default(0),
+        limit: z.number().int().min(1).max(200).optional().default(50),
+        offset: z.number().int().min(0).optional().default(0),
       }).optional())
-      .query(async ({ input }) => {
-        return await db.getBonusAuditLogs(input);
+      .query(async ({ input, ctx }) => {
+        const { getBonusBranchScope } = await import('./bonus/access');
+        const scope = getBonusBranchScope(ctx.user);
+        if (scope !== null && input?.branchId && input.branchId !== scope) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك الوصول لبونص فرع آخر' });
+        }
+        if (scope !== null && input?.weeklyBonusId) {
+          const bonus = await db.getWeeklyBonusById(input.weeklyBonusId);
+          if (bonus && bonus.branchId !== scope) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك الوصول لبونص فرع آخر' });
+          }
+        }
+        return await db.getBonusAuditLogs({ ...input, branchId: scope ?? input?.branchId });
       }),
 
-    // الكشف عن فروقات البونص
+    // الكشف عن فروقات البونص (مقيد بفرع المشرف)
     detectDiscrepancies: protectedProcedure
       .input(z.object({
         branchId: z.number(),
-        weekNumber: z.number().min(1).max(5),
-        month: z.number().min(1).max(12),
-        year: z.number(),
+        weekNumber: z.number().int().min(1).max(5),
+        month: z.number().int().min(1).max(12),
+        year: z.number().int(),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        const { assertBonusBranchAccess, assertValidBonusPeriod } = await import('./bonus/access');
+        assertBonusBranchAccess(ctx.user, input.branchId);
+        assertValidBonusPeriod(input.weekNumber, input.month, input.year);
         return await db.detectBonusDiscrepancies(
           input.branchId,
           input.weekNumber,
@@ -2834,59 +2691,38 @@ export const appRouter = router({
         );
       }),
 
-    // الحصول على جميع الفروقات غير المعالجة (للوحة التحكم)
+    // فروقات الفترة الحالية لكل الفروع (للمسؤول والمدير)
     getAllDiscrepancies: protectedProcedure
       .query(async ({ ctx }) => {
-        // فقط للأدمن
-        if (ctx.user.role !== 'admin') {
-          return { totalDiscrepancies: 0, branches: [] };
-        }
-
-        const now = new Date();
-        const day = now.getDate();
-        const month = now.getMonth() + 1;
-        const year = now.getFullYear();
-        
-        // حساب رقم الأسبوع الحالي
-        let weekNumber: number;
-        if (day <= 7) weekNumber = 1;
-        else if (day <= 15) weekNumber = 2;
-        else if (day <= 22) weekNumber = 3;
-        else if (day <= 29) weekNumber = 4;
-        else weekNumber = 5;
-
-        // الحصول على جميع الفروع
-        const branches = await db.getBranches();
-        const results: Array<{
+        const { isBonusManager } = await import('./bonus/access');
+        const { getCurrentBonusPeriod } = await import('./bonus/calculator');
+        const { formatBonusPeriodLabel } = await import('../shared/bonus');
+        const { weekNumber, month, year } = getCurrentBonusPeriod();
+        const periodLabel = formatBonusPeriodLabel(weekNumber, month, year);
+        const allBranches: Array<{
           branchId: number;
           branchName: string;
           discrepancyCount: number;
           totalDiff: number;
         }> = [];
 
+        if (!isBonusManager(ctx.user)) {
+          return { totalDiscrepancies: 0, weekNumber, month, year, periodLabel, branches: allBranches, allBranches };
+        }
+
+        const branches = (await db.getBranches()).filter(b => b.isActive);
         let totalDiscrepancies = 0;
 
         for (const branch of branches) {
-          const discrepancies = await db.detectBonusDiscrepancies(
-            branch.id,
-            weekNumber,
-            month,
-            year
-          );
-
-          if (discrepancies.hasDiscrepancy) {
-            const totalDiff = discrepancies.discrepancies.reduce(
-              (sum, d) => sum + Math.abs(d.bonusDiff),
-              0
-            );
-            results.push({
-              branchId: branch.id,
-              branchName: branch.nameAr || branch.name,
-              discrepancyCount: discrepancies.discrepancies.length,
-              totalDiff,
-            });
-            totalDiscrepancies += discrepancies.discrepancies.length;
-          }
+          const discrepancies = await db.detectBonusDiscrepancies(branch.id, weekNumber, month, year);
+          const totalDiff = discrepancies.discrepancies.reduce((sum, d) => sum + Math.abs(d.bonusDiff), 0);
+          allBranches.push({
+            branchId: branch.id,
+            branchName: branch.nameAr || branch.name,
+            discrepancyCount: discrepancies.discrepancies.length,
+            totalDiff,
+          });
+          totalDiscrepancies += discrepancies.discrepancies.length;
         }
 
         return {
@@ -2894,19 +2730,25 @@ export const appRouter = router({
           weekNumber,
           month,
           year,
-          branches: results,
+          periodLabel,
+          // الفروع التي بها فروقات فقط (تستخدمها لوحة التحكم)
+          branches: allBranches.filter(b => b.discrepancyCount > 0),
+          // جميع الفروع النشطة (بما فيها المتطابقة) لإحصائيات صفحة البونص
+          allBranches,
         };
       }),
 
-    // إرسال تنبيه بالفروقات عبر البريد
-    sendDiscrepancyAlert: protectedProcedure
+    // إرسال تنبيه بالفروقات عبر البريد (المدير)
+    sendDiscrepancyAlert: managerProcedure
       .input(z.object({
         branchId: z.number(),
-        weekNumber: z.number().min(1).max(5),
-        month: z.number().min(1).max(12),
-        year: z.number(),
+        weekNumber: z.number().int().min(1).max(5),
+        month: z.number().int().min(1).max(12),
+        year: z.number().int(),
       }))
       .mutation(async ({ input, ctx }) => {
+        const { assertValidBonusPeriod } = await import('./bonus/access');
+        assertValidBonusPeriod(input.weekNumber, input.month, input.year);
         const discrepancyResult = await db.detectBonusDiscrepancies(
           input.branchId,
           input.weekNumber,
@@ -2920,34 +2762,13 @@ export const appRouter = router({
 
         // الحصول على اسم الفرع
         const branch = await db.getBranchById(input.branchId);
-        const branchName = branch?.name || 'غير محدد';
+        const branchName = branch?.nameAr || branch?.name || 'غير محدد';
 
-        // إنشاء محتوى التنبيه
-        const discrepancyRows = discrepancyResult.discrepancies.map(d => 
-          `- ${d.employeeName}: إيراد مسجل ${d.registeredRevenue.toFixed(2)} ر.س، إيراد فعلي ${d.actualRevenue.toFixed(2)} ر.س (فرق: ${d.revenueDiff.toFixed(2)} ر.س)`
-        ).join('\n');
-
-        const alertContent = `
-⚠️ تنبيه: تم اكتشاف فروقات في البونص
-
-الفرع: ${branchName}
-الأسبوع: ${input.weekNumber}
-الشهر: ${input.month}/${input.year}
-
-عدد الفروقات: ${discrepancyResult.discrepancies.length}
-
-التفاصيل:
-${discrepancyRows}
-
-يرجى مراجعة الإيرادات وإعادة تزامن البونص.
-        `.trim();
-
-        // إرسال إشعار للمسؤولين
         try {
           const emailService = await import('./notifications/emailNotificationService');
           const recipients = await db.getNotificationRecipients();
           const adminRecipients = recipients.filter(r => r.isActive && (r.role === 'admin' || r.role === 'general_supervisor'));
-          
+
           for (const recipient of adminRecipients) {
             if (recipient.email) {
               await emailService.sendBonusDiscrepancyAlert(recipient.email, {
@@ -2961,15 +2782,17 @@ ${discrepancyRows}
           }
 
           // تسجيل في سجل التدقيق
-          await db.createBonusAuditLog({
-            weeklyBonusId: discrepancyResult.summary?.weeklyBonusId || 0,
-            action: 'discrepancy_alert_sent',
-            performedBy: ctx.user.id,
-            details: `تم إرسال تنبيه بـ ${discrepancyResult.discrepancies.length} فروقات`,
-          });
+          if (discrepancyResult.summary?.weeklyBonusId) {
+            await db.createBonusAuditLog({
+              weeklyBonusId: discrepancyResult.summary.weeklyBonusId,
+              action: 'discrepancy_alert_sent',
+              performedBy: ctx.user.id,
+              details: `تم إرسال تنبيه بـ ${discrepancyResult.discrepancies.length} فروقات`,
+            });
+          }
 
-          return { 
-            success: true, 
+          return {
+            success: true,
             message: `تم إرسال التنبيه إلى ${adminRecipients.length} مستلم`,
             discrepancies: discrepancyResult.discrepancies.length
           };
@@ -2979,21 +2802,16 @@ ${discrepancyRows}
         }
       }),
 
-    // إرسال التقرير الأسبوعي للبونص (يدوياً)
-    sendWeeklyReport: protectedProcedure
-      .mutation(async ({ ctx }) => {
-        // فقط للأدمن
-        if (ctx.user.role !== 'admin') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح' });
-        }
-
+    // إرسال التقرير الأسبوعي للبونص (يدوياً - المسؤول والمدير)
+    sendWeeklyReport: managerProcedure
+      .mutation(async () => {
         try {
           const scheduledService = await import('./notifications/scheduledNotificationService');
           const result = await scheduledService.sendWeeklyBonusReport();
-          
+
           return {
             success: result.success,
-            message: result.success 
+            message: result.success
               ? `تم إرسال التقرير إلى ${result.sentCount} مستلم`
               : result.reason || 'فشل إرسال التقرير',
             sentCount: result.sentCount,
@@ -3010,10 +2828,10 @@ ${discrepancyRows}
         try {
           const { sendDocumentExpiryNotifications } = await import('./notifications/documentExpiryNotifications');
           const result = await sendDocumentExpiryNotifications();
-          
+
           return {
             success: result.success,
-            message: result.success 
+            message: result.success
               ? `تم إرسال تقرير الوثائق إلى ${result.sentCount} مستلم (إجمالي الوثائق: ${result.totalDocuments})`
               : result.errors.join(', ') || 'فشل إرسال التقرير',
             sentCount: result.sentCount,
@@ -3026,18 +2844,100 @@ ${discrepancyRows}
         }
       }),
 
-    // ==================== إدارة مستويات البونص (للأدمن فقط) ====================
-    
-    // الحصول على جميع مستويات البونص
-    getTierSettings: protectedProcedure
+    // ==================== إدارة مستويات البونص (المدير: admin + manager) ====================
+
+    // المستويات النشطة المستخدمة في الاحتساب (للعرض: المسؤول والمدير والمشرف والمشرف العام)
+    getTiers: supervisorViewProcedure
       .query(async () => {
-        // تهيئة المستويات الافتراضية إذا لم تكن موجودة
-        await db.initializeDefaultBonusTiers();
+        const { loadActiveBonusTiers } = await import('./bonus/tiers');
+        const { getTierThresholds } = await import('./bonus/calculator');
+        const { BONUS_PERIOD_RANGES, MAX_BONUS_TIERS } = await import('../shared/bonus');
+        const { tiers, isDefault } = await loadActiveBonusTiers({ fresh: true });
+        const thresholds = getTierThresholds(tiers);
+        return {
+          isDefault,
+          maxTiers: MAX_BONUS_TIERS,
+          tiers: tiers.map(t => ({
+            tierKey: t.tierKey,
+            tierName: t.tierName,
+            minRevenue: t.minRevenue,
+            maxRevenue: thresholds.find(th => th.tier === t.tierKey)?.maxRevenue ?? null,
+            bonusAmount: t.bonusAmount,
+            color: t.color ?? null,
+          })),
+          periods: Object.entries(BONUS_PERIOD_RANGES).map(([weekNumber, range]) => ({
+            weekNumber: Number(weekNumber),
+            startDay: range.startDay,
+            endDay: range.endDay,
+          })),
+        };
+      }),
+
+    // حفظ قائمة المستويات بالكامل في معاملة واحدة (المدير)
+    saveTiers: managerProcedure
+      .input(z.object({
+        tiers: z.array(z.object({
+          tierName: z.string().trim().max(100).optional().nullable(),
+          minRevenue: z.number().finite(),
+          bonusAmount: z.number().finite(),
+          color: z.string().max(20).optional().nullable(),
+        })).min(1, 'يجب تحديد مستوى واحد على الأقل').max(7, 'الحد الأقصى 7 مستويات'),
+        recalculateOpenPeriods: z.boolean().optional().default(false),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { validateTierList } = await import('../shared/bonus');
+        const { prepareTierRowsForSave } = await import('../shared/bonusHelpers');
+        const { invalidateBonusTiersCache, loadActiveBonusTiers } = await import('./bonus/tiers');
+
+        const errors = validateTierList(input.tiers);
+        if (errors.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: errors.join('، ') });
+        }
+
+        const rows = prepareTierRowsForSave(input.tiers);
+        await db.replaceBonusTiers(rows, { id: ctx.user.id, name: ctx.user.name || 'مدير' });
+        invalidateBonusTiersCache();
+
+        let recalculation: { recomputed: number; skipped: number; failed: number } | null = null;
+        if (input.recalculateOpenPeriods) {
+          const { recomputeOpenPeriodsForMonth } = await import('./bonus/sync');
+          const { getCurrentBonusPeriod } = await import('./bonus/calculator');
+          const { year, month } = getCurrentBonusPeriod();
+          const tiers = (await loadActiveBonusTiers({ fresh: true })).tiers;
+          const result = await recomputeOpenPeriodsForMonth(year, month, {
+            tiers,
+            performedBy: ctx.user.id,
+            reason: 'تعديل مستويات البونص',
+          });
+          recalculation = { recomputed: result.recomputed, skipped: result.skipped, failed: result.failed };
+        }
+
+        await db.createActivityLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name || 'مستخدم',
+          action: 'update',
+          entityType: 'bonus',
+          details: `تحديث مستويات البونص (${rows.length} مستوى)${recalculation ? ` وإعادة احتساب ${recalculation.recomputed} فترة مفتوحة` : ''}`,
+        });
+
+        return {
+          success: true,
+          message: recalculation
+            ? `تم حفظ المستويات وإعادة احتساب ${recalculation.recomputed} فترة مفتوحة للشهر الحالي`
+            : 'تم حفظ مستويات البونص بنجاح - ستُطبق على الاحتسابات القادمة',
+          tiers: rows,
+          recalculation,
+        };
+      }),
+
+    // جميع صفوف إعدادات المستويات (بدون تهيئة تلقائية عند القراءة)
+    getTierSettings: supervisorViewProcedure
+      .query(async () => {
         return await db.getBonusTierSettings();
       }),
 
-    // تحديث مستوى بونص (للأدمن فقط)
-    updateTier: adminProcedure
+    // تحديث مستوى بونص (المدير)
+    updateTier: managerProcedure
       .input(z.object({
         id: z.number(),
         tierName: z.string().optional(),
@@ -3049,16 +2949,28 @@ ${discrepancyRows}
         isActive: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        const { validateTierList } = await import('../shared/bonus');
+        const { invalidateBonusTiersCache } = await import('./bonus/tiers');
         // الحصول على القيم القديمة
         const tiers = await db.getBonusTierSettings();
         const oldTier = tiers.find(t => t.id === input.id);
-        
+
         if (!oldTier) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'المستوى غير موجود' });
         }
 
         const { id, ...updateData } = input;
+        const nextList = tiers
+          .map(t => (t.id === id ? { ...t, ...updateData } : t))
+          .filter(t => t.isActive)
+          .map(t => ({ minRevenue: Number(t.minRevenue), bonusAmount: Number(t.bonusAmount) }));
+        const errors = validateTierList(nextList);
+        if (errors.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: errors.join('، ') });
+        }
+
         await db.updateBonusTier(id, updateData);
+        invalidateBonusTiersCache();
 
         // تسجيل التغيير
         await db.logBonusTierChange({
@@ -3075,8 +2987,8 @@ ${discrepancyRows}
         return { success: true, message: 'تم تحديث المستوى بنجاح' };
       }),
 
-    // إضافة مستوى جديد (للأدمن فقط)
-    createTier: adminProcedure
+    // إضافة مستوى جديد (المدير)
+    createTier: managerProcedure
       .input(z.object({
         tierKey: z.string(),
         tierName: z.string(),
@@ -3087,7 +2999,25 @@ ${discrepancyRows}
         sortOrder: z.number().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        const { isValidTierKey, validateTierList } = await import('../shared/bonus');
+        const { invalidateBonusTiersCache } = await import('./bonus/tiers');
+        if (!isValidTierKey(input.tierKey)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'مفتاح المستوى يجب أن يكون من tier_1 إلى tier_7' });
+        }
+        const tiers = await db.getBonusTierSettings();
+        if (tiers.some(t => t.tierKey === input.tierKey)) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'مفتاح المستوى مستخدم بالفعل' });
+        }
+        const errors = validateTierList([
+          ...tiers.filter(t => t.isActive).map(t => ({ minRevenue: Number(t.minRevenue), bonusAmount: Number(t.bonusAmount) })),
+          { minRevenue: Number(input.minRevenue), bonusAmount: Number(input.bonusAmount) },
+        ]);
+        if (errors.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: errors.join('، ') });
+        }
+
         await db.createBonusTier(input);
+        invalidateBonusTiersCache();
 
         // تسجيل التغيير
         await db.logBonusTierChange({
@@ -3102,18 +3032,20 @@ ${discrepancyRows}
         return { success: true, message: 'تم إضافة المستوى بنجاح' };
       }),
 
-    // حذف مستوى (للأدمن فقط)
-    deleteTier: adminProcedure
+    // حذف مستوى (المدير)
+    deleteTier: managerProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
+        const { invalidateBonusTiersCache } = await import('./bonus/tiers');
         const tiers = await db.getBonusTierSettings();
         const tier = tiers.find(t => t.id === input.id);
-        
+
         if (!tier) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'المستوى غير موجود' });
         }
 
         await db.deleteBonusTier(input.id);
+        invalidateBonusTiersCache();
 
         // تسجيل التغيير
         await db.logBonusTierChange({
@@ -3129,54 +3061,58 @@ ${discrepancyRows}
         return { success: true, message: 'تم حذف المستوى بنجاح' };
       }),
 
-    // سجل تغييرات مستويات البونص
-    getTierAuditLogs: adminProcedure
+    // سجل تغييرات مستويات البونص (المدير)
+    getTierAuditLogs: managerProcedure
       .input(z.object({ limit: z.number().optional() }).optional())
       .query(async ({ input }) => {
         return await db.getBonusTierAuditLogs(input?.limit || 50);
       }),
 
-    // إحصائيات البونص - متاح للمشرف
-    stats: supervisorViewProcedure.query(async () => {
-      return await db.getBonusStats();
+    // إحصائيات البونص (مقيدة بفرع المشرف) - المصروف = "تم الصرف" فقط
+    stats: supervisorViewProcedure.query(async ({ ctx }) => {
+      const { getBonusBranchScope } = await import('./bonus/access');
+      return await db.getBonusStats(getBonusBranchScope(ctx.user));
     }),
 
-    // تصدير PDF للبونص الأسبوعي - متاح للمشرف
+    // تصدير PDF للبونص الأسبوعي (مقيد بفرع المشرف)
     exportPDF: supervisorViewProcedure
       .input(z.object({ weeklyBonusId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
+        const { assertBonusBranchAccess } = await import('./bonus/access');
         const bonus = await db.getWeeklyBonusById(input.weeklyBonusId);
         if (!bonus) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'البونص غير موجود' });
         }
+        assertBonusBranchAccess(ctx.user, bonus.branchId);
 
         const branch = await db.getBranchById(bonus.branchId);
         const details = await db.getBonusDetails(input.weeklyBonusId);
-        
+
         // جلب معلومات المستخدمين
         const requestedByUser = bonus.requestedBy ? await db.getUserById(bonus.requestedBy) : null;
         const approvedByUser = bonus.approvedBy ? await db.getUserById(bonus.approvedBy) : null;
         const paidByUser = bonus.paidBy ? await db.getUserById(bonus.paidBy) : null;
 
-        // تحضير بيانات الموظفين
+        // تحضير بيانات الموظفين (مع اسم المستوى المحفوظ وقت الاحتساب)
         const employees = details.map(d => ({
           name: d.employeeName || 'غير محدد',
           code: d.employeeCode || '',
           weeklyRevenue: parseFloat(String(d.weeklyRevenue)) || 0,
           tier: d.bonusTier || 'none',
+          tierName: d.tierName,
           bonusAmount: parseFloat(String(d.bonusAmount)) || 0,
           isEligible: d.isEligible || false,
         }));
 
         const { generateWeeklyBonusReportPDF } = await import('./pdfService');
-        
+
         const pdfBuffer = await generateWeeklyBonusReportPDF({
           branchName: branch?.nameAr || 'غير محدد',
           weekNumber: bonus.weekNumber,
           month: bonus.month,
           year: bonus.year,
           status: bonus.status,
-          totalAmount: parseFloat(bonus.totalAmount || '0'),
+          totalAmount: parseFloat(bonus.paidAmount ?? bonus.approvedAmount ?? bonus.totalAmount ?? '0'),
           eligibleCount: details.filter(d => d.isEligible).length,
           totalEmployees: details.length,
           requestedAt: bonus.requestedAt,
@@ -9975,7 +9911,21 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           notes: z.string().optional(),
         }))
         .mutation(async ({ input, ctx }) => {
-          const targetDate = input.date ? new Date(input.date) : new Date();
+          const {
+            getBusinessDayKey,
+            businessDayKeyToLocalDate,
+          } = await import('./bonus/calculator');
+
+          // التحقق من صلاحية الوصول للفرع للمشرفين
+          if (ctx.user.role === 'supervisor' && !checkBranchAccess(ctx.user.branchId, input.branchId)) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك تأكيد فواتير فرع آخر' });
+          }
+
+          // يوم العمل (YYYY-MM-DD): من المدخل أو اليوم الحالي للخادم
+          const businessDayKey = input.date && /^\d{4}-\d{2}-\d{2}/.test(input.date)
+            ? input.date.slice(0, 10)
+            : getBusinessDayKey(input.date ? new Date(input.date) : new Date());
+          const targetDate = businessDayKeyToLocalDate(businessDayKey);
           
           // التحقق من عدم وجود تأكيد سابق لنفس اليوم
           const existingConfirmation = await db.checkPosConfirmationStatus(input.branchId, targetDate);
@@ -9986,79 +9936,84 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
             });
           }
 
-          // جلب فواتير اليوم
+          // جلب فواتير اليوم (المكتملة فقط تُحتسب - الملغاة والمسترجعة تُستبعد)
           const todayInvoices = await db.getTodayPosInvoices(input.branchId, targetDate);
-          if (todayInvoices.length === 0) {
+          const completedInvoices = todayInvoices.filter(inv => inv.status === 'completed');
+          if (completedInvoices.length === 0) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
-              message: 'لا توجد فواتير للتأكيد',
+              message: 'لا توجد فواتير مكتملة للتأكيد',
             });
           }
-
-          // حساب الإجماليات
-          const totalRevenue = todayInvoices.reduce((sum, inv) => sum + Number(inv.total), 0);
-          const totalCash = todayInvoices
-            .filter(inv => inv.paymentMethod === 'cash')
-            .reduce((sum, inv) => sum + Number(inv.total), 0) +
-            todayInvoices
-            .filter(inv => inv.paymentMethod === 'split')
-            .reduce((sum, inv) => sum + Number(inv.cashAmount || 0), 0);
-          const totalCard = todayInvoices
-            .filter(inv => inv.paymentMethod === 'card')
-            .reduce((sum, inv) => sum + Number(inv.total), 0) +
-            todayInvoices
-            .filter(inv => inv.paymentMethod === 'split')
-            .reduce((sum, inv) => sum + Number(inv.cardAmount || 0), 0);
-
-          // حساب فواتير المدفوع
-          const totalPaidInvoices = input.paidInvoices?.reduce((sum, inv) => sum + inv.amount, 0) || 0;
 
           // حساب فواتير الولاء
           const loyaltyDiscount = input.loyaltyInfo?.discountAmount || 0;
           const loyaltyInvoiceCount = input.loyaltyInfo?.invoiceCount || 0;
 
-          // إنشاء سجل الإيرادات
-          const revenueResult = await db.createRevenueFromPOS({
-            branchId: input.branchId,
-            date: targetDate,
-            totalAmount: totalRevenue,
-            cashAmount: totalCash,
-            cardAmount: totalCard,
-            balanceImageKey: input.balanceImageKey,
-            balanceImageUrl: input.balanceImageUrl,
-            paidInvoices: input.paidInvoices || [],
-            loyaltyInfo: input.loyaltyInfo,
-            notes: input.notes,
-            confirmedBy: ctx.user.id,
-            confirmedByName: ctx.user.name || 'غير معروف',
-            posInvoiceIds: todayInvoices.map(inv => inv.id),
-          });
+          // إنشاء سجل الإيرادات + إيرادات الموظفين في معاملة واحدة
+          let revenueResult: Awaited<ReturnType<typeof db.createRevenueFromPOS>>;
+          try {
+            revenueResult = await db.createRevenueFromPOS({
+              branchId: input.branchId,
+              businessDayKey,
+              balanceImageKey: input.balanceImageKey,
+              balanceImageUrl: input.balanceImageUrl,
+              paidInvoices: input.paidInvoices || [],
+              loyaltyInfo: input.loyaltyInfo,
+              notes: input.notes,
+              confirmedBy: ctx.user.id,
+              confirmedByName: ctx.user.name || 'غير معروف',
+            });
+          } catch (error: any) {
+            const message = String(error?.message || '');
+            if (message.startsWith('ALREADY_CONFIRMED') || message.startsWith('NO_INVOICES')) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: message.split(': ').slice(1).join(': ') || message });
+            }
+            throw error;
+          }
 
-          // تحديث حالة الفواتير إلى مؤكدة
-          await db.markPosInvoicesAsConfirmed(todayInvoices.map(inv => inv.id));
+          const { total: totalRevenue, cash: totalCash, network: totalCard, invoiceCount, excludedCount, totalPaidInvoices } = revenueResult.summary;
+
+          // بعد الحفظ: إعادة احتساب بونص الفترة لهذا الفرع (الإيراد ينعكس على البونص تلقائياً)
+          let bonusWarnings: string[] = [];
+          try {
+            const { recomputeBonusForStoredDates } = await import('./bonus/sync');
+            const bonusResults = await recomputeBonusForStoredDates(input.branchId, [revenueResult.date], {
+              performedBy: ctx.user.id,
+              reason: 'تأكيد فواتير الكاشير',
+            });
+            bonusWarnings = bonusResults.flatMap(r => r.success ? r.warnings : (r.errors || [r.message]));
+          } catch (error: any) {
+            bonusLogger.error('خطأ في احتساب البونص بعد تأكيد الكاشير', error);
+          }
 
           // إرسال إشعار للمشرف إذا لم يتم رفع صورة الموازنة
           if (!input.balanceImageUrl) {
-            const branch = await db.getBranchById(input.branchId);
-            const branchName = branch?.name || `فرع ${input.branchId}`;
-            const dateStr = targetDate.toLocaleDateString('ar-EG', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            });
-            
-            await notifyOwner({
-              title: '⚠️ تذكير: فواتير بدون صورة موازنة',
-              content: `تم تأكيد فواتير ${branchName} ليوم ${dateStr} بدون رفع صورة الموازنة.\n\nملخص الفواتير:\n- عدد الفواتير: ${todayInvoices.length}\n- الإجمالي: ${totalRevenue.toFixed(2)} ر.س\n- كاش: ${totalCash.toFixed(2)} ر.س\n- شبكة: ${totalCard.toFixed(2)} ر.س\n\nالرجاء رفع صورة الموازنة من صفحة الإيرادات.`,
-            });
+            try {
+              const branch = await db.getBranchById(input.branchId);
+              const branchName = branch?.name || `فرع ${input.branchId}`;
+              const dateStr = targetDate.toLocaleDateString('ar-EG', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              });
+              
+              await notifyOwner({
+                title: '⚠️ تذكير: فواتير بدون صورة موازنة',
+                content: `تم تأكيد فواتير ${branchName} ليوم ${dateStr} بدون رفع صورة الموازنة.\n\nملخص الفواتير:\n- عدد الفواتير: ${invoiceCount}\n- الإجمالي: ${totalRevenue.toFixed(2)} ر.س\n- كاش: ${totalCash.toFixed(2)} ر.س\n- شبكة: ${totalCard.toFixed(2)} ر.س\n\nالرجاء رفع صورة الموازنة من صفحة الإيرادات.`,
+              });
+            } catch (error: any) {
+              notificationLogger.error('فشل إرسال تذكير صورة الموازنة', error);
+            }
           }
 
           return {
             success: true,
             revenueId: revenueResult.id,
             summary: {
-              totalInvoices: todayInvoices.length,
+              totalInvoices: invoiceCount,
+              excludedInvoices: excludedCount,
               totalRevenue,
               totalCash,
               totalCard,
@@ -10066,6 +10021,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
               loyaltyDiscount,
               loyaltyInvoiceCount,
             },
+            bonusWarnings,
           };
         }),
 

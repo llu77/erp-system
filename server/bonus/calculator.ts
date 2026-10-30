@@ -1,25 +1,33 @@
 /**
  * Bonus Calculator - حاسبة البونص الأسبوعي
- * 
- * مستويات البونص (محدثة 7 يناير 2026):
- * - المستوى 7: ≥3200 ر.س → 190 ر.س
- * - المستوى 6: 2800-3199 ر.س → 155 ر.س
- * - المستوى 5: 2500-2799 ر.س → 120 ر.س
- * - المستوى 4: 2200-2499 ر.س → 90 ر.س
- * - المستوى 3: 1950-2199 ر.س → 65 ر.س
- * - المستوى 2: 1750-1949 ر.س → 55 ر.س
- * - المستوى 1: 1450-1749 ر.س → 35 ر.س
- * - بدون: <1450 ر.س → 0 ر.س
- * 
- * @version 3.0.0 - مستويات بونص محدثة
+ *
+ * - المستويات يحددها المدير من صفحة "إعدادات مستويات البونص" (جدول bonusTierSettings)
+ *   وتُمرر لكل عملية احتساب؛ القيم الافتراضية DEFAULT_BONUS_TIERS تُستخدم فقط إذا لم تُحدد مستويات
+ * - فترات البونص: 1-7، 8-14، 15-21، 22-28، 29-نهاية الشهر (shared/bonus.ts)
+ * - حدود الفترات بتوقيت UTC (منتصف الليل UTC لأول يوم حتى 23:59:59.999 UTC لآخر يوم)
+ *
+ * @version 4.0.0 - مستويات من قاعدة البيانات + فترات موحدة
  */
+
+import {
+  resolveBonusTier,
+  revenueToNextTier,
+  normalizeTiers,
+  getBonusPeriodNumber,
+  getBonusPeriodDays,
+  getBonusPeriodsInMonth,
+  type BonusTierRule,
+} from "../../shared/bonus";
 
 // ==================== Types ====================
 
 export type BonusTier = "tier_1" | "tier_2" | "tier_3" | "tier_4" | "tier_5" | "tier_6" | "tier_7" | "none";
 
+export type { BonusTierRule };
+
 export interface BonusCalculation {
   tier: BonusTier;
+  tierName: string;
   amount: number;
   isEligible: boolean;
 }
@@ -279,10 +287,14 @@ export function validateYear(value: unknown): ValidationResult<number> {
 // ==================== Core Functions ====================
 
 /**
- * حساب البونص بناءً على الإيراد الأسبوعي
+ * حساب البونص بناءً على إيراد الفترة ومستويات المدير
+ * @param tiers المستويات النشطة من قاعدة البيانات (null/فارغة = المستويات الافتراضية)
  * @throws {Error} إذا كان الإدخال غير صالح
  */
-export function calculateBonus(weeklyRevenue: unknown): BonusCalculation {
+export function calculateBonus(
+  weeklyRevenue: unknown,
+  tiers: BonusTierRule[] | null | undefined
+): BonusCalculation {
   const validation = validateNumber(weeklyRevenue, "الإيراد الأسبوعي", {
     allowNegative: false,
   });
@@ -291,37 +303,21 @@ export function calculateBonus(weeklyRevenue: unknown): BonusCalculation {
     throw new Error(validation.errors.map(e => e.message).join(", "));
   }
 
-  const revenue = validation.data!;
-
-  if (revenue >= 3200) {
-    return { tier: "tier_7", amount: 190, isEligible: true };
-  }
-  if (revenue >= 2800) {
-    return { tier: "tier_6", amount: 155, isEligible: true };
-  }
-  if (revenue >= 2500) {
-    return { tier: "tier_5", amount: 120, isEligible: true };
-  }
-  if (revenue >= 2200) {
-    return { tier: "tier_4", amount: 90, isEligible: true };
-  }
-  if (revenue >= 1950) {
-    return { tier: "tier_3", amount: 65, isEligible: true };
-  }
-  if (revenue >= 1750) {
-    return { tier: "tier_2", amount: 55, isEligible: true };
-  }
-  if (revenue >= 1450) {
-    return { tier: "tier_1", amount: 35, isEligible: true };
-  }
-  return { tier: "none", amount: 0, isEligible: false };
+  const match = resolveBonusTier(validation.data!, tiers);
+  return {
+    tier: match.tier,
+    tierName: match.tierName,
+    amount: match.amount,
+    isEligible: match.isEligible,
+  };
 }
 
 /**
  * حساب البونص مع إرجاع نتيجة التحقق (بدون throw)
  */
 export function calculateBonusSafe(
-  weeklyRevenue: unknown
+  weeklyRevenue: unknown,
+  tiers: BonusTierRule[] | null | undefined
 ): ValidationResult<BonusCalculation> {
   const validation = validateNumber(weeklyRevenue, "الإيراد الأسبوعي", {
     allowNegative: false,
@@ -331,32 +327,21 @@ export function calculateBonusSafe(
     return { success: false, errors: validation.errors };
   }
 
-  const revenue = validation.data!;
-  let result: BonusCalculation;
-
-  if (revenue >= 3200) {
-    result = { tier: "tier_7", amount: 190, isEligible: true };
-  } else if (revenue >= 2800) {
-    result = { tier: "tier_6", amount: 155, isEligible: true };
-  } else if (revenue >= 2500) {
-    result = { tier: "tier_5", amount: 120, isEligible: true };
-  } else if (revenue >= 2200) {
-    result = { tier: "tier_4", amount: 90, isEligible: true };
-  } else if (revenue >= 1950) {
-    result = { tier: "tier_3", amount: 65, isEligible: true };
-  } else if (revenue >= 1750) {
-    result = { tier: "tier_2", amount: 55, isEligible: true };
-  } else if (revenue >= 1450) {
-    result = { tier: "tier_1", amount: 35, isEligible: true };
-  } else {
-    result = { tier: "none", amount: 0, isEligible: false };
-  }
-
-  return { success: true, data: result, errors: [] };
+  const match = resolveBonusTier(validation.data!, tiers);
+  return {
+    success: true,
+    data: {
+      tier: match.tier,
+      tierName: match.tierName,
+      amount: match.amount,
+      isEligible: match.isEligible,
+    },
+    errors: [],
+  };
 }
 
 /**
- * تحديد رقم الأسبوع من اليوم في الشهر
+ * تحديد رقم الفترة من اليوم في الشهر (1-7، 8-14، 15-21، 22-28، 29+)
  */
 export function getWeekNumber(day: number): 1 | 2 | 3 | 4 | 5 {
   const validation = validateNumber(day, "اليوم", { min: 1, max: 31 });
@@ -365,84 +350,108 @@ export function getWeekNumber(day: number): 1 | 2 | 3 | 4 | 5 {
     throw new Error(validation.errors.map(e => e.message).join(", "));
   }
 
-  const d = Math.floor(validation.data!);
+  return getBonusPeriodNumber(Math.floor(validation.data!));
+}
 
-  if (d >= 1 && d <= 7) return 1;
-  if (d >= 8 && d <= 14) return 2;
-  if (d >= 15 && d <= 21) return 3;
-  if (d >= 22 && d <= 28) return 4;
-  return 5;
+function assertPeriodInputs(weekNumber: number, month: number, year: number): void {
+  const weekValidation = validateWeekNumber(weekNumber);
+  const monthValidation = validateMonth(month);
+  const yearValidation = validateYear(year);
+
+  if (!weekValidation.success || !monthValidation.success || !yearValidation.success) {
+    const errors = [
+      ...weekValidation.errors,
+      ...monthValidation.errors,
+      ...yearValidation.errors,
+    ];
+    throw new Error(errors.map(e => e.message).join(", "));
+  }
+
+  if (weekNumber > getBonusPeriodsInMonth(month, year)) {
+    throw new Error(`INVALID_INPUT: الفترة ${weekNumber} غير موجودة في الشهر ${month}/${year}`);
+  }
 }
 
 /**
- * الحصول على عدد الأيام المتوقع لأسبوع معين
+ * الحصول على عدد الأيام المتوقع لفترة معينة
  */
 export function getExpectedDaysCount(
   weekNumber: number,
   month: number,
   year: number
 ): number {
-  // التحقق من المدخلات
-  const weekValidation = validateWeekNumber(weekNumber);
-  const monthValidation = validateMonth(month);
-  const yearValidation = validateYear(year);
-
-  if (!weekValidation.success || !monthValidation.success || !yearValidation.success) {
-    const errors = [
-      ...weekValidation.errors,
-      ...monthValidation.errors,
-      ...yearValidation.errors,
-    ];
-    throw new Error(errors.map(e => e.message).join(", "));
-  }
-
-  if (weekNumber >= 1 && weekNumber <= 4) {
-    return 7;
-  }
-
-  const lastDayOfMonth = new Date(year, month, 0).getDate();
-  return Math.max(0, lastDayOfMonth - 28);
+  assertPeriodInputs(weekNumber, month, year);
+  return getBonusPeriodDays(weekNumber, month, year).days;
 }
 
 /**
- * الحصول على نطاق التواريخ لأسبوع معين
+ * الحصول على نطاق التواريخ لفترة معينة (حدود UTC)
  */
 export function getWeekDateRange(
   weekNumber: number,
   month: number,
   year: number
 ): { start: Date; end: Date } {
-  // التحقق من المدخلات
-  const weekValidation = validateWeekNumber(weekNumber);
-  const monthValidation = validateMonth(month);
-  const yearValidation = validateYear(year);
+  assertPeriodInputs(weekNumber, month, year);
 
-  if (!weekValidation.success || !monthValidation.success || !yearValidation.success) {
-    const errors = [
-      ...weekValidation.errors,
-      ...monthValidation.errors,
-      ...yearValidation.errors,
-    ];
-    throw new Error(errors.map(e => e.message).join(", "));
-  }
+  const { startDay, endDay } = getBonusPeriodDays(weekNumber, month, year);
 
-  const lastDayOfMonth = new Date(year, month, 0).getDate();
-
-  const ranges: Record<number, { startDay: number; endDay: number }> = {
-    1: { startDay: 1, endDay: 7 },
-    2: { startDay: 8, endDay: 14 },
-    3: { startDay: 15, endDay: 21 },
-    4: { startDay: 22, endDay: 28 },
-    5: { startDay: 29, endDay: lastDayOfMonth },
-  };
-
-  const range = ranges[weekNumber] || ranges[5];
-  
   // استخدام UTC لتجنب مشاكل المنطقة الزمنية
-  const start = new Date(Date.UTC(year, month - 1, range.startDay, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(year, month - 1, Math.min(range.endDay, lastDayOfMonth), 23, 59, 59, 999));
+  const start = new Date(Date.UTC(year, month - 1, startDay, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(year, month - 1, endDay, 23, 59, 59, 999));
 
   return { start, end };
+}
+
+// ==================== يوم العمل ====================
+
+/**
+ * مفتاح يوم العمل (YYYY-MM-DD) لتوقيت الخادم المحلي
+ * (نفس منطق الكاشير: الفواتير تُسجل بمنتصف ليل اليوم المحلي)
+ */
+export function getBusinessDayKey(date: Date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** تحويل مفتاح اليوم إلى التاريخ المخزن في dailyRevenues (منتصف الليل UTC) - مثل مسار الإدخال اليدوي */
+export function businessDayKeyToStoredDate(dayKey: string): Date {
+  const { year, month, day } = parseBusinessDayKey(dayKey);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+/** تحويل مفتاح اليوم إلى منتصف الليل المحلي (لاستعلامات فواتير الكاشير) */
+export function businessDayKeyToLocalDate(dayKey: string): Date {
+  const { year, month, day } = parseBusinessDayKey(dayKey);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+export function parseBusinessDayKey(dayKey: string): { year: number; month: number; day: number } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dayKey);
+  if (!match) {
+    throw new Error(`INVALID_INPUT: تاريخ غير صالح ${dayKey}`);
+  }
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+}
+
+/** فترة البونص لتاريخ مخزن في dailyRevenues (حسب UTC بما يطابق حدود الاستعلام) */
+export function getBonusPeriodForStoredDate(date: Date): { year: number; month: number; weekNumber: 1 | 2 | 3 | 4 | 5 } {
+  const d = new Date(date);
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    weekNumber: getBonusPeriodNumber(d.getUTCDate()),
+  };
+}
+
+/** فترة البونص لمفتاح يوم عمل */
+export function getBonusPeriodForDayKey(dayKey: string): { year: number; month: number; weekNumber: 1 | 2 | 3 | 4 | 5 } {
+  const { year, month, day } = parseBusinessDayKey(dayKey);
+  return { year, month, weekNumber: getBonusPeriodNumber(day) };
+}
+
+/** الفترة الحالية حسب يوم العمل للخادم */
+export function getCurrentBonusPeriod(now: Date = new Date()) {
+  return getBonusPeriodForDayKey(getBusinessDayKey(now));
 }
 
 /**
@@ -455,11 +464,8 @@ export function getWeekInfo(date: Date): WeekInfo {
     throw new Error(dateValidation.errors.map(e => e.message).join(", "));
   }
 
-  const validDate = dateValidation.data!;
-  const day = validDate.getDate();
-  const month = validDate.getMonth() + 1;
-  const year = validDate.getFullYear();
-  const weekNumber = getWeekNumber(day);
+  // يوم العمل حسب التقويم المحلي للخادم
+  const { year, month, weekNumber } = getBonusPeriodForDayKey(getBusinessDayKey(dateValidation.data!));
 
   const { start, end } = getWeekDateRange(weekNumber, month, year);
   const daysCount = getExpectedDaysCount(weekNumber, month, year);
@@ -488,17 +494,17 @@ export function getWeekDates(
   const current = new Date(start);
   while (current <= end) {
     dates.push(new Date(current));
-    current.setDate(current.getDate() + 1);
+    current.setUTCDate(current.getUTCDate() + 1);
   }
 
   return dates;
 }
 
 /**
- * تطبيع التاريخ للمقارنة (إزالة الوقت)
+ * تطبيع التاريخ للمقارنة (إزالة الوقت) - حسب UTC بما يطابق حدود الفترات
  */
 export function normalizeDateForComparison(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 /**
@@ -534,7 +540,7 @@ export function validateWeekData(
   if (isValid) {
     message = `الأسبوع ${weekNumber} مكتمل (${expectedDays} أيام)`;
   } else {
-    const missingDaysStr = missingDates.map(d => d.getDate()).join("، ");
+    const missingDaysStr = missingDates.map(d => d.getUTCDate()).join("، ");
     message = `الأسبوع ${weekNumber} غير مكتمل - ناقص ${missingDates.length} يوم (الأيام: ${missingDaysStr})`;
   }
 
@@ -652,72 +658,60 @@ export function getTierColor(tier: BonusTier): string {
 }
 
 /**
- * الحصول على حدود المستوى
+ * الحصول على حدود المستويات من قائمة المستويات (الحد الأقصى = الحد الأدنى التالي - 0.01)
  */
-export function getTierThresholds(): Array<{
-  tier: BonusTier;
+export function getTierThresholds(tiers: BonusTierRule[] | null | undefined): Array<{
+  tier: string;
+  tierName: string;
   minRevenue: number;
   maxRevenue: number | null;
   bonusAmount: number;
 }> {
+  const ordered = normalizeTiers(tiers);
+  const rows = ordered.map((t, i) => ({
+    tier: t.tierKey,
+    tierName: t.tierName,
+    minRevenue: t.minRevenue,
+    maxRevenue: ordered[i + 1] ? Math.round((ordered[i + 1].minRevenue - 0.01) * 100) / 100 : null,
+    bonusAmount: t.bonusAmount,
+  }));
+  const lowest = ordered[0]?.minRevenue ?? 0;
   return [
-    { tier: "tier_7", minRevenue: 3200, maxRevenue: null, bonusAmount: 190 },
-    { tier: "tier_6", minRevenue: 2800, maxRevenue: 3199.99, bonusAmount: 155 },
-    { tier: "tier_5", minRevenue: 2500, maxRevenue: 2799.99, bonusAmount: 120 },
-    { tier: "tier_4", minRevenue: 2200, maxRevenue: 2499.99, bonusAmount: 90 },
-    { tier: "tier_3", minRevenue: 1950, maxRevenue: 2199.99, bonusAmount: 65 },
-    { tier: "tier_2", minRevenue: 1750, maxRevenue: 1949.99, bonusAmount: 55 },
-    { tier: "tier_1", minRevenue: 1450, maxRevenue: 1749.99, bonusAmount: 35 },
-    { tier: "none", minRevenue: 0, maxRevenue: 1449.99, bonusAmount: 0 },
+    ...rows.reverse(),
+    { tier: "none", tierName: "غير مؤهل", minRevenue: 0, maxRevenue: Math.max(0, Math.round((lowest - 0.01) * 100) / 100), bonusAmount: 0 },
   ];
 }
 
 /**
  * حساب الإيراد المطلوب للوصول للمستوى التالي
  */
-export function getRevenueToNextTier(currentRevenue: number): {
-  currentTier: BonusTier;
-  nextTier: BonusTier | null;
+export function getRevenueToNextTier(
+  currentRevenue: number,
+  tiers: BonusTierRule[] | null | undefined
+): {
+  currentTier: string;
+  nextTier: string | null;
+  nextTierName: string | null;
+  nextTierAmount: number;
   requiredRevenue: number;
   additionalNeeded: number;
 } {
   const validation = validateNumber(currentRevenue, "الإيراد الحالي", { allowNegative: false });
-  
+
   if (!validation.success) {
     throw new Error(validation.errors.map(e => e.message).join(", "));
   }
 
   const revenue = validation.data!;
-  const thresholds = [
-    { tier: "tier_7" as BonusTier, min: 3200 },
-    { tier: "tier_6" as BonusTier, min: 2800 },
-    { tier: "tier_5" as BonusTier, min: 2500 },
-    { tier: "tier_4" as BonusTier, min: 2200 },
-    { tier: "tier_3" as BonusTier, min: 1950 },
-    { tier: "tier_2" as BonusTier, min: 1750 },
-    { tier: "tier_1" as BonusTier, min: 1450 },
-    { tier: "none" as BonusTier, min: 0 },
-  ];
-
-  let currentTier: BonusTier = "none";
-  let nextTier: BonusTier | null = null;
-  let requiredRevenue = 0;
-
-  for (let i = 0; i < thresholds.length; i++) {
-    if (revenue >= thresholds[i].min) {
-      currentTier = thresholds[i].tier;
-      if (i > 0) {
-        nextTier = thresholds[i - 1].tier;
-        requiredRevenue = thresholds[i - 1].min;
-      }
-      break;
-    }
-  }
+  const current = resolveBonusTier(revenue, tiers);
+  const { nextTier, remaining } = revenueToNextTier(revenue, tiers);
 
   return {
-    currentTier,
-    nextTier,
-    requiredRevenue,
-    additionalNeeded: nextTier ? Math.max(0, requiredRevenue - revenue) : 0,
+    currentTier: current.tier,
+    nextTier: nextTier?.tierKey ?? null,
+    nextTierName: nextTier?.tierName ?? null,
+    nextTierAmount: nextTier?.bonusAmount ?? 0,
+    requiredRevenue: nextTier?.minRevenue ?? 0,
+    additionalNeeded: remaining,
   };
 }
