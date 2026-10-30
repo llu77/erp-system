@@ -16,39 +16,60 @@ export function isBonusManager(user: Pick<BonusUser, "role">): boolean {
 }
 
 /** نطاق الفرع للمستخدم: null = كل الفروع */
-export function getBonusBranchScope(user: Pick<BonusUser, "role" | "branchId">): number | null {
+export function getBonusBranchScope(
+  user: Pick<BonusUser, "role" | "branchId">
+): number | null {
   if (isBonusManager(user)) return null;
-  // مشرف الفرع غير المرتبط بفرع لا يحصل على صلاحية كل الفروع
-  if (user.role === "supervisor" && user.branchId == null) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "حساب المشرف غير مرتبط بفرع" });
-  }
-  return user.branchId ?? null;
+  if (user.branchId != null) return user.branchId;
+  // المشرف العام (viewer) غير المرتبط بفرع: عرض كل الفروع (للقراءة فقط)
+  if (user.role === "viewer") return null;
+  // مشرف الفرع والموظف غير المرتبطين بفرع لا يحصلان على صلاحية كل الفروع
+  throw new TRPCError({ code: "FORBIDDEN", message: "حسابك غير مرتبط بفرع" });
 }
 
 /** التحقق من صلاحية الوصول لفرع (نفس منطق checkBranchAccess) */
-export function assertBonusBranchAccess(user: Pick<BonusUser, "role" | "branchId">, branchId: number): void {
+export function assertBonusBranchAccess(
+  user: Pick<BonusUser, "role" | "branchId">,
+  branchId: number
+): void {
   const scope = getBonusBranchScope(user);
   if (scope !== null && scope !== branchId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "لا يمكنك الوصول لبونص فرع آخر" });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "لا يمكنك الوصول لبونص فرع آخر",
+    });
   }
 }
 
 /** العمليات (احتساب / طلب صرف): المسؤول والمدير ومشرف الفرع */
 export function assertBonusOperator(user: Pick<BonusUser, "role">): void {
   if (!["admin", "manager", "supervisor"].includes(user.role)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "هذا الإجراء متاح للمسؤول والمدير ومشرف الفرع فقط" });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "هذا الإجراء متاح للمسؤول والمدير ومشرف الفرع فقط",
+    });
   }
 }
 
 /** العرض: المسؤول والمدير والمشرف والمشرف العام */
 export function assertBonusViewer(user: Pick<BonusUser, "role">): void {
   if (!["admin", "manager", "supervisor", "viewer"].includes(user.role)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح لك بعرض البونص" });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "غير مصرح لك بعرض البونص",
+    });
   }
 }
 
-export function assertValidBonusPeriod(weekNumber: number, month: number, year: number): void {
+export function assertValidBonusPeriod(
+  weekNumber: number,
+  month: number,
+  year: number
+): void {
   if (!isValidBonusPeriod(weekNumber, month, year)) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: `الفترة ${weekNumber} غير موجودة في الشهر ${month}/${year}` });
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `الفترة ${weekNumber} غير موجودة في الشهر ${month}/${year}`,
+    });
   }
 }

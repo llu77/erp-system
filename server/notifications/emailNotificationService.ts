@@ -209,12 +209,17 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
       );
     }
     
-    await resend.emails.send({
+    // Resend لا يرمي خطأً عند رفض الإرسال بل يعيده في الحقل error
+    const { error: sendError } = await resend.emails.send({
       from: FROM_EMAIL,
       to,
       subject,
       html,
     });
+    if (sendError) {
+      console.error(`❌ رفض مزود البريد الإرسال إلى ${to}:`, sendError.message || sendError);
+      return false;
+    }
     console.log(`✓ تم إرسال البريد إلى: ${to}`);
     return true;
   } catch (error: any) {

@@ -10,8 +10,9 @@ describe("bonus branch scope", () => {
     expect(getBonusBranchScope({ role: "supervisor", branchId: 2 })).toBe(2);
     expect(() => assertBonusBranchAccess({ role: "supervisor", branchId: 2 }, 3)).toThrow();
   });
-  it("refuses a supervisor that is not linked to a branch", () => {
+  it("refuses supervisors and employees that are not linked to a branch", () => {
     expect(() => getBonusBranchScope({ role: "supervisor", branchId: null })).toThrow(/غير مرتبط بفرع/);
+    expect(() => getBonusBranchScope({ role: "employee", branchId: null })).toThrow(/غير مرتبط بفرع/);
   });
   it("keeps a general supervisor (viewer) without a branch on all branches", () => {
     expect(getBonusBranchScope({ role: "viewer", branchId: null })).toBeNull();

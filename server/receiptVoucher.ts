@@ -125,11 +125,11 @@ export function canCreateVoucher(role: string | null | undefined): boolean {
 /** هل يقتصر المستخدم على فرعه؟ (غير المدير/المسؤول المرتبط بفرع) */
 export function scopedBranchId(actor: Pick<VoucherActor, 'role' | 'branchId'>): number | null {
   if (isVoucherApprover(actor.role)) return null;
-  // مشرف الفرع غير المرتبط بفرع لا يحصل على صلاحية كل الفروع
-  if (actor.role === 'supervisor' && actor.branchId == null) {
-    throw new VoucherError('حساب المشرف غير مرتبط بفرع', 'FORBIDDEN');
-  }
-  return actor.branchId ?? null;
+  if (actor.branchId != null) return actor.branchId;
+  // المشرف العام (viewer) غير المرتبط بفرع: عرض كل الفروع
+  if (actor.role === 'viewer') return null;
+  // غير ذلك (مشرف فرع أو موظف بدون فرع) لا يحصل على صلاحية كل الفروع
+  throw new VoucherError('حسابك غير مرتبط بفرع', 'FORBIDDEN');
 }
 
 async function requireDb(): Promise<Db> {

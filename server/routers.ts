@@ -193,10 +193,13 @@ async function runVoucherAction<T>(action: () => Promise<T>): Promise<T> {
   }
 }
 
-/** فرع تقرير السندات: المشرف يرى فرعه فقط */
+/** فرع تقرير السندات: المسؤول والمدير والمشرف العام كل الفروع، وغيرهم فرعهم فقط */
 function voucherReportBranch(user: { role: string; branchId: number | null }, branchId?: string): string | undefined {
-  if (user.role !== 'admin' && user.role !== 'manager' && user.branchId) return String(user.branchId);
-  return branchId || undefined;
+  if (user.role === 'admin' || user.role === 'manager') return branchId || undefined;
+  if (user.branchId) return String(user.branchId);
+  // المشرف العام (viewer) غير المرتبط بفرع: عرض كل الفروع
+  if (user.role === 'viewer') return branchId || undefined;
+  throw new TRPCError({ code: 'FORBIDDEN', message: 'حسابك غير مرتبط بفرع' });
 }
 
 // تاريخ السند: نص YYYY-MM-DD (المفضل) أو Date (للتوافق مع الواجهة القديمة)
@@ -2357,7 +2360,7 @@ export const appRouter = router({
           action: 'delete',
           entityType: 'revenue',
           details: `تم حذف إيراد يومي رقم ${input.id}`,
-        });
+        }).catch(error => bonusLogger.error('خطأ في تسجيل نشاط حذف الإيراد', error));
 
         // إعادة احتساب بونص الفترة بعد الحذف
         let bonusWarnings: string[] = [];
@@ -3055,18 +3058,25 @@ export const appRouter = router({
         await db.replaceBonusTiers(rows, { id: ctx.user.id, name: ctx.user.name || 'مدير' });
         invalidateBonusTiersCache();
 
+        // المستويات حُفظت؛ أي فشل بعدها (إعادة الاحتساب أو السجل) لا يُظهر الحفظ كفاشل
         let recalculation: { recomputed: number; skipped: number; failed: number } | null = null;
+        let recalculationError: string | null = null;
         if (input.recalculateOpenPeriods) {
-          const { recomputeOpenPeriodsForMonth } = await import('./bonus/sync');
-          const { getCurrentBonusPeriod } = await import('./bonus/calculator');
-          const { year, month } = getCurrentBonusPeriod();
-          const tiers = (await loadActiveBonusTiers({ fresh: true })).tiers;
-          const result = await recomputeOpenPeriodsForMonth(year, month, {
-            tiers,
-            performedBy: ctx.user.id,
-            reason: 'تعديل مستويات البونص',
-          });
-          recalculation = { recomputed: result.recomputed, skipped: result.skipped, failed: result.failed };
+          try {
+            const { recomputeOpenPeriodsForMonth } = await import('./bonus/sync');
+            const { getCurrentBonusPeriod } = await import('./bonus/calculator');
+            const { year, month } = getCurrentBonusPeriod();
+            const tiers = (await loadActiveBonusTiers({ fresh: true })).tiers;
+            const result = await recomputeOpenPeriodsForMonth(year, month, {
+              tiers,
+              performedBy: ctx.user.id,
+              reason: 'تعديل مستويات البونص',
+            });
+            recalculation = { recomputed: result.recomputed, skipped: result.skipped, failed: result.failed };
+          } catch (error: any) {
+            bonusLogger.error('خطأ في إعادة احتساب الفترات المفتوحة بعد حفظ المستويات', error);
+            recalculationError = 'تم حفظ المستويات، لكن تعذرت إعادة احتساب الفترات المفتوحة؛ استخدم زر المزامنة في صفحة البونص';
+          }
         }
 
         await db.createActivityLog({
@@ -3075,15 +3085,18 @@ export const appRouter = router({
           action: 'update',
           entityType: 'bonus',
           details: `تحديث مستويات البونص (${rows.length} مستوى)${recalculation ? ` وإعادة احتساب ${recalculation.recomputed} فترة مفتوحة` : ''}`,
-        });
+        }).catch(error => bonusLogger.error('خطأ في تسجيل نشاط تعديل المستويات', error));
 
         return {
           success: true,
-          message: recalculation
-            ? `تم حفظ المستويات وإعادة احتساب ${recalculation.recomputed} فترة مفتوحة للشهر الحالي`
-            : 'تم حفظ مستويات البونص بنجاح - ستُطبق على الاحتسابات القادمة',
+          message: recalculationError
+            ? recalculationError
+            : recalculation
+              ? `تم حفظ المستويات وإعادة احتساب ${recalculation.recomputed} فترة مفتوحة للشهر الحالي`
+              : 'تم حفظ مستويات البونص بنجاح - ستُطبق على الاحتسابات القادمة',
           tiers: rows,
           recalculation,
+          recalculationError,
         };
       }),
 
@@ -10043,7 +10056,9 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           } = await import('./bonus/calculator');
 
           // التحقق من صلاحية الوصول للفرع للمشرفين
-          if (ctx.user.role === 'supervisor' && !checkBranchAccess(ctx.user.branchId, input.branchId)) {
+          // تأكيد الكاشير لفرع المستخدم فقط (المسؤول والمدير لأي فرع)
+          if (ctx.user.role !== 'admin' && ctx.user.role !== 'manager' &&
+              (ctx.user.branchId == null || ctx.user.branchId !== input.branchId)) {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك تأكيد فواتير فرع آخر' });
           }
 

@@ -2,20 +2,35 @@
  * Bonus Tiers - تحميل مستويات البونص من قاعدة البيانات
  *
  * - المصدر الوحيد للمستويات هو جدول bonusTierSettings (يحدده المدير)
- * - إذا لم توجد مستويات نشطة تُستخدم DEFAULT_BONUS_TIERS
+ * - إذا لم توجد مستويات نشطة (الجدول فارغ) تُستخدم DEFAULT_BONUS_TIERS؛ أما فشل القراءة فيوقف الاحتساب
  * - ذاكرة مؤقتة قصيرة تُمسح عند حفظ المستويات
  */
 
-import { DEFAULT_BONUS_TIERS, normalizeTiers, isValidTierKey, type BonusTierRule } from "../../shared/bonus";
+import {
+  DEFAULT_BONUS_TIERS,
+  normalizeTiers,
+  isValidTierKey,
+  type BonusTierRule,
+} from "../../shared/bonus";
 import * as db from "../db";
 
 const CACHE_TTL_MS = 60_000;
 
-let cache: { tiers: BonusTierRule[]; isDefault: boolean; loadedAt: number } | null = null;
+let cache: {
+  tiers: BonusTierRule[];
+  isDefault: boolean;
+  loadedAt: number;
+} | null = null;
 
 /** تحويل صفوف قاعدة البيانات إلى قواعد مستويات صالحة */
 export function toTierRules(
-  rows: Array<{ tierKey: string; tierName: string; minRevenue: number | string; bonusAmount: number | string; color?: string | null }>
+  rows: Array<{
+    tierKey: string;
+    tierName: string;
+    minRevenue: number | string;
+    bonusAmount: number | string;
+    color?: string | null;
+  }>
 ): BonusTierRule[] {
   return rows
     .map(r => ({
@@ -39,7 +54,9 @@ export function toTierRules(
 /**
  * تحميل المستويات النشطة (مرة واحدة لكل عملية احتساب)
  */
-export async function loadActiveBonusTiers(options: { fresh?: boolean } = {}): Promise<{
+export async function loadActiveBonusTiers(
+  options: { fresh?: boolean } = {}
+): Promise<{
   tiers: BonusTierRule[];
   isDefault: boolean;
 }> {
@@ -47,11 +64,18 @@ export async function loadActiveBonusTiers(options: { fresh?: boolean } = {}): P
     return { tiers: cache.tiers, isDefault: cache.isDefault };
   }
 
-  let rows: BonusTierRule[] = [];
+  // فشل القراءة يُرفع للمستدعي: لا يُحتسب البونص بمستويات افتراضية لا يعرفها المدير ولا تُخزَّن مؤقتاً
+  let rows: BonusTierRule[];
   try {
     rows = toTierRules(await db.getActiveBonusTiers());
   } catch (error) {
-    console.error("[Bonus Tiers] فشل تحميل المستويات من قاعدة البيانات:", error);
+    console.error(
+      "[Bonus Tiers] فشل تحميل المستويات من قاعدة البيانات:",
+      error
+    );
+    throw new Error(
+      "تعذر تحميل مستويات البونص من قاعدة البيانات، لم يتم الاحتساب"
+    );
   }
 
   const isDefault = rows.length === 0;
