@@ -359,6 +359,8 @@ function DashboardLayoutContent({
     flatMenuItems
       .filter((item) => isMenuPathActive(item.path, location))
       .sort((a, b) => (b.path ?? "").length - (a.path ?? "").length)[0];
+  // عنصر واحد نشط فقط (الأطول تطابقاً)، ومنه تُحدد القائمة الأب المفتوحة والمميزة
+  const activePath = activeMenuItem?.path;
   const isMobile = useIsMobile();
 
   // دالة للتنقل مع إغلاق القائمة على الموبايل
@@ -404,7 +406,7 @@ function DashboardLayoutContent({
   const [openMenus, setOpenMenus] = useState<string[]>(() => {
     // فتح القائمة التي تحتوي على الصفحة الحالية تلقائياً
     const parentMenu = menuStructure.find(menu => 
-      menu.children?.some(child => child.path === location)
+      menu.children?.some(child => child.path === activePath)
     );
     return parentMenu ? [parentMenu.label] : [];
   });
@@ -503,7 +505,7 @@ function DashboardLayoutContent({
   // فتح القائمة الأب عند تغيير الصفحة
   useEffect(() => {
     const parentMenu = menuStructure.find(menu => 
-      menu.children?.some(child => child.path === location)
+      menu.children?.some(child => child.path === activePath)
     );
     if (parentMenu && !openMenus.includes(parentMenu.label)) {
       setOpenMenus(prev => [...prev, parentMenu.label]);
@@ -556,7 +558,7 @@ function DashboardLayoutContent({
               {finalMenu.map((item) => {
                 // عنصر بدون أطفال (رابط مباشر)
                 if (!item.children) {
-                  const isActive = isMenuPathActive(item.path, location);
+                  const isActive = !!item.path && item.path === activePath;
                   return (
                     <SidebarMenuItem key={item.path}>
                       <SidebarMenuButton
@@ -578,7 +580,7 @@ function DashboardLayoutContent({
 
                 // عنصر مع أطفال (قائمة قابلة للطي)
                 const isOpen = openMenus.includes(item.label);
-                const hasActiveChild = item.children.some(child => child.path === location);
+                const hasActiveChild = item.children.some(child => child.path === activePath);
 
                 return (
                   <Collapsible
@@ -609,7 +611,7 @@ function DashboardLayoutContent({
                       <CollapsibleContent>
                         <SidebarMenuSub className="mr-4 border-r border-border/50 pr-2 sidebar-submenu">
                           {item.children.map((child) => {
-                            const isChildActive = isMenuPathActive(child.path, location);
+                            const isChildActive = !!child.path && child.path === activePath;
                             return (
                               <SidebarMenuSubItem key={child.path}>
                                 <SidebarMenuSubButton

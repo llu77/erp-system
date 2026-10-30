@@ -7,7 +7,12 @@
  * - تنبيهات الحساب (calculation.warnings) للمراجعة الداخلية فقط ولا تُطبع أبداً
  */
 
-import { COMPANY_INFO, SIGNATURES, isPlaceholderValue, type CompanyInfo } from "./branding";
+import {
+  COMPANY_INFO,
+  SIGNATURES,
+  isPlaceholderValue,
+  type CompanyInfo,
+} from "./branding";
 import {
   END_OF_SERVICE_DOCUMENT_TITLES,
   END_OF_SERVICE_PAYMENT_METHODS,
@@ -21,7 +26,12 @@ import {
   type EndOfServiceDocumentKind,
   type EndOfServiceReason,
 } from "./endOfService";
-import { escapeHtml, formatVoucherAmount, formatVoucherDate, formatVoucherDateTime } from "./vouchers";
+import {
+  escapeHtml,
+  formatVoucherAmount,
+  formatVoucherDate,
+  formatVoucherDateTime,
+} from "./vouchers";
 import {
   autoPrintScript,
   bilingualHtml as bi,
@@ -55,13 +65,25 @@ const NEGATIVE = "#8b1e1e";
 /** خط المستندات: يُعرَّف بوزن عادي حتى يُولّد المتصفح الخط العريض من الملف الوحيد المتوفر */
 const FONT_FAMILY = "EosArabic";
 
-const WEEKDAYS_AR = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const WEEKDAYS_AR = [
+  "الأحد",
+  "الاثنين",
+  "الثلاثاء",
+  "الأربعاء",
+  "الخميس",
+  "الجمعة",
+  "السبت",
+];
 
 /** اسم اليوم بالعربية لتاريخ YYYY-MM-DD (أو null إن كان التاريخ غير صالح) */
-export function arabicWeekdayName(ymd: string | null | undefined): string | null {
+export function arabicWeekdayName(
+  ymd: string | null | undefined
+): string | null {
   const d = parseDateOnly(ymd);
   if (!d) return null;
-  return WEEKDAYS_AR[new Date(Date.UTC(d.year, d.month - 1, d.day)).getUTCDay()];
+  return WEEKDAYS_AR[
+    new Date(Date.UTC(d.year, d.month - 1, d.day)).getUTCDay()
+  ];
 }
 
 const esc = escapeHtml;
@@ -74,7 +96,12 @@ function present(value: unknown): string | null {
 
 /** تاريخ DD/MM/YYYY (أو "-" إن كان فارغاً أو تاريخاً مستحيلاً مثل 2026-13-01) */
 function dateText(value: Date | string | null | undefined): string {
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) && !parseDateOnly(value)) return "-";
+  if (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) &&
+    !parseDateOnly(value)
+  )
+    return "-";
   return formatVoucherDate(value);
 }
 
@@ -100,7 +127,9 @@ function statusKey(status: string): string {
 }
 
 function reasonLabel(reason: string): string {
-  return END_OF_SERVICE_REASON_LABELS[reason as EndOfServiceReason]?.ar ?? reason;
+  return (
+    END_OF_SERVICE_REASON_LABELS[reason as EndOfServiceReason]?.ar ?? reason
+  );
 }
 
 interface DocContext {
@@ -113,7 +142,10 @@ interface DocContext {
   printedAt: Date;
 }
 
-function buildContext(data: EndOfServiceDocumentData, options: EndOfServiceTemplateOptions): DocContext {
+function buildContext(
+  data: EndOfServiceDocumentData,
+  options: EndOfServiceTemplateOptions
+): DocContext {
   const status = String(data.status || "draft");
   return {
     data,
@@ -130,9 +162,14 @@ function buildContext(data: EndOfServiceDocumentData, options: EndOfServiceTempl
 
 function renderLetterhead(ctx: DocContext): string {
   const c = ctx.company;
-  const shown = (v: string | null | undefined) => (!isPlaceholderValue(v) ? esc(String(v).trim()) : "");
-  const metaAr = [shown(c.address), shown(c.phone)].filter(Boolean).join(" &nbsp;|&nbsp; ");
-  const legal = [shown(c.cr), shown(c.vat)].filter(Boolean).join(" &nbsp;|&nbsp; ");
+  const shown = (v: string | null | undefined) =>
+    !isPlaceholderValue(v) ? esc(String(v).trim()) : "";
+  const metaAr = [shown(c.address), shown(c.phone)]
+    .filter(Boolean)
+    .join(" &nbsp;|&nbsp; ");
+  const legal = [shown(c.cr), shown(c.vat)]
+    .filter(Boolean)
+    .join(" &nbsp;|&nbsp; ");
   const email = shown(c.email);
   const subtitle = present(c.subtitle);
   return `
@@ -153,7 +190,8 @@ function renderLetterhead(ctx: DocContext): string {
 
 function renderWatermark(ctx: DocContext): string {
   if (ctx.cancelled) return `<div class="watermark cancelled">ملغاة</div>`;
-  if (!ctx.signed) return `<div class="watermark draft">مسودة - غير معتمدة</div>`;
+  if (!ctx.signed)
+    return `<div class="watermark draft">مسودة - غير معتمدة</div>`;
   return "";
 }
 
@@ -173,13 +211,21 @@ function pendingText(ctx: DocContext): string {
 }
 
 /** كتلة توقيع (المدير العام / المشرف العام) مع الختم فوق كتلة المدير بعد الاعتماد */
-function renderSigner(ctx: DocContext, key: "manager" | "supervisor", withStamp: boolean): string {
+function renderSigner(
+  ctx: DocContext,
+  key: "manager" | "supervisor",
+  withStamp: boolean
+): string {
   const info = SIGNATURES[key];
-  const img = key === "manager" ? ctx.assets.managerSignature : ctx.assets.supervisorSignature;
+  const img =
+    key === "manager"
+      ? ctx.assets.managerSignature
+      : ctx.assets.supervisorSignature;
   let area: string;
   if (ctx.signed) {
     area = `<img class="sig-img" src="${esc(img)}" alt="${esc(info.name)}" />`;
-    if (withStamp) area += `<img class="stamp-img" src="${esc(ctx.assets.stamp)}" alt="${esc(SIGNATURES.stamp.label)}" />`;
+    if (withStamp)
+      area += `<img class="stamp-img" src="${esc(ctx.assets.stamp)}" alt="${esc(SIGNATURES.stamp.label)}" />`;
   } else {
     area = `<div class="sig-pending">${pendingText(ctx)}</div>`;
     if (withStamp) area += `<div class="stamp-placeholder">الختم</div>`;
@@ -204,7 +250,12 @@ function renderFooter(ctx: DocContext, kind: EndOfServiceDocumentKind): string {
     </footer>`;
 }
 
-function renderDocument(ctx: DocContext, kind: EndOfServiceDocumentKind, body: string, autoPrint: boolean | undefined): string {
+function renderDocument(
+  ctx: DocContext,
+  kind: EndOfServiceDocumentKind,
+  body: string,
+  autoPrint: boolean | undefined
+): string {
   const title = END_OF_SERVICE_DOCUMENT_TITLES[kind];
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -230,7 +281,10 @@ function renderDocument(ctx: DocContext, kind: EndOfServiceDocumentKind, body: s
 // ==================== الخطاب ====================
 
 /** خطاب إشعار انتهاء عقد العمل وعدم التجديد (صفحة A4 كاملة RTL) */
-export function renderEndOfServiceLetterHtml(data: EndOfServiceDocumentData, options: EndOfServiceTemplateOptions = {}): string {
+export function renderEndOfServiceLetterHtml(
+  data: EndOfServiceDocumentData,
+  options: EndOfServiceTemplateOptions = {}
+): string {
   const ctx = buildContext(data, options);
   const title = END_OF_SERVICE_DOCUMENT_TITLES.letter;
   const companyAr = `<strong>${esc(ctx.company.nameAr)}</strong>`;
@@ -245,12 +299,17 @@ export function renderEndOfServiceLetterHtml(data: EndOfServiceDocumentData, opt
   ];
   const infoCells = info
     .filter((entry): entry is [string, string] => entry[1] !== null)
-    .map(([label, value]) => `<div class="cell"><div class="lbl">${label}</div><div class="val">${esc(value)}</div></div>`)
+    .map(
+      ([label, value]) =>
+        `<div class="cell"><div class="lbl">${label}</div><div class="val">${esc(value)}</div></div>`
+    )
     .join("");
 
   const weekday = arabicWeekdayName(data.lastWorkingDay);
   const lastDay = strong(esc(proseDate(data.lastWorkingDay)));
-  const lastDayText = weekday ? `يوم ${strong(weekday)} الموافق ${lastDay}` : lastDay;
+  const lastDayText = weekday
+    ? `يوم ${strong(weekday)} الموافق ${lastDay}`
+    : lastDay;
 
   const body = `
     <div class="doc-title">
@@ -316,7 +375,10 @@ export function renderEndOfServiceLetterHtml(data: EndOfServiceDocumentData, opt
 
 // ==================== المخالصة النهائية ====================
 
-function deductionRows(items: EndOfServiceDeductionItem[], tag: string): string {
+function deductionRows(
+  items: EndOfServiceDeductionItem[],
+  tag: string
+): string {
   return items
     .map(
       item => `
@@ -334,25 +396,34 @@ function renderEntitlements(data: EndOfServiceDocumentData): string {
   // صيغة تُعيد إنتاج المبلغ: الأيام × (الأجر ÷ 30) بدل أجر يوم مقرّب
   const perDay = `(${money(c.monthlyWage)} ÷ 30)`;
   // سنوات الخدمة المحتسبة بعد استبعاد أيام وقف العقد (المادة 116)؛ المخالصات القديمة بلا استبعاد
-  const awardYears = Number.isFinite(c.awardYears) ? c.awardYears : c.service.yearsDecimal;
+  const awardYears = Number.isFinite(c.awardYears)
+    ? c.awardYears
+    : c.service.yearsDecimal;
   const excludedDays = Number(c.excludedServiceDays) || 0;
   const firstFive = Math.min(awardYears, 5);
   const afterFive = Math.max(0, awardYears - 5);
   // بدون استبعاد تُكتب المدة بالسنوات والأشهر والأيام (سنوات + أشهر/12 + أيام/365) فتطابق المبلغ تماماً
   const s = c.service;
-  const firstFiveText = excludedDays > 0
-    ? `${firstFive.toFixed(4)} سنة`
-    : s.years >= 5
-      ? formatServicePeriod({ years: 5, months: 0, days: 0 })
-      : formatServicePeriod(s);
-  const afterFiveText = excludedDays > 0
-    ? `${afterFive.toFixed(4)} سنة`
-    : formatServicePeriod({ years: Math.max(0, s.years - 5), months: s.months, days: s.days });
+  const firstFiveText =
+    excludedDays > 0
+      ? `${firstFive.toFixed(4)} سنة`
+      : s.years >= 5
+        ? formatServicePeriod({ years: 5, months: 0, days: 0 })
+        : formatServicePeriod(s);
+  const afterFiveText =
+    excludedDays > 0
+      ? `${afterFive.toFixed(4)} سنة`
+      : formatServicePeriod({
+          years: Math.max(0, s.years - 5),
+          months: s.months,
+          days: s.days,
+        });
 
-  const eosLines = (afterFive > 0
-    ? `<div>نصف أجر شهر × ${firstFiveText} <span class="sub">= ${money(c.eosFirstFiveYears)}</span></div>
+  const eosLines =
+    (afterFive > 0
+      ? `<div>نصف أجر شهر × ${firstFiveText} <span class="sub">= ${money(c.eosFirstFiveYears)}</span></div>
               <div>أجر شهر × ${afterFiveText} <span class="sub">= ${money(c.eosAfterFiveYears)}</span></div>`
-    : `<div>نصف أجر شهر × ${firstFiveText}</div>`) +
+      : `<div>نصف أجر شهر × ${firstFiveText}</div>`) +
     (excludedDays > 0
       ? `<div class="sub">(بعد استبعاد ${formatDays(excludedDays)} يوم إجازة بدون أجر تزيد على 20 يوماً - المادة 116)</div>`
       : "");
@@ -363,21 +434,24 @@ function renderEntitlements(data: EndOfServiceDocumentData): string {
 
   let salaryDetail = "";
   if (c.salaryDaysIsManual) {
-    salaryDetail = present(data.salaryNote) ? `(${esc(present(data.salaryNote))})` : "(عدد أيام معتمد يدوياً)";
+    salaryDetail = present(data.salaryNote)
+      ? `(${esc(present(data.salaryNote))})`
+      : "(عدد أيام معتمد يدوياً)";
   } else if (c.salaryFromDate && c.salaryDays > 0) {
     salaryDetail = `من ${esc(dateText(c.salaryFromDate))} حتى ${esc(dateText(data.lastWorkingDay))}`;
   } else if (c.salaryCoveredByPayroll) {
     salaryDetail = "(مصروف ضمن مسيرة الرواتب)";
   }
 
-  const otherRow = c.otherAdditions > 0
-    ? `
+  const otherRow =
+    c.otherAdditions > 0
+      ? `
           <tr>
             <td>مستحقات أخرى</td>
             <td class="calc">${present(data.otherAdditionsNote) ? esc(present(data.otherAdditionsNote)) : "-"}</td>
             <td class="amt">${money(c.otherAdditions)}</td>
           </tr>`
-    : "";
+      : "";
 
   return `
     <section class="sec">
@@ -418,7 +492,9 @@ function renderEntitlements(data: EndOfServiceDocumentData): string {
 
 function renderDeductions(data: EndOfServiceDocumentData): string {
   const c = data.calculation;
-  let rows = deductionRows(data.advances ?? [], "سلفة") + deductionRows(data.violations ?? [], "مخالفة");
+  let rows =
+    deductionRows(data.advances ?? [], "سلفة") +
+    deductionRows(data.violations ?? [], "مخالفة");
   if (c.otherDeductions > 0) {
     rows += `
           <tr>
@@ -459,7 +535,9 @@ function renderDeclaration(ctx: DocContext): string {
   const d = ctx.data;
   const c = d.calculation;
   const name = `<strong>${esc(d.employeeName)}</strong>`;
-  const idClause = present(d.idNumber) ? `، رقم الهوية / الإقامة (<strong>${esc(present(d.idNumber))}</strong>)` : "";
+  const idClause = present(d.idNumber)
+    ? `، رقم الهوية / الإقامة (<strong>${esc(present(d.idNumber))}</strong>)`
+    : "";
   const company = `<strong>${esc(ctx.company.nameAr)}</strong>`;
   const amount = `<strong>${money(Math.abs(c.netAmount))} ريال سعودي</strong>`;
   const words = esc(c.netAmountWords);
@@ -503,9 +581,10 @@ function renderSettlementSignatures(ctx: DocContext): string {
   if (ctx.signed) {
     const approved = `اعتُمدت بواسطة ${esc(present(d.approvedByName) ?? SIGNATURES.manager.title)}${d.approvedAt ? ` بتاريخ ${esc(formatVoucherDateTime(d.approvedAt))}` : ""}`;
     const paidWord = d.calculation.netAmount < 0 ? "تم التحصيل" : "تم الصرف";
-    const paid = ctx.status === "paid"
-      ? ` &nbsp;|&nbsp; ${paidWord}${present(d.paidByName) ? ` بواسطة ${esc(present(d.paidByName))}` : ""}${d.paidAt ? ` بتاريخ ${esc(formatVoucherDateTime(d.paidAt))}` : ""}`
-      : "";
+    const paid =
+      ctx.status === "paid"
+        ? ` &nbsp;|&nbsp; ${paidWord}${present(d.paidByName) ? ` بواسطة ${esc(present(d.paidByName))}` : ""}${d.paidAt ? ` بتاريخ ${esc(formatVoucherDateTime(d.paidAt))}` : ""}`
+        : "";
     note = `<div class="approval-note">&#10004; ${approved}${paid}</div>`;
   }
 
@@ -519,27 +598,34 @@ function renderSettlementSignatures(ctx: DocContext): string {
 }
 
 /** المخالصة النهائية وإبراء الذمة (صفحة A4 كاملة RTL) */
-export function renderFinalSettlementHtml(data: EndOfServiceDocumentData, options: EndOfServiceTemplateOptions = {}): string {
+export function renderFinalSettlementHtml(
+  data: EndOfServiceDocumentData,
+  options: EndOfServiceTemplateOptions = {}
+): string {
   const ctx = buildContext(data, options);
   const c = data.calculation;
   const title = END_OF_SERVICE_DOCUMENT_TITLES.settlement;
   const negative = c.netAmount < 0;
   // صافٍ سالب: "الصرف" يعني تحصيل المبلغ من الموظف
-  const statusLabel = ctx.status === "paid" && negative ? { ar: "تم التحصيل", en: "Collected" } : getEndOfServiceStatusLabel(ctx.status);
+  const statusLabel =
+    ctx.status === "paid" && negative
+      ? { ar: "تم التحصيل", en: "Collected" }
+      : getEndOfServiceStatusLabel(ctx.status);
   const payWord = negative ? "التحصيل" : "الصرف";
 
   const cell = (label: string, value: unknown, cls = "") =>
     `<div class="cell${cls ? ` ${cls}` : ""}"><div class="lbl">${label}</div><div class="val">${present(value) ? esc(present(value)) : "-"}</div></div>`;
 
   const paymentMethod = present(data.paymentMethod);
-  const payment = ctx.status === "paid"
-    ? `
+  const payment =
+    ctx.status === "paid"
+      ? `
     <div class="payment-line">
       <span><b>طريقة ${payWord}:</b> ${paymentMethod ? esc(END_OF_SERVICE_PAYMENT_METHODS[paymentMethod]?.ar ?? paymentMethod) : "-"}</span>
       <span><b>المرجع:</b> ${present(data.paymentReference) ? esc(present(data.paymentReference)) : "-"}</span>
       ${data.paidAt ? `<span><b>تاريخ ${payWord}:</b> ${esc(formatVoucherDateTime(data.paidAt))}</span>` : ""}
     </div>`
-    : "";
+      : "";
 
   const notes = present(data.notes)
     ? `
@@ -613,7 +699,9 @@ export function renderEndOfServiceDocumentHtml(
   data: EndOfServiceDocumentData,
   options: EndOfServiceTemplateOptions = {}
 ): string {
-  return kind === "letter" ? renderEndOfServiceLetterHtml(data, options) : renderFinalSettlementHtml(data, options);
+  return kind === "letter"
+    ? renderEndOfServiceLetterHtml(data, options)
+    : renderFinalSettlementHtml(data, options);
 }
 
 // ==================== التنسيق ====================

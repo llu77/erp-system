@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("./db", () => ({ getDb: vi.fn(async () => null), generateRequestNumber: vi.fn(() => "REQ-261030-0001") }));
+vi.mock("./db", () => ({
+  getDb: vi.fn(async () => null),
+  generateRequestNumber: vi.fn(() => "REQ-261030-0001"),
+}));
 
 import {
   EndOfServiceError,
@@ -67,7 +70,9 @@ const ctx: EmployeeContext = {
   wage: { baseSalary: 2000, fixedAllowances: 1000, breakdown: [] },
   annualLeaveDaysTaken: 30,
   lastPayroll: { year: 2026, month: 9, payrollNumber: "PAY-202609-0001" },
-  advances: [{ id: 11, label: "سلفة REQ-260901-0001", amount: 500, date: "2026-09-01" }],
+  advances: [
+    { id: 11, label: "سلفة REQ-260901-0001", amount: 500, date: "2026-09-01" },
+  ],
   violations: [{ id: 21, label: "تأخير", amount: 100, date: "2026-10-05" }],
 };
 
@@ -93,7 +98,10 @@ const form: EndOfServiceForm = {
   notes: null,
 };
 
-function settlementRow(overrides: Partial<EndOfServiceSettlement> = {}, f: EndOfServiceForm = form): EndOfServiceSettlement {
+function settlementRow(
+  overrides: Partial<EndOfServiceSettlement> = {},
+  f: EndOfServiceForm = form
+): EndOfServiceSettlement {
   const calc = calculateOrThrow(f, ctx);
   return {
     id: 1,
@@ -124,7 +132,11 @@ function settlementRow(overrides: Partial<EndOfServiceSettlement> = {}, f: EndOf
 describe("wage defaults", () => {
   it("uses the default base salary without salary settings", () => {
     const w = buildWageDefaults(undefined);
-    expect(w).toEqual({ baseSalary: 2000, fixedAllowances: 0, breakdown: [{ label: "الأجر الأساسي", amount: 2000 }] });
+    expect(w).toEqual({
+      baseSalary: 2000,
+      fixedAllowances: 0,
+      breakdown: [{ label: "الأجر الأساسي", amount: 2000 }],
+    });
   });
 
   it("adds fixed overtime and the supervisor incentive as allowances", () => {
@@ -137,7 +149,11 @@ describe("wage defaults", () => {
     });
     expect(w.baseSalary).toBe(2500);
     expect(w.fixedAllowances).toBe(1400);
-    expect(w.breakdown.map(b => b.label)).toEqual(["الأجر الأساسي", "الساعات الإضافية الثابتة", "حافز الإشراف"]);
+    expect(w.breakdown.map(b => b.label)).toEqual([
+      "الأجر الأساسي",
+      "الساعات الإضافية الثابتة",
+      "حافز الإشراف",
+    ]);
   });
 
   it("ignores the overtime rate when overtime is disabled", () => {
@@ -155,7 +171,14 @@ describe("wage defaults", () => {
 
 describe("annual leave taken", () => {
   it("counts recorded days, or the inclusive span between the dates", () => {
-    expect(vacationRowDays({ vacationType: "سنوية", vacationStartDate: null, vacationEndDate: null, vacationDays: 10 })).toBe(10);
+    expect(
+      vacationRowDays({
+        vacationType: "سنوية",
+        vacationStartDate: null,
+        vacationEndDate: null,
+        vacationDays: 10,
+      })
+    ).toBe(10);
     expect(
       vacationRowDays({
         vacationType: "annual",
@@ -165,17 +188,47 @@ describe("annual leave taken", () => {
       })
     ).toBe(7);
     expect(
-      vacationRowDays({ vacationType: "annual", vacationStartDate: "2026-03-01", vacationEndDate: null, vacationDays: 0 })
+      vacationRowDays({
+        vacationType: "annual",
+        vacationStartDate: "2026-03-01",
+        vacationEndDate: null,
+        vacationDays: 0,
+      })
     ).toBe(1);
   });
 
   it("sums only annual leave and skips leave starting after the last working day", () => {
     const rows = [
-      { vacationType: "إجازة سنوية", vacationStartDate: "2025-01-01", vacationEndDate: null, vacationDays: 21 },
-      { vacationType: "annual", vacationStartDate: "2026-02-01", vacationEndDate: null, vacationDays: 9.5 },
-      { vacationType: "مرضية", vacationStartDate: "2026-03-01", vacationEndDate: null, vacationDays: 5 },
-      { vacationType: "بدون راتب", vacationStartDate: "2026-04-01", vacationEndDate: null, vacationDays: 3 },
-      { vacationType: "سنوية", vacationStartDate: "2026-11-15", vacationEndDate: null, vacationDays: 10 },
+      {
+        vacationType: "إجازة سنوية",
+        vacationStartDate: "2025-01-01",
+        vacationEndDate: null,
+        vacationDays: 21,
+      },
+      {
+        vacationType: "annual",
+        vacationStartDate: "2026-02-01",
+        vacationEndDate: null,
+        vacationDays: 9.5,
+      },
+      {
+        vacationType: "مرضية",
+        vacationStartDate: "2026-03-01",
+        vacationEndDate: null,
+        vacationDays: 5,
+      },
+      {
+        vacationType: "بدون راتب",
+        vacationStartDate: "2026-04-01",
+        vacationEndDate: null,
+        vacationDays: 3,
+      },
+      {
+        vacationType: "سنوية",
+        vacationStartDate: "2026-11-15",
+        vacationEndDate: null,
+        vacationDays: 10,
+      },
     ];
     expect(sumAnnualLeaveDays(rows)).toBe(40.5);
     expect(sumAnnualLeaveDays(rows, "2026-10-31")).toBe(30.5);
@@ -192,16 +245,30 @@ describe("annual leave taken", () => {
 describe("view access", () => {
   it("gives admins, managers and general supervisors every branch", () => {
     for (const role of ["admin", "manager", "viewer"]) {
-      expect(resolveViewScope({ role, branchId: 4 })).toEqual({ branchId: null });
+      expect(resolveViewScope({ role, branchId: 4 })).toEqual({
+        branchId: null,
+      });
     }
   });
 
   it("limits branch supervisors to their branch and refuses one without a branch", () => {
-    expect(resolveViewScope({ role: "supervisor", branchId: 3 })).toEqual({ branchId: 3 });
-    expect(() => resolveViewScope({ role: "supervisor", branchId: null })).toThrow("حسابك غير مرتبط بفرع");
-    expect(() => assertCanViewSettlement({ role: "supervisor", branchId: 3 }, { branchId: 3 })).not.toThrow();
+    expect(resolveViewScope({ role: "supervisor", branchId: 3 })).toEqual({
+      branchId: 3,
+    });
+    expect(() =>
+      resolveViewScope({ role: "supervisor", branchId: null })
+    ).toThrow("حسابك غير مرتبط بفرع");
+    expect(() =>
+      assertCanViewSettlement(
+        { role: "supervisor", branchId: 3 },
+        { branchId: 3 }
+      )
+    ).not.toThrow();
     try {
-      assertCanViewSettlement({ role: "supervisor", branchId: 3 }, { branchId: 5 });
+      assertCanViewSettlement(
+        { role: "supervisor", branchId: 3 },
+        { branchId: 5 }
+      );
       expect.unreachable();
     } catch (error) {
       expect(error).toBeInstanceOf(EndOfServiceError);
@@ -210,14 +277,24 @@ describe("view access", () => {
   });
 
   it("refuses employees and other roles", () => {
-    expect(() => resolveViewScope({ role: "employee", branchId: 3 })).toThrow(EndOfServiceError);
-    expect(() => resolveViewScope({ role: "user", branchId: null })).toThrow(EndOfServiceError);
+    expect(() => resolveViewScope({ role: "employee", branchId: 3 })).toThrow(
+      EndOfServiceError
+    );
+    expect(() => resolveViewScope({ role: "user", branchId: null })).toThrow(
+      EndOfServiceError
+    );
   });
 
   it("checks access before touching the database", async () => {
-    await expect(listSettlements(undefined, { role: "employee", branchId: 3 })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(getSettlementById(1, { role: "supervisor", branchId: null })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(listSettlements(undefined, { role: "admin", branchId: null })).rejects.toThrow("قاعدة البيانات غير متاحة");
+    await expect(
+      listSettlements(undefined, { role: "employee", branchId: 3 })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      getSettlementById(1, { role: "supervisor", branchId: null })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      listSettlements(undefined, { role: "admin", branchId: null })
+    ).rejects.toThrow("قاعدة البيانات غير متاحة");
   });
 
   it("lets only admins and managers manage settlements", () => {
@@ -230,17 +307,25 @@ describe("view access", () => {
 
 describe("form validation", () => {
   it("rejects invalid or inverted dates with Arabic messages", () => {
-    expect(() => validateFormDates({ ...form, hireDate: "2021-02-30" })).toThrow("تاريخ مباشرة العمل غير صحيح");
-    expect(() => validateFormDates({ ...form, letterDate: "01/09/2026" })).toThrow("تاريخ الخطاب غير صحيح");
-    expect(() => validateFormDates({ ...form, contractEndDate: "2020-01-01" })).toThrow("تاريخ انتهاء العقد يجب أن يكون بعد تاريخ مباشرة العمل");
-    expect(() => validateFormDates({ ...form, lastWorkingDay: "2020-01-01" })).toThrow("آخر يوم عمل يجب أن يكون بعد تاريخ مباشرة العمل");
+    expect(() =>
+      validateFormDates({ ...form, hireDate: "2021-02-30" })
+    ).toThrow("تاريخ مباشرة العمل غير صحيح");
+    expect(() =>
+      validateFormDates({ ...form, letterDate: "01/09/2026" })
+    ).toThrow("تاريخ الخطاب غير صحيح");
+    expect(() =>
+      validateFormDates({ ...form, contractEndDate: "2020-01-01" })
+    ).toThrow("تاريخ انتهاء العقد يجب أن يكون بعد تاريخ مباشرة العمل");
+    expect(() =>
+      validateFormDates({ ...form, lastWorkingDay: "2020-01-01" })
+    ).toThrow("آخر يوم عمل يجب أن يكون بعد تاريخ مباشرة العمل");
     expect(() => validateFormDates(form)).not.toThrow();
   });
 
   it("turns a calculation failure into a BAD_REQUEST error", () => {
-    expect(() => calculateOrThrow({ ...form, baseSalary: 0, fixedAllowances: 0 }, ctx)).toThrow(
-      "الأجر الشهري المعتمد للحساب يجب أن يكون أكبر من صفر"
-    );
+    expect(() =>
+      calculateOrThrow({ ...form, baseSalary: 0, fixedAllowances: 0 }, ctx)
+    ).toThrow("الأجر الشهري المعتمد للحساب يجب أن يكون أكبر من صفر");
   });
 });
 
@@ -261,22 +346,37 @@ describe("settlement rows", () => {
     expect(values.lastPayrollMonth).toBe(9);
     expect(values.branchName).toBe("فرع لبن");
     expect(JSON.parse(values.advancesDetails)).toEqual(ctx.advances);
-    expect(JSON.parse(values.calculationSnapshot).netAmount).toBe(calc.netAmount);
+    expect(JSON.parse(values.calculationSnapshot).netAmount).toBe(
+      calc.netAmount
+    );
   });
 
   it("falls back to the employee file for snapshot fields the form leaves out", () => {
     const { nationality, idNumber, position, ...rest } = form;
-    const values = buildSettlementValues(rest as EndOfServiceForm, ctx, calculateOrThrow(form, ctx));
+    const values = buildSettlementValues(
+      rest as EndOfServiceForm,
+      ctx,
+      calculateOrThrow(form, ctx)
+    );
     expect(values.nationality).toBe("مصري");
     expect(values.idNumber).toBe("2412345678");
     expect(values.position).toBe("حلاق");
-    const cleared = buildSettlementValues({ ...form, nationality: "  ", position: null }, ctx, calculateOrThrow(form, ctx));
+    const cleared = buildSettlementValues(
+      { ...form, nationality: "  ", position: null },
+      ctx,
+      calculateOrThrow(form, ctx)
+    );
     expect(cleared.nationality).toBeNull();
     expect(cleared.position).toBeNull();
   });
 
   it("round-trips the saved form for editing and approval recompute", () => {
-    const withOverrides: EndOfServiceForm = { ...form, leaveBalanceDaysOverride: 12.5, salaryDaysOverride: 15, leaveNote: "حسب الاتفاق" };
+    const withOverrides: EndOfServiceForm = {
+      ...form,
+      leaveBalanceDaysOverride: 12.5,
+      salaryDaysOverride: 15,
+      leaveNote: "حسب الاتفاق",
+    };
     const row = settlementRow({}, withOverrides);
     expect(row.leaveBalanceDaysOverride).toBe("12.50");
     expect(settlementToForm(row)).toEqual(withOverrides);
@@ -312,7 +412,9 @@ describe("settlement rows", () => {
     const calc = storedCalculation(row);
     expect(calc.netAmount).toBe(calculateOrThrow(form, ctx).netAmount);
     expect(calc.advancesDeduction).toBe(500);
-    expect(_internal.parseCalculationSnapshot(JSON.stringify({ netAmount: 1 }))).toBeNull();
+    expect(
+      _internal.parseCalculationSnapshot(JSON.stringify({ netAmount: 1 }))
+    ).toBeNull();
   });
 
   it("keeps a negative net amount in the list (amount owed by the employee)", () => {
@@ -332,17 +434,39 @@ describe("settlement rows", () => {
   });
 
   it("stores the request's last working day at Riyadh midnight", () => {
-    expect(_internal.riyadhMidnight("2026-10-31").toISOString()).toBe("2026-10-30T21:00:00.000Z");
+    expect(_internal.riyadhMidnight("2026-10-31").toISOString()).toBe(
+      "2026-10-30T21:00:00.000Z"
+    );
   });
 });
 
 describe("Article 116 excluded service days", () => {
   it("counts only approved unpaid leave beyond 20 days, per leave, up to the last working day", () => {
     const rows = [
-      { vacationType: "بدون راتب", vacationStartDate: "2024-01-01", vacationEndDate: null, vacationDays: 50 },
-      { vacationType: "unpaid", vacationStartDate: "2025-01-01", vacationEndDate: null, vacationDays: 20 },
-      { vacationType: "سنوية", vacationStartDate: "2025-06-01", vacationEndDate: null, vacationDays: 40 },
-      { vacationType: "unpaid", vacationStartDate: "2026-12-01", vacationEndDate: null, vacationDays: 45 },
+      {
+        vacationType: "بدون راتب",
+        vacationStartDate: "2024-01-01",
+        vacationEndDate: null,
+        vacationDays: 50,
+      },
+      {
+        vacationType: "unpaid",
+        vacationStartDate: "2025-01-01",
+        vacationEndDate: null,
+        vacationDays: 20,
+      },
+      {
+        vacationType: "سنوية",
+        vacationStartDate: "2025-06-01",
+        vacationEndDate: null,
+        vacationDays: 40,
+      },
+      {
+        vacationType: "unpaid",
+        vacationStartDate: "2026-12-01",
+        vacationEndDate: null,
+        vacationDays: 45,
+      },
     ];
     expect(sumExcludedServiceDays(rows)).toBe(30 + 0 + 25);
     expect(sumExcludedServiceDays(rows, "2026-10-31")).toBe(30);
@@ -350,28 +474,66 @@ describe("Article 116 excluded service days", () => {
 });
 
 describe("generic request endpoints", () => {
-  const eos = (branchId: number | null) => ({ requestType: "end_of_service", branchId });
+  const eos = (branchId: number | null) => ({
+    requestType: "end_of_service",
+    branchId,
+  });
   it("let admins, managers and general supervisors see every end-of-service request", () => {
-    for (const role of ["admin", "manager", "viewer"]) expect(canViewEndOfServiceRequest({ role, branchId: 1 }, eos(2))).toBe(true);
+    for (const role of ["admin", "manager", "viewer"])
+      expect(canViewEndOfServiceRequest({ role, branchId: 1 }, eos(2))).toBe(
+        true
+      );
   });
   it("limit branch supervisors to their branch and hide them from everyone else", () => {
-    expect(canViewEndOfServiceRequest({ role: "supervisor", branchId: 1 }, eos(1))).toBe(true);
-    expect(canViewEndOfServiceRequest({ role: "supervisor", branchId: 1 }, eos(2))).toBe(false);
-    expect(canViewEndOfServiceRequest({ role: "supervisor", branchId: null }, eos(1))).toBe(false);
-    expect(canViewEndOfServiceRequest({ role: "employee", branchId: 1 }, eos(1))).toBe(false);
-    expect(canViewEndOfServiceRequest({ role: "user", branchId: null }, eos(1))).toBe(false);
+    expect(
+      canViewEndOfServiceRequest({ role: "supervisor", branchId: 1 }, eos(1))
+    ).toBe(true);
+    expect(
+      canViewEndOfServiceRequest({ role: "supervisor", branchId: 1 }, eos(2))
+    ).toBe(false);
+    expect(
+      canViewEndOfServiceRequest({ role: "supervisor", branchId: null }, eos(1))
+    ).toBe(false);
+    expect(
+      canViewEndOfServiceRequest({ role: "employee", branchId: 1 }, eos(1))
+    ).toBe(false);
+    expect(
+      canViewEndOfServiceRequest({ role: "user", branchId: null }, eos(1))
+    ).toBe(false);
   });
   it("leave other request types unchanged", () => {
-    expect(canViewEndOfServiceRequest({ role: "employee", branchId: null }, { requestType: "advance", branchId: 2 })).toBe(true);
+    expect(
+      canViewEndOfServiceRequest(
+        { role: "employee", branchId: null },
+        { requestType: "advance", branchId: 2 }
+      )
+    ).toBe(true);
   });
 });
 
 describe("employee portal visibility", () => {
   it("shows an end-of-service request to the employee only once approved", () => {
-    expect(isRequestVisibleToEmployee({ requestType: "end_of_service", status: "pending" })).toBe(false);
-    expect(isRequestVisibleToEmployee({ requestType: "end_of_service", status: "cancelled" })).toBe(false);
-    expect(isRequestVisibleToEmployee({ requestType: "end_of_service", status: "approved" })).toBe(true);
-    expect(isRequestVisibleToEmployee({ requestType: "advance", status: "pending" })).toBe(true);
+    expect(
+      isRequestVisibleToEmployee({
+        requestType: "end_of_service",
+        status: "pending",
+      })
+    ).toBe(false);
+    expect(
+      isRequestVisibleToEmployee({
+        requestType: "end_of_service",
+        status: "cancelled",
+      })
+    ).toBe(false);
+    expect(
+      isRequestVisibleToEmployee({
+        requestType: "end_of_service",
+        status: "approved",
+      })
+    ).toBe(true);
+    expect(
+      isRequestVisibleToEmployee({ requestType: "advance", status: "pending" })
+    ).toBe(true);
   });
 });
 
@@ -380,6 +542,8 @@ describe("settled items guard", () => {
     expect(settledInEndOfServiceMessage("advance", "EOS-2026-0003")).toBe(
       "السلفة مخصومة في مخالصة نهائية (EOS-2026-0003)، ألغِ المخالصة أولاً"
     );
-    expect(settledInEndOfServiceMessage("violation")).toBe("المخالفة مخصومة في مخالصة نهائية، ألغِ المخالصة أولاً");
+    expect(settledInEndOfServiceMessage("violation")).toBe(
+      "المخالفة مخصومة في مخالصة نهائية، ألغِ المخالصة أولاً"
+    );
   });
 });

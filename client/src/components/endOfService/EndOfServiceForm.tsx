@@ -3,10 +3,10 @@
  * الخطوة 1: اختيار موظف نشط - الخطوة 2: البيانات مع معاينة حية للحساب من الخادم
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useLocation } from 'wouter';
-import { keepPreviousData } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useLocation } from "wouter";
+import { keepPreviousData } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   Building2,
@@ -19,22 +19,32 @@ import {
   UserCircle,
   UserX,
   Users,
-} from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
-import { trpc } from '@/lib/trpc';
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { getEndOfServiceStatusLabel, parseDateOnly } from '@shared/endOfService';
-import { roundMoney, todayVoucherDate } from '@shared/vouchers';
-import { CalculationBreakdown } from './CalculationBreakdown';
-import type { EosDefaults, EosFormInput, EosPreview } from './types';
-import { errorMessage, formatDays, formatSar, retryUnlessFinal } from './utils';
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { trpc } from "@/lib/trpc";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  getEndOfServiceStatusLabel,
+  parseDateOnly,
+} from "@shared/endOfService";
+import { roundMoney, todayVoucherDate } from "@shared/vouchers";
+import { CalculationBreakdown } from "./CalculationBreakdown";
+import type { EosDefaults, EosFormInput, EosPreview } from "./types";
+import { errorMessage, formatDays, formatSar, retryUnlessFinal } from "./utils";
 
 // ==================== حالة النموذج ====================
 
@@ -61,7 +71,7 @@ interface FormState {
   notes: string;
 }
 
-type FieldKey = keyof FormState | 'employee';
+type FieldKey = keyof FormState | "employee";
 type FieldErrors = Partial<Record<FieldKey, string>>;
 
 const MAX_AMOUNT = 10_000_000;
@@ -69,77 +79,85 @@ const MAX_DAYS = 100_000;
 
 function emptyState(): FormState {
   return {
-    hireDate: '',
-    contractEndDate: '',
-    lastWorkingDay: '',
+    hireDate: "",
+    contractEndDate: "",
+    lastWorkingDay: "",
     letterDate: todayVoucherDate(),
-    nationality: '',
-    idNumber: '',
-    position: '',
-    baseSalary: '',
-    fixedAllowances: '',
+    nationality: "",
+    idNumber: "",
+    position: "",
+    baseSalary: "",
+    fixedAllowances: "",
     leaveManual: false,
-    leaveDays: '',
-    leaveNote: '',
+    leaveDays: "",
+    leaveNote: "",
     salaryManual: false,
-    salaryDays: '',
-    salaryNote: '',
-    otherAdditions: '',
-    otherAdditionsNote: '',
-    otherDeductions: '',
-    otherDeductionsNote: '',
-    notes: '',
+    salaryDays: "",
+    salaryNote: "",
+    otherAdditions: "",
+    otherAdditionsNote: "",
+    otherDeductions: "",
+    otherDeductionsNote: "",
+    notes: "",
   };
 }
 
-const numberText = (value: number | null | undefined) => (value === null || value === undefined ? '' : String(value));
+const numberText = (value: number | null | undefined) =>
+  value === null || value === undefined ? "" : String(value);
 
 function stateFromDefaults(d: EosDefaults): FormState {
-  const contractEndDate = d.employee.contractEndDate ?? '';
+  const contractEndDate = d.employee.contractEndDate ?? "";
   return {
     ...emptyState(),
-    hireDate: d.employee.hireDate ?? '',
+    hireDate: d.employee.hireDate ?? "",
     contractEndDate,
     lastWorkingDay: contractEndDate,
-    nationality: d.employee.nationality ?? '',
-    idNumber: d.employee.idNumber ?? '',
-    position: d.employee.position ?? '',
+    nationality: d.employee.nationality ?? "",
+    idNumber: d.employee.idNumber ?? "",
+    position: d.employee.position ?? "",
     baseSalary: numberText(d.wage.baseSalary),
     fixedAllowances: numberText(d.wage.fixedAllowances),
   };
 }
 
 function stateFromForm(f: EosFormInput): FormState {
-  const leaveManual = f.leaveBalanceDaysOverride !== null && f.leaveBalanceDaysOverride !== undefined;
-  const salaryManual = f.salaryDaysOverride !== null && f.salaryDaysOverride !== undefined;
+  const leaveManual =
+    f.leaveBalanceDaysOverride !== null &&
+    f.leaveBalanceDaysOverride !== undefined;
+  const salaryManual =
+    f.salaryDaysOverride !== null && f.salaryDaysOverride !== undefined;
   return {
     hireDate: f.hireDate,
     contractEndDate: f.contractEndDate,
     lastWorkingDay: f.lastWorkingDay,
     letterDate: f.letterDate,
-    nationality: f.nationality ?? '',
-    idNumber: f.idNumber ?? '',
-    position: f.position ?? '',
+    nationality: f.nationality ?? "",
+    idNumber: f.idNumber ?? "",
+    position: f.position ?? "",
     baseSalary: numberText(f.baseSalary),
     fixedAllowances: numberText(f.fixedAllowances),
     leaveManual,
-    leaveDays: leaveManual ? numberText(f.leaveBalanceDaysOverride) : '',
-    leaveNote: f.leaveNote ?? '',
+    leaveDays: leaveManual ? numberText(f.leaveBalanceDaysOverride) : "",
+    leaveNote: f.leaveNote ?? "",
     salaryManual,
-    salaryDays: salaryManual ? numberText(f.salaryDaysOverride) : '',
-    salaryNote: f.salaryNote ?? '',
-    otherAdditions: f.otherAdditions ? String(f.otherAdditions) : '',
-    otherAdditionsNote: f.otherAdditionsNote ?? '',
-    otherDeductions: f.otherDeductions ? String(f.otherDeductions) : '',
-    otherDeductionsNote: f.otherDeductionsNote ?? '',
-    notes: f.notes ?? '',
+    salaryDays: salaryManual ? numberText(f.salaryDaysOverride) : "",
+    salaryNote: f.salaryNote ?? "",
+    otherAdditions: f.otherAdditions ? String(f.otherAdditions) : "",
+    otherAdditionsNote: f.otherAdditionsNote ?? "",
+    otherDeductions: f.otherDeductions ? String(f.otherDeductions) : "",
+    otherDeductionsNote: f.otherDeductionsNote ?? "",
+    notes: f.notes ?? "",
   };
 }
 
 /** رقم غير سالب من نص (الفارغ = القيمة الافتراضية) */
-function parseNonNegative(text: string, max: number, emptyValue: number | null): { ok: true; value: number | null } | { ok: false } {
+function parseNonNegative(
+  text: string,
+  max: number,
+  emptyValue: number | null
+): { ok: true; value: number | null } | { ok: false } {
   const trimmed = text.trim();
-  if (trimmed === '') return { ok: true, value: emptyValue };
+  if (trimmed === "") return { ok: true, value: emptyValue };
   const n = Number(trimmed);
   if (!Number.isFinite(n) || n < 0 || n > max) return { ok: false };
   return { ok: true, value: n };
@@ -152,7 +170,10 @@ const textOrNull = (value: string) => value.trim() || null;
  * - errors: كل أخطاء الحفظ
  * - previewInput: مدخلات صالحة للحساب (تتجاهل الملاحظات الإلزامية) أو null
  */
-function buildInput(employeeId: number | null, s: FormState): { previewInput: EosFormInput | null; errors: FieldErrors } {
+function buildInput(
+  employeeId: number | null,
+  s: FormState
+): { previewInput: EosFormInput | null; errors: FieldErrors } {
   const errors: FieldErrors = {};
   let calcValid = true;
   const fail = (key: FieldKey, message: string, affectsCalc: boolean) => {
@@ -160,55 +181,70 @@ function buildInput(employeeId: number | null, s: FormState): { previewInput: Eo
     if (affectsCalc) calcValid = false;
   };
 
-  if (!employeeId) fail('employee', 'اختر الموظف', true);
+  if (!employeeId) fail("employee", "اختر الموظف", true);
 
   const dates: Array<[keyof FormState, string]> = [
-    ['hireDate', 'تاريخ مباشرة العمل'],
-    ['contractEndDate', 'تاريخ انتهاء العقد'],
-    ['lastWorkingDay', 'آخر يوم عمل'],
-    ['letterDate', 'تاريخ الخطاب'],
+    ["hireDate", "تاريخ مباشرة العمل"],
+    ["contractEndDate", "تاريخ انتهاء العقد"],
+    ["lastWorkingDay", "آخر يوم عمل"],
+    ["letterDate", "تاريخ الخطاب"],
   ];
   for (const [key, label] of dates) {
     const value = String(s[key]).trim();
     if (!value) fail(key, `${label} مطلوب`, true);
     else if (!parseDateOnly(value)) fail(key, `${label} غير صحيح`, true);
   }
-  if (!errors.hireDate && !errors.lastWorkingDay && s.lastWorkingDay < s.hireDate) {
-    fail('lastWorkingDay', 'آخر يوم عمل يجب أن يكون بعد تاريخ المباشرة', true);
+  if (
+    !errors.hireDate &&
+    !errors.lastWorkingDay &&
+    s.lastWorkingDay < s.hireDate
+  ) {
+    fail("lastWorkingDay", "آخر يوم عمل يجب أن يكون بعد تاريخ المباشرة", true);
   }
 
   const baseSalary = parseNonNegative(s.baseSalary, MAX_AMOUNT, null);
-  if (!baseSalary.ok || baseSalary.value === null) fail('baseSalary', 'الراتب الأساسي مطلوب ويجب أن يكون رقماً صحيحاً', true);
+  if (!baseSalary.ok || baseSalary.value === null)
+    fail("baseSalary", "الراتب الأساسي مطلوب ويجب أن يكون رقماً صحيحاً", true);
   const fixedAllowances = parseNonNegative(s.fixedAllowances, MAX_AMOUNT, 0);
-  if (!fixedAllowances.ok) fail('fixedAllowances', 'قيمة البدلات غير صحيحة', true);
+  if (!fixedAllowances.ok)
+    fail("fixedAllowances", "قيمة البدلات غير صحيحة", true);
 
   let leaveOverride: number | null = null;
   if (s.leaveManual) {
     const r = parseNonNegative(s.leaveDays, MAX_DAYS, null);
-    if (!r.ok || r.value === null) fail('leaveDays', 'أدخل رصيد الإجازة بالأيام', false);
+    if (!r.ok || r.value === null)
+      fail("leaveDays", "أدخل رصيد الإجازة بالأيام", false);
     else leaveOverride = r.value;
-    if (!s.leaveNote.trim()) fail('leaveNote', 'سبب تعديل رصيد الإجازة مطلوب', false);
+    if (!s.leaveNote.trim())
+      fail("leaveNote", "سبب تعديل رصيد الإجازة مطلوب", false);
   }
 
   let salaryOverride: number | null = null;
   if (s.salaryManual) {
     const r = parseNonNegative(s.salaryDays, MAX_DAYS, null);
-    if (!r.ok || r.value === null) fail('salaryDays', 'أدخل أيام الأجر المستحق', false);
+    if (!r.ok || r.value === null)
+      fail("salaryDays", "أدخل أيام الأجر المستحق", false);
     else salaryOverride = r.value;
-    if (!s.salaryNote.trim()) fail('salaryNote', 'سبب تعديل أيام الأجر مطلوب', false);
+    if (!s.salaryNote.trim())
+      fail("salaryNote", "سبب تعديل أيام الأجر مطلوب", false);
   }
 
   const otherAdditions = parseNonNegative(s.otherAdditions, MAX_AMOUNT, 0);
-  if (!otherAdditions.ok) fail('otherAdditions', 'قيمة الإضافات غير صحيحة', true);
-  else if ((otherAdditions.value ?? 0) > 0 && !s.otherAdditionsNote.trim()) fail('otherAdditionsNote', 'اكتب بيان الإضافات الأخرى', false);
+  if (!otherAdditions.ok)
+    fail("otherAdditions", "قيمة الإضافات غير صحيحة", true);
+  else if ((otherAdditions.value ?? 0) > 0 && !s.otherAdditionsNote.trim())
+    fail("otherAdditionsNote", "اكتب بيان الإضافات الأخرى", false);
 
   const otherDeductions = parseNonNegative(s.otherDeductions, MAX_AMOUNT, 0);
-  if (!otherDeductions.ok) fail('otherDeductions', 'قيمة الخصومات غير صحيحة', true);
-  else if ((otherDeductions.value ?? 0) > 0 && !s.otherDeductionsNote.trim()) fail('otherDeductionsNote', 'اكتب بيان الخصومات الأخرى', false);
+  if (!otherDeductions.ok)
+    fail("otherDeductions", "قيمة الخصومات غير صحيحة", true);
+  else if ((otherDeductions.value ?? 0) > 0 && !s.otherDeductionsNote.trim())
+    fail("otherDeductionsNote", "اكتب بيان الخصومات الأخرى", false);
 
   if (!calcValid || !employeeId) return { previewInput: null, errors };
 
-  const num = (r: ReturnType<typeof parseNonNegative>) => (r.ok ? r.value ?? 0 : 0);
+  const num = (r: ReturnType<typeof parseNonNegative>) =>
+    r.ok ? (r.value ?? 0) : 0;
   return {
     errors,
     previewInput: {
@@ -227,9 +263,11 @@ function buildInput(employeeId: number | null, s: FormState): { previewInput: Eo
       salaryDaysOverride: salaryOverride,
       salaryNote: s.salaryManual ? textOrNull(s.salaryNote) : null,
       otherAdditions: num(otherAdditions),
-      otherAdditionsNote: num(otherAdditions) > 0 ? textOrNull(s.otherAdditionsNote) : null,
+      otherAdditionsNote:
+        num(otherAdditions) > 0 ? textOrNull(s.otherAdditionsNote) : null,
       otherDeductions: num(otherDeductions),
-      otherDeductionsNote: num(otherDeductions) > 0 ? textOrNull(s.otherDeductionsNote) : null,
+      otherDeductionsNote:
+        num(otherDeductions) > 0 ? textOrNull(s.otherDeductionsNote) : null,
       notes: textOrNull(s.notes),
     },
   };
@@ -243,7 +281,7 @@ function Field({
   error,
   hint,
   children,
-  className = '',
+  className = "",
 }: {
   label: string;
   required?: boolean;
@@ -269,19 +307,32 @@ function Field({
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return <h3 className="text-sm font-semibold border-b pb-1.5 mb-3">{children}</h3>;
+  return (
+    <h3 className="text-sm font-semibold border-b pb-1.5 mb-3">{children}</h3>
+  );
 }
 
 /** الخطوة 1: اختيار موظف نشط */
-function EmployeePicker({ onSelect }: { onSelect: (employeeId: number) => void }) {
-  const [search, setSearch] = useState('');
-  const employeesQuery = trpc.employees.list.useQuery(undefined, { refetchOnWindowFocus: false });
+function EmployeePicker({
+  onSelect,
+}: {
+  onSelect: (employeeId: number) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const employeesQuery = trpc.employees.list.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
 
   const employees = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (employeesQuery.data ?? [])
       .filter(e => e.isActive)
-      .filter(e => !term || e.name.toLowerCase().includes(term) || e.code.toLowerCase().includes(term));
+      .filter(
+        e =>
+          !term ||
+          e.name.toLowerCase().includes(term) ||
+          e.code.toLowerCase().includes(term)
+      );
   }, [employeesQuery.data, search]);
 
   return (
@@ -298,7 +349,9 @@ function EmployeePicker({ onSelect }: { onSelect: (employeeId: number) => void }
             className="pr-10"
           />
         </div>
-        <p className="text-xs text-muted-foreground mt-1">تظهر الموظفون النشطون فقط</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          تظهر الموظفون النشطون فقط
+        </p>
       </div>
 
       {employeesQuery.isLoading ? (
@@ -309,8 +362,14 @@ function EmployeePicker({ onSelect }: { onSelect: (employeeId: number) => void }
         </div>
       ) : employeesQuery.error ? (
         <div className="text-center py-8 space-y-3">
-          <p className="text-red-600 text-sm">تعذر تحميل الموظفين: {employeesQuery.error.message}</p>
-          <Button variant="outline" size="sm" onClick={() => employeesQuery.refetch()}>
+          <p className="text-red-600 text-sm">
+            تعذر تحميل الموظفين: {employeesQuery.error.message}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => employeesQuery.refetch()}
+          >
             <RefreshCw className="w-4 h-4 ml-2" />
             إعادة المحاولة
           </Button>
@@ -318,7 +377,9 @@ function EmployeePicker({ onSelect }: { onSelect: (employeeId: number) => void }
       ) : employees.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground text-sm">
           <Users className="w-10 h-10 mx-auto mb-2 opacity-40" />
-          {search.trim() ? 'لا يوجد موظف نشط يطابق البحث' : 'لا يوجد موظفون نشطون'}
+          {search.trim()
+            ? "لا يوجد موظف نشط يطابق البحث"
+            : "لا يوجد موظفون نشطون"}
         </div>
       ) : (
         <div className="max-h-[50vh] overflow-y-auto rounded-lg border divide-y">
@@ -334,8 +395,8 @@ function EmployeePicker({ onSelect }: { onSelect: (employeeId: number) => void }
                 <span className="block font-medium truncate">{e.name}</span>
                 <span className="block text-xs text-muted-foreground">
                   <span className="font-mono">{e.code}</span>
-                  {e.branchName ? ` - ${e.branchName}` : ''}
-                  {e.position ? ` - ${e.position}` : ''}
+                  {e.branchName ? ` - ${e.branchName}` : ""}
+                  {e.position ? ` - ${e.position}` : ""}
                 </span>
               </span>
             </button>
@@ -355,8 +416,13 @@ function PreviewPanel({
 }: {
   ready: boolean;
   debouncing: boolean;
-  query: { data?: EosPreview; error: { message: string } | null; isFetching: boolean; isLoading: boolean };
-  notes: Parameters<typeof CalculationBreakdown>[0]['notes'];
+  query: {
+    data?: EosPreview;
+    error: { message: string } | null;
+    isFetching: boolean;
+    isLoading: boolean;
+  };
+  notes: Parameters<typeof CalculationBreakdown>[0]["notes"];
 }) {
   const updating = ready && (debouncing || query.isFetching);
   return (
@@ -383,7 +449,11 @@ function PreviewPanel({
           {query.error.message}
         </div>
       ) : query.data ? (
-        <div className={updating ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+        <div
+          className={
+            updating ? "opacity-60 transition-opacity" : "transition-opacity"
+          }
+        >
           <CalculationBreakdown
             calculation={query.data.calculation}
             advances={query.data.advances}
@@ -400,7 +470,8 @@ function PreviewPanel({
         </div>
       )}
       <p className="text-[11px] text-muted-foreground leading-relaxed">
-        يُحسب على الخادم بنفس دالة الحفظ: المكافأة وفق المادة 84، والإجازة 21 يوماً سنوياً (30 بعد خمس سنوات)، وأجر اليوم = الأجر الشهري ÷ 30.
+        يُحسب على الخادم بنفس دالة الحفظ: المكافأة وفق المادة 84، والإجازة 21
+        يوماً سنوياً (30 بعد خمس سنوات)، وأجر اليوم = الأجر الشهري ÷ 30.
       </p>
     </div>
   );
@@ -412,36 +483,63 @@ export interface EndOfServiceFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** تعديل مسودة قائمة (بدونها: إنشاء جديد) */
-  settlement?: { id: number; settlementNumber: string; employeeName: string; form: EosFormInput } | null;
+  settlement?: {
+    id: number;
+    settlementNumber: string;
+    employeeName: string;
+    form: EosFormInput;
+  } | null;
   /** اختيار موظف مسبقاً عند الإنشاء */
   initialEmployeeId?: number | null;
   onCreated?: (id: number) => void;
   onSaved?: () => void;
 }
 
-export default function EndOfServiceForm({ open, onOpenChange, settlement, initialEmployeeId, onCreated, onSaved }: EndOfServiceFormProps) {
+export default function EndOfServiceForm({
+  open,
+  onOpenChange,
+  settlement,
+  initialEmployeeId,
+  onCreated,
+  onSaved,
+}: EndOfServiceFormProps) {
   const isEdit = !!settlement;
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
 
-  const [employeeId, setEmployeeId] = useState<number | null>(settlement?.form.employeeId ?? initialEmployeeId ?? null);
-  const [form, setForm] = useState<FormState>(() => (settlement ? stateFromForm(settlement.form) : emptyState()));
+  const [employeeId, setEmployeeId] = useState<number | null>(
+    settlement?.form.employeeId ?? initialEmployeeId ?? null
+  );
+  const [form, setForm] = useState<FormState>(() =>
+    settlement ? stateFromForm(settlement.form) : emptyState()
+  );
   // آخر يوم عمل يتبع تاريخ انتهاء العقد حتى يعدّله المستخدم
   const [lastDayFollowsContract, setLastDayFollowsContract] = useState(
-    () => !settlement || settlement.form.lastWorkingDay === settlement.form.contractEndDate
+    () =>
+      !settlement ||
+      settlement.form.lastWorkingDay === settlement.form.contractEndDate
   );
-  const [prefilledFor, setPrefilledFor] = useState<number | null>(settlement ? settlement.form.employeeId : null);
+  const [prefilledFor, setPrefilledFor] = useState<number | null>(
+    settlement ? settlement.form.employeeId : null
+  );
   const [showErrors, setShowErrors] = useState(false);
 
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm(prev => ({ ...prev, [key]: value }));
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setForm(prev => ({ ...prev, [key]: value }));
 
   // بيانات الموظف الافتراضية (في التعديل: للاطلاع على تفصيل الأجر فقط)
   const defaultsQuery = trpc.endOfService.defaults.useQuery(
     { employeeId: employeeId ?? 0 },
-    { enabled: open && !!employeeId, retry: retryUnlessFinal, refetchOnWindowFocus: false }
+    {
+      enabled: open && !!employeeId,
+      retry: retryUnlessFinal,
+      refetchOnWindowFocus: false,
+    }
   );
   const defaults: EosDefaults | undefined =
-    defaultsQuery.data && defaultsQuery.data.employee.id === employeeId ? defaultsQuery.data : undefined;
+    defaultsQuery.data && defaultsQuery.data.employee.id === employeeId
+      ? defaultsQuery.data
+      : undefined;
 
   useEffect(() => {
     if (isEdit || !defaults || prefilledFor === defaults.employee.id) return;
@@ -456,29 +554,54 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
     if (defaults.existing) {
       return (
         <>
-          توجد مخالصة إنهاء خدمة قائمة لهذا الموظف برقم{' '}
-          <span className="font-mono font-semibold">{defaults.existing.settlementNumber}</span> (
-          {getEndOfServiceStatusLabel(defaults.existing.status).ar}). لا يمكن إنشاء مخالصة أخرى حتى تُلغى القائمة.
+          توجد مخالصة إنهاء خدمة قائمة لهذا الموظف برقم{" "}
+          <span className="font-mono font-semibold">
+            {defaults.existing.settlementNumber}
+          </span>{" "}
+          ({getEndOfServiceStatusLabel(defaults.existing.status).ar}). لا يمكن
+          إنشاء مخالصة أخرى حتى تُلغى القائمة.
         </>
       );
     }
-    if (!defaults.employee.isActive) return <>الموظف غير نشط، لا يمكن إنشاء إنهاء خدمة له.</>;
+    if (!defaults.employee.isActive)
+      return <>الموظف غير نشط، لا يمكن إنشاء إنهاء خدمة له.</>;
     return null;
   })();
 
-  const waitingForDefaults = !isEdit && !!employeeId && prefilledFor !== employeeId;
+  const waitingForDefaults =
+    !isEdit && !!employeeId && prefilledFor !== employeeId;
 
-  const { previewInput, errors } = useMemo(() => buildInput(employeeId, form), [employeeId, form]);
-  const previewKey = previewInput && !waitingForDefaults && !blockedReason ? JSON.stringify(previewInput) : '';
+  const { previewInput, errors } = useMemo(
+    () => buildInput(employeeId, form),
+    [employeeId, form]
+  );
+  // الملاحظات لا تدخل في الحساب: تُستبعد من المعاينة حتى لا يطول رابط الطلب ولا يُعاد الحساب مع كل حرف
+  const previewKey =
+    previewInput && !waitingForDefaults && !blockedReason
+      ? JSON.stringify({
+          ...previewInput,
+          leaveNote: null,
+          salaryNote: null,
+          otherAdditionsNote: null,
+          otherDeductionsNote: null,
+          notes: null,
+        })
+      : "";
   const debouncedKey = useDebouncedValue(previewKey, 400);
-  const debouncedInput = useMemo(() => (debouncedKey ? (JSON.parse(debouncedKey) as EosFormInput) : null), [debouncedKey]);
+  const debouncedInput = useMemo(
+    () => (debouncedKey ? (JSON.parse(debouncedKey) as EosFormInput) : null),
+    [debouncedKey]
+  );
 
-  const previewQuery = trpc.endOfService.preview.useQuery(debouncedInput as EosFormInput, {
-    enabled: open && !!debouncedInput,
-    retry: false,
-    refetchOnWindowFocus: false,
-    placeholderData: keepPreviousData,
-  });
+  const previewQuery = trpc.endOfService.preview.useQuery(
+    debouncedInput as EosFormInput,
+    {
+      enabled: open && !!debouncedInput,
+      retry: false,
+      refetchOnWindowFocus: false,
+      placeholderData: keepPreviousData,
+    }
+  );
   const previewData: EosPreview | undefined = previewQuery.data;
 
   const createMutation = trpc.endOfService.create.useMutation();
@@ -488,11 +611,15 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
   const fieldError = (key: FieldKey) => (showErrors ? errors[key] : undefined);
 
   const handleContractEndChange = (value: string) =>
-    setForm(prev => ({ ...prev, contractEndDate: value, lastWorkingDay: lastDayFollowsContract ? value : prev.lastWorkingDay }));
+    setForm(prev => ({
+      ...prev,
+      contractEndDate: value,
+      lastWorkingDay: lastDayFollowsContract ? value : prev.lastWorkingDay,
+    }));
 
   const handleLastDayChange = (value: string) => {
     setLastDayFollowsContract(value === form.contractEndDate);
-    set('lastWorkingDay', value);
+    set("lastWorkingDay", value);
   };
 
   const toggleLeaveManual = (checked: boolean) =>
@@ -500,14 +627,19 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
       ...prev,
       leaveManual: checked,
       leaveDays:
-        checked && !prev.leaveDays && previewData ? formatDays(previewData.calculation.computedLeaveBalanceDays) : prev.leaveDays,
+        checked && !prev.leaveDays && previewData
+          ? formatDays(previewData.calculation.computedLeaveBalanceDays)
+          : prev.leaveDays,
     }));
 
   const toggleSalaryManual = (checked: boolean) =>
     setForm(prev => ({
       ...prev,
       salaryManual: checked,
-      salaryDays: checked && !prev.salaryDays && previewData ? formatDays(previewData.calculation.computedSalaryDays) : prev.salaryDays,
+      salaryDays:
+        checked && !prev.salaryDays && previewData
+          ? formatDays(previewData.calculation.computedSalaryDays)
+          : prev.salaryDays,
     }));
 
   const changeEmployee = () => {
@@ -521,17 +653,21 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
     const firstError = Object.values(errors)[0];
     if (firstError || !previewInput) {
       setShowErrors(true);
-      toast.error(firstError || 'أكمل البيانات المطلوبة');
+      toast.error(firstError || "أكمل البيانات المطلوبة");
       return;
     }
     if (blockedReason) {
-      toast.error('لا يمكن إنشاء إنهاء خدمة لهذا الموظف');
+      toast.error("لا يمكن إنشاء إنهاء خدمة لهذا الموظف");
       return;
     }
     try {
       if (settlement) {
-        const result: { success: boolean; message: string } = await updateMutation.mutateAsync({ id: settlement.id, ...previewInput });
-        toast.success(result.message || 'تم حفظ التعديلات');
+        const result: { success: boolean; message: string } =
+          await updateMutation.mutateAsync({
+            id: settlement.id,
+            ...previewInput,
+          });
+        toast.success(result.message || "تم حفظ التعديلات");
         await Promise.all([
           utils.endOfService.getById.invalidate({ id: settlement.id }),
           utils.endOfService.list.invalidate(),
@@ -539,23 +675,42 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
         onSaved?.();
         onOpenChange(false);
       } else {
-        const result: { id: number; requestId: number; settlementNumber: string; message: string } =
-          await createMutation.mutateAsync(previewInput);
-        toast.success(result.message || `تم إنشاء المخالصة ${result.settlementNumber}`);
+        const result: {
+          id: number;
+          requestId: number;
+          settlementNumber: string;
+          message: string;
+        } = await createMutation.mutateAsync(previewInput);
+        toast.success(
+          result.message || `تم إنشاء المخالصة ${result.settlementNumber}`
+        );
         void utils.endOfService.list.invalidate();
         void utils.employeeRequests.list.invalidate();
         onOpenChange(false);
         onCreated?.(result.id);
       }
     } catch (error) {
-      toast.error(errorMessage(error, isEdit ? 'فشل حفظ تعديلات المخالصة' : 'فشل إنشاء إنهاء الخدمة'));
+      toast.error(
+        errorMessage(
+          error,
+          isEdit ? "فشل حفظ تعديلات المخالصة" : "فشل إنشاء إنهاء الخدمة"
+        )
+      );
     }
   };
 
   const employeeHeader = defaults
-    ? { name: defaults.employee.name, code: defaults.employee.code, branchName: defaults.employee.branchName }
+    ? {
+        name: defaults.employee.name,
+        code: defaults.employee.code,
+        branchName: defaults.employee.branchName,
+      }
     : settlement
-      ? { name: settlement.employeeName, code: '', branchName: null as string | null }
+      ? {
+          name: settlement.employeeName,
+          code: "",
+          branchName: null as string | null,
+        }
       : null;
 
   const monthlyWage = (() => {
@@ -566,15 +721,23 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
 
   return (
     <Dialog open={open} onOpenChange={value => !saving && onOpenChange(value)}>
-      <DialogContent className="sm:max-w-6xl max-h-[94vh] overflow-y-auto p-4 sm:p-6" dir="rtl">
+      <DialogContent
+        className="sm:max-w-6xl max-h-[94vh] overflow-y-auto p-4 sm:p-6"
+        dir="rtl"
+      >
         <DialogHeader className="text-right">
           <DialogTitle className="flex items-center gap-2">
             <UserX className="w-5 h-5 text-red-600" />
-            {isEdit ? `تعديل مخالصة ${settlement!.settlementNumber}` : 'إنهاء خدمة جديد'}
-            <span className="text-sm text-muted-foreground font-normal hidden sm:inline">- انتهاء العقد وعدم التجديد</span>
+            {isEdit
+              ? `تعديل مخالصة ${settlement!.settlementNumber}`
+              : "إنهاء خدمة جديد"}
+            <span className="text-sm text-muted-foreground font-normal hidden sm:inline">
+              - انتهاء العقد وعدم التجديد
+            </span>
           </DialogTitle>
           <DialogDescription>
-            يُصدر خطاب إشعار انتهاء عقد العمل وعدم التجديد ومخالصة نهائية وإبراء ذمة. تظهر التوقيعات والختم بعد اعتماد الإدارة فقط.
+            يُصدر خطاب إشعار انتهاء عقد العمل وعدم التجديد ومخالصة نهائية وإبراء
+            ذمة. تظهر التوقيعات والختم بعد اعتماد الإدارة فقط.
           </DialogDescription>
         </DialogHeader>
 
@@ -593,9 +756,13 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
                 <UserCircle className="w-9 h-9 text-muted-foreground shrink-0" />
                 {employeeHeader ? (
                   <div className="min-w-0">
-                    <p className="font-semibold truncate">{employeeHeader.name}</p>
+                    <p className="font-semibold truncate">
+                      {employeeHeader.name}
+                    </p>
                     <p className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
-                      {employeeHeader.code && <span className="font-mono">{employeeHeader.code}</span>}
+                      {employeeHeader.code && (
+                        <span className="font-mono">{employeeHeader.code}</span>
+                      )}
                       {employeeHeader.branchName && (
                         <span className="inline-flex items-center gap-1">
                           <Building2 className="w-3 h-3" />
@@ -605,7 +772,9 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
                     </p>
                   </div>
                 ) : defaultsQuery.error ? (
-                  <p className="text-sm text-red-600">تعذر تحميل بيانات الموظف</p>
+                  <p className="text-sm text-red-600">
+                    تعذر تحميل بيانات الموظف
+                  </p>
                 ) : (
                   <div className="space-y-1">
                     <Skeleton className="h-4 w-40" />
@@ -614,7 +783,13 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
                 )}
               </div>
               {!isEdit && (
-                <Button type="button" variant="outline" size="sm" onClick={changeEmployee} disabled={saving}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={changeEmployee}
+                  disabled={saving}
+                >
                   تغيير الموظف
                 </Button>
               )}
@@ -626,7 +801,12 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
                 <AlertTitle>تعذر تحميل بيانات الموظف</AlertTitle>
                 <AlertDescription>
                   <p>{defaultsQuery.error.message}</p>
-                  <Button variant="outline" size="sm" className="mt-2" onClick={() => defaultsQuery.refetch()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => defaultsQuery.refetch()}
+                  >
                     <RefreshCw className="w-4 h-4 ml-2" />
                     إعادة المحاولة
                   </Button>
@@ -677,29 +857,63 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
                       <Field
                         label="تاريخ مباشرة العمل"
                         required
-                        error={fieldError('hireDate')}
-                        hint={defaults && !defaults.employee.hireDate ? 'غير مسجل في ملف الموظف - أدخله يدوياً' : undefined}
+                        error={fieldError("hireDate")}
+                        hint={
+                          defaults && !defaults.employee.hireDate
+                            ? "غير مسجل في ملف الموظف - أدخله يدوياً"
+                            : undefined
+                        }
                       >
-                        <Input type="date" value={form.hireDate} onChange={e => set('hireDate', e.target.value)} />
+                        <Input
+                          type="date"
+                          value={form.hireDate}
+                          onChange={e => set("hireDate", e.target.value)}
+                        />
                       </Field>
                       <Field
                         label="تاريخ انتهاء العقد"
                         required
-                        error={fieldError('contractEndDate')}
-                        hint={defaults && !defaults.employee.contractEndDate ? 'غير مسجل في ملف الموظف - أدخله يدوياً' : undefined}
+                        error={fieldError("contractEndDate")}
+                        hint={
+                          defaults && !defaults.employee.contractEndDate
+                            ? "غير مسجل في ملف الموظف - أدخله يدوياً"
+                            : undefined
+                        }
                       >
-                        <Input type="date" value={form.contractEndDate} onChange={e => handleContractEndChange(e.target.value)} />
+                        <Input
+                          type="date"
+                          value={form.contractEndDate}
+                          onChange={e =>
+                            handleContractEndChange(e.target.value)
+                          }
+                        />
                       </Field>
                       <Field
                         label="آخر يوم عمل"
                         required
-                        error={fieldError('lastWorkingDay')}
-                        hint={lastDayFollowsContract ? 'افتراضياً تاريخ انتهاء العقد' : undefined}
+                        error={fieldError("lastWorkingDay")}
+                        hint={
+                          lastDayFollowsContract
+                            ? "افتراضياً تاريخ انتهاء العقد"
+                            : undefined
+                        }
                       >
-                        <Input type="date" value={form.lastWorkingDay} onChange={e => handleLastDayChange(e.target.value)} />
+                        <Input
+                          type="date"
+                          value={form.lastWorkingDay}
+                          onChange={e => handleLastDayChange(e.target.value)}
+                        />
                       </Field>
-                      <Field label="تاريخ الخطاب" required error={fieldError('letterDate')}>
-                        <Input type="date" value={form.letterDate} onChange={e => set('letterDate', e.target.value)} />
+                      <Field
+                        label="تاريخ الخطاب"
+                        required
+                        error={fieldError("letterDate")}
+                      >
+                        <Input
+                          type="date"
+                          value={form.letterDate}
+                          onChange={e => set("letterDate", e.target.value)}
+                        />
                       </Field>
                     </div>
                   </section>
@@ -708,13 +922,28 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
                     <SectionTitle>بيانات الموظف في الخطاب</SectionTitle>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <Field label="الجنسية">
-                        <Input value={form.nationality} onChange={e => set('nationality', e.target.value)} maxLength={100} placeholder="مثال: مصري" />
+                        <Input
+                          value={form.nationality}
+                          onChange={e => set("nationality", e.target.value)}
+                          maxLength={100}
+                          placeholder="مثال: مصري"
+                        />
                       </Field>
                       <Field label="رقم الهوية / الإقامة">
-                        <Input value={form.idNumber} onChange={e => set('idNumber', e.target.value)} maxLength={50} dir="ltr" className="text-right" />
+                        <Input
+                          value={form.idNumber}
+                          onChange={e => set("idNumber", e.target.value)}
+                          maxLength={50}
+                          dir="ltr"
+                          className="text-right"
+                        />
                       </Field>
                       <Field label="المسمى الوظيفي">
-                        <Input value={form.position} onChange={e => set('position', e.target.value)} maxLength={100} />
+                        <Input
+                          value={form.position}
+                          onChange={e => set("position", e.target.value)}
+                          maxLength={100}
+                        />
                       </Field>
                     </div>
                   </section>
@@ -722,26 +951,60 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
                   <section>
                     <SectionTitle>الأجر المعتمد للحساب</SectionTitle>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Field label="الراتب الأساسي الشهري" required error={fieldError('baseSalary')}>
-                        <Input type="number" inputMode="decimal" min="0" step="0.01" value={form.baseSalary} onChange={e => set('baseSalary', e.target.value)} placeholder="0.00" />
+                      <Field
+                        label="الراتب الأساسي الشهري"
+                        required
+                        error={fieldError("baseSalary")}
+                      >
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
+                          value={form.baseSalary}
+                          onChange={e => set("baseSalary", e.target.value)}
+                          placeholder="0.00"
+                        />
                       </Field>
-                      <Field label="البدلات الثابتة الشهرية" error={fieldError('fixedAllowances')}>
-                        <Input type="number" inputMode="decimal" min="0" step="0.01" value={form.fixedAllowances} onChange={e => set('fixedAllowances', e.target.value)} placeholder="0.00" />
+                      <Field
+                        label="البدلات الثابتة الشهرية"
+                        error={fieldError("fixedAllowances")}
+                      >
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
+                          value={form.fixedAllowances}
+                          onChange={e => set("fixedAllowances", e.target.value)}
+                          placeholder="0.00"
+                        />
                       </Field>
                     </div>
                     {defaults && defaults.wage.breakdown.length > 0 && (
                       <div className="mt-2 rounded-md bg-muted/40 px-3 py-2 text-xs space-y-0.5">
-                        <p className="font-medium text-muted-foreground">تفصيل الأجر حسب إعدادات راتب الموظف{isEdit ? ' الحالية' : ''}:</p>
+                        <p className="font-medium text-muted-foreground">
+                          تفصيل الأجر حسب إعدادات راتب الموظف
+                          {isEdit ? " الحالية" : ""}:
+                        </p>
                         {defaults.wage.breakdown.map(line => (
-                          <div key={line.label} className="flex justify-between gap-2">
+                          <div
+                            key={line.label}
+                            className="flex justify-between gap-2"
+                          >
                             <span>{line.label}</span>
-                            <span className="tabular-nums" dir="ltr">{formatSar(line.amount)}</span>
+                            <span className="tabular-nums" dir="ltr">
+                              {formatSar(line.amount)}
+                            </span>
                           </div>
                         ))}
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground mt-2">
-                      الأجر الشهري المعتمد = الأساسي + البدلات الثابتة = <span className="font-semibold tabular-nums">{formatSar(monthlyWage)}</span>
+                      الأجر الشهري المعتمد = الأساسي + البدلات الثابتة ={" "}
+                      <span className="font-semibold tabular-nums">
+                        {formatSar(monthlyWage)}
+                      </span>
                     </p>
                   </section>
 
@@ -750,19 +1013,53 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
 
                     <div className="rounded-lg border p-3 space-y-3">
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox checked={form.leaveManual} onCheckedChange={value => toggleLeaveManual(value === true)} />
-                        <span className="text-sm font-medium">تعديل رصيد الإجازة يدوياً</span>
+                        <Checkbox
+                          checked={form.leaveManual}
+                          onCheckedChange={value =>
+                            toggleLeaveManual(value === true)
+                          }
+                        />
+                        <span className="text-sm font-medium">
+                          تعديل رصيد الإجازة يدوياً
+                        </span>
                         {previewData && !form.leaveManual && (
-                          <span className="text-xs text-muted-foreground">(المحسوب {formatDays(previewData.calculation.computedLeaveBalanceDays)} يوم)</span>
+                          <span className="text-xs text-muted-foreground">
+                            (المحسوب{" "}
+                            {formatDays(
+                              previewData.calculation.computedLeaveBalanceDays
+                            )}{" "}
+                            يوم)
+                          </span>
                         )}
                       </label>
                       {form.leaveManual && (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <Field label="رصيد الإجازة (يوم)" required error={fieldError('leaveDays')}>
-                            <Input type="number" inputMode="decimal" min="0" step="0.5" value={form.leaveDays} onChange={e => set('leaveDays', e.target.value)} />
+                          <Field
+                            label="رصيد الإجازة (يوم)"
+                            required
+                            error={fieldError("leaveDays")}
+                          >
+                            <Input
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              step="0.5"
+                              value={form.leaveDays}
+                              onChange={e => set("leaveDays", e.target.value)}
+                            />
                           </Field>
-                          <Field label="سبب التعديل" required error={fieldError('leaveNote')} className="sm:col-span-2">
-                            <Input value={form.leaveNote} onChange={e => set('leaveNote', e.target.value)} maxLength={2000} placeholder="مثال: حسب سجل الإجازات الورقي" />
+                          <Field
+                            label="سبب التعديل"
+                            required
+                            error={fieldError("leaveNote")}
+                            className="sm:col-span-2"
+                          >
+                            <Input
+                              value={form.leaveNote}
+                              onChange={e => set("leaveNote", e.target.value)}
+                              maxLength={2000}
+                              placeholder="مثال: حسب سجل الإجازات الورقي"
+                            />
                           </Field>
                         </div>
                       )}
@@ -770,46 +1067,133 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
 
                     <div className="rounded-lg border p-3 space-y-3">
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox checked={form.salaryManual} onCheckedChange={value => toggleSalaryManual(value === true)} />
-                        <span className="text-sm font-medium">تعديل أيام الأجر المستحق يدوياً</span>
+                        <Checkbox
+                          checked={form.salaryManual}
+                          onCheckedChange={value =>
+                            toggleSalaryManual(value === true)
+                          }
+                        />
+                        <span className="text-sm font-medium">
+                          تعديل أيام الأجر المستحق يدوياً
+                        </span>
                         {previewData && !form.salaryManual && (
-                          <span className="text-xs text-muted-foreground">(المحسوب {formatDays(previewData.calculation.computedSalaryDays)} يوم)</span>
+                          <span className="text-xs text-muted-foreground">
+                            (المحسوب{" "}
+                            {formatDays(
+                              previewData.calculation.computedSalaryDays
+                            )}{" "}
+                            يوم)
+                          </span>
                         )}
                       </label>
                       {form.salaryManual && (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <Field label="أيام الأجر المستحق" required error={fieldError('salaryDays')}>
-                            <Input type="number" inputMode="decimal" min="0" step="0.5" value={form.salaryDays} onChange={e => set('salaryDays', e.target.value)} />
+                          <Field
+                            label="أيام الأجر المستحق"
+                            required
+                            error={fieldError("salaryDays")}
+                          >
+                            <Input
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              step="0.5"
+                              value={form.salaryDays}
+                              onChange={e => set("salaryDays", e.target.value)}
+                            />
                           </Field>
-                          <Field label="سبب التعديل" required error={fieldError('salaryNote')} className="sm:col-span-2">
-                            <Input value={form.salaryNote} onChange={e => set('salaryNote', e.target.value)} maxLength={2000} placeholder="مثال: صُرف له نصف الشهر في المسيرة" />
+                          <Field
+                            label="سبب التعديل"
+                            required
+                            error={fieldError("salaryNote")}
+                            className="sm:col-span-2"
+                          >
+                            <Input
+                              value={form.salaryNote}
+                              onChange={e => set("salaryNote", e.target.value)}
+                              maxLength={2000}
+                              placeholder="مثال: صُرف له نصف الشهر في المسيرة"
+                            />
                           </Field>
                         </div>
                       )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <Field label="إضافات أخرى" error={fieldError('otherAdditions')}>
-                        <Input type="number" inputMode="decimal" min="0" step="0.01" value={form.otherAdditions} onChange={e => set('otherAdditions', e.target.value)} placeholder="0.00" />
+                      <Field
+                        label="إضافات أخرى"
+                        error={fieldError("otherAdditions")}
+                      >
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
+                          value={form.otherAdditions}
+                          onChange={e => set("otherAdditions", e.target.value)}
+                          placeholder="0.00"
+                        />
                       </Field>
-                      <Field label="بيان الإضافات" required={Number(form.otherAdditions) > 0} error={fieldError('otherAdditionsNote')} className="sm:col-span-2">
-                        <Input value={form.otherAdditionsNote} onChange={e => set('otherAdditionsNote', e.target.value)} maxLength={2000} placeholder="مثال: بدل تذكرة سفر" />
+                      <Field
+                        label="بيان الإضافات"
+                        required={Number(form.otherAdditions) > 0}
+                        error={fieldError("otherAdditionsNote")}
+                        className="sm:col-span-2"
+                      >
+                        <Input
+                          value={form.otherAdditionsNote}
+                          onChange={e =>
+                            set("otherAdditionsNote", e.target.value)
+                          }
+                          maxLength={2000}
+                          placeholder="مثال: بدل تذكرة سفر"
+                        />
                       </Field>
-                      <Field label="خصومات أخرى" error={fieldError('otherDeductions')}>
-                        <Input type="number" inputMode="decimal" min="0" step="0.01" value={form.otherDeductions} onChange={e => set('otherDeductions', e.target.value)} placeholder="0.00" />
+                      <Field
+                        label="خصومات أخرى"
+                        error={fieldError("otherDeductions")}
+                      >
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
+                          value={form.otherDeductions}
+                          onChange={e => set("otherDeductions", e.target.value)}
+                          placeholder="0.00"
+                        />
                       </Field>
-                      <Field label="بيان الخصومات" required={Number(form.otherDeductions) > 0} error={fieldError('otherDeductionsNote')} className="sm:col-span-2">
-                        <Input value={form.otherDeductionsNote} onChange={e => set('otherDeductionsNote', e.target.value)} maxLength={2000} placeholder="مثال: عهدة غير مُسلّمة" />
+                      <Field
+                        label="بيان الخصومات"
+                        required={Number(form.otherDeductions) > 0}
+                        error={fieldError("otherDeductionsNote")}
+                        className="sm:col-span-2"
+                      >
+                        <Input
+                          value={form.otherDeductionsNote}
+                          onChange={e =>
+                            set("otherDeductionsNote", e.target.value)
+                          }
+                          maxLength={2000}
+                          placeholder="مثال: عهدة غير مُسلّمة"
+                        />
                       </Field>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      السلف غير المسددة والمخالفات غير المخصومة تُخصم تلقائياً وتظهر في الحساب.
+                      السلف غير المسددة والمخالفات غير المخصومة تُخصم تلقائياً
+                      وتظهر في الحساب.
                     </p>
                   </section>
 
                   <section>
                     <Field label="ملاحظات">
-                      <Textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} maxLength={2000} placeholder="ملاحظات اختيارية تظهر في المخالصة" />
+                      <Textarea
+                        value={form.notes}
+                        onChange={e => set("notes", e.target.value)}
+                        rows={2}
+                        maxLength={2000}
+                        placeholder="ملاحظات اختيارية تظهر في المخالصة"
+                      />
                     </Field>
                   </section>
                 </div>
@@ -821,7 +1205,14 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
                     debouncing={previewKey !== debouncedKey}
                     query={{
                       data: previewData,
-                      error: previewQuery.error ? { message: errorMessage(previewQuery.error, 'تعذر حساب المخالصة') } : null,
+                      error: previewQuery.error
+                        ? {
+                            message: errorMessage(
+                              previewQuery.error,
+                              "تعذر حساب المخالصة"
+                            ),
+                          }
+                        : null,
                       isFetching: previewQuery.isFetching,
                       isLoading: previewQuery.isLoading,
                     }}
@@ -839,7 +1230,11 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
         )}
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
             إلغاء
           </Button>
           {employeeId && (
@@ -848,8 +1243,16 @@ export default function EndOfServiceForm({ open, onOpenChange, settlement, initi
               disabled={saving || waitingForDefaults || !!blockedReason}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              {saving ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Save className="w-4 h-4 ml-2" />}
-              {saving ? 'جاري الحفظ...' : isEdit ? 'حفظ التعديلات' : 'حفظ كمسودة'}
+              {saving ? (
+                <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 ml-2" />
+              )}
+              {saving
+                ? "جاري الحفظ..."
+                : isEdit
+                  ? "حفظ التعديلات"
+                  : "حفظ كمسودة"}
             </Button>
           )}
         </DialogFooter>

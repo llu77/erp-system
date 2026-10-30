@@ -35,7 +35,11 @@ function calc(overrides: Partial<EndOfServiceCalcInput> = {}) {
 
 describe("parseDateOnly", () => {
   it("accepts valid dates and rejects impossible ones", () => {
-    expect(parseDateOnly("2026-02-28")).toEqual({ year: 2026, month: 2, day: 28 });
+    expect(parseDateOnly("2026-02-28")).toEqual({
+      year: 2026,
+      month: 2,
+      day: 28,
+    });
     expect(parseDateOnly("2026-02-30")).toBeNull();
     expect(parseDateOnly("2026/02/01")).toBeNull();
     expect(parseDateOnly("")).toBeNull();
@@ -62,7 +66,9 @@ describe("computeServicePeriod", () => {
     expect(p.totalDays).toBe(30);
     // ذكرى 29 فبراير في سنة غير كبيسة = 28 فبراير: 365 يوماً = سنة كاملة
     const leap = computeServicePeriod("2024-02-29", "2025-02-27")!;
-    expect([leap.years, leap.months, leap.days, leap.totalDays]).toEqual([1, 0, 0, 365]);
+    expect([leap.years, leap.months, leap.days, leap.totalDays]).toEqual([
+      1, 0, 0, 365,
+    ]);
     const leapPlus = computeServicePeriod("2024-02-29", "2025-02-28")!;
     expect([leapPlus.years, leapPlus.months, leapPlus.days]).toEqual([1, 0, 1]);
   });
@@ -79,10 +85,16 @@ describe("computeServicePeriod", () => {
 
 describe("formatServicePeriod", () => {
   it("uses Arabic counting forms", () => {
-    expect(formatServicePeriod({ years: 5, months: 3, days: 10 })).toBe("5 سنوات و3 أشهر و10 أيام");
-    expect(formatServicePeriod({ years: 1, months: 2, days: 1 })).toBe("سنة واحدة وشهران ويوم واحد");
+    expect(formatServicePeriod({ years: 5, months: 3, days: 10 })).toBe(
+      "5 سنوات و3 أشهر و10 أيام"
+    );
+    expect(formatServicePeriod({ years: 1, months: 2, days: 1 })).toBe(
+      "سنة واحدة وشهران ويوم واحد"
+    );
     expect(formatServicePeriod({ years: 2, months: 0, days: 0 })).toBe("سنتان");
-    expect(formatServicePeriod({ years: 12, months: 11, days: 15 })).toBe("12 سنة و11 شهراً و15 يوماً");
+    expect(formatServicePeriod({ years: 12, months: 11, days: 15 })).toBe(
+      "12 سنة و11 شهراً و15 يوماً"
+    );
   });
 });
 
@@ -115,32 +127,71 @@ describe("computeAccruedAnnualLeaveDays (Article 109)", () => {
 
 describe("computeUnpaidSalaryPeriod", () => {
   it("pays the final partial month after the last payroll", () => {
-    expect(computeUnpaidSalaryPeriod("2026-10-15", { year: 2026, month: 9 })).toEqual({ fromDate: "2026-10-01", days: 15, coveredByPayroll: false });
+    expect(
+      computeUnpaidSalaryPeriod("2026-10-15", { year: 2026, month: 9 })
+    ).toEqual({ fromDate: "2026-10-01", days: 15, coveredByPayroll: false });
   });
   it("a full last month is 30 days, including February", () => {
-    expect(computeUnpaidSalaryPeriod("2026-10-31", { year: 2026, month: 9 }).days).toBe(30);
-    expect(computeUnpaidSalaryPeriod("2026-02-28", { year: 2026, month: 1 }).days).toBe(30);
+    expect(
+      computeUnpaidSalaryPeriod("2026-10-31", { year: 2026, month: 9 }).days
+    ).toBe(30);
+    expect(
+      computeUnpaidSalaryPeriod("2026-02-28", { year: 2026, month: 1 }).days
+    ).toBe(30);
   });
   it("adds 30 days for every unpaid full month in between", () => {
-    expect(computeUnpaidSalaryPeriod("2026-10-10", { year: 2026, month: 7 })).toEqual({ fromDate: "2026-08-01", days: 70, coveredByPayroll: false });
+    expect(
+      computeUnpaidSalaryPeriod("2026-10-10", { year: 2026, month: 7 })
+    ).toEqual({ fromDate: "2026-08-01", days: 70, coveredByPayroll: false });
   });
   it("crosses the year boundary", () => {
-    expect(computeUnpaidSalaryPeriod("2027-01-05", { year: 2026, month: 11 })).toEqual({ fromDate: "2026-12-01", days: 35, coveredByPayroll: false });
+    expect(
+      computeUnpaidSalaryPeriod("2027-01-05", { year: 2026, month: 11 })
+    ).toEqual({ fromDate: "2026-12-01", days: 35, coveredByPayroll: false });
   });
   it("is zero when a payroll already covers the last month", () => {
-    expect(computeUnpaidSalaryPeriod("2026-10-15", { year: 2026, month: 10 })).toEqual({ fromDate: null, days: 0, coveredByPayroll: true });
+    expect(
+      computeUnpaidSalaryPeriod("2026-10-15", { year: 2026, month: 10 })
+    ).toEqual({
+      fromDate: null,
+      days: 0,
+      coveredByPayroll: true,
+      payrollAfterLastMonth: false,
+    });
+    expect(
+      computeUnpaidSalaryPeriod("2026-09-30", { year: 2026, month: 10 })
+        .payrollAfterLastMonth
+    ).toBe(true);
   });
   it("never starts before the hire date, counting a partial month by its actual days", () => {
     // مباشرة 20 أكتوبر وآخر يوم 31 أكتوبر بلا مسيرة: 12 يوماً لا 30
-    expect(computeUnpaidSalaryPeriod("2026-10-31", null, "2026-10-20")).toEqual({ fromDate: "2026-10-20", days: 12, coveredByPayroll: false });
+    expect(computeUnpaidSalaryPeriod("2026-10-31", null, "2026-10-20")).toEqual(
+      { fromDate: "2026-10-20", days: 12, coveredByPayroll: false }
+    );
     // مباشرة في منتصف شهر بعد آخر مسيرة: الشهر الأول جزئي ثم شهر كامل ثم الشهر الأخير
-    expect(computeUnpaidSalaryPeriod("2026-11-10", { year: 2026, month: 8 }, "2026-09-16")).toEqual({ fromDate: "2026-09-16", days: 15 + 30 + 10, coveredByPayroll: false });
+    expect(
+      computeUnpaidSalaryPeriod(
+        "2026-11-10",
+        { year: 2026, month: 8 },
+        "2026-09-16"
+      )
+    ).toEqual({
+      fromDate: "2026-09-16",
+      days: 15 + 30 + 10,
+      coveredByPayroll: false,
+    });
     // مباشرة بعد آخر يوم (بيانات خاطئة) لا تعطي أياماً
-    expect(computeUnpaidSalaryPeriod("2026-10-05", null, "2026-10-20").days).toBe(0);
+    expect(
+      computeUnpaidSalaryPeriod("2026-10-05", null, "2026-10-20").days
+    ).toBe(0);
   });
 
   it("without any payroll it starts from the last month", () => {
-    expect(computeUnpaidSalaryPeriod("2026-10-12", null)).toEqual({ fromDate: "2026-10-01", days: 12, coveredByPayroll: false });
+    expect(computeUnpaidSalaryPeriod("2026-10-12", null)).toEqual({
+      fromDate: "2026-10-01",
+      days: 12,
+      coveredByPayroll: false,
+    });
   });
 });
 
@@ -162,7 +213,10 @@ describe("calculateEndOfServiceSettlement", () => {
   it("deducts outstanding advances, violations and other deductions exactly once", () => {
     const c = calc({
       annualLeaveDaysTaken: 105,
-      advances: [{ id: 1, label: "سلفة REQ-1", amount: 1000 }, { id: 2, label: "سلفة REQ-2", amount: 500 }],
+      advances: [
+        { id: 1, label: "سلفة REQ-1", amount: 1000 },
+        { id: 2, label: "سلفة REQ-2", amount: 500 },
+      ],
       violations: [{ id: 7, label: "تأخير", amount: 100 }],
       otherDeductions: 50,
       otherAdditions: 200,
@@ -184,23 +238,45 @@ describe("calculateEndOfServiceSettlement", () => {
   });
 
   it("warns when a payroll already covers the last month", () => {
-    const c = calc({ lastWorkingDay: "2026-09-15", lastPayrollMonth: { year: 2026, month: 9 } });
+    const c = calc({
+      lastWorkingDay: "2026-09-15",
+      lastPayrollMonth: { year: 2026, month: 9 },
+    });
     expect(c.salaryDays).toBe(0);
     expect(c.salaryCoveredByPayroll).toBe(true);
     expect(c.warnings.join(" ")).toContain("مسيرة");
   });
 
   it("allows a negative net (employee owes) and words use the absolute value", () => {
-    const c = calc({ hireDate: "2026-10-01", leaveBalanceDaysOverride: 0, salaryDaysOverride: 0, advances: [{ id: 1, label: "سلفة", amount: 5000 }] });
+    const c = calc({
+      hireDate: "2026-10-01",
+      leaveBalanceDaysOverride: 0,
+      salaryDaysOverride: 0,
+      advances: [{ id: 1, label: "سلفة", amount: 5000 }],
+    });
     expect(c.netAmount).toBeLessThan(0);
     expect(c.netAmountWords).not.toContain("-");
     expect(c.warnings.join(" ")).toContain("مستحق على الموظف");
   });
 
   it("does not overpay an employee hired inside the last month", () => {
-    const c = calc({ hireDate: "2026-10-20", lastWorkingDay: "2026-10-31", lastPayrollMonth: null, leaveBalanceDaysOverride: 0 });
+    const c = calc({
+      hireDate: "2026-10-20",
+      lastWorkingDay: "2026-10-31",
+      lastPayrollMonth: null,
+      leaveBalanceDaysOverride: 0,
+    });
     expect(c.salaryDays).toBe(12);
     expect(c.salaryDue).toBe(1200);
+  });
+
+  it("warns precisely when a later payroll would pay a month after the last working day", () => {
+    const c = calc({
+      lastWorkingDay: "2026-09-30",
+      lastPayrollMonth: { year: 2026, month: 10 },
+    });
+    expect(c.salaryDays).toBe(0);
+    expect(c.warnings.join(" ")).toContain("10/2026 بعد آخر يوم عمل");
   });
 
   it("warns when no payroll ever paid the months before the last one", () => {
@@ -214,7 +290,9 @@ describe("calculateEndOfServiceSettlement", () => {
     const c = calc({ excludedServiceDays: 73, annualLeaveDaysTaken: 0 });
     expect(c.excludedServiceDays).toBe(73);
     expect(c.awardYears).toBeCloseTo(5 - 73 / 365, 10);
-    expect(c.eosAward).toBe(Math.round(3000 * (5 - 73 / 365) * 0.5 * 100) / 100);
+    expect(c.eosAward).toBe(
+      Math.round(3000 * (5 - 73 / 365) * 0.5 * 100) / 100
+    );
     expect(c.accruedLeaveDays).toBeCloseTo(21 * (5 - 73 / 365), 1);
     expect(c.warnings.join(" ")).toContain("المادة 116");
     // لا يتجاوز الاستبعاد مدة الخدمة
@@ -222,13 +300,28 @@ describe("calculateEndOfServiceSettlement", () => {
   });
 
   it("rejects invalid input", () => {
-    expect(calculateEndOfServiceSettlement({ ...base, hireDate: "2026-13-01" }).ok).toBe(false);
-    expect(calculateEndOfServiceSettlement({ ...base, lastWorkingDay: "2020-01-01" }).ok).toBe(false);
-    expect(calculateEndOfServiceSettlement({ ...base, baseSalary: 0, fixedAllowances: 0 }).ok).toBe(false);
+    expect(
+      calculateEndOfServiceSettlement({ ...base, hireDate: "2026-13-01" }).ok
+    ).toBe(false);
+    expect(
+      calculateEndOfServiceSettlement({ ...base, lastWorkingDay: "2020-01-01" })
+        .ok
+    ).toBe(false);
+    expect(
+      calculateEndOfServiceSettlement({
+        ...base,
+        baseSalary: 0,
+        fixedAllowances: 0,
+      }).ok
+    ).toBe(false);
   });
 
   it("ignores negative amounts", () => {
-    const c = calc({ otherAdditions: -100, otherDeductions: -50, advances: [{ id: 1, label: "x", amount: -10 }] });
+    const c = calc({
+      otherAdditions: -100,
+      otherDeductions: -50,
+      advances: [{ id: 1, label: "x", amount: -10 }],
+    });
     expect(c.otherAdditions).toBe(0);
     expect(c.otherDeductions).toBe(0);
     expect(c.advancesDeduction).toBe(0);

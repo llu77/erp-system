@@ -8853,7 +8853,9 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         if (adminCheck.branchId) {
           filters.branchId = adminCheck.branchId;
         }
-        return await db.getAllEmployeeRequests(filters);
+        // بوابة الموظفين لا تعرض إنهاء الخدمة قبل اعتماده (قد يكون المشرف نفسه هو الموظف المعني)
+        const requests = await db.getAllEmployeeRequests(filters);
+        return requests.filter(endOfService.isRequestVisibleToEmployee);
       }),
 
     // تحديث حالة طلب (للأدمن في بوابة الموظفين)

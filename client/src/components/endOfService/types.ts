@@ -8,7 +8,7 @@ import type {
   EndOfServiceDeductionItem,
   EndOfServiceDocumentData,
   EndOfServiceDocumentKind,
-} from '@shared/endOfService';
+} from "@shared/endOfService";
 
 /** مدخلات نموذج إنهاء الخدمة (create/update/preview) - التواريخ YYYY-MM-DD */
 export interface EosFormInput {
@@ -112,6 +112,6 @@ export interface EosDetail {
   canManage: boolean;
 }
 
-export type EosPaymentMethod = 'cash' | 'bank_transfer' | 'check';
+export type EosPaymentMethod = "cash" | "bank_transfer" | "check";
 
 export type { EndOfServiceDocumentKind };

@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 // توليد PDF يحتاج متصفحاً: نستبدل خطوة التحويل فقط ونُبقي تحميل الصور الحقيقي
 vi.mock("./voucherPdf", async importOriginal => {
   const actual = await importOriginal<typeof import("./voucherPdf")>();
-  return { ...actual, renderHtmlToPdf: vi.fn(async (html: string) => Buffer.from(html, "utf8")) };
+  return {
+    ...actual,
+    renderHtmlToPdf: vi.fn(async (html: string) => Buffer.from(html, "utf8")),
+  };
 });
 
 import { COMPANY_INFO, SIGNATURES } from "../shared/branding";
@@ -29,7 +32,11 @@ import {
   resolveVoucherAssets,
   type VoucherTemplateData,
 } from "../shared/voucherTemplate";
-import { endOfServiceFileName, generateEndOfServicePDF, renderEndOfServiceHtmlEmbedded } from "./endOfServicePdf";
+import {
+  endOfServiceFileName,
+  generateEndOfServicePDF,
+  renderEndOfServiceHtmlEmbedded,
+} from "./endOfServicePdf";
 import { loadVoucherAssets, renderHtmlToPdf } from "./voucherPdf";
 
 const ASSETS = {
@@ -50,10 +57,22 @@ const BASE_INPUT: EndOfServiceCalcInput = {
   otherAdditions: 300,
   otherDeductions: 200,
   advances: [
-    { id: 1, label: "سلفة طلب رقم REQ-2026-0142", amount: 1500, date: "2026-08-12" },
-    { id: 2, label: "سلفة طلب رقم REQ-2026-0201", amount: 750, date: "2026-09-20" },
+    {
+      id: 1,
+      label: "سلفة طلب رقم REQ-2026-0142",
+      amount: 1500,
+      date: "2026-08-12",
+    },
+    {
+      id: 2,
+      label: "سلفة طلب رقم REQ-2026-0201",
+      amount: 750,
+      date: "2026-09-20",
+    },
   ],
-  violations: [{ id: 7, label: "تأخر عن الدوام", amount: 150, date: "2026-10-05" }],
+  violations: [
+    { id: 7, label: "تأخر عن الدوام", amount: 150, date: "2026-10-05" },
+  ],
 };
 
 function calc(overrides: Partial<EndOfServiceCalcInput> = {}) {
@@ -62,7 +81,10 @@ function calc(overrides: Partial<EndOfServiceCalcInput> = {}) {
   return r.calculation;
 }
 
-function doc(overrides: Partial<EndOfServiceDocumentData> = {}, input: Partial<EndOfServiceCalcInput> = {}): EndOfServiceDocumentData {
+function doc(
+  overrides: Partial<EndOfServiceDocumentData> = {},
+  input: Partial<EndOfServiceCalcInput> = {}
+): EndOfServiceDocumentData {
   const merged = { ...BASE_INPUT, ...input };
   return {
     settlementNumber: "EOS-2026-0007",
@@ -91,15 +113,30 @@ function doc(overrides: Partial<EndOfServiceDocumentData> = {}, input: Partial<E
   };
 }
 
-const opts = (extra: EndOfServiceTemplateOptions = {}): EndOfServiceTemplateOptions => ({ assets: ASSETS, printedAt: PRINTED_AT, ...extra });
-const letter = (d: EndOfServiceDocumentData, extra?: EndOfServiceTemplateOptions) => renderEndOfServiceLetterHtml(d, opts(extra));
-const settlement = (d: EndOfServiceDocumentData, extra?: EndOfServiceTemplateOptions) => renderFinalSettlementHtml(d, opts(extra));
+const opts = (
+  extra: EndOfServiceTemplateOptions = {}
+): EndOfServiceTemplateOptions => ({
+  assets: ASSETS,
+  printedAt: PRINTED_AT,
+  ...extra,
+});
+const letter = (
+  d: EndOfServiceDocumentData,
+  extra?: EndOfServiceTemplateOptions
+) => renderEndOfServiceLetterHtml(d, opts(extra));
+const settlement = (
+  d: EndOfServiceDocumentData,
+  extra?: EndOfServiceTemplateOptions
+) => renderFinalSettlementHtml(d, opts(extra));
 
 /** النص المرئي لمطابقة الجمل الكاملة: الوسوم الكتلية فواصل، والوسوم السطرية تُحذف دون مسافة */
 function visibleText(html: string): string {
   return html
     .replace(/<style>[\s\S]*?<\/style>/g, " ")
-    .replace(/<\/?(?:div|p|li|ol|td|th|tr|table|thead|tbody|tfoot|section|header|footer|main|h1|h2|br|img)\b[^>]*>/g, " ")
+    .replace(
+      /<\/?(?:div|p|li|ol|td|th|tr|table|thead|tbody|tfoot|section|header|footer|main|h1|h2|br|img)\b[^>]*>/g,
+      " "
+    )
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
     .replace(/\s+/g, " ");
@@ -121,7 +158,11 @@ describe("arabicWeekdayName", () => {
 });
 
 describe("خطاب انتهاء العقد وعدم التجديد", () => {
-  const d = doc({ status: "approved", approvedByName: "عمر المطيري", approvedAt: "2026-10-02T09:15:00Z" });
+  const d = doc({
+    status: "approved",
+    approvedByName: "عمر المطيري",
+    approvedAt: "2026-10-02T09:15:00Z",
+  });
   const html = letter(d);
   const text = visibleText(html);
 
@@ -139,7 +180,14 @@ describe("خطاب انتهاء العقد وعدم التجديد", () => {
     expect(text).toContain("الرقم: EOS-2026-0007");
     expect(text).toContain("التاريخ: 01/10/2026م");
     expect(text).toContain("المكرم / محمد عبدالله القحطاني المحترم");
-    for (const value of ["EMP-0042", "سعودي", "1087654321", "مشرف صالون أول", "فرع العليا"]) expect(text).toContain(value);
+    for (const value of [
+      "EMP-0042",
+      "سعودي",
+      "1087654321",
+      "مشرف صالون أول",
+      "فرع العليا",
+    ])
+      expect(text).toContain(value);
     expect(text).toContain("رقم الهوية / الإقامة");
   });
 
@@ -152,15 +200,27 @@ describe("خطاب انتهاء العقد وعدم التجديد", () => {
     expect(text).toContain(
       "وبناءً عليه، يكون آخر يوم عمل لكم لدى المنشأة هو يوم السبت الموافق 31/10/2026م، وتنتهي العلاقة التعاقدية بانتهاء هذا اليوم."
     );
-    expect(text).toContain(`مكافأة نهاية الخدمة عن كامل مدة خدمتكم البالغة (${d.calculation.serviceText})`);
+    expect(text).toContain(
+      `مكافأة نهاية الخدمة عن كامل مدة خدمتكم البالغة (${d.calculation.serviceText})`
+    );
     expect(d.calculation.serviceText).toBe("7 سنوات و7 أشهر و22 يوماً");
-    expect(text).toContain("وذلك وفق المخالصة النهائية المرفقة وخلال المدة المحددة نظاماً.");
+    expect(text).toContain(
+      "وذلك وفق المخالصة النهائية المرفقة وخلال المدة المحددة نظاماً."
+    );
     expect(text).toContain("ونأمل منكم التكرم بما يلي قبل آخر يوم عمل:");
-    expect(text).toContain("تسليم جميع العُهد والممتلكات الخاصة بالمنشأة (الأجهزة، المفاتيح، البطاقات، المستندات) إلى الإدارة.");
+    expect(text).toContain(
+      "تسليم جميع العُهد والممتلكات الخاصة بالمنشأة (الأجهزة، المفاتيح، البطاقات، المستندات) إلى الإدارة."
+    );
     expect(text).toContain("استكمال إجراءات إخلاء الطرف مع الإدارة المختصة.");
-    expect(text).toContain("تسليم ما لديكم من أعمال ومهام قائمة إلى من تحدده الإدارة.");
-    expect(text).toContain("ويحق لكم الحصول على شهادة خدمة توضح مدة عملكم ومهنتكم وآخر أجر تقاضيتموه، وذلك عند طلبها.");
-    expect(text).toContain("وتتقدم إدارة المنشأة لكم بخالص الشكر والتقدير على ما بذلتموه من جهود خلال فترة عملكم، متمنين لكم دوام التوفيق والنجاح.");
+    expect(text).toContain(
+      "تسليم ما لديكم من أعمال ومهام قائمة إلى من تحدده الإدارة."
+    );
+    expect(text).toContain(
+      "ويحق لكم الحصول على شهادة خدمة توضح مدة عملكم ومهنتكم وآخر أجر تقاضيتموه، وذلك عند طلبها."
+    );
+    expect(text).toContain(
+      "وتتقدم إدارة المنشأة لكم بخالص الشكر والتقدير على ما بذلتموه من جهود خلال فترة عملكم، متمنين لكم دوام التوفيق والنجاح."
+    );
     expect(text).toContain("وتقبلوا خالص التحية والتقدير،،");
   });
 
@@ -169,12 +229,22 @@ describe("خطاب انتهاء العقد وعدم التجديد", () => {
     expect(text).toContain(SIGNATURES.manager.name);
     expect(text).toContain(SIGNATURES.supervisor.title);
     expect(text).toContain(SIGNATURES.supervisor.name);
-    expect(text).toContain("إقرار استلام: أقر أنا الموقع أدناه بأنني استلمت أصل هذا الإشعار وعلمت بما ورد فيه.");
+    expect(text).toContain(
+      "إقرار استلام: أقر أنا الموقع أدناه بأنني استلمت أصل هذا الإشعار وعلمت بما ورد فيه."
+    );
     expect(text).toMatch(/الاسم: محمد عبدالله القحطاني التوقيع: التاريخ:/);
   });
 
   it("hides empty employee details and drops the weekday for an invalid date", () => {
-    const html2 = letter(doc({ nationality: null, idNumber: "  ", position: "", branchName: undefined, lastWorkingDay: "2026-13-01" }));
+    const html2 = letter(
+      doc({
+        nationality: null,
+        idNumber: "  ",
+        position: "",
+        branchName: undefined,
+        lastWorkingDay: "2026-13-01",
+      })
+    );
     const text2 = visibleText(html2);
     expect(text2).toContain("الرقم الوظيفي EMP-0042");
     expect(text2).not.toContain("الجنسية");
@@ -186,14 +256,21 @@ describe("خطاب انتهاء العقد وعدم التجديد", () => {
 
   it("does not print the settlement figures or calculation warnings", () => {
     expect(html).not.toContain(formatVoucherAmount(d.calculation.netAmount));
-    for (const warning of calc({ annualLeaveDaysTaken: 0, lastPayrollMonth: { year: 2026, month: 10 } }).warnings) {
+    for (const warning of calc({
+      annualLeaveDaysTaken: 0,
+      lastPayrollMonth: { year: 2026, month: 10 },
+    }).warnings) {
       expect(html).not.toContain(warning);
     }
   });
 });
 
 describe("المخالصة النهائية", () => {
-  const d = doc({ status: "approved", approvedByName: "عمر المطيري", approvedAt: "2026-10-02T09:15:00Z" });
+  const d = doc({
+    status: "approved",
+    approvedByName: "عمر المطيري",
+    approvedAt: "2026-10-02T09:15:00Z",
+  });
   const c = d.calculation;
   const html = settlement(d);
   const text = visibleText(html);
@@ -209,8 +286,15 @@ describe("المخالصة النهائية", () => {
 
   it("lists the employee details and the service period", () => {
     for (const value of [
-      "محمد عبدالله القحطاني", "EMP-0042", "سعودي", "1087654321", "مشرف صالون أول", "فرع العليا",
-      "10/03/2019", "31/10/2026", "انتهاء مدة العقد وعدم التجديد",
+      "محمد عبدالله القحطاني",
+      "EMP-0042",
+      "سعودي",
+      "1087654321",
+      "مشرف صالون أول",
+      "فرع العليا",
+      "10/03/2019",
+      "31/10/2026",
+      "انتهاء مدة العقد وعدم التجديد",
     ]) {
       expect(text).toContain(value);
     }
@@ -221,32 +305,46 @@ describe("المخالصة النهائية", () => {
     expect(text).toContain("الأجر الأساسي 4,500.00");
     expect(text).toContain("البدلات الثابتة 1,250.00");
     expect(text).toContain("الأجر الشهري المعتمد 5,750.00");
-    expect(text).toContain(`أجر اليوم (الأجر ÷ 30) ${formatVoucherAmount(c.dailyWage)}`);
+    expect(text).toContain(
+      `أجر اليوم (الأجر ÷ 30) ${formatVoucherAmount(c.dailyWage)}`
+    );
   });
 
   it("explains each entitlement and totals them", () => {
     expect(text).toContain("مكافأة نهاية الخدمة (المادة 84 من نظام العمل)");
     // المدة بالسنوات والأشهر والأيام: أجر شهر × (2 + 7/12 + 22/365) يطابق المبلغ المطبوع
     expect(text).toContain("نصف أجر شهر × 5 سنوات = 14,375.00");
-    expect(text).toContain(`أجر شهر × سنتان و7 أشهر و22 يوماً = ${formatVoucherAmount(c.eosAfterFiveYears)}`);
-    expect(Math.round(5750 * (2 + 7 / 12 + 22 / 365) * 100) / 100).toBe(c.eosAfterFiveYears);
+    expect(text).toContain(
+      `أجر شهر × سنتان و7 أشهر و22 يوماً = ${formatVoucherAmount(c.eosAfterFiveYears)}`
+    );
+    expect(Math.round(5750 * (2 + 7 / 12 + 22 / 365) * 100) / 100).toBe(
+      c.eosAfterFiveYears
+    );
     expect(text).toContain(formatVoucherAmount(c.eosAward));
     expect(text).toContain("مقابل الإجازة السنوية غير المستخدمة (المادة 111)");
-    expect(text).toContain(`${String(c.leaveBalanceDays)} يوم × (5,750.00 ÷ 30)`);
+    expect(text).toContain(
+      `${String(c.leaveBalanceDays)} يوم × (5,750.00 ÷ 30)`
+    );
     expect(text).toContain(`(المستحق ${c.accruedLeaveDays} − المستخدم 96)`);
     expect(text).toContain("الأجر المستحق حتى آخر يوم عمل");
     expect(text).toContain(`30 يوم × (5,750.00 ÷ 30)`);
     expect(text).toContain("من 01/10/2026 حتى 31/10/2026");
     expect(text).toContain("مستحقات أخرى بدل تذاكر سفر 300.00");
-    expect(text).toContain(`إجمالي المستحقات ${formatVoucherAmount(c.totalEntitlements)}`);
+    expect(text).toContain(
+      `إجمالي المستحقات ${formatVoucherAmount(c.totalEntitlements)}`
+    );
   });
 
   it("lists every deduction and totals them", () => {
-    expect(text).toContain("سلفة سلفة طلب رقم REQ-2026-0142 12/08/2026 1,500.00");
+    expect(text).toContain(
+      "سلفة سلفة طلب رقم REQ-2026-0142 12/08/2026 1,500.00"
+    );
     expect(text).toContain("سلفة سلفة طلب رقم REQ-2026-0201 20/09/2026 750.00");
     expect(text).toContain("مخالفة تأخر عن الدوام 05/10/2026 150.00");
     expect(text).toContain("خصومات أخرى عهدة غير مسلمة 200.00");
-    expect(text).toContain(`إجمالي الخصومات ${formatVoucherAmount(c.totalDeductions)}`);
+    expect(text).toContain(
+      `إجمالي الخصومات ${formatVoucherAmount(c.totalDeductions)}`
+    );
     expect(text).not.toContain("لا توجد خصومات");
   });
 
@@ -272,7 +370,10 @@ describe("المخالصة النهائية", () => {
   });
 
   it("shows one 'no deductions' row and hides optional rows when they are zero", () => {
-    const d2 = doc({}, { advances: [], violations: [], otherDeductions: 0, otherAdditions: 0 });
+    const d2 = doc(
+      {},
+      { advances: [], violations: [], otherDeductions: 0, otherAdditions: 0 }
+    );
     const t2 = visibleText(settlement(d2));
     expect(t2).toContain("لا توجد خصومات");
     expect(t2).toContain("إجمالي الخصومات 0.00");
@@ -301,7 +402,10 @@ describe("المخالصة النهائية", () => {
   });
 
   it("uses collection wording when a negative net is marked paid", () => {
-    const d2 = doc({ status: "paid", paymentMethod: "cash", paidAt: "2026-11-02T09:00:00Z" }, { otherDeductions: 90000 });
+    const d2 = doc(
+      { status: "paid", paymentMethod: "cash", paidAt: "2026-11-02T09:00:00Z" },
+      { otherDeductions: 90000 }
+    );
     const t2 = visibleText(settlement(d2));
     expect(t2).toContain("تم التحصيل");
     expect(t2).toContain("طريقة التحصيل: نقداً");
@@ -313,18 +417,29 @@ describe("المخالصة النهائية", () => {
   it("prints years with decimals and the Article 116 note when unpaid leave is excluded", () => {
     const d2 = doc({}, { excludedServiceDays: 70 });
     const t2 = visibleText(settlement(d2));
-    expect(t2).toContain("بعد استبعاد 70 يوم إجازة بدون أجر تزيد على 20 يوماً - المادة 116");
-    expect(t2).toContain(`أجر شهر × ${d2.calculation.awardYears > 5 ? (d2.calculation.awardYears - 5).toFixed(4) : "0"} سنة`);
+    expect(t2).toContain(
+      "بعد استبعاد 70 يوم إجازة بدون أجر تزيد على 20 يوماً - المادة 116"
+    );
+    expect(t2).toContain(
+      `أجر شهر × ${d2.calculation.awardYears > 5 ? (d2.calculation.awardYears - 5).toFixed(4) : "0"} سنة`
+    );
   });
 
   it("uses the 'owed by the employee' wording when deductions exceed entitlements", () => {
-    const d2 = doc({ status: "approved", idNumber: null }, { otherDeductions: 90000 });
+    const d2 = doc(
+      { status: "approved", idNumber: null },
+      { otherDeductions: 90000 }
+    );
     expect(d2.calculation.netAmount).toBeLessThan(0);
     const t2 = visibleText(settlement(d2));
     expect(t2).toContain("صافي المستحق على الموظف");
     expect(t2).not.toContain("صافي المستحق للموظف");
-    expect(t2).toContain(formatVoucherAmount(Math.abs(d2.calculation.netAmount)));
-    expect(t2).not.toContain(`-${formatVoucherAmount(Math.abs(d2.calculation.netAmount))}`);
+    expect(t2).toContain(
+      formatVoucherAmount(Math.abs(d2.calculation.netAmount))
+    );
+    expect(t2).not.toContain(
+      `-${formatVoucherAmount(Math.abs(d2.calculation.netAmount))}`
+    );
     expect(t2).toContain(
       `أقر أنا الموقع أدناه / محمد عبدالله القحطاني، بأن ذمتي مشغولة للمنشأة بمبلغ وقدره (${formatVoucherAmount(Math.abs(d2.calculation.netAmount))} ريال سعودي) ${d2.calculation.netAmountWords} بعد تسوية جميع مستحقاتي، وأتعهد بسداده.`
     );
@@ -333,7 +448,16 @@ describe("المخالصة النهائية", () => {
   });
 
   it("prints the payment method and reference only once paid", () => {
-    const paid = visibleText(settlement(doc({ status: "paid", paymentMethod: "bank_transfer", paymentReference: "TRX-998", paidAt: "2026-11-03T10:00:00Z" })));
+    const paid = visibleText(
+      settlement(
+        doc({
+          status: "paid",
+          paymentMethod: "bank_transfer",
+          paymentReference: "TRX-998",
+          paidAt: "2026-11-03T10:00:00Z",
+        })
+      )
+    );
     expect(paid).toContain("طريقة الصرف: تحويل بنكي");
     expect(paid).toContain("المرجع: TRX-998");
     expect(paid).toContain("تم الصرف");
@@ -341,10 +465,18 @@ describe("المخالصة النهائية", () => {
   });
 
   it("never prints calculation warnings", () => {
-    const d2 = doc({}, { annualLeaveDaysTaken: 0, lastPayrollMonth: { year: 2026, month: 10 }, otherDeductions: 90000 });
+    const d2 = doc(
+      {},
+      {
+        annualLeaveDaysTaken: 0,
+        lastPayrollMonth: { year: 2026, month: 10 },
+        otherDeductions: 90000,
+      }
+    );
     expect(d2.calculation.warnings.length).toBe(3);
     const html2 = settlement(d2) + letter(d2);
-    for (const warning of d2.calculation.warnings) expect(html2).not.toContain(warning);
+    for (const warning of d2.calculation.warnings)
+      expect(html2).not.toContain(warning);
   });
 });
 
@@ -378,7 +510,13 @@ describe("التوقيعات والختم والعلامة المائية حسب
     }
 
     it(`${kind}: cancelled shows the cancelled watermark and the reason, without signatures`, () => {
-      const html = render(doc({ status: "cancelled", cancellationReason: "تم تجديد العقد", cancelledByName: "عمر المطيري" }));
+      const html = render(
+        doc({
+          status: "cancelled",
+          cancellationReason: "تم تجديد العقد",
+          cancelledByName: "عمر المطيري",
+        })
+      );
       expect(html).toContain('<div class="watermark cancelled">ملغاة</div>');
       expect(visibleText(html)).toContain("سبب الإلغاء: تم تجديد العقد");
       expect(html).toContain("عمر المطيري");
@@ -389,17 +527,37 @@ describe("التوقيعات والختم والعلامة المائية حسب
 
     it(`${kind}: resolves default asset paths, signing only after approval`, () => {
       const base = "https://erp.example.com/";
-      const draft = renderEndOfServiceDocumentHtml(kind, doc({ status: "draft" }), { assetBaseUrl: base });
-      const approved = renderEndOfServiceDocumentHtml(kind, doc({ status: "approved" }), { assetBaseUrl: base });
+      const draft = renderEndOfServiceDocumentHtml(
+        kind,
+        doc({ status: "draft" }),
+        { assetBaseUrl: base }
+      );
+      const approved = renderEndOfServiceDocumentHtml(
+        kind,
+        doc({ status: "approved" }),
+        { assetBaseUrl: base }
+      );
       expect(draft).not.toContain(SIGNATURES.manager.image);
       expect(draft).not.toContain(SIGNATURES.supervisor.image);
       expect(draft).not.toContain(SIGNATURES.stamp.image);
-      expect(approved).toContain(`https://erp.example.com${SIGNATURES.manager.image}`);
-      expect(approved).toContain(`https://erp.example.com${SIGNATURES.supervisor.image}`);
-      expect(approved).toContain(`https://erp.example.com${SIGNATURES.stamp.image}`);
+      expect(approved).toContain(
+        `https://erp.example.com${SIGNATURES.manager.image}`
+      );
+      expect(approved).toContain(
+        `https://erp.example.com${SIGNATURES.supervisor.image}`
+      );
+      expect(approved).toContain(
+        `https://erp.example.com${SIGNATURES.stamp.image}`
+      );
       expect(approved).toContain(`https://erp.example.com${COMPANY_INFO.logo}`);
       // الخط يُعرّف بوزن عادي حتى يظهر الخط العريض العربي
-      expect(approved).toContain(printFontFaceCss(`https://erp.example.com${PRINT_FONT_PATH}`, "EosArabic", "normal"));
+      expect(approved).toContain(
+        printFontFaceCss(
+          `https://erp.example.com${PRINT_FONT_PATH}`,
+          "EosArabic",
+          "normal"
+        )
+      );
     });
   }
 });
@@ -433,7 +591,15 @@ describe("التهريب وبيانات الشركة", () => {
   for (const [kind, html] of [
     ["letter", letter(d)],
     ["settlement", settlement(d)],
-    ["cancelled settlement", settlement({ ...d, status: "cancelled", cancellationReason: evil, cancelledByName: evilImg })],
+    [
+      "cancelled settlement",
+      settlement({
+        ...d,
+        status: "cancelled",
+        cancellationReason: evil,
+        cancelledByName: evilImg,
+      }),
+    ],
   ] as const) {
     it(`${kind}: escapes every user-provided value`, () => {
       expect(html).not.toContain("<script");
@@ -443,7 +609,9 @@ describe("التهريب وبيانات الشركة", () => {
   }
 
   it("prints user notes on the settlement (escaped)", () => {
-    expect(visibleText(settlement(d))).toContain("ملاحظات: ملاحظة &lt;script&gt;");
+    expect(visibleText(settlement(d))).toContain(
+      "ملاحظات: ملاحظة &lt;script&gt;"
+    );
   });
 
   it("hides placeholder company values and shows real ones", () => {
@@ -453,8 +621,16 @@ describe("التهريب وبيانات الشركة", () => {
       expect(html).toContain(COMPANY_INFO.email);
       expect(html).toContain(COMPANY_INFO.subtitle);
     }
-    const company = { phone: "+966 11 222 3333", cr: "س.ت: 1010101010", vat: "الرقم الضريبي: 300000000000003", email: "XXXX@example.com" };
-    for (const html of [letter(doc(), { company }), settlement(doc(), { company })]) {
+    const company = {
+      phone: "+966 11 222 3333",
+      cr: "س.ت: 1010101010",
+      vat: "الرقم الضريبي: 300000000000003",
+      email: "XXXX@example.com",
+    };
+    for (const html of [
+      letter(doc(), { company }),
+      settlement(doc(), { company }),
+    ]) {
       expect(html).toContain("+966 11 222 3333");
       expect(html).toContain("س.ت: 1010101010");
       expect(html).toContain("الرقم الضريبي: 300000000000003");
@@ -464,8 +640,12 @@ describe("التهريب وبيانات الشركة", () => {
 
   it("uses an overridden company name in the letter text and the declaration", () => {
     const company = { nameAr: "مؤسسة الاختبار", name: "Test Co" };
-    expect(visibleText(letter(doc(), { company }))).toContain("تود مؤسسة الاختبار إحاطتكم علماً");
-    expect(visibleText(settlement(doc(), { company }))).toContain("بأنني استلمت من مؤسسة الاختبار كامل مستحقاتي");
+    expect(visibleText(letter(doc(), { company }))).toContain(
+      "تود مؤسسة الاختبار إحاطتكم علماً"
+    );
+    expect(visibleText(settlement(doc(), { company }))).toContain(
+      "بأنني استلمت من مؤسسة الاختبار كامل مستحقاتي"
+    );
   });
 });
 
@@ -473,7 +653,9 @@ describe("خيارات المستند", () => {
   it("dispatches on the document kind", () => {
     const d = doc();
     expect(renderEndOfServiceDocumentHtml("letter", d, opts())).toBe(letter(d));
-    expect(renderEndOfServiceDocumentHtml("settlement", d, opts())).toBe(settlement(d));
+    expect(renderEndOfServiceDocumentHtml("settlement", d, opts())).toBe(
+      settlement(d)
+    );
   });
 
   it("adds the auto-print script only on request", () => {
@@ -495,15 +677,27 @@ describe("توليد PDF لإنهاء الخدمة على الخادم", () => {
   it("embeds the real images and signs only after approval", () => {
     const stamp = loadVoucherAssets().stamp as string;
     expect(stamp).toMatch(/^data:image\//);
-    expect(renderEndOfServiceHtmlEmbedded(doc({ status: "approved" }), "letter")).toContain(stamp);
-    expect(renderEndOfServiceHtmlEmbedded(doc({ status: "paid" }), "settlement")).toContain(stamp);
-    expect(renderEndOfServiceHtmlEmbedded(doc({ status: "draft" }), "letter")).not.toContain(stamp);
-    expect(renderEndOfServiceHtmlEmbedded(doc({ status: "draft" }), "settlement")).not.toContain(stamp);
+    expect(
+      renderEndOfServiceHtmlEmbedded(doc({ status: "approved" }), "letter")
+    ).toContain(stamp);
+    expect(
+      renderEndOfServiceHtmlEmbedded(doc({ status: "paid" }), "settlement")
+    ).toContain(stamp);
+    expect(
+      renderEndOfServiceHtmlEmbedded(doc({ status: "draft" }), "letter")
+    ).not.toContain(stamp);
+    expect(
+      renderEndOfServiceHtmlEmbedded(doc({ status: "draft" }), "settlement")
+    ).not.toContain(stamp);
   });
 
   it("renders the requested document through the shared PDF renderer", async () => {
-    const letterPdf = (await generateEndOfServicePDF(doc({ status: "approved" }), "letter")).toString("utf8");
-    const settlementPdf = (await generateEndOfServicePDF(doc({ status: "approved" }), "settlement")).toString("utf8");
+    const letterPdf = (
+      await generateEndOfServicePDF(doc({ status: "approved" }), "letter")
+    ).toString("utf8");
+    const settlementPdf = (
+      await generateEndOfServicePDF(doc({ status: "approved" }), "settlement")
+    ).toString("utf8");
     expect(vi.mocked(renderHtmlToPdf)).toHaveBeenCalledTimes(2);
     expect(letterPdf).toContain("إشعار انتهاء عقد العمل وعدم التجديد");
     expect(letterPdf).toContain(loadVoucherAssets().managerSignature as string);
@@ -512,8 +706,12 @@ describe("توليد PDF لإنهاء الخدمة على الخادم", () => {
   });
 
   it("builds safe file names", () => {
-    expect(endOfServiceFileName({ settlementNumber: "EOS-2026-0001" }, "letter")).toBe("end-of-service-letter-EOS-2026-0001.pdf");
-    expect(endOfServiceFileName({ settlementNumber: "../EOS 1" }, "settlement")).toBe("final-settlement-___EOS_1.pdf");
+    expect(
+      endOfServiceFileName({ settlementNumber: "EOS-2026-0001" }, "letter")
+    ).toBe("end-of-service-letter-EOS-2026-0001.pdf");
+    expect(
+      endOfServiceFileName({ settlementNumber: "../EOS 1" }, "settlement")
+    ).toBe("final-settlement-___EOS_1.pdf");
   });
 });
 
@@ -531,17 +729,29 @@ describe("قالب السندات بعد مشاركة الأدوات المسا�
   };
 
   it("keeps the voucher's assets, bilingual labels and print script, with a regular-weight font face", () => {
-    const html = renderVoucherHtml(voucher, { assetBaseUrl: "https://erp.example.com/", autoPrint: true, printedAt: PRINTED_AT });
+    const html = renderVoucherHtml(voucher, {
+      assetBaseUrl: "https://erp.example.com/",
+      autoPrint: true,
+      printedAt: PRINTED_AT,
+    });
     // الخط ملف عادي واحد: يُعلن بوزن عادي حتى يُركّب المتصفح الخط العريض (لا يظهر العريض مع "100 900")
     expect(html).toContain(
       "@font-face { font-family: 'VoucherArabic'; src: url('https://erp.example.com/fonts/NotoSansArabic-Regular.ttf') format('truetype'); font-weight: normal; }"
     );
-    expect(html).toContain('src="https://erp.example.com/signatures/company_stamp.png"');
-    expect(html).toContain('src="https://erp.example.com/signatures/manager_signature.png"');
-    expect(html).toContain('<span class="ar">التاريخ</span><span class="sep"> / </span><span class="en">Date</span>');
+    expect(html).toContain(
+      'src="https://erp.example.com/signatures/company_stamp.png"'
+    );
+    expect(html).toContain(
+      'src="https://erp.example.com/signatures/manager_signature.png"'
+    );
+    expect(html).toContain(
+      '<span class="ar">التاريخ</span><span class="sep"> / </span><span class="en">Date</span>'
+    );
     expect(html).toContain(bilingualHtml("التاريخ", "Date"));
     expect(html).toContain(autoPrintScript());
-    expect(renderVoucherHtml(voucher, { printedAt: PRINTED_AT })).not.toContain("@font-face");
+    expect(renderVoucherHtml(voucher, { printedAt: PRINTED_AT })).not.toContain(
+      "@font-face"
+    );
   });
 
   it("resolves explicit assets before public paths", () => {
@@ -552,7 +762,9 @@ describe("قالب السندات بعد مشاركة الأدوات المسا�
       stamp: "S",
       font: undefined,
     });
-    expect(resolveVoucherAssets({ assetBaseUrl: "https://x.test" }).font).toBe(`https://x.test${PRINT_FONT_PATH}`);
+    expect(resolveVoucherAssets({ assetBaseUrl: "https://x.test" }).font).toBe(
+      `https://x.test${PRINT_FONT_PATH}`
+    );
     expect(printFontFaceCss(undefined)).toBe("");
     expect(printFontFaceCss("a'b")).toContain("url('a%27b')");
   });
