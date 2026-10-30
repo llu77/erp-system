@@ -17,6 +17,7 @@ import {
   settlementToForm,
   storedCalculation,
   sumAnnualLeaveDays,
+  annualLeaveDaysTaken,
   toDocumentData,
   toListRow,
   vacationRowDays,
@@ -176,6 +177,13 @@ describe("annual leave taken", () => {
     ];
     expect(sumAnnualLeaveDays(rows)).toBe(40.5);
     expect(sumAnnualLeaveDays(rows, "2026-10-31")).toBe(30.5);
+  });
+
+  it("takes the larger of approved requests and recorded balances, never their sum", () => {
+    expect(annualLeaveDaysTaken(30, 21)).toBe(30);
+    expect(annualLeaveDaysTaken(10, "63")).toBe(63);
+    expect(annualLeaveDaysTaken(12, null)).toBe(12);
+    expect(annualLeaveDaysTaken(12, -5)).toBe(12);
   });
 });
 

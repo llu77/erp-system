@@ -437,7 +437,7 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
   const total = roundMoney(v.totalAmount);
   const accent = type === "receipt" ? "#1f3a5f" : "#7a1f1f";
   const accentSoft = type === "receipt" ? "#eef3f9" : "#fbf0f0";
-  const fontFace = printFontFaceCss(assets.font);
+  const fontFace = printFontFaceCss(assets.font, "VoucherArabic", "normal");
 
   const watermark = status === "cancelled"
     ? `<div class="watermark cancelled">ملغي / CANCELLED</div>`

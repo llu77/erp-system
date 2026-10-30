@@ -17,6 +17,7 @@ import {
   employeeRequestLogs,
   employeeRequests,
   employeeSalarySettings,
+  employeeLeaveBalance,
   employeeViolations,
   endOfServiceSettlements,
   payrollDetails,
@@ -284,6 +285,15 @@ export function sumAnnualLeaveDays(rows: VacationRow[], untilDate?: string | nul
     total += vacationRowDays(row);
   }
   return Math.round(total * 100) / 100;
+}
+
+/**
+ * الإجازات السنوية المستخدمة: الأكبر بين طلبات الإجازة المعتمدة وأرصدة الإجازات السنوية المسجلة.
+ * المصدران قد يسجلان نفس الإجازة، فلا يُجمعان حتى لا تُخصم مرتين
+ */
+export function annualLeaveDaysTaken(fromRequests: number, fromBalances: unknown): number {
+  const balances = Number(fromBalances);
+  return Math.max(fromRequests, Number.isFinite(balances) && balances > 0 ? balances : 0);
 }
 
 /** تحقق التواريخ قبل الحساب */
@@ -570,7 +580,7 @@ async function loadEmployeeContext(
 ): Promise<EmployeeContext> {
   const employee = options.employee ?? (await loadEmployee(q, employeeId, !!options.lock));
 
-  const [branchName, settingsRows, vacationRows, lastPayroll, advanceRows, violationRows] = await Promise.all([
+  const [branchName, settingsRows, vacationRows, lastPayroll, advanceRows, violationRows, balanceRows] = await Promise.all([
     loadBranchName(q, employee.branchId ?? null),
     q.select().from(employeeSalarySettings).where(eq(employeeSalarySettings.employeeId, employeeId)).limit(1),
     q
@@ -625,6 +635,11 @@ async function loadEmployeeContext(
         )
       )
       .orderBy(employeeViolations.violationDate, employeeViolations.id),
+    // أرصدة الإجازات السنوية المسجلة لكل سنة (قد تشمل سنوات قبل استخدام النظام)
+    q
+      .select({ usedDays: sql<number>`COALESCE(SUM(${employeeLeaveBalance.usedDays}), 0)` })
+      .from(employeeLeaveBalance)
+      .where(and(eq(employeeLeaveBalance.employeeId, employeeId), eq(employeeLeaveBalance.leaveType, "annual"))),
   ]);
 
   const advances: EndOfServiceDeductionItem[] = [];
@@ -644,7 +659,7 @@ async function loadEmployeeContext(
     employee,
     branchName,
     wage: buildWageDefaults(settingsRows[0]),
-    annualLeaveDaysTaken: sumAnnualLeaveDays(vacationRows, options.untilDate),
+    annualLeaveDaysTaken: annualLeaveDaysTaken(sumAnnualLeaveDays(vacationRows, options.untilDate), balanceRows[0]?.usedDays),
     lastPayroll,
     advances,
     violations,

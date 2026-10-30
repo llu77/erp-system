@@ -511,10 +511,11 @@ describe("قالب السندات بعد مشاركة الأدوات المسا�
     createdByName: "أحمد",
   };
 
-  it("keeps the voucher's font face, assets, bilingual labels and print script unchanged", () => {
+  it("keeps the voucher's assets, bilingual labels and print script, with a regular-weight font face", () => {
     const html = renderVoucherHtml(voucher, { assetBaseUrl: "https://erp.example.com/", autoPrint: true, printedAt: PRINTED_AT });
+    // الخط ملف عادي واحد: يُعلن بوزن عادي حتى يُركّب المتصفح الخط العريض (لا يظهر العريض مع "100 900")
     expect(html).toContain(
-      "@font-face { font-family: 'VoucherArabic'; src: url('https://erp.example.com/fonts/NotoSansArabic-Regular.ttf') format('truetype'); font-weight: 100 900; }"
+      "@font-face { font-family: 'VoucherArabic'; src: url('https://erp.example.com/fonts/NotoSansArabic-Regular.ttf') format('truetype'); font-weight: normal; }"
     );
     expect(html).toContain('src="https://erp.example.com/signatures/company_stamp.png"');
     expect(html).toContain('src="https://erp.example.com/signatures/manager_signature.png"');
