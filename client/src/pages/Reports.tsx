@@ -114,7 +114,10 @@ export default function ReportsPage() {
     });
     
     const totalExpenses = Object.values(expensesByCategory).reduce((a, b) => a + b, 0);
-    const totalPayroll = filteredPayrolls.reduce((sum: number, p: any) => sum + parseFloat(p.totalNet || 0), 0);
+    // تكلفة الرواتب = المسيرات المعتمدة والمدفوعة فقط
+    const totalPayroll = filteredPayrolls
+      .filter((p: any) => p.status === 'approved' || p.status === 'paid')
+      .reduce((sum: number, p: any) => sum + (parseFloat(p.totalNetSalary) || 0), 0);
     
     const grossProfit = totalSales - totalPurchases;
     const operatingExpenses = totalExpenses + totalPayroll;

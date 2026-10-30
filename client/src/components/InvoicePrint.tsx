@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { GROUP_ESTABLISHMENT } from "@shared/branding";
 
 interface InvoiceItem {
   id: number;
@@ -108,13 +109,15 @@ const InvoicePrint = forwardRef<HTMLDivElement, InvoicePrintProps>(
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "30px", borderBottom: "3px solid #3b82f6", paddingBottom: "20px" }}>
           {/* معلومات الشركة */}
           <div style={{ flex: 1 }}>
-            <img 
-              src={company.logo || "/symbol-ai-logo.png"} 
-              alt="شعار الشركة" 
-              style={{ height: "70px", marginBottom: "10px", objectFit: "contain" }} 
-            />
+            {company.logo && (
+              <img
+                src={company.logo}
+                alt="شعار الشركة"
+                style={{ height: "70px", marginBottom: "10px", objectFit: "contain" }}
+              />
+            )}
             <h1 style={{ fontSize: "24px", fontWeight: "bold", color: "#1e40af", margin: "0 0 10px 0" }}>
-              {company.name || "Symbol AI"}
+              {company.name || GROUP_ESTABLISHMENT.nameAr}
             </h1>
             <p style={{ margin: "5px 0", color: "#4b5563" }}>{company.address}</p>
             <p style={{ margin: "5px 0", color: "#4b5563" }}>هاتف: {company.phone}</p>
@@ -349,9 +352,6 @@ const InvoicePrint = forwardRef<HTMLDivElement, InvoicePrintProps>(
         }}>
           <p style={{ margin: "5px 0" }}>شكراً لتعاملكم معنا</p>
           <p style={{ margin: "5px 0" }}>هذه الفاتورة صادرة إلكترونياً ولا تحتاج إلى توقيع أو ختم</p>
-          <p style={{ margin: "10px 0 0 0", color: "#9ca3af" }}>
-            تم إنشاء هذه الفاتورة بواسطة Symbol AI
-          </p>
         </div>
       </div>
     );

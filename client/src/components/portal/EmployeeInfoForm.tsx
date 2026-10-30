@@ -24,15 +24,18 @@ import {
   Eye,
   Upload
 } from 'lucide-react';
+import { toVoucherDateString } from '@shared/vouchers';
+import { daysUntil, errorMessage, formatPortalDate, shouldRetryQuery } from '@/lib/portal/portalUi';
+import { PortalQueryError } from './PortalQueryState';
 
 interface EmployeeInfoFormProps {
-  employeeId: number;
   onSuccess?: () => void;
 }
 
 type DocumentType = 'iqama' | 'healthCert' | 'contract';
 
-export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProps) {
+/** وثائق الموظف المسجل في البوابة (الهوية من جلسة الخادم) */
+export function EmployeeInfoForm({ onSuccess }: EmployeeInfoFormProps) {
   const [iqamaNumber, setIqamaNumber] = useState('');
   const [iqamaExpiryDate, setIqamaExpiryDate] = useState('');
   const [healthCertExpiryDate, setHealthCertExpiryDate] = useState('');
@@ -53,16 +56,22 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
   const contractInputRef = useRef<HTMLInputElement>(null);
 
   // التحقق مما إذا كان الموظف قد سجل معلوماته
-  const { data: submissionStatus, isLoading: checkingStatus } = trpc.employeePortal.hasSubmittedInfo.useQuery(
-    { employeeId },
-    { retry: false }
-  );
+  const {
+    data: submissionStatus,
+    isLoading: checkingStatus,
+    error: statusError,
+    refetch: refetchStatus,
+    isFetching: fetchingStatus,
+  } = trpc.employeePortal.hasSubmittedInfo.useQuery(undefined, { retry: shouldRetryQuery });
 
   // جلب معلومات الموظف الحالية
-  const { data: documentInfo, isLoading: loadingInfo, refetch } = trpc.employeePortal.getDocumentInfo.useQuery(
-    { employeeId },
-    { retry: false }
-  );
+  const {
+    data: documentInfo,
+    isLoading: loadingInfo,
+    error: infoError,
+    refetch,
+    isFetching: fetchingInfo,
+  } = trpc.employeePortal.getDocumentInfo.useQuery(undefined, { retry: shouldRetryQuery });
 
   // تسجيل المعلومات
   // حالة وضع التعديل
@@ -76,7 +85,7 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
       onSuccess?.();
     },
     onError: (error) => {
-      toast.error(error.message || 'فشل في تسجيل المعلومات');
+      toast.error(errorMessage(error, 'فشل في تسجيل المعلومات'));
     },
   });
 
@@ -100,7 +109,7 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
       refetch();
     },
     onError: (error) => {
-      toast.error(error.message || 'فشل في رفع الصورة');
+      toast.error(errorMessage(error, 'فشل في رفع الصورة'));
       setUploadingType(null);
     },
   });
@@ -123,7 +132,7 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
       refetch();
     },
     onError: (error) => {
-      toast.error(error.message || 'فشل في حذف الصورة');
+      toast.error(errorMessage(error, 'فشل في حذف الصورة'));
     },
   });
 
@@ -131,15 +140,10 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
   useEffect(() => {
     if (documentInfo) {
       if (documentInfo.iqamaNumber) setIqamaNumber(documentInfo.iqamaNumber);
-      if (documentInfo.iqamaExpiryDate) {
-        setIqamaExpiryDate(new Date(documentInfo.iqamaExpiryDate).toISOString().split('T')[0]);
-      }
-      if (documentInfo.healthCertExpiryDate) {
-        setHealthCertExpiryDate(new Date(documentInfo.healthCertExpiryDate).toISOString().split('T')[0]);
-      }
-      if (documentInfo.contractExpiryDate) {
-        setContractExpiryDate(new Date(documentInfo.contractExpiryDate).toISOString().split('T')[0]);
-      }
+      // يوم التقويم في الرياض (toISOString قد يُرجع اليوم السابق)
+      setIqamaExpiryDate(toVoucherDateString(documentInfo.iqamaExpiryDate) ?? '');
+      setHealthCertExpiryDate(toVoucherDateString(documentInfo.healthCertExpiryDate) ?? '');
+      setContractExpiryDate(toVoucherDateString(documentInfo.contractExpiryDate) ?? '');
       // تحميل روابط الصور
       if (documentInfo.iqamaImageUrl) setIqamaImage(documentInfo.iqamaImageUrl);
       if (documentInfo.healthCertImageUrl) setHealthCertImage(documentInfo.healthCertImageUrl);
@@ -175,7 +179,6 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
       }
       
       uploadMutation.mutate({
-        employeeId,
         documentType: docType,
         imageData: base64,
         fileName: file.name,
@@ -192,7 +195,7 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
 
   const handleDeleteImage = (docType: DocumentType) => {
     if (confirm('هل أنت متأكد من حذف هذه الصورة؟')) {
-      deleteMutation.mutate({ employeeId, documentType: docType });
+      deleteMutation.mutate({ documentType: docType });
     }
   };
 
@@ -205,30 +208,21 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
       return;
     }
 
+    // التواريخ تُرسل كأيام تقويم (YYYY-MM-DD)
     submitMutation.mutate({
-      employeeId,
       iqamaNumber: iqamaNumber || undefined,
-      iqamaExpiryDate: iqamaExpiryDate ? new Date(iqamaExpiryDate) : undefined,
-      healthCertExpiryDate: healthCertExpiryDate ? new Date(healthCertExpiryDate) : undefined,
-      contractExpiryDate: contractExpiryDate ? new Date(contractExpiryDate) : undefined,
+      iqamaExpiryDate: iqamaExpiryDate || undefined,
+      healthCertExpiryDate: healthCertExpiryDate || undefined,
+      contractExpiryDate: contractExpiryDate || undefined,
     });
   };
 
-  const formatDate = (date: string | Date | null) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('ar-SA', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
+  const formatDate = (date: string | Date | null) => formatPortalDate(date);
 
-  // حساب حالة انتهاء الصلاحية
+  // حساب حالة انتهاء الصلاحية (بأيام تقويم الرياض)
   const getExpiryStatus = (date: string | Date | null) => {
-    if (!date) return null;
-    const expiryDate = new Date(date);
-    const today = new Date();
-    const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const daysUntilExpiry = daysUntil(date);
+    if (daysUntilExpiry === null) return null;
     
     if (daysUntilExpiry < 0) {
       return { status: 'expired', label: 'منتهية', color: 'bg-red-500/20 text-red-400 border-red-500/30' };
@@ -344,6 +338,20 @@ export function EmployeeInfoForm({ employeeId, onSuccess }: EmployeeInfoFormProp
       </div>
     );
   };
+
+  if (statusError || infoError) {
+    return (
+      <PortalQueryError
+        error={statusError ?? infoError}
+        title="تعذر تحميل بيانات الوثائق"
+        onRetry={() => {
+          refetchStatus();
+          refetch();
+        }}
+        isRetrying={fetchingStatus || fetchingInfo}
+      />
+    );
+  }
 
   if (checkingStatus || loadingInfo) {
     return (

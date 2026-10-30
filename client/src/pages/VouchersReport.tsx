@@ -11,6 +11,16 @@ import { trpc } from '@/lib/trpc';
 import { FileText, Download, Filter, Calendar, Building2, Receipt, TrendingUp, Clock, CheckCircle, XCircle, FileCheck, Eye, Printer } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { getVoucherStatusLabel } from '@shared/vouchers';
+
+// تاريخ YYYY-MM-DD من أجزاء التاريخ المحلية (toISOString يُزيح اليوم في توقيت +3)
+const toLocalDateInput = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const VOUCHER_TYPE_LABELS: Record<string, string> = {
+  receipt: 'سند قبض',
+  payment: 'سند صرف',
+};
 
 export default function VouchersReport() {
   // الحصول على أول وآخر يوم في الشهر الحالي
@@ -23,6 +33,8 @@ export default function VouchersReport() {
 
   // جلب بيانات المستخدم الحالي
   const { data: user } = trpc.auth.me.useQuery();
+  // الاعتماد للمدير والمسؤول فقط
+  const isApprover = user?.role === 'admin' || user?.role === 'manager';
 
   // mutation لتحديث حالة السند
   const updateStatusMutation = trpc.receiptVoucher.updateStatus.useMutation({
@@ -61,8 +73,9 @@ export default function VouchersReport() {
   });
 
   const [filters, setFilters] = useState({
-    startDate: firstDayOfMonth.toISOString().split('T')[0],
-    endDate: lastDayOfMonth.toISOString().split('T')[0],
+    startDate: toLocalDateInput(firstDayOfMonth),
+    endDate: toLocalDateInput(lastDayOfMonth),
+    voucherType: 'all' as 'receipt' | 'payment' | 'all',
     status: 'all' as 'draft' | 'approved' | 'paid' | 'cancelled' | 'all',
     branchId: '',
   });
@@ -71,9 +84,10 @@ export default function VouchersReport() {
   const { data: branches } = trpc.branches.list.useQuery();
 
   // جلب بيانات التقرير
-  const { data: reportData, isLoading, refetch } = trpc.receiptVoucher.getMonthlyReport.useQuery({
+  const { data: reportData, isLoading, refetch, error: reportError } = trpc.receiptVoucher.getMonthlyReport.useQuery({
     startDate: filters.startDate,
     endDate: filters.endDate,
+    voucherType: filters.voucherType,
     status: filters.status,
     branchId: filters.branchId || undefined,
   }, {
@@ -112,6 +126,7 @@ export default function VouchersReport() {
     generatePDFMutation.mutate({
       startDate: filters.startDate,
       endDate: filters.endDate,
+      voucherType: filters.voucherType,
       status: filters.status,
       branchId: filters.branchId || undefined,
     });
@@ -130,14 +145,15 @@ export default function VouchersReport() {
     return `${num.toLocaleString('ar-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, voucherType?: string) => {
+    const label = getVoucherStatusLabel(status, voucherType === 'payment' ? 'payment' : 'receipt').ar;
     switch (status) {
       case 'draft':
         return <Badge variant="secondary" className="bg-gray-500/20 text-gray-400"><Clock className="w-3 h-3 ml-1" />مسودة</Badge>;
       case 'approved':
-        return <Badge variant="secondary" className="bg-green-500/20 text-green-400"><CheckCircle className="w-3 h-3 ml-1" />معتمد</Badge>;
+        return <Badge variant="secondary" className="bg-green-500/20 text-green-400"><CheckCircle className="w-3 h-3 ml-1" />{label}</Badge>;
       case 'paid':
-        return <Badge variant="secondary" className="bg-blue-500/20 text-blue-400"><FileCheck className="w-3 h-3 ml-1" />مدفوع</Badge>;
+        return <Badge variant="secondary" className="bg-blue-500/20 text-blue-400"><FileCheck className="w-3 h-3 ml-1" />{label}</Badge>;
       case 'cancelled':
         return <Badge variant="secondary" className="bg-red-500/20 text-red-400"><XCircle className="w-3 h-3 ml-1" />ملغي</Badge>;
       default:
@@ -165,7 +181,7 @@ export default function VouchersReport() {
         </div>
         <Button
           onClick={handleGeneratePDF}
-          disabled={generatePDFMutation.isPending || !reportData?.vouchers?.length}
+          disabled={generatePDFMutation.isPending || !!reportError || !reportData?.vouchers?.length}
           className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
         >
           {generatePDFMutation.isPending ? (
@@ -188,7 +204,23 @@ export default function VouchersReport() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="space-y-2">
+              <Label className="text-gray-300">نوع السند</Label>
+              <Select
+                value={filters.voucherType}
+                onValueChange={(value) => setFilters({ ...filters, voucherType: value as typeof filters.voucherType })}
+              >
+                <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
+                  <SelectValue placeholder="جميع السندات" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع السندات</SelectItem>
+                  <SelectItem value="receipt">سندات القبض</SelectItem>
+                  <SelectItem value="payment">سندات الصرف</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label className="text-gray-300">من تاريخ</Label>
               <div className="relative">
@@ -226,7 +258,7 @@ export default function VouchersReport() {
                   <SelectItem value="all">جميع الحالات</SelectItem>
                   <SelectItem value="draft">مسودة</SelectItem>
                   <SelectItem value="approved">معتمد</SelectItem>
-                  <SelectItem value="paid">مدفوع</SelectItem>
+                  <SelectItem value="paid">تم الصرف</SelectItem>
                   <SelectItem value="cancelled">ملغي</SelectItem>
                 </SelectContent>
               </Select>
@@ -254,8 +286,18 @@ export default function VouchersReport() {
         </CardContent>
       </Card>
 
+      {/* خطأ في تحميل التقرير: لا يُعرض كتقرير فارغ */}
+      {reportError && (
+        <Card className="border-red-500/40 bg-red-500/10">
+          <CardContent className="py-6 flex flex-col items-center gap-3 text-center">
+            <p className="text-red-400">تعذر تحميل تقرير السندات: {reportError.message}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>إعادة المحاولة</Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* بطاقات الإحصائيات */}
-      {isLoading ? (
+      {reportError ? null : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-32 bg-gray-700/50" />
@@ -267,9 +309,17 @@ export default function VouchersReport() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-400">إجمالي السندات</p>
+                  <p className="text-sm text-gray-400">إجمالي السندات (بدون الملغي)</p>
                   <p className="text-3xl font-bold text-white">{statistics.totalCount}</p>
                   <p className="text-sm text-orange-400 mt-1">{formatCurrency(statistics.totalAmount)}</p>
+                  {filters.voucherType === 'all' && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      قبض: {formatCurrency(statistics.receiptAmount ?? 0)} | صرف: {formatCurrency(statistics.paymentAmount ?? 0)}
+                    </p>
+                  )}
+                  {statistics.cancelledCount > 0 && (
+                    <p className="text-xs text-red-400 mt-1">ملغي: {statistics.cancelledCount} (غير محتسب)</p>
+                  )}
                 </div>
                 <div className="p-3 bg-orange-500/20 rounded-xl">
                   <Receipt className="w-8 h-8 text-orange-400" />
@@ -312,7 +362,7 @@ export default function VouchersReport() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-400">المدفوعة</p>
+                  <p className="text-sm text-gray-400">المصروفة (سندات الصرف)</p>
                   <p className="text-3xl font-bold text-white">{statistics.paidCount}</p>
                   <p className="text-sm text-blue-400 mt-1">{formatCurrency(statistics.paidAmount)}</p>
                 </div>
@@ -334,7 +384,9 @@ export default function VouchersReport() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {reportError ? (
+            <p className="text-center py-8 text-red-400">تعذر تحميل السندات</p>
+          ) : isLoading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
                 <Skeleton key={i} className="h-12 bg-gray-700/50" />
@@ -347,8 +399,9 @@ export default function VouchersReport() {
                   <TableRow className="border-gray-700 hover:bg-gray-700/30">
                     <TableHead className="text-gray-300 text-center">#</TableHead>
                     <TableHead className="text-gray-300 text-center">رقم السند</TableHead>
+                    <TableHead className="text-gray-300 text-center">النوع</TableHead>
                     <TableHead className="text-gray-300 text-center">التاريخ</TableHead>
-                    <TableHead className="text-gray-300">المستقبل</TableHead>
+                    <TableHead className="text-gray-300">الطرف</TableHead>
                     <TableHead className="text-gray-300 text-center">الفرع</TableHead>
                     <TableHead className="text-gray-300 text-center">المبلغ</TableHead>
                     <TableHead className="text-gray-300 text-center">الحالة</TableHead>
@@ -357,14 +410,24 @@ export default function VouchersReport() {
                 </TableHeader>
                 <TableBody>
                   {reportData.vouchers.map((voucher, index) => (
-                    <TableRow key={voucher.id} className="border-gray-700 hover:bg-gray-700/30">
+                    <TableRow key={voucher.id} className={`border-gray-700 hover:bg-gray-700/30 ${voucher.status === 'cancelled' ? 'opacity-60' : ''}`}>
                       <TableCell className="text-center text-gray-400">{index + 1}</TableCell>
                       <TableCell className="text-center font-mono font-bold text-orange-400">{voucher.voucherId}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className={voucher.voucherType === 'payment' ? 'border-red-400/50 text-red-300' : 'border-blue-400/50 text-blue-300'}>
+                          {VOUCHER_TYPE_LABELS[voucher.voucherType] || 'سند قبض'}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-center text-gray-300">{formatDate(voucher.voucherDate)}</TableCell>
-                      <TableCell className="text-white">{voucher.payeeName}</TableCell>
+                      <TableCell className="text-white">
+                        {voucher.partyName || voucher.payeeName}
+                        {voucher.voucherType !== 'payment' && voucher.partyName && voucher.payeeName !== voucher.partyName && (
+                          <div className="text-xs text-gray-400">المستلم: {voucher.payeeName}</div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-center text-gray-400">{voucher.branchName || 'غير محدد'}</TableCell>
-                      <TableCell className="text-center font-bold text-white">{formatCurrency(voucher.totalAmount)}</TableCell>
-                      <TableCell className="text-center">{getStatusBadge(voucher.status)}</TableCell>
+                      <TableCell className={`text-center font-bold text-white ${voucher.status === 'cancelled' ? 'line-through' : ''}`}>{formatCurrency(voucher.totalAmount)}</TableCell>
+                      <TableCell className="text-center">{getStatusBadge(voucher.status, voucher.voucherType)}</TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Button
@@ -379,7 +442,7 @@ export default function VouchersReport() {
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
-                          {user?.role === 'admin' && voucher.status === 'draft' && (
+                          {isApprover && voucher.status === 'draft' && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -443,8 +506,11 @@ export default function VouchersReport() {
                   <p className="text-white font-bold text-lg">{formatDate(selectedVoucher.voucherDate)}</p>
                 </div>
                 <div className="bg-gray-700/50 p-4 rounded-lg">
-                  <p className="text-gray-400 text-sm">المستقبل</p>
-                  <p className="text-white font-bold text-lg">{selectedVoucher.payeeName}</p>
+                  <p className="text-gray-400 text-sm">{selectedVoucher.voucherType === 'payment' ? 'صرفنا إلى' : 'استلمنا من'}</p>
+                  <p className="text-white font-bold text-lg">{selectedVoucher.partyName || selectedVoucher.payeeName}</p>
+                  {selectedVoucher.voucherType !== 'payment' && selectedVoucher.partyName && selectedVoucher.payeeName !== selectedVoucher.partyName && (
+                    <p className="text-gray-400 text-sm mt-1">المستلم: {selectedVoucher.payeeName}</p>
+                  )}
                 </div>
                 <div className="bg-gray-700/50 p-4 rounded-lg">
                   <p className="text-gray-400 text-sm">المبلغ</p>
@@ -456,7 +522,7 @@ export default function VouchersReport() {
                 </div>
                 <div className="bg-gray-700/50 p-4 rounded-lg">
                   <p className="text-gray-400 text-sm">الحالة</p>
-                  <div className="mt-1">{getStatusBadge(selectedVoucher.status)}</div>
+                  <div className="mt-1">{getStatusBadge(selectedVoucher.status, selectedVoucher.voucherType)}</div>
                 </div>
               </div>
               {selectedVoucher.notes && (
@@ -466,7 +532,7 @@ export default function VouchersReport() {
                 </div>
               )}
               <div className="flex gap-2 justify-end pt-4 border-t border-gray-700">
-                {user?.role === 'admin' && selectedVoucher.status === 'draft' && (
+                {isApprover && selectedVoucher.status === 'draft' && (
                   <Button
                     className="bg-green-600 hover:bg-green-700"
                     disabled={updateStatusMutation.isPending}

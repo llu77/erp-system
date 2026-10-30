@@ -52,12 +52,16 @@ const CashFlowReport = lazy(() => import("./pages/CashFlowReport"));
 const ReceiptVoucher = lazy(() => import("./pages/ReceiptVoucher"));
 const ReceiptVoucherReports = lazy(() => import("./pages/ReceiptVoucherReports"));
 const VouchersReport = lazy(() => import("./pages/VouchersReport"));
+const EndOfService = lazy(() => import("./pages/EndOfService"));
+const EndOfServiceDetail = lazy(() => import("./pages/EndOfServiceDetail"));
 
 // HR & Payroll
 const Employees = lazy(() => import("./pages/Employees"));
 const Payrolls = lazy(() => import("./pages/Payrolls"));
+const EmployeeViolations = lazy(() => import("./pages/EmployeeViolations"));
 const Bonuses = lazy(() => import("./pages/Bonuses"));
 const BonusRequests = lazy(() => import("./pages/BonusRequests"));
+const BonusTierSettings = lazy(() => import("./pages/BonusTierSettings"));
 const SubmitRequest = lazy(() => import("./pages/SubmitRequest"));
 const ManageRequests = lazy(() => import("./pages/ManageRequests"));
 const HROnboarding = lazy(() => import("./pages/HROnboarding"));
@@ -327,6 +331,13 @@ function Router() {
         </DashboardLayout>
       </Route>
       
+      {/* إعدادات مستويات البونص (المسؤول والمدير) */}
+      <Route path="/bonus-tiers">
+        <DashboardLayout>
+          <LazyPage component={BonusTierSettings} />
+        </DashboardLayout>
+      </Route>
+      
       {/* سجل الإيرادات */}
       <Route path="/revenues">
         <DashboardLayout>
@@ -348,11 +359,14 @@ function Router() {
         </DashboardLayout>
       </Route>
       
-      {/* لوحة الوثائق */}
+      {/* لوحة الوثائق (والمسار القديم من القائمة) */}
       <Route path="/documents">
         <DashboardLayout>
           <LazyPage component={DocumentsDashboard} />
         </DashboardLayout>
+      </Route>
+      <Route path="/documents-dashboard">
+        <Redirect to="/documents" />
       </Route>
       
       {/* تقديم طلب */}
@@ -373,6 +387,13 @@ function Router() {
       <Route path="/payrolls">
         <DashboardLayout>
           <LazyPage component={Payrolls} />
+        </DashboardLayout>
+      </Route>
+
+      {/* مخالفات الموظفين */}
+      <Route path="/violations">
+        <DashboardLayout>
+          <LazyPage component={EmployeeViolations} />
         </DashboardLayout>
       </Route>
       
@@ -522,6 +543,13 @@ function Router() {
           <LazyPage component={ReceiptVoucher} />
         </DashboardLayout>
       </Route>
+
+      {/* سند الصرف (نفس صفحة السندات على تبويب الصرف) */}
+      <Route path="/payment-voucher">
+        <DashboardLayout>
+          <LazyPage component={ReceiptVoucher} />
+        </DashboardLayout>
+      </Route>
       
       {/* تقارير سندات القبض */}
       <Route path="/receipt-voucher-reports">
@@ -534,6 +562,18 @@ function Router() {
       <Route path="/vouchers-report">
         <DashboardLayout>
           <LazyPage component={VouchersReport} />
+        </DashboardLayout>
+      </Route>
+
+      {/* إنهاء الخدمة (انتهاء العقد وعدم التجديد) والمخالصات النهائية */}
+      <Route path="/end-of-service/:id">
+        <DashboardLayout>
+          <LazyPage component={EndOfServiceDetail} />
+        </DashboardLayout>
+      </Route>
+      <Route path="/end-of-service">
+        <DashboardLayout>
+          <LazyPage component={EndOfService} />
         </DashboardLayout>
       </Route>
       

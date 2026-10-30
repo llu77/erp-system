@@ -6,7 +6,7 @@
 export type UserRole = 'employee' | 'supervisor' | 'admin';
 
 // Request types
-export type RequestType = 'advance' | 'vacation' | 'arrears' | 'permission' | 'objection' | 'resignation';
+export type RequestType = 'advance' | 'vacation' | 'arrears' | 'permission' | 'objection' | 'resignation' | 'end_of_service';
 
 // Request status
 export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';

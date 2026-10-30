@@ -165,7 +165,7 @@ export default function InventoryVarianceReport() {
   </style>
 </head>
 <body>
-  ${getPDFHeader('تقرير فروقات الجرد', { reportNumber: varianceReport.count?.countNumber })}
+  ${getPDFHeader('تقرير فروقات الجرد', { reportNumber: varianceReport.count?.countNumber, branchName: varianceReport.count?.branchName })}
   
   ${getPDFInfoSection([
     { label: 'رقم الجرد', value: varianceReport.count?.countNumber || '-' },
@@ -214,7 +214,7 @@ export default function InventoryVarianceReport() {
     </tbody>
   </table>
   
-  ${getPDFFooter()}
+  ${getPDFFooter(undefined, { branchName: varianceReport.count?.branchName })}
 </body>
 </html>
     `;

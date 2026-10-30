@@ -19,22 +19,26 @@ import {
   Edit2,
   Save,
   X,
-  CheckCircle2
+  CheckCircle2,
+  Flag,
+  IdCard,
+  Landmark,
+  ShieldCheck
 } from 'lucide-react';
+import { errorMessage, formatPortalDate, formatSar, shouldRetryQuery } from '@/lib/portal/portalUi';
+import { PortalLoading, PortalQueryError } from './PortalQueryState';
+import { ChangePasswordDialog } from './ChangePasswordDialog';
 
-interface EmployeeProfileProps {
-  employeeId: number;
-}
-
-export function EmployeeProfile({ employeeId }: EmployeeProfileProps) {
+/** الملف الشخصي للموظف المسجل في البوابة (الهوية من جلسة الخادم) */
+export function EmployeeProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedPhone, setEditedPhone] = useState('');
   const [editedEmail, setEditedEmail] = useState('');
 
   // جلب الملف الشخصي
-  const { data: profile, isLoading, refetch } = trpc.employeePortal.getProfile.useQuery(
-    { employeeId },
-    { retry: false }
+  const { data: profile, isLoading, error, refetch, isFetching } = trpc.employeePortal.getProfile.useQuery(
+    undefined,
+    { retry: shouldRetryQuery }
   );
 
   // تحديث الملف الشخصي
@@ -45,7 +49,7 @@ export function EmployeeProfile({ employeeId }: EmployeeProfileProps) {
       refetch();
     },
     onError: (error) => {
-      toast.error(error.message || 'فشل في تحديث البيانات');
+      toast.error(errorMessage(error, 'فشل في تحديث البيانات'));
     },
   });
 
@@ -59,7 +63,6 @@ export function EmployeeProfile({ employeeId }: EmployeeProfileProps) {
 
   const handleSave = () => {
     updateMutation.mutate({
-      employeeId,
       phone: editedPhone || undefined,
       email: editedEmail || undefined,
     });
@@ -71,31 +74,29 @@ export function EmployeeProfile({ employeeId }: EmployeeProfileProps) {
     setEditedEmail('');
   };
 
-  const formatDate = (date: string | Date | null) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('ar-SA', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
   const formatCurrency = (amount: number | string | null) => {
-    if (!amount) return '-';
-    return new Intl.NumberFormat('ar-SA', {
-      style: 'decimal',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(Number(amount)) + ' ر.س';
+    if (amount === null || amount === undefined || amount === '') return '-';
+    return formatSar(amount);
   };
 
   if (isLoading) {
     return (
       <Card className="bg-slate-800/50 border-slate-700">
-        <CardContent className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+        <CardContent>
+          <PortalLoading label="جاري تحميل الملف الشخصي..." />
         </CardContent>
       </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <PortalQueryError
+        error={error}
+        title="تعذر تحميل الملف الشخصي"
+        onRetry={() => refetch()}
+        isRetrying={isFetching}
+      />
     );
   }
 
@@ -238,6 +239,13 @@ export function EmployeeProfile({ employeeId }: EmployeeProfileProps) {
         <CardContent className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg">
+              <Landmark className="h-5 w-5 text-slate-400" />
+              <div>
+                <p className="text-xs text-slate-400">جهة العمل</p>
+                <p className="text-white">{profile.establishmentName || '-'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg">
               <Building2 className="h-5 w-5 text-slate-400" />
               <div>
                 <p className="text-xs text-slate-400">الفرع</p>
@@ -255,7 +263,21 @@ export function EmployeeProfile({ employeeId }: EmployeeProfileProps) {
               <Calendar className="h-5 w-5 text-slate-400" />
               <div>
                 <p className="text-xs text-slate-400">تاريخ التعيين</p>
-                <p className="text-white">{formatDate(profile.hireDate)}</p>
+                <p className="text-white">{formatPortalDate(profile.hireDate, 'غير مسجل')}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg">
+              <Flag className="h-5 w-5 text-slate-400" />
+              <div>
+                <p className="text-xs text-slate-400">الجنسية</p>
+                <p className="text-white">{profile.nationality || 'غير مسجلة'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg">
+              <IdCard className="h-5 w-5 text-slate-400" />
+              <div>
+                <p className="text-xs text-slate-400">رقم الإقامة</p>
+                <p className="text-white font-mono">{profile.iqamaNumber || '-'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg">
@@ -283,33 +305,51 @@ export function EmployeeProfile({ employeeId }: EmployeeProfileProps) {
             معلومات الراتب
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <CardContent className="p-4 space-y-3">
+          {/* للعرض فقط: الإدارة تحدد الراتب والبدلات في ملف الموظف، وهي نفس قيم المسيرة */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-lg border border-amber-500/20">
               <p className="text-xs text-amber-400/70">الراتب الأساسي</p>
               <p className="text-xl font-bold text-amber-400">{formatCurrency(profile.baseSalary)}</p>
             </div>
-            {profile.isSupervisor && (
+            <div className="p-4 bg-slate-700/30 rounded-lg">
+              <p className="text-xs text-slate-400">بدل الساعات الإضافية</p>
+              {profile.overtimeEnabled ? (
+                <p className="text-lg font-bold text-white">{formatCurrency(profile.overtimeAllowance)}</p>
+              ) : (
+                <p className="text-sm text-slate-400 mt-1">غير مفعّل</p>
+              )}
+            </div>
+            {profile.supervisorIncentive > 0 && (
               <div className="p-4 bg-slate-700/30 rounded-lg">
-                <p className="text-xs text-slate-400">نوع الموظف</p>
-                <Badge className="mt-1 bg-purple-500/20 text-purple-400 border-purple-500/30">
-                  مشرف
-                </Badge>
-              </div>
-            )}
-            {profile.overtimeEnabled && (
-              <div className="p-4 bg-slate-700/30 rounded-lg">
-                <p className="text-xs text-slate-400">الساعات الإضافية</p>
-                <Badge className="mt-1 bg-blue-500/20 text-blue-400 border-blue-500/30">
-                  مفعّلة
-                </Badge>
+                <p className="text-xs text-slate-400">حافز المشرف</p>
+                <p className="text-lg font-bold text-white">{formatCurrency(profile.supervisorIncentive)}</p>
               </div>
             )}
           </div>
+          <p className="text-xs text-slate-400">
+            {profile.salaryConfigured
+              ? 'تحدد الإدارة الراتب والبدلات في ملفك الوظيفي، وتظهر هنا للاطلاع فقط.'
+              : 'لم تحدد الإدارة راتبك في ملفك الوظيفي بعد؛ القيم المعروضة هي القيم الافتراضية للمسيرة.'}
+          </p>
         </CardContent>
       </Card>
 
-
+      {/* أمان الحساب */}
+      <Card className="bg-slate-800/50 border-slate-700">
+        <CardHeader className="border-b border-slate-700">
+          <CardTitle className="text-white text-sm flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-amber-500" />
+            أمان الحساب
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-sm text-slate-400">
+            غيّر كلمة المرور دورياً، وعند تغييرها يتم تسجيل الخروج من الأجهزة الأخرى.
+          </p>
+          <ChangePasswordDialog />
+        </CardContent>
+      </Card>
     </div>
   );
 }

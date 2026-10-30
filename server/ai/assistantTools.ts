@@ -7,11 +7,13 @@
  * 3. الشفافية - نوضح مصدر البيانات والفترة الزمنية
  */
 
-import { getDb } from "../db";
+import { getDb, generateRequestNumber } from "../db";
+import { isRequestVisibleToEmployee } from "../endOfService/service";
 import { 
   employees, 
   branches, 
   employeeRequests, 
+  employeeRequestLogs,
   dailyRevenues,
   employeeRevenues,
   weeklyBonuses,
@@ -185,9 +187,8 @@ export async function submitEmployeeRequest(input: EmployeeRequestInput): Promis
       resignation: 'استقالة'
     };
 
-    // إنشاء رقم الطلب
-    const now = new Date();
-    const requestNumber = `REQ-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Date.now().toString().slice(-6)}`;
+    // إنشاء رقم الطلب (نفس صيغة طلبات النظام)
+    const requestNumber = generateRequestNumber();
 
     // إنشاء الطلب
     const requestData: any = {
@@ -227,6 +228,20 @@ export async function submitEmployeeRequest(input: EmployeeRequestInput): Promis
     }
 
     const result = await db.insert(employeeRequests).values(requestData);
+
+    // سجل إنشاء الطلب (يظهر في تتبع الطلب)
+    try {
+      await db.insert(employeeRequestLogs).values({
+        requestId: Number(result[0]?.insertId),
+        action: 'إنشاء طلب',
+        newStatus: 'pending',
+        performedBy: input.employeeId,
+        performedByName: `${emp.name} (المساعد الذكي)`,
+        notes: `تم رفع ${requestData.title} عبر المساعد الذكي`,
+      });
+    } catch (logError) {
+      console.error('[AssistantTools] تعذر تسجيل إنشاء الطلب:', logError);
+    }
 
     return {
       success: true,
@@ -373,18 +388,26 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
 
     // ========== تقرير البونص ==========
     if (input.reportType === 'bonus') {
-      const currentWeekStart = getWeekStart(now);
+      // الفترة الحالية حسب فترات البونص الموحدة (1-7، 8-14، 15-21، 22-28، 29-نهاية الشهر)
+      const { getCurrentBonusPeriod } = await import('../bonus/calculator');
+      const { getTierDisplayName, getBonusStatusLabel, isFinalBonusStatus } = await import('../../shared/bonusHelpers');
+      const { formatBonusPeriodLabel } = await import('../../shared/bonus');
+      const currentPeriod = getCurrentBonusPeriod(now);
       
       const bonusDetail = await db.select({
         revenue: bonusDetails.weeklyRevenue,
         bonusAmount: bonusDetails.bonusAmount,
         tier: bonusDetails.bonusTier,
+        tierName: bonusDetails.tierName,
+        status: weeklyBonuses.status,
       })
       .from(bonusDetails)
       .innerJoin(weeklyBonuses, eq(bonusDetails.weeklyBonusId, weeklyBonuses.id))
       .where(and(
         eq(bonusDetails.employeeId, input.employeeId),
-        eq(weeklyBonuses.weekStart, currentWeekStart)
+        eq(weeklyBonuses.year, currentPeriod.year),
+        eq(weeklyBonuses.month, currentPeriod.month),
+        eq(weeklyBonuses.weekNumber, currentPeriod.weekNumber)
       ))
       .limit(1);
 
@@ -394,12 +417,16 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
           revenue: bonusDetails.weeklyRevenue,
           bonusAmount: bonusDetails.bonusAmount,
           tier: bonusDetails.bonusTier,
-          weekStart: weeklyBonuses.weekStart,
+          tierName: bonusDetails.tierName,
+          status: weeklyBonuses.status,
+          weekNumber: weeklyBonuses.weekNumber,
+          month: weeklyBonuses.month,
+          year: weeklyBonuses.year,
         })
         .from(bonusDetails)
         .innerJoin(weeklyBonuses, eq(bonusDetails.weeklyBonusId, weeklyBonuses.id))
         .where(eq(bonusDetails.employeeId, input.employeeId))
-        .orderBy(desc(weeklyBonuses.weekStart))
+        .orderBy(desc(weeklyBonuses.year), desc(weeklyBonuses.month), desc(weeklyBonuses.weekNumber))
         .limit(1);
 
         if (lastBonus.length === 0) {
@@ -413,52 +440,43 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
         }
 
         const bonus = lastBonus[0];
-        const tierNames: Record<string, string> = {
-          'none': 'لم يصل للحد الأدنى',
-          'tier_1': 'المستوى الأول',
-          'tier_2': 'المستوى الثاني',
-          'tier_3': 'المستوى الثالث',
-          'tier_4': 'المستوى الرابع',
-          'tier_5': 'المستوى الخامس'
-        };
+        const tierLabel = bonus.tier === 'none' ? 'لم يصل للحد الأدنى' : getTierDisplayName(bonus.tier, bonus.tierName);
+        const amountLabel = isFinalBonusStatus(bonus.status) ? 'البونص' : 'البونص (تقديري - لم يُعتمد بعد)';
 
         return {
           success: true,
           hasData: true,
           dataCount: 1,
           data: bonus,
-          message: `📊 تقرير البونص للموظف ${emp.name}:\n\n⚠️ لا يوجد بونص مسجل لهذا الأسبوع بعد.\n\n📌 آخر بونص مسجل (${new Date(bonus.weekStart).toLocaleDateString('ar-SA')}):\n💰 الإيرادات: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierNames[bonus.tier || 'none']}\n💵 البونص: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`,
+          message: `📊 تقرير البونص للموظف ${emp.name}:\n\n⚠️ لا يوجد بونص مسجل لهذه الفترة بعد.\n\n📌 آخر بونص مسجل (${formatBonusPeriodLabel(bonus.weekNumber, bonus.month, bonus.year)} - ${getBonusStatusLabel(bonus.status)}):\n💰 الإيرادات: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierLabel}\n💵 ${amountLabel}: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`,
           source: 'جدول تفاصيل البونص'
         };
       }
 
       const bonus = bonusDetail[0];
-      const tierNames: Record<string, string> = {
-        'none': 'لم يصل للحد الأدنى',
-        'tier_1': 'المستوى الأول',
-        'tier_2': 'المستوى الثاني',
-        'tier_3': 'المستوى الثالث',
-        'tier_4': 'المستوى الرابع',
-        'tier_5': 'المستوى الخامس'
-      };
+      const tierLabel = bonus.tier === 'none' ? 'لم يصل للحد الأدنى' : getTierDisplayName(bonus.tier, bonus.tierName);
+      const amountLabel = isFinalBonusStatus(bonus.status) ? 'البونص المستحق' : 'البونص المتوقع (تقديري - لم يُعتمد بعد)';
 
       return {
         success: true,
         hasData: true,
         dataCount: 1,
         data: bonus,
-        message: `📊 تقرير البونص الأسبوعي للموظف ${emp.name}:\n\n💰 إيراداتك هذا الأسبوع: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierNames[bonus.tier || 'none']}\n💵 البونص المستحق: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`,
+        message: `📊 تقرير البونص للموظف ${emp.name} (${formatBonusPeriodLabel(currentPeriod.weekNumber, currentPeriod.month, currentPeriod.year)}):\n\n💰 إيراداتك في هذه الفترة: ${Number(bonus.revenue).toLocaleString()} ر.س\n🏆 المستوى: ${tierLabel}\n💵 ${amountLabel}: ${Number(bonus.bonusAmount).toLocaleString()} ر.س`,
         source: 'جدول تفاصيل البونص'
       };
     }
 
     // ========== تقرير الطلبات ==========
     if (input.reportType === 'requests') {
-      const requests = await db.select()
+      // إنهاء الخدمة لا يظهر للموظف قبل اعتماده (نفس قاعدة بوابة الموظف)
+      const requests = (await db.select()
         .from(employeeRequests)
         .where(eq(employeeRequests.employeeId, input.employeeId))
         .orderBy(desc(employeeRequests.createdAt))
-        .limit(10);
+        .limit(20))
+        .filter(isRequestVisibleToEmployee)
+        .slice(0, 10);
 
       if (requests.length === 0) {
         return {
@@ -482,7 +500,8 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
         'arrears': 'متأخرات',
         'permission': 'استئذان',
         'objection': 'اعتراض',
-        'resignation': 'استقالة'
+        'resignation': 'استقالة',
+        'end_of_service': 'إنهاء خدمة'
       };
 
       const requestsList = requests.map((r: any, index: number) => {
@@ -625,14 +644,6 @@ export async function calculatePrice(input: PriceCalculationInput): Promise<Tool
   } catch (error) {
     return errorResult(`حدث خطأ: ${error}`);
   }
-}
-
-// ========== دالة مساعدة لحساب بداية الأسبوع ==========
-function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff));
 }
 
 // ========== دوال مساعدة للتصدير (للاختبارات) ==========
@@ -946,7 +957,8 @@ export async function executeAssistantTool(toolName: string, args: any): Promise
       return prepareRequest(args);
     
     case 'confirm_request':
-      return confirmRequest(args.sessionId, args.employeeId);
+      // نص الموظف الفعلي (لا يُفترض "نعم"): يُنفذ الطلب فقط إذا كان الرد تأكيداً صريحاً
+      return confirmRequest(args.sessionId, args.employeeId, typeof args.userMessage === 'string' ? args.userMessage : '');
     
     case 'cancel_request':
       return cancelRequest(args.sessionId);
@@ -1025,9 +1037,9 @@ async function prepareRequest(args: {
 /**
  * تأكيد وتنفيذ الطلب المعلق
  */
-async function confirmRequest(sessionId: string, employeeId: number): Promise<ToolResult> {
+async function confirmRequest(sessionId: string, employeeId: number, userMessage: string): Promise<ToolResult> {
   try {
-    const result = await handleConfirmationResponse(sessionId, employeeId, 'نعم');
+    const result = await handleConfirmationResponse(sessionId, employeeId, userMessage);
 
     if (result.action === 'confirmed' && result.result) {
       return result.result;
@@ -1081,6 +1093,7 @@ async function cancelRequest(sessionId: string): Promise<ToolResult> {
       permission: 'استئذان',
       objection: 'اعتراض',
       resignation: 'استقالة',
+      end_of_service: 'إنهاء خدمة',
     };
 
     const typeName = typeNames[latestRequest.requestType] || latestRequest.requestType;

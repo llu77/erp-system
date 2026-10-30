@@ -183,8 +183,14 @@ export default function Revenues() {
 
   // حفظ الإيرادات
   const saveMutation = trpc.revenues.createDaily.useMutation({
-    onSuccess: () => {
-      toast.success("تم حفظ الإيرادات بنجاح وتحديث البونص تلقائياً");
+    onSuccess: (result) => {
+      // تحذيرات البونص (مثل تعذر إعادة الاحتساب) تظهر بعد رسالة الحفظ
+      if (result.bonusWarnings?.length) {
+        toast.success("تم حفظ الإيرادات بنجاح");
+        toast.warning(result.bonusWarnings.join("\n"));
+      } else {
+        toast.success("تم حفظ الإيرادات بنجاح وتحديث البونص تلقائياً");
+      }
       // إعادة تعيين النموذج
       setBranchRevenue({ cash: "", network: "", paidInvoices: "", paidInvoicesNote: "", paidInvoicesCustomer: "", loyalty: "" });
       setEmployeeRevenues([]);
@@ -923,14 +929,18 @@ export default function Revenues() {
 // مكون سجل الإيرادات الشهري
 function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: number | null; selectedDate: string; userRole?: string }) {
   const isMobile = useIsMobile();
+  // فرع السجل لترويسة المؤسسة في PDF (نفس استعلام الصفحة الرئيسية من الذاكرة المؤقتة)
+  const { data: branchOptions } = trpc.branches.list.useQuery();
+  const logBranch = branchOptions?.find(b => b.id === branchId) ?? null;
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [revenueToDelete, setRevenueToDelete] = useState<number | null>(null);
   const utils = trpc.useUtils();
   
   // حذف الإيراد
   const deleteMutation = trpc.revenues.deleteDaily.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success("تم حذف الإيراد بنجاح");
+      if (result.bonusWarnings?.length) toast.warning(result.bonusWarnings.join("\n"));
       setDeleteDialogOpen(false);
       setRevenueToDelete(null);
       utils.revenues.getByDateRange.invalidate();
@@ -1072,7 +1082,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
   </style>
 </head>
 <body>
-  ${getPDFHeader(`سجل إيرادات شهر ${monthName}`, { reportNumber: `REV-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` })}
+  ${getPDFHeader(`سجل إيرادات شهر ${monthName}`, { reportNumber: `REV-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`, branchName: logBranch })}
   
   ${getPDFInfoSection([
     { label: 'من تاريخ', value: format(monthStart, "d MMMM", { locale: ar }) },
@@ -1138,7 +1148,7 @@ function MonthlyRevenueLog({ branchId, selectedDate, userRole }: { branchId: num
     </tbody>
   </table>
   
-  ${getPDFFooter()}
+  ${getPDFFooter(undefined, { branchName: logBranch })}
 </body>
 </html>
       `;

@@ -463,6 +463,41 @@
       "when": 1770078669246,
       "tag": "0065_pale_doctor_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "5",
+      "when": 1793328111609,
+      "tag": "0066_payroll_bonus_vouchers",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "5",
+      "when": 1793337001730,
+      "tag": "0067_end_of_service",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "5",
+      "when": 1793338004166,
+      "tag": "0068_employee_portal",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "5",
+      "when": 1793354563040,
+      "tag": "0069_job_titles",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "5",
+      "when": 1793359982668,
+      "tag": "0070_fixed_expenses",
+      "breakpoints": true
     }
   ]
 }

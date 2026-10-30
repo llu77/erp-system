@@ -12,10 +12,8 @@ import {
   Award,
   AlertCircle
 } from 'lucide-react';
-
-interface BonusReportProps {
-  employeeId: number;
-}
+import { shouldRetryQuery, trpcErrorCode } from '@/lib/portal/portalUi';
+import { PortalQueryError } from './PortalQueryState';
 
 const MONTHS = [
   { value: 1, label: 'يناير' },
@@ -32,24 +30,30 @@ const MONTHS = [
   { value: 12, label: 'ديسمبر' },
 ];
 
-export function BonusReport({ employeeId }: BonusReportProps) {
+/** تقرير بونص الموظف المسجل في البوابة */
+export function BonusReport() {
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
 
   // جلب تقرير البونص
-  const { data: bonusReport, isLoading, error } = trpc.employeePortal.getBonusReport.useQuery(
-    { employeeId, year: selectedYear, month: selectedMonth },
-    { retry: false }
+  const reportQuery = trpc.employeePortal.getBonusReport.useQuery(
+    { year: selectedYear, month: selectedMonth },
+    { retry: shouldRetryQuery }
   );
+  const { data: bonusReport, isLoading, error } = reportQuery;
+  // "غير موجود" يعني لا يوجد تقرير لهذا الشهر، وغيره خطأ يُعرض مع إعادة المحاولة
+  const reportFailed = !!error && trpcErrorCode(error) !== 'NOT_FOUND';
 
   // جلب سجل البونص
-  const { data: bonusHistory } = trpc.employeePortal.getBonusHistory.useQuery(
-    { employeeId, limit: 6 }
+  const historyQuery = trpc.employeePortal.getBonusHistory.useQuery(
+    { limit: 6 },
+    { retry: shouldRetryQuery }
   );
+  const { data: bonusHistory } = historyQuery;
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ar-SA', {
+    return new Intl.NumberFormat('ar-SA-u-nu-latn', {
       style: 'decimal',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -123,6 +127,13 @@ export function BonusReport({ employeeId }: BonusReportProps) {
             <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
           </CardContent>
         </Card>
+      ) : reportFailed ? (
+        <PortalQueryError
+          error={error}
+          title="تعذر تحميل تقرير البونص"
+          onRetry={() => reportQuery.refetch()}
+          isRetrying={reportQuery.isFetching}
+        />
       ) : error || !bonusReport ? (
         <Card className="bg-slate-800/50 border-slate-700">
           <CardContent className="text-center py-12">
@@ -168,10 +179,18 @@ export function BonusReport({ employeeId }: BonusReportProps) {
                 <div className="text-xl font-bold text-amber-400">
                   {formatCurrency(bonusReport.totalBonus)}
                 </div>
-                <div className="text-xs text-amber-400/70">إجمالي البونص</div>
+                <div className="text-xs text-amber-400/70">البونص المعتمد</div>
               </CardContent>
             </Card>
           </div>
+
+          {/* البونص التقديري (لم يُعتمد بعد) */}
+          {bonusReport.estimatedBonus > 0 && (
+            <div className="rounded-lg border border-slate-600 bg-slate-800/50 p-3 text-sm text-slate-300 flex items-center justify-between">
+              <span>بونص تقديري بانتظار الاعتماد (قد يتغير)</span>
+              <span className="font-bold text-slate-200">{formatCurrency(bonusReport.estimatedBonus)}</span>
+            </div>
+          )}
 
           {/* تفاصيل الأسابيع */}
           {bonusReport.weeks && bonusReport.weeks.length > 0 && (
@@ -184,27 +203,34 @@ export function BonusReport({ employeeId }: BonusReportProps) {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y divide-slate-700">
-                  {bonusReport.weeks.map((week: {
-                    weekNumber: number;
-                    startDate: string;
-                    endDate: string;
-                    revenue: number;
-                    bonus: number;
-                  }, index: number) => (
+                  {bonusReport.weeks.map((week, index) => (
                     <div key={index} className="p-4 hover:bg-slate-700/30 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-white font-medium">الأسبوع {week.weekNumber}</p>
+                          <p className="text-white font-medium flex items-center gap-2">
+                            {week.periodLabel}
+                            <Badge
+                              variant="outline"
+                              className={week.isFinal
+                                ? 'border-emerald-500/50 text-emerald-400'
+                                : week.status === 'rejected'
+                                  ? 'border-red-500/50 text-red-400'
+                                  : 'border-slate-500 text-slate-300'}
+                            >
+                              {week.statusLabel}
+                            </Badge>
+                          </p>
                           <p className="text-xs text-slate-400 mt-1">
-                            {new Date(week.startDate).toLocaleDateString('ar-SA')} - {new Date(week.endDate).toLocaleDateString('ar-SA')}
+                            {week.tierName || (week.bonusTier === 'none' ? 'غير مؤهل' : '')}
+                            {week.branchName ? ` - ${week.branchName}` : ''}
                           </p>
                         </div>
                         <div className="text-left">
                           <p className="text-slate-400 text-sm">
                             الإيرادات: {formatCurrency(week.revenue)}
                           </p>
-                          <p className="text-amber-400 font-bold">
-                            البونص: {formatCurrency(week.bonus)}
+                          <p className={week.isFinal ? 'text-amber-400 font-bold' : 'text-slate-300 font-bold'}>
+                            {week.isFinal ? 'البونص' : 'البونص (تقديري)'}: {formatCurrency(week.bonus)}
                           </p>
                         </div>
                       </div>
@@ -218,6 +244,14 @@ export function BonusReport({ employeeId }: BonusReportProps) {
       )}
 
       {/* سجل البونص */}
+      {historyQuery.error && (
+        <PortalQueryError
+          error={historyQuery.error}
+          title="تعذر تحميل سجل البونص"
+          onRetry={() => historyQuery.refetch()}
+          isRetrying={historyQuery.isFetching}
+        />
+      )}
       {bonusHistory && bonusHistory.length > 0 && (
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader className="border-b border-slate-700">
@@ -228,12 +262,7 @@ export function BonusReport({ employeeId }: BonusReportProps) {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-slate-700">
-              {bonusHistory.map((record: {
-                year: number;
-                month: number;
-                totalRevenue: number;
-                totalBonus: number;
-              }, index: number) => (
+              {bonusHistory.map((record, index) => (
                 <div 
                   key={index}
                   className="p-4 hover:bg-slate-700/30 transition-colors cursor-pointer"
@@ -255,6 +284,11 @@ export function BonusReport({ employeeId }: BonusReportProps) {
                       <p className="text-amber-400 font-bold">
                         {formatCurrency(record.totalBonus)}
                       </p>
+                      {record.estimatedBonus > 0 && (
+                        <p className="text-xs text-slate-400">
+                          تقديري: {formatCurrency(record.estimatedBonus)}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

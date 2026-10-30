@@ -15,10 +15,8 @@ import {
   Heart,
   Briefcase
 } from 'lucide-react';
-
-interface LeaveBalanceProps {
-  employeeId: number;
-}
+import { formatPortalDate, shouldRetryQuery } from '@/lib/portal/portalUi';
+import { PortalQueryError } from './PortalQueryState';
 
 const LEAVE_TYPE_INFO: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   annual: { label: 'سنوية', icon: <Palmtree className="h-4 w-4" />, color: 'text-emerald-400' },
@@ -41,20 +39,24 @@ const STATUS_NAMES: Record<string, string> = {
   cancelled: 'ملغية',
 };
 
-export function LeaveBalance({ employeeId }: LeaveBalanceProps) {
+/** رصيد وسجل إجازات الموظف المسجل في البوابة */
+export function LeaveBalance() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
 
   // جلب رصيد الإجازات
-  const { data: balance, isLoading: balanceLoading } = trpc.employeePortal.getLeaveBalance.useQuery(
-    { employeeId, year: selectedYear },
-    { retry: false }
+  const balanceQuery = trpc.employeePortal.getLeaveBalance.useQuery(
+    { year: selectedYear },
+    { retry: shouldRetryQuery }
   );
+  const { data: balance, isLoading: balanceLoading } = balanceQuery;
 
   // جلب سجل الإجازات
-  const { data: leaveHistory, isLoading: historyLoading } = trpc.employeePortal.getLeaveHistory.useQuery(
-    { employeeId, year: selectedYear }
+  const historyQuery = trpc.employeePortal.getLeaveHistory.useQuery(
+    { year: selectedYear },
+    { retry: shouldRetryQuery }
   );
+  const { data: leaveHistory, isLoading: historyLoading } = historyQuery;
 
   const years = Array.from({ length: 3 }, (_, i) => currentYear - i);
 
@@ -116,6 +118,13 @@ export function LeaveBalance({ employeeId }: LeaveBalanceProps) {
             <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
           </CardContent>
         </Card>
+      ) : balanceQuery.error ? (
+        <PortalQueryError
+          error={balanceQuery.error}
+          title="تعذر تحميل رصيد الإجازات"
+          onRetry={() => balanceQuery.refetch()}
+          isRetrying={balanceQuery.isFetching}
+        />
       ) : balance ? (
         <>
           {/* إحصائيات سريعة */}
@@ -209,6 +218,14 @@ export function LeaveBalance({ employeeId }: LeaveBalanceProps) {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
             </div>
+          ) : historyQuery.error ? (
+            <PortalQueryError
+              className="m-4"
+              error={historyQuery.error}
+              title="تعذر تحميل سجل الإجازات"
+              onRetry={() => historyQuery.refetch()}
+              isRetrying={historyQuery.isFetching}
+            />
           ) : !leaveHistory || leaveHistory.length === 0 ? (
             <div className="text-center py-12">
               <Calendar className="h-12 w-12 text-slate-600 mx-auto mb-4" />
@@ -232,7 +249,7 @@ export function LeaveBalance({ employeeId }: LeaveBalanceProps) {
                         </div>
                         <div className="text-sm text-slate-400 mt-1">
                           {leave.vacationStartDate && leave.vacationEndDate ? (
-                            <>من {new Date(leave.vacationStartDate).toLocaleDateString('ar-SA')} إلى {new Date(leave.vacationEndDate).toLocaleDateString('ar-SA')}</>
+                            <>من {formatPortalDate(leave.vacationStartDate)} إلى {formatPortalDate(leave.vacationEndDate)}</>
                           ) : (
                             <span>تاريخ غير محدد</span>
                           )}

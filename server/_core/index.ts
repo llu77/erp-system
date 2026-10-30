@@ -31,6 +31,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+  // التطبيق خلف وكيل عكسي واحد (يعتمد على x-forwarded-proto للكوكيز):
+  // نثق بقفزة واحدة حتى يكون req.ip عنوان العميل الحقيقي (حد محاولات الدخول لكل عميل)
+  app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS ?? 1));
   const server = createServer(app);
   
   // Enable gzip compression for all responses

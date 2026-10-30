@@ -4,6 +4,7 @@
 import { Resend } from "resend";
 import * as db from "../db";
 import * as templates from "./emailTemplates";
+import { formatBonusPeriodLabel } from "../../shared/bonus";
 import { 
   EmailException, 
   SMTPException, 
@@ -208,12 +209,17 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
       );
     }
     
-    await resend.emails.send({
+    // Resend لا يرمي خطأً عند رفض الإرسال بل يعيده في الحقل error
+    const { error: sendError } = await resend.emails.send({
       from: FROM_EMAIL,
       to,
       subject,
       html,
     });
+    if (sendError) {
+      console.error(`❌ رفض مزود البريد الإرسال إلى ${to}:`, sendError.message || sendError);
+      return false;
+    }
     console.log(`✓ تم إرسال البريد إلى: ${to}`);
     return true;
   } catch (error: any) {
@@ -768,17 +774,17 @@ export async function notifyEmployeesPayslip(data: {
       
       if (await sendEmail(employee.email, subject, html)) {
         sentCount++;
-        console.log(`✓ تم إرسال قسيمة الراتب إلى ${employee.employeeName}`);
+        console.log(`✓ تم إرسال مسيرة الراتب إلى ${employee.employeeName}`);
       } else {
         failedCount++;
       }
     } catch (error) {
-      console.error(`خطأ في إرسال قسيمة الراتب للموظف ${employee.employeeName}:`, error);
+      console.error(`خطأ في إرسال مسيرة الراتب للموظف ${employee.employeeName}:`, error);
       failedCount++;
     }
   }
   
-  console.log(`✓ تم إرسال ${sentCount} قسيمة راتب، فشل ${failedCount}`);
+  console.log(`✓ تم إرسال ${sentCount} مسيرة راتب، فشل ${failedCount}`);
   return { success: sentCount > 0, sentCount, failedCount };
 }
 
@@ -1043,8 +1049,7 @@ export async function sendBonusDiscrepancyAlert(
         <div style="padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
           <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
             <p style="margin: 5px 0;"><strong>الفرع:</strong> ${data.branchName}</p>
-            <p style="margin: 5px 0;"><strong>الأسبوع:</strong> ${data.weekNumber}</p>
-            <p style="margin: 5px 0;"><strong>الفترة:</strong> ${data.month}/${data.year}</p>
+            <p style="margin: 5px 0;"><strong>الفترة:</strong> ${formatBonusPeriodLabel(data.weekNumber, data.month, data.year)}</p>
           </div>
           
           <h3 style="color: #dc2626; border-bottom: 2px solid #dc2626; padding-bottom: 10px;">
@@ -1092,7 +1097,7 @@ export async function sendBonusDiscrepancyAlert(
     await resend.emails.send({
       from: FROM_EMAIL,
       to: recipientEmail,
-      subject: `⚠️ تنبيه فروقات البونص - ${data.branchName} - الأسبوع ${data.weekNumber}`,
+      subject: `⚠️ تنبيه فروقات البونص - ${data.branchName} - ${formatBonusPeriodLabel(data.weekNumber, data.month, data.year)}`,
       html,
     });
 
@@ -1145,7 +1150,7 @@ export async function sendWeeklyBonusReport(
         <div style="background: linear-gradient(135deg, #1f2937, #374151); padding: 25px; border-radius: 12px 12px 0 0;">
           <h1 style="color: white; margin: 0; font-size: 24px;">📊 تقرير البونص الأسبوعي</h1>
           <p style="color: #9ca3af; margin: 10px 0 0 0;">
-            الأسبوع ${data.weekNumber} - ${data.month}/${data.year}
+            الفترة ${formatBonusPeriodLabel(data.weekNumber, data.month, data.year)}
           </p>
         </div>
         
@@ -1225,7 +1230,7 @@ export async function sendWeeklyBonusReport(
         await resend.emails.send({
           from: FROM_EMAIL,
           to: recipient.email,
-          subject: `📊 تقرير البونص الأسبوعي - الأسبوع ${data.weekNumber} - ${data.month}/${data.year}`,
+          subject: `📊 تقرير البونص الأسبوعي - ${formatBonusPeriodLabel(data.weekNumber, data.month, data.year)}`,
           html,
         });
         sentCount++;
@@ -1347,6 +1352,44 @@ export async function sendMultipleAnomalyAlerts(
 }
 
 
+// ==================== مستلمو طلبات صرف البونص (أصحاب صلاحية الموافقة فقط) ====================
+// المسؤولون من قائمة المستلمين (مع احترام تفعيل إشعارات البونص) + مستخدمو النظام بدور مسؤول/مدير
+// مشرفو الفروع لا يستقبلون "طلب يتطلب موافقتكم" لأنهم ليسوا أصحاب صلاحية الموافقة
+export async function getBonusApproverRecipients(): Promise<Recipient[]> {
+  const recipients: Recipient[] = [];
+  const seen = new Set<string>();
+  const add = (r: Recipient) => {
+    const key = (r.email || '').trim().toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    recipients.push(r);
+  };
+
+  try {
+    const registered = await db.getNotificationRecipients();
+    for (const r of registered) {
+      if (r.role === 'admin' && r.isActive && r.receiveBonusNotifications !== false) {
+        add({ id: r.id, name: r.name, email: r.email, role: 'admin' });
+      }
+    }
+  } catch (error) {
+    console.error('خطأ في جلب مستلمي إشعارات البونص:', error);
+  }
+
+  try {
+    const users = await db.getAllUsers();
+    for (const u of users) {
+      if (u.isActive && u.email && (u.role === 'admin' || u.role === 'manager')) {
+        add({ id: 0, name: u.name || u.email, email: u.email, role: u.role });
+      }
+    }
+  } catch (error) {
+    console.error('خطأ في جلب المديرين لإشعارات البونص:', error);
+  }
+
+  return recipients;
+}
+
 // ==================== إشعار طلب صرف بونص أسبوعي متقدم ====================
 export async function notifyAdvancedBonusPaymentRequest(data: {
   branchId: number;
@@ -1354,6 +1397,8 @@ export async function notifyAdvancedBonusPaymentRequest(data: {
   weekNumber: number;
   month: number;
   year: number;
+  /** وصف الفترة: "8-14 أكتوبر 2026" */
+  periodLabel?: string;
   totalAmount: number;
   eligibleCount: number;
   totalEmployees: number;
@@ -1364,12 +1409,14 @@ export async function notifyAdvancedBonusPaymentRequest(data: {
     code: string;
     weeklyRevenue: number;
     tier: string;
+    /** اسم المستوى المحفوظ وقت الاحتساب */
+    tierName?: string;
     bonusAmount: number;
   }>;
 }): Promise<{ success: boolean; sentCount: number }> {
-  console.log(`📧 إرسال طلب صرف بونص متقدم: ${data.branchName} - الأسبوع ${data.weekNumber} - ${data.totalAmount} ر.س`);
+  console.log(`📧 إرسال طلب صرف بونص متقدم: ${data.branchName} - ${data.periodLabel || `الفترة ${data.weekNumber}`} - ${data.totalAmount} ر.س`);
   
-  const recipients = await getRecipientsForNotification('bonus', data.branchId);
+  const recipients = await getBonusApproverRecipients();
   
   if (recipients.length === 0) {
     console.log('⚠️ لا يوجد مستلمين لإشعار طلب صرف البونص');
@@ -1404,7 +1451,7 @@ export async function notifyAdvancedBonusPaymentRequest(data: {
           recipientName: recipient.name,
           notificationType: 'bonus_payment_request',
           subject,
-          bodyArabic: `طلب صرف بونص - ${data.branchName} - الأسبوع ${data.weekNumber} - ${data.totalAmount} ر.س`,
+          bodyArabic: `طلب صرف بونص - ${data.branchName} - ${data.periodLabel || `الفترة ${data.weekNumber}`} - ${data.totalAmount} ر.س`,
           status: 'sent',
           sentAt: new Date(),
         });
@@ -1941,6 +1988,7 @@ export async function notifyEmployeeRequestSubmitted(data: {
     permission: 'استئذان',
     objection: 'اعتراض',
     resignation: 'استقالة',
+    end_of_service: 'إنهاء خدمة',
   };
   
   const requestTypeName = requestTypeNames[data.requestType] || data.requestType;
@@ -2059,6 +2107,7 @@ export async function notifyEmployeeRequestApproved(data: {
     permission: 'استئذان',
     objection: 'اعتراض',
     resignation: 'استقالة',
+    end_of_service: 'إنهاء خدمة',
   };
   
   const requestTypeName = requestTypeNames[data.requestType] || data.requestType;
@@ -2181,6 +2230,7 @@ export async function notifyEmployeeRequestRejected(data: {
     permission: 'استئذان',
     objection: 'اعتراض',
     resignation: 'استقالة',
+    end_of_service: 'إنهاء خدمة',
   };
   
   const requestTypeName = requestTypeNames[data.requestType] || data.requestType;

@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, json, date } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, json, date, index } from "drizzle-orm/mysql-core";
 
 // ==================== جدول المستخدمين ====================
 export const users = mysqlTable("users", {
@@ -281,6 +281,8 @@ export const employees = mysqlTable("employees", {
   hasPortalAccess: boolean("hasPortalAccess").default(false).notNull(),
   isSupervisor: boolean("isSupervisor").default(false).notNull(),
   lastLogin: timestamp("lastLogin"),
+  // إصدار جلسة بوابة الموظفين: يُزاد عند تغيير/إعادة تعيين كلمة المرور أو إيقاف الدخول فتُلغى الجلسات القائمة
+  sessionVersion: int("sessionVersion").default(0).notNull(),
   // صورة الموظف
   photoUrl: varchar("photoUrl", { length: 500 }),
   // حقول الإقامة والوثائق
@@ -291,6 +293,14 @@ export const employees = mysqlTable("employees", {
   healthCertImageUrl: varchar("healthCertImageUrl", { length: 500 }),
   contractExpiryDate: timestamp("contractExpiryDate"),
   contractImageUrl: varchar("contractImageUrl", { length: 500 }),
+  // مفاتيح التخزين لتجديد روابط الصور (الرابط المحفوظ قد ينتهي)
+  photoKey: varchar("photoKey", { length: 500 }),
+  iqamaImageKey: varchar("iqamaImageKey", { length: 500 }),
+  healthCertImageKey: varchar("healthCertImageKey", { length: 500 }),
+  contractImageKey: varchar("contractImageKey", { length: 500 }),
+  // تاريخ مباشرة العمل (YYYY-MM-DD) والجنسية - لخطاب إنهاء الخدمة والمخالصة النهائية
+  hireDate: date("hireDate", { mode: "string" }),
+  nationality: varchar("nationality", { length: 100 }),
   // حقل تسجيل المعلومات من الموظف (لمرة واحدة فقط)
   infoSubmittedAt: timestamp("infoSubmittedAt"),
   infoSubmittedBy: int("infoSubmittedBy"), // null = الموظف نفسه، أو ID الأدمن
@@ -367,12 +377,15 @@ export type InsertEmployeeRevenue = typeof employeeRevenues.$inferInsert;
 // ==================== جدول البونص الأسبوعي ====================
 /**
  * Weekly Bonuses - Tracks weekly bonus calculations per branch
- * Week calculation:
- * - Week 1: Days 1-7
- * - Week 2: Days 8-15
- * - Week 3: Days 16-22
- * - Week 4: Days 23-29
- * - Week 5: Days 30-31 (remaining days)
+ * Bonus periods (shared/bonus.ts):
+ * - Period 1: Days 1-7
+ * - Period 2: Days 8-14
+ * - Period 3: Days 15-21
+ * - Period 4: Days 22-28
+ * - Period 5: Day 29 to end of month (absent in a non-leap February)
+ * weekStart/weekEnd are stored as UTC bounds (00:00:00 of the first day → 23:59:59.999 of the last day)
+ * Status flow: pending → requested → approved → paid (requested → rejected → requested again)
+ * Amounts of requested/approved/paid periods are frozen; approvedAmount/paidAmount snapshot the totals.
  */
 export const weeklyBonuses = mysqlTable("weeklyBonuses", {
   id: int("id").autoincrement().primaryKey(),
@@ -391,6 +404,8 @@ export const weeklyBonuses = mysqlTable("weeklyBonuses", {
   rejectedBy: int("rejectedBy"),
   rejectionReason: text("rejectionReason"),
   totalAmount: decimal("totalAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  approvedAmount: decimal("approvedAmount", { precision: 15, scale: 2 }), // المبلغ المعتمد وقت الموافقة
+  paidAmount: decimal("paidAmount", { precision: 15, scale: 2 }), // المبلغ المصروف فعلياً
   
   // حقول تتبع الصرف
   paidAt: timestamp("paidAt"), // تاريخ الصرف الفعلي
@@ -409,13 +424,8 @@ export type InsertWeeklyBonus = typeof weeklyBonuses.$inferInsert;
 // ==================== جدول تفاصيل البونص ====================
 /**
  * Bonus Details - Individual employee bonus breakdown
- * Bonus tiers:
- * - Tier 5: ≥2400 SAR → 180 SAR
- * - Tier 4: 2100-2399 SAR → 135 SAR
- * - Tier 3: 1800-2099 SAR → 95 SAR
- * - Tier 2: 1500-1799 SAR → 60 SAR
- * - Tier 1: 1200-1499 SAR → 35 SAR
- * - None: <1200 SAR → 0 SAR
+ * Tiers are defined by the manager in bonusTierSettings (up to 7 tiers, keys tier_1..tier_7).
+ * tierName snapshots the tier label in force when the bonus was calculated.
  */
 export const bonusDetails = mysqlTable("bonusDetails", {
   id: int("id").autoincrement().primaryKey(),
@@ -424,6 +434,7 @@ export const bonusDetails = mysqlTable("bonusDetails", {
   weeklyRevenue: decimal("weeklyRevenue", { precision: 15, scale: 2 }).default("0.00").notNull(),
   bonusAmount: decimal("bonusAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
   bonusTier: mysqlEnum("bonusTier", ["tier_1", "tier_2", "tier_3", "tier_4", "tier_5", "tier_6", "tier_7", "none"]).notNull(),
+  tierName: varchar("tierName", { length: 100 }), // اسم المستوى وقت الاحتساب
   isEligible: boolean("isEligible").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -487,7 +498,8 @@ export const employeeRequests = mysqlTable("employeeRequests", {
     "arrears",      // صرف متأخرات
     "permission",   // استئذان
     "objection",    // اعتراض على مخالفة
-    "resignation"   // استقالة
+    "resignation",  // استقالة
+    "end_of_service" // إنهاء خدمة (انتهاء العقد وعدم التجديد) - يُدار من صفحة إنهاء الخدمة
   ]).notNull(),
   
   // حالة الطلب
@@ -552,7 +564,8 @@ export const employeeRequests = mysqlTable("employeeRequests", {
   isDeductedFromSalary: boolean("isDeductedFromSalary").default(false).notNull(), // هل تم خصمها من الراتب
   deductedInPayrollId: int("deductedInPayrollId"), // معرف مسيرة الراتب التي تم الخصم فيها
   deductedAt: timestamp("deductedAt"), // تاريخ الخصم
-  
+  settledInEndOfServiceId: int("settledInEndOfServiceId"), // المخالصة النهائية التي خُصمت فيها السلفة
+
   // التتبع
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -631,9 +644,10 @@ export type InsertPayroll = typeof payrolls.$inferInsert;
 // ==================== جدول تفاصيل الرواتب ====================
 /**
  * Payroll Details - تفاصيل راتب كل موظف
- * الراتب الأساسي: 2000 ريال
- * ساعات إضافية: 1000 ريال (إذا مفعل)
- * حوافز المشرف: 400 ريال
+ * تُحسب جميع القيم في الخادم عبر shared/payroll.ts (calculatePayrollLine)
+ * الراتب الأساسي: من إعدادات الموظف (افتراضي 2000)
+ * ساعات إضافية: overtimeRate من إعدادات الموظف (افتراضي 1000) عند تفعيلها
+ * حوافز المشرف: supervisorIncentive (افتراضي 400)
  */
 export const payrollDetails = mysqlTable("payrollDetails", {
   id: int("id").autoincrement().primaryKey(),
@@ -665,7 +679,12 @@ export const payrollDetails = mysqlTable("payrollDetails", {
   
   // السلف المخصومة
   advanceDeduction: decimal("advanceDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
-  
+  advanceDetails: text("advanceDetails"), // السلف المرتبطة بالمسيرة (JSON: {items:[{id,amount,title,approvedAt}], deferredIds:[]})
+
+  // خصم المخالفات المعتمدة
+  violationsDeduction: decimal("violationsDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  violationsDetails: text("violationsDetails"), // JSON: {items:[{id,amount,violationType,violationDate,description}], deferredIds:[]}
+
   // خصم فواتير الموظفين السالبة
   negativeInvoicesDeduction: decimal("negativeInvoicesDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
   negativeInvoicesDetails: text("negativeInvoicesDetails"), // تفاصيل الفواتير السالبة (JSON)
@@ -730,6 +749,141 @@ export const employeeSalarySettings = mysqlTable("employeeSalarySettings", {
 export type EmployeeSalarySetting = typeof employeeSalarySettings.$inferSelect;
 export type InsertEmployeeSalarySetting = typeof employeeSalarySettings.$inferInsert;
 
+// ==================== جدول مخالفات الموظفين ====================
+/**
+ * Employee Violations - مخالفات/جزاءات الموظفين
+ * - يسجلها مشرف الفرع (بانتظار الاعتماد) أو المدير (معتمدة مباشرة)
+ * - المخالفات المعتمدة تُخصم تلقائياً في مسيرة الرواتب للشهر الذي وقعت فيه أو بعده
+ * - ترتبط بالمسيرة عبر deductedInPayrollId وتُحرر عند إلغاء/حذف المسيرة
+ */
+export const employeeViolations = mysqlTable("employeeViolations", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  employeeName: varchar("employeeName", { length: 255 }).notNull(),
+  branchId: int("branchId").notNull(),
+  branchName: varchar("branchName", { length: 255 }),
+  violationDate: timestamp("violationDate").notNull(),
+  violationType: varchar("violationType", { length: 100 }).notNull(),
+  description: text("description"),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "cancelled"]).default("pending").notNull(),
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }),
+  reviewedBy: int("reviewedBy"),
+  reviewedByName: varchar("reviewedByName", { length: 255 }),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewNotes: text("reviewNotes"),
+  isDeductedFromSalary: boolean("isDeductedFromSalary").default(false).notNull(),
+  deductedInPayrollId: int("deductedInPayrollId"),
+  deductedAt: timestamp("deductedAt"),
+  settledInEndOfServiceId: int("settledInEndOfServiceId"), // المخالصة النهائية التي خُصمت فيها المخالفة
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeViolation = typeof employeeViolations.$inferSelect;
+export type InsertEmployeeViolation = typeof employeeViolations.$inferInsert;
+
+// ==================== جدول مخالصات إنهاء الخدمة ====================
+/**
+ * End of Service Settlements - إنهاء الخدمة (انتهاء العقد وعدم التجديد) والمخالصة النهائية
+ * - كل مخالصة مرتبطة بطلب من نوع end_of_service في employeeRequests (requestId)
+ * - بيانات الموظف والأجر لقطة وقت الإنشاء/آخر تعديل، والحساب من shared/endOfService.ts
+ * - عند الاعتماد تُربط السلف والمخالفات المخصومة (settledInEndOfServiceId) ويُعطّل الموظف
+ * - الحالات: draft → approved → paid، والإلغاء من المسودة أو المعتمدة (يُحرر الربط ويُعاد تفعيل الموظف)
+ */
+export const endOfServiceSettlements = mysqlTable("endOfServiceSettlements", {
+  id: int("id").autoincrement().primaryKey(),
+  settlementNumber: varchar("settlementNumber", { length: 30 }).notNull().unique(), // EOS-2026-0001
+  requestId: int("requestId").notNull().unique(),
+  employeeId: int("employeeId").notNull(),
+  branchId: int("branchId"),
+  reason: varchar("reason", { length: 50 }).default("contract_expiry").notNull(),
+  status: mysqlEnum("status", ["draft", "approved", "paid", "cancelled"]).default("draft").notNull(),
+
+  // التواريخ (YYYY-MM-DD)
+  letterDate: date("letterDate", { mode: "string" }).notNull(),
+  hireDate: date("hireDate", { mode: "string" }).notNull(),
+  contractEndDate: date("contractEndDate", { mode: "string" }).notNull(),
+  lastWorkingDay: date("lastWorkingDay", { mode: "string" }).notNull(),
+
+  // لقطة بيانات الموظف
+  employeeName: varchar("employeeName", { length: 255 }).notNull(),
+  employeeCode: varchar("employeeCode", { length: 50 }).notNull(),
+  nationality: varchar("nationality", { length: 100 }),
+  idNumber: varchar("idNumber", { length: 50 }),
+  position: varchar("position", { length: 100 }),
+  branchName: varchar("branchName", { length: 255 }),
+
+  // الأجر المعتمد للحساب
+  baseSalary: decimal("baseSalary", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  fixedAllowances: decimal("fixedAllowances", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  monthlyWage: decimal("monthlyWage", { precision: 12, scale: 2 }).default("0.00").notNull(),
+
+  // مدة الخدمة
+  serviceYears: int("serviceYears").default(0).notNull(),
+  serviceMonths: int("serviceMonths").default(0).notNull(),
+  serviceDays: int("serviceDays").default(0).notNull(),
+  serviceTotalDays: int("serviceTotalDays").default(0).notNull(),
+
+  // المستحقات
+  eosAward: decimal("eosAward", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  salaryDays: decimal("salaryDays", { precision: 8, scale: 2 }).default("0.00").notNull(),
+  salaryDaysOverride: decimal("salaryDaysOverride", { precision: 8, scale: 2 }),
+  salaryDue: decimal("salaryDue", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  otherAdditions: decimal("otherAdditions", { precision: 12, scale: 2 }).default("0.00").notNull(),
+
+  // الخصومات
+  otherDeductions: decimal("otherDeductions", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  advancesDeduction: decimal("advancesDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  violationsDeduction: decimal("violationsDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+
+  // الإجماليات (الصافي سالب = مبلغ مستحق على الموظف)
+  totalEntitlements: decimal("totalEntitlements", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  totalDeductions: decimal("totalDeductions", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  netAmount: decimal("netAmount", { precision: 12, scale: 2 }).default("0.00").notNull(),
+
+  // الملاحظات
+  salaryNote: text("salaryNote"),
+  otherAdditionsNote: text("otherAdditionsNote"),
+  otherDeductionsNote: text("otherDeductionsNote"),
+  notes: text("notes"),
+
+  // التفاصيل (JSON)
+  advancesDetails: text("advancesDetails"), // EndOfServiceDeductionItem[]
+  violationsDetails: text("violationsDetails"), // EndOfServiceDeductionItem[]
+  calculationSnapshot: text("calculationSnapshot"), // EndOfServiceCalculation
+
+  // مصادر الحساب
+  lastPayrollYear: int("lastPayrollYear"),
+  lastPayrollMonth: int("lastPayrollMonth"),
+
+  // الصرف
+  paymentMethod: varchar("paymentMethod", { length: 30 }),
+  paymentReference: varchar("paymentReference", { length: 100 }),
+
+  // التتبع
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }),
+  approvedBy: int("approvedBy"),
+  approvedByName: varchar("approvedByName", { length: 255 }),
+  approvedAt: timestamp("approvedAt"),
+  paidBy: int("paidBy"),
+  paidByName: varchar("paidByName", { length: 255 }),
+  paidAt: timestamp("paidAt"),
+  cancelledBy: int("cancelledBy"),
+  cancelledByName: varchar("cancelledByName", { length: 255 }),
+  cancelledAt: timestamp("cancelledAt"),
+  cancellationReason: text("cancellationReason"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("endOfServiceSettlements_employeeId_idx").on(table.employeeId),
+]);
+
+export type EndOfServiceSettlement = typeof endOfServiceSettlements.$inferSelect;
+export type InsertEndOfServiceSettlement = typeof endOfServiceSettlements.$inferInsert;
+
 // ==================== جدول المصاريف ====================
 /**
  * Expenses - المصاريف
@@ -761,7 +915,8 @@ export const expenses = mysqlTable("expenses", {
     "housing_rent",       // ايجار سكن
     "improvements",       // تحسينات
     "bonus",              // مكافأة
-    "other"               // أخرى
+    "other",              // أخرى
+    "salaries"            // رواتب (من مسير معتمد فقط، لا تُدخل يدوياً)
   ]).notNull(),
   
   // التفاصيل
@@ -813,10 +968,42 @@ export const expenses = mysqlTable("expenses", {
   createdByName: varchar("createdByName", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+
+  // المصدر: يدوي، أو مصروف ثابت شهري، أو مسير رواتب معتمد (تلقائي)
+  source: mysqlEnum("source", ["manual", "fixed", "payroll"]).default("manual").notNull(),
+  // مفتاح فريد للمصاريف التلقائية حتى لا تتكرر (fixed:فرع:شهر:قالب / payroll:رقم)
+  sourceKey: varchar("sourceKey", { length: 100 }).unique(),
 });
 
 export type Expense = typeof expenses.$inferSelect;
 export type InsertExpense = typeof expenses.$inferInsert;
+
+// ==================== المصاريف الثابتة الشهرية (قوالب لكل فرع) ====================
+/**
+ * Recurring expenses - المصاريف الثابتة: تُضاف تلقائياً كل شهر لفرعها (إيجار، سكن، إنترنت...)
+ */
+export const recurringExpenses = mysqlTable("recurringExpenses", {
+  id: int("id").autoincrement().primaryKey(),
+  branchId: int("branchId").notNull(),
+  category: mysqlEnum("category", [
+    "shop_supplies", "printing", "carpet_cleaning", "small_needs", "residency", "medical_exam",
+    "transportation", "electricity", "internet", "license_renewal", "visa", "residency_renewal",
+    "health_cert_renewal", "maintenance", "health_cert", "violation", "emergency", "shop_rent",
+    "housing_rent", "improvements", "bonus", "other",
+  ]).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  paymentMethod: mysqlEnum("paymentMethod", ["cash", "bank_transfer", "check", "credit_card", "other"]).default("cash").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  // أول شهر يُضاف فيه (YYYY-MM)؛ الشهور السابقة لا تُنشأ بأثر رجعي
+  startsOn: varchar("startsOn", { length: 7 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RecurringExpense = typeof recurringExpenses.$inferSelect;
+export type InsertRecurringExpense = typeof recurringExpenses.$inferInsert;
 
 // ==================== جدول سجل المصاريف ====================
 export const expenseLogs = mysqlTable("expenseLogs", {
@@ -1611,13 +1798,14 @@ export type InsertLoyaltySettingsAuditLog = typeof loyaltySettingsAuditLog.$infe
 // ==================== جدول مستويات البونص ====================
 /**
  * BonusTierSettings - إعدادات مستويات البونص
- * يسمح للأدمن بتعديل حدود ومبالغ كل مستوى
+ * يحددها المدير (admin / manager) من صفحة "إعدادات مستويات البونص"
+ * المفاتيح tier_1..tier_7 تُعين تصاعدياً حسب الحد الأدنى، والحد الأقصى = الحد الأدنى للمستوى التالي - 0.01
  */
 export const bonusTierSettings = mysqlTable("bonusTierSettings", {
   id: int("id").autoincrement().primaryKey(),
   
   // معرف المستوى
-  tierKey: varchar("tierKey", { length: 20 }).notNull().unique(), // tier_1, tier_2, tier_3, tier_4, tier_5
+  tierKey: varchar("tierKey", { length: 20 }).notNull().unique(), // tier_1 .. tier_7
   
   // اسم المستوى
   tierName: varchar("tierName", { length: 100 }).notNull(), // المستوى 1, المستوى 2, ...
@@ -1687,20 +1875,28 @@ export const receiptVouchers = mysqlTable("receiptVouchers", {
   id: int("id").autoincrement().primaryKey(),
   
   // معرف السند
-  voucherId: varchar("voucherId", { length: 50 }).notNull().unique(), // RV-2026-001
-  
+  voucherId: varchar("voucherId", { length: 50 }).notNull().unique(), // RV-2026-0001 / PV-2026-0001
+
+  // نوع السند: سند قبض أو سند صرف
+  voucherType: mysqlEnum("voucherType", ["receipt", "payment"]).default("receipt").notNull(),
+
   // بيانات المستند
   voucherDate: date("voucherDate").notNull(),
   dueDateFrom: date("dueDateFrom"),
   dueDateTo: date("dueDateTo"),
   dueDate: date("dueDate"), // للتوافق العكسي
   
-  // بيانات المدفوع له
+  // الطرف: "استلمنا من" لسند القبض / "صرفنا إلى" لسند الصرف
+  partyName: varchar("partyName", { length: 255 }),
+  partyType: mysqlEnum("partyType", ["branch", "employee", "supplier", "customer", "owner", "other"]),
+  partyId: int("partyId"),
+
+  // بيانات المدفوع له (في سند القبض: المستلم الفعلي للمبلغ)
   payeeName: varchar("payeeName", { length: 255 }).notNull(),
   payeeAddress: text("payeeAddress"),
   payeePhone: varchar("payeePhone", { length: 20 }),
   payeeEmail: varchar("payeeEmail", { length: 320 }),
-  
+
   // بيانات الفرع
   branchId: int("branchId"),
   branchName: varchar("branchName", { length: 100 }),
@@ -1733,13 +1929,32 @@ export const receiptVouchers = mysqlTable("receiptVouchers", {
     "bank_transfer", // تحويل بنكي
     "check",         // شيك
     "credit_card",   // بطاقة ائتمان
-    "other"          // أخرى
+    "other",         // أخرى
+    "mixed"          // مختلط (أكثر من طريقة)
   ]).default("cash"),
-  
-  // معرفات التوقيع
+
+  // توزيع المبلغ على طرق الدفع (المجموع = totalAmount)
+  cashAmount: decimal("cashAmount", { precision: 12, scale: 2 }).default('0').notNull(),
+  bankAmount: decimal("bankAmount", { precision: 12, scale: 2 }).default('0').notNull(),
+  checkAmount: decimal("checkAmount", { precision: 12, scale: 2 }).default('0').notNull(),
+  // تفاصيل الحوالة البنكية
+  bankName: varchar("bankName", { length: 100 }),
+  bankReference: varchar("bankReference", { length: 100 }),
+  // تفاصيل الشيك
+  checkNumber: varchar("checkNumber", { length: 50 }),
+  checkDate: date("checkDate"),
+  checkBank: varchar("checkBank", { length: 100 }),
+
+  // معرفات التوقيع (تُحفظ أسماء الموقعين لحظة الاعتماد)
   signedBy1: varchar("signedBy1", { length: 255 }), // سالم الوادعي
   signedBy2: varchar("signedBy2", { length: 255 }), // عمر المطيري
-  
+
+  // بيانات الإلغاء
+  cancelledBy: int("cancelledBy"),
+  cancelledByName: varchar("cancelledByName", { length: 255 }),
+  cancelledAt: timestamp("cancelledAt"),
+  cancellationReason: text("cancellationReason"),
+
   // المستخدم الذي أنشأ السند
   createdBy: int("createdBy").notNull(),
   createdByName: varchar("createdByName", { length: 255 }).notNull(),
@@ -1766,7 +1981,11 @@ export const receiptVoucherItems = mysqlTable("receiptVoucherItems", {
   
   // وصف البند
   description: varchar("description", { length: 500 }).notNull(),
-  
+
+  // الكمية وسعر الوحدة (المبلغ = الكمية × سعر الوحدة عند تحديده)
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).default('1').notNull(),
+  unitPrice: decimal("unitPrice", { precision: 12, scale: 2 }),
+
   // المبلغ
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
   

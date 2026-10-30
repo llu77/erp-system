@@ -5,3 +5,7 @@ export { BonusReport } from './BonusReport';
 export { RequestTimeline } from './RequestTimeline';
 export { RequestAttachments } from './RequestAttachments';
 export { EmployeeInfoForm } from './EmployeeInfoForm';
+export { AdvanceRequestDialog } from './AdvanceRequestDialog';
+export { AdvanceRequestActions } from './AdvanceRequestActions';
+export { ChangePasswordDialog } from './ChangePasswordDialog';
+export { PortalLoading, PortalQueryError } from './PortalQueryState';

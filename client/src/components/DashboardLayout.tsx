@@ -67,8 +67,11 @@ import {
   Bot,
   Sparkles,
   Bell,
+  ArrowUpCircle,
+  Layers,
+  UserX,
 } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
@@ -152,7 +155,9 @@ const menuStructure: MenuItem[] = [
       { icon: Receipt, label: "المصاريف", path: "/expenses", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Gift, label: "البونص", path: "/bonuses", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
       { icon: Wallet, label: "مسيرات الرواتب", path: "/payrolls", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: FileWarning, label: "مخالفات الموظفين", path: "/violations", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: FileText, label: "سند قبض", path: "/receipt-voucher", roles: ["admin", "manager", "supervisor"] },
+      { icon: ArrowUpCircle, label: "سند صرف", path: "/payment-voucher", roles: ["admin", "manager", "supervisor"] },
       { icon: BarChart3, label: "تقارير السندات", path: "/receipt-voucher-reports", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Wallet, label: "التدفق النقدي", path: "/cash-flow", roles: ["admin", "manager"] },
     ]
@@ -180,7 +185,9 @@ const menuStructure: MenuItem[] = [
     children: [
       { icon: FilePlus, label: "تقديم طلب", path: "/submit-request", roles: ["admin", "manager", "employee", "supervisor"] },
       { icon: ClipboardList, label: "إدارة الطلبات", path: "/manage-requests", roles: ["admin", "manager", "supervisor", "viewer"] },
-      { icon: Gift, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin"] },
+      { icon: UserX, label: "إنهاء الخدمة", path: "/end-of-service", roles: ["admin", "manager", "viewer", "supervisor"] },
+      { icon: Gift, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin", "manager"] },
+      { icon: Layers, label: "إعدادات مستويات البونص", path: "/bonus-tiers", roles: ["admin", "manager"] },
     ]
   },
   
@@ -188,16 +195,18 @@ const menuStructure: MenuItem[] = [
   {
     icon: Building2,
     label: "إدارة الموارد",
-    roles: ["admin", "manager", "viewer"],
+    // مشرف الفرع يرى هنا الموظفين ولوحة الوثائق فقط (موظفو فرعه)
+    roles: ["admin", "manager", "viewer", "supervisor"],
     children: [
       { icon: Building2, label: "الفروع", path: "/branches", roles: ["admin", "manager", "viewer"] },
-      { icon: UserCircle, label: "الموظفين", path: "/employees", roles: ["admin", "manager", "viewer"] },
-      { icon: FileWarning, label: "لوحة الوثائق", path: "/documents-dashboard", roles: ["admin", "manager"] },
+      { icon: UserCircle, label: "الموظفين", path: "/employees", roles: ["admin", "manager", "supervisor"] },
+      { icon: FileWarning, label: "لوحة الوثائق", path: "/documents", roles: ["admin", "manager", "viewer", "supervisor"] },
+      { icon: FileText, label: "تقرير وثائق الموظفين", path: "/employee-documents-report", roles: ["admin", "manager"] },
       { icon: Truck, label: "الموردين", path: "/suppliers", roles: ["admin", "manager", "viewer"] },
-      { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee", "supervisor"] },
-      { icon: Brain, label: "Symbol AI", path: "/employee-assistant", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: Users, label: "بوابة الموظفين", path: "/hr-onboarding", roles: ["admin", "manager", "employee"] },
+      { icon: Brain, label: "Symbol AI", path: "/employee-assistant", roles: ["admin", "manager", "viewer"] },
       { icon: Key, label: "حسابات الموظفين", path: "/employee-accounts", roles: ["admin"] },
-      { icon: Heart, label: "برنامج الولاء", path: "/loyalty", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: Heart, label: "برنامج الولاء", path: "/loyalty", roles: ["admin", "manager", "viewer"] },
     ]
   },
   
@@ -274,11 +283,23 @@ const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 400;
 
+// يمنع تكرار القائمة الجانبية عندما تُغلّف الصفحة بـ DashboardLayout داخل مسار مغلّف به أصلاً
+const DashboardLayoutNestingContext = createContext(false);
+
+
+/** هل عنصر القائمة نشط للمسار الحالي (المسار نفسه أو صفحة فرعية منه) */
+function isMenuPathActive(itemPath: string | undefined, location: string): boolean {
+  if (!itemPath) return false;
+  if (location === itemPath) return true;
+  return itemPath !== "/" && location.startsWith(`${itemPath}/`);
+}
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const isNested = useContext(DashboardLayoutNestingContext);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
@@ -288,6 +309,10 @@ export default function DashboardLayout({
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
+
+  if (isNested) {
+    return <>{children}</>;
+  }
 
   if (loading) {
     return <DashboardLayoutSkeleton />;
@@ -299,6 +324,7 @@ export default function DashboardLayout({
   }
 
   return (
+    <DashboardLayoutNestingContext.Provider value={true}>
     <SidebarProvider
       style={
         {
@@ -310,6 +336,7 @@ export default function DashboardLayout({
         {children}
       </DashboardLayoutContent>
     </SidebarProvider>
+    </DashboardLayoutNestingContext.Provider>
   );
 }
 
@@ -328,7 +355,14 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = flatMenuItems.find((item) => item.path === location);
+  // الصفحات الفرعية (مثل /end-of-service/3) تتبع عنصر القائمة الأقرب
+  const activeMenuItem =
+    flatMenuItems.find((item) => item.path === location) ??
+    flatMenuItems
+      .filter((item) => isMenuPathActive(item.path, location))
+      .sort((a, b) => (b.path ?? "").length - (a.path ?? "").length)[0];
+  // عنصر واحد نشط فقط (الأطول تطابقاً)، ومنه تُحدد القائمة الأب المفتوحة والمميزة
+  const activePath = activeMenuItem?.path;
   const isMobile = useIsMobile();
 
   // دالة للتنقل مع إغلاق القائمة على الموبايل
@@ -340,16 +374,17 @@ function DashboardLayoutContent({
   };
   const [hasShownDiscrepancyToast, setHasShownDiscrepancyToast] = useState(false);
 
-  // استعلام فروقات البونص (للأدمن فقط)
+  // استعلام فروقات البونص (للمسؤول والمدير)
+  const isBonusManager = user?.role === 'admin' || user?.role === 'manager';
   const { data: bonusDiscrepancies } = trpc.bonuses.getAllDiscrepancies.useQuery(
     undefined,
-    { enabled: user?.role === 'admin' }
+    { enabled: isBonusManager }
   );
 
   // إشعار منبثق عند تسجيل الدخول إذا وجدت فروقات
   useEffect(() => {
     if (
-      user?.role === 'admin' && 
+      isBonusManager && 
       bonusDiscrepancies && 
       bonusDiscrepancies.totalDiscrepancies > 0 && 
       !hasShownDiscrepancyToast
@@ -358,7 +393,7 @@ function DashboardLayoutContent({
       toast.warning(
         `⚠️ تنبيه: ${bonusDiscrepancies.totalDiscrepancies} فروقات في البونص`,
         {
-          description: `في ${bonusDiscrepancies.branches.length} فرع - الأسبوع ${bonusDiscrepancies.weekNumber}`,
+          description: `في ${bonusDiscrepancies.branches.length} فرع - فترة ${bonusDiscrepancies.periodLabel}`,
           duration: 8000,
           action: {
             label: 'عرض التفاصيل',
@@ -367,13 +402,13 @@ function DashboardLayoutContent({
         }
       );
     }
-  }, [bonusDiscrepancies, user, hasShownDiscrepancyToast, setLocation]);
+  }, [bonusDiscrepancies, isBonusManager, hasShownDiscrepancyToast, setLocation]);
   
   // حالة فتح/إغلاق القوائم الفرعية
   const [openMenus, setOpenMenus] = useState<string[]>(() => {
     // فتح القائمة التي تحتوي على الصفحة الحالية تلقائياً
     const parentMenu = menuStructure.find(menu => 
-      menu.children?.some(child => child.path === location)
+      menu.children?.some(child => child.path === activePath)
     );
     return parentMenu ? [parentMenu.label] : [];
   });
@@ -472,7 +507,7 @@ function DashboardLayoutContent({
   // فتح القائمة الأب عند تغيير الصفحة
   useEffect(() => {
     const parentMenu = menuStructure.find(menu => 
-      menu.children?.some(child => child.path === location)
+      menu.children?.some(child => child.path === activePath)
     );
     if (parentMenu && !openMenus.includes(parentMenu.label)) {
       setOpenMenus(prev => [...prev, parentMenu.label]);
@@ -525,7 +560,7 @@ function DashboardLayoutContent({
               {finalMenu.map((item) => {
                 // عنصر بدون أطفال (رابط مباشر)
                 if (!item.children) {
-                  const isActive = location === item.path;
+                  const isActive = !!item.path && item.path === activePath;
                   return (
                     <SidebarMenuItem key={item.path}>
                       <SidebarMenuButton
@@ -547,7 +582,7 @@ function DashboardLayoutContent({
 
                 // عنصر مع أطفال (قائمة قابلة للطي)
                 const isOpen = openMenus.includes(item.label);
-                const hasActiveChild = item.children.some(child => child.path === location);
+                const hasActiveChild = item.children.some(child => child.path === activePath);
 
                 return (
                   <Collapsible
@@ -578,7 +613,7 @@ function DashboardLayoutContent({
                       <CollapsibleContent>
                         <SidebarMenuSub className="mr-4 border-r border-border/50 pr-2 sidebar-submenu">
                           {item.children.map((child) => {
-                            const isChildActive = location === child.path;
+                            const isChildActive = !!child.path && child.path === activePath;
                             return (
                               <SidebarMenuSubItem key={child.path}>
                                 <SidebarMenuSubButton

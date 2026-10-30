@@ -2,6 +2,10 @@ import puppeteer from 'puppeteer';
 import { getDb } from '../db';
 import { dailyRevenues, employeeRevenues, expenses, weeklyBonuses, bonusDetails, employees, branches } from '../../drizzle/schema';
 import { eq, and, gte, lte, sql, desc, asc } from 'drizzle-orm';
+import { getTierDisplayName, getTierColorHex } from '../../shared/bonusHelpers';
+import type { Establishment } from '../../shared/branding';
+import { escapeHtml } from '../../shared/vouchers';
+import { REPORT_SIGNATORIES, establishmentDetailsLine, getReportEstablishment, reportFooterHtml } from '../../shared/reportBranding';
 
 // ==================== دوال المساعدة ====================
 
@@ -21,6 +25,19 @@ const getDayName = (date: Date): string => {
 const formatCurrency = (amount: number): string => {
   return `${amount.toLocaleString('ar-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
 };
+
+/**
+ * فرع التقرير ومؤسسته: اسم الفرع (العربي أولاً) ومؤسسته، أو "جميع الفروع" والهوية العامة
+ */
+async function resolveReportBranch(branchId?: number): Promise<{ label: string; establishment: Establishment }> {
+  if (!branchId) return { label: 'جميع الفروع', establishment: getReportEstablishment(null) };
+  const db = await getDb();
+  const rows = db
+    ? await db.select({ name: branches.name, nameAr: branches.nameAr }).from(branches).where(eq(branches.id, branchId)).limit(1)
+    : [];
+  const row = rows[0];
+  return { label: row?.nameAr || row?.name || `فرع رقم ${branchId}`, establishment: getReportEstablishment(row ?? null) };
+}
 
 const formatDate = (date: Date | string): string => {
   const d = new Date(date);
@@ -46,23 +63,10 @@ const getStatusLabel = (status: string): string => {
   return labels[status] || status;
 };
 
-const getTierLabel = (tier: string): string => {
-  const labels: Record<string, string> = {
-    'tier_7': 'المستوى 7 (ممتاز)', 'tier_6': 'المستوى 6', 'tier_5': 'المستوى 5',
-    'tier_4': 'المستوى 4', 'tier_3': 'المستوى 3', 'tier_2': 'المستوى 2',
-    'tier_1': 'المستوى 1', 'none': 'غير مؤهل'
-  };
-  return labels[tier] || tier;
-};
+// أسماء المستويات من الاسم المحفوظ وقت الاحتساب (bonusDetails.tierName) وليس خريطة ثابتة
+const getTierLabel = (tier: string, tierName?: string | null): string => getTierDisplayName(tier, tierName);
 
-const getTierColor = (tier: string): string => {
-  const colors: Record<string, string> = {
-    'tier_7': '#9333ea', 'tier_6': '#a855f7', 'tier_5': '#2563eb',
-    'tier_4': '#3b82f6', 'tier_3': '#22c55e', 'tier_2': '#eab308',
-    'tier_1': '#f97316', 'none': '#9ca3af'
-  };
-  return colors[tier] || '#6b7280';
-};
+const getTierColor = (tier: string): string => getTierColorHex(tier);
 
 // ==================== تقرير الإيرادات الشهري ====================
 
@@ -199,11 +203,12 @@ export async function generateMonthlyRevenueReport(month: number, year: number, 
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
   
-  const branchName = branchId ? (byBranch.find(b => b.branchId === branchId)?.branchName || 'جميع الفروع') : 'جميع الفروع';
+  const reportBranch = await resolveReportBranch(branchId);
+  const branchName = reportBranch.label;
   
   // توليد HTML
   const htmlContent = generateRevenueHTML({
-    month, year, branchName,
+    month, year, branchName, establishment: reportBranch.establishment,
     totalCash, totalNetwork, totalMada: 0, grandTotal,
     workingDays, averageDaily,
     byBranch, byEmployee, dailyBreakdown
@@ -295,11 +300,12 @@ export async function generateMonthlyExpenseReport(month: number, year: number, 
       total: data.total
     }));
   
-  const branchName = branchId ? 'فرع محدد' : 'جميع الفروع';
+  const reportBranch = await resolveReportBranch(branchId);
+  const branchName = reportBranch.label;
   
   // توليد HTML
   const htmlContent = generateExpenseHTML({
-    month, year, branchName,
+    month, year, branchName, establishment: reportBranch.establishment,
     totalExpenses, approvedExpenses, pendingExpenses, paidExpenses,
     byCategory, byStatus,
     expenses: expensesList.slice(0, 30).map(e => ({
@@ -362,6 +368,7 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
     branchName: string | null;
     weeklyRevenue: string;
     tier: string;
+    tierName: string | null;
     bonusAmount: string;
     isEligible: boolean;
   }> = [];
@@ -376,6 +383,7 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
       branchName: branches.name,
       weeklyRevenue: bonusDetails.weeklyRevenue,
       tier: bonusDetails.bonusTier,
+      tierName: bonusDetails.tierName,
       bonusAmount: bonusDetails.bonusAmount,
       isEligible: bonusDetails.isEligible
     })
@@ -387,6 +395,12 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
     detailsList = await detailsQuery;
   }
   
+  // اسم كل مستوى كما حُفظ وقت الاحتساب
+  const tierNameByKey = new Map<string, string>();
+  for (const d of detailsList) {
+    if (d.tier && d.tierName) tierNameByKey.set(d.tier, d.tierName);
+  }
+
   // تجميع حسب المستوى
   const tierMap = new Map<string, { count: number; total: number }>();
   for (const d of detailsList) {
@@ -401,7 +415,7 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
   const byTier = Array.from(tierMap.entries())
     .map(([tier, data]) => ({
       tier,
-      tierLabel: getTierLabel(tier),
+      tierLabel: getTierLabel(tier, tierNameByKey.get(tier)),
       count: data.count,
       totalAmount: data.total,
       percentage: totalBonusAmount > 0 ? (data.total / totalBonusAmount) * 100 : 0
@@ -444,7 +458,8 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
         branchName: data.branchName,
         totalRevenue: data.revenue,
         totalBonus: data.bonus,
-        averageTier
+        averageTier,
+        averageTierLabel: getTierLabel(averageTier, tierNameByKey.get(averageTier))
       };
     })
     .sort((a, b) => b.totalBonus - a.totalBonus);
@@ -453,11 +468,12 @@ export async function generateMonthlyBonusReport(month: number, year: number, br
   const eligibleEmployees = new Set(detailsList.filter(d => d.isEligible).map(d => d.employeeId));
   const averageBonus = eligibleEmployees.size > 0 ? totalBonusAmount / eligibleEmployees.size : 0;
   
-  const branchName = branchId ? 'فرع محدد' : 'جميع الفروع';
+  const reportBranch = await resolveReportBranch(branchId);
+  const branchName = reportBranch.label;
   
   // توليد HTML
   const htmlContent = generateBonusHTML({
-    month, year, branchName,
+    month, year, branchName, establishment: reportBranch.establishment,
     totalBonusAmount,
     weeksCount: bonusesList.length,
     totalEmployees: uniqueEmployees.size,
@@ -497,6 +513,8 @@ interface RevenueHTMLData {
   month: number;
   year: number;
   branchName: string;
+  /** الجهة المُصدرة (الافتراضي: مؤسسة اسم الفرع) */
+  establishment?: Establishment;
   totalCash: number;
   totalNetwork: number;
   totalMada: number;
@@ -509,6 +527,8 @@ interface RevenueHTMLData {
 }
 
 function generateRevenueHTML(data: RevenueHTMLData): string {
+  const est = data.establishment ?? getReportEstablishment(data.branchName);
+  const estDetails = establishmentDetailsLine(est);
   return `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -521,7 +541,7 @@ function generateRevenueHTML(data: RevenueHTMLData): string {
     body { font-family: 'Tajawal', sans-serif; font-size: 11px; line-height: 1.5; color: #1a1a1a; background: #fff; padding: 25px; direction: rtl; }
     .report-container { max-width: 800px; margin: 0 auto; }
     .header { background: linear-gradient(135deg, #1a1a1a 0%, #333 100%); color: #fff; padding: 20px 25px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; }
-    .logo { font-size: 24px; font-weight: 800; }
+    .logo { font-size: 20px; font-weight: 800; }
     .company-name { font-size: 10px; opacity: 0.9; }
     .report-title { font-size: 20px; font-weight: 700; text-align: center; }
     .report-subtitle { font-size: 10px; opacity: 0.8; text-align: center; }
@@ -548,18 +568,18 @@ function generateRevenueHTML(data: RevenueHTMLData): string {
     .signature-line { border-top: 2px solid #333; padding-top: 10px; margin-top: 40px; }
     .signature-name { font-weight: 700; font-size: 12px; }
     .signature-title { font-size: 10px; color: #666; }
-    .stamp { width: 100px; height: 100px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; }
-    .stamp-logo { font-size: 14px; font-weight: 800; }
-    .stamp-text { font-size: 8px; }
+    .stamp { width: 130px; height: 130px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; text-align: center; padding: 8px; line-height: 1.3; }
+    .stamp-logo { font-size: 18px; font-weight: 800; }
+    .stamp-text { font-size: 10px; }
     @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
 <body>
   <div class="report-container">
     <div class="header">
-      <div><div class="logo">Symbol AI</div><div class="company-name">سيمبول للذكاء الاصطناعي</div></div>
+      <div><div class="logo">${escapeHtml(est.nameAr)}</div>${estDetails ? `<div class="company-name">${escapeHtml(estDetails)}</div>` : ''}</div>
       <div><div class="report-title">تقرير الإيرادات الشهري</div><div class="report-subtitle">Monthly Revenue Report</div></div>
-      <div style="text-align: left;"><div class="report-period">${getMonthName(data.month)} ${data.year}</div><div style="font-size: 10px; opacity: 0.8;">${data.branchName}</div></div>
+      <div style="text-align: left;"><div class="report-period">${getMonthName(data.month)} ${data.year}</div><div style="font-size: 10px; opacity: 0.8;">${escapeHtml(data.branchName)}</div></div>
     </div>
     
     <div class="summary-section">
@@ -577,7 +597,7 @@ function generateRevenueHTML(data: RevenueHTMLData): string {
       <table>
         <thead><tr><th>الفرع</th><th>نقدي</th><th>شبكة</th><th>مدى</th><th>النسبة</th><th>الإجمالي</th></tr></thead>
         <tbody>
-          ${data.byBranch.map(b => `<tr><td>${b.branchName}</td><td>${formatCurrency(b.totalCash)}</td><td>${formatCurrency(b.totalNetwork)}</td><td>${formatCurrency(b.totalMada)}</td><td><div class="progress-bar"><div class="progress-fill" style="width: ${b.percentage}%"></div></div><span style="font-size: 9px;">${b.percentage.toFixed(1)}%</span></td><td>${formatCurrency(b.total)}</td></tr>`).join('')}
+          ${data.byBranch.map(b => `<tr><td>${escapeHtml(b.branchName)}</td><td>${formatCurrency(b.totalCash)}</td><td>${formatCurrency(b.totalNetwork)}</td><td>${formatCurrency(b.totalMada)}</td><td><div class="progress-bar"><div class="progress-fill" style="width: ${b.percentage}%"></div></div><span style="font-size: 9px;">${b.percentage.toFixed(1)}%</span></td><td>${formatCurrency(b.total)}</td></tr>`).join('')}
         </tbody>
       </table>
     </div>
@@ -588,7 +608,7 @@ function generateRevenueHTML(data: RevenueHTMLData): string {
       <table>
         <thead><tr><th>#</th><th>الموظف</th><th>الكود</th><th>الفرع</th><th>النسبة</th><th>الإيرادات</th></tr></thead>
         <tbody>
-          ${data.byEmployee.slice(0, 15).map((e, i) => `<tr><td>${i + 1}</td><td>${e.employeeName}</td><td>${e.employeeCode}</td><td>${e.branchName}</td><td><div class="progress-bar"><div class="progress-fill" style="width: ${e.percentage}%"></div></div><span style="font-size: 9px;">${e.percentage.toFixed(1)}%</span></td><td>${formatCurrency(e.totalRevenue)}</td></tr>`).join('')}
+          ${data.byEmployee.slice(0, 15).map((e, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(e.employeeName)}</td><td>${escapeHtml(e.employeeCode)}</td><td>${escapeHtml(e.branchName)}</td><td><div class="progress-bar"><div class="progress-fill" style="width: ${e.percentage}%"></div></div><span style="font-size: 9px;">${e.percentage.toFixed(1)}%</span></td><td>${formatCurrency(e.totalRevenue)}</td></tr>`).join('')}
           <tr class="total-row"><td colspan="5">الإجمالي</td><td>${formatCurrency(data.grandTotal)}</td></tr>
         </tbody>
       </table>
@@ -606,12 +626,12 @@ function generateRevenueHTML(data: RevenueHTMLData): string {
     </div>
     
     <div class="footer">
-      <div class="signature-box"><div class="signature-line"><div class="signature-name">سالم الوادعي</div><div class="signature-title">المشرف العام</div></div></div>
-      <div><div class="stamp"><div class="stamp-logo">Symbol</div><div class="stamp-text">معتمد</div></div></div>
-      <div class="signature-box"><div class="signature-line"><div class="signature-name">عمر المطيري</div><div class="signature-title">المدير العام</div></div></div>
+      <div class="signature-box"><div class="signature-line"><div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.supervisor.name)}</div><div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.supervisor.title)}</div></div></div>
+      <div><div class="stamp"><div class="stamp-logo">معتمد</div><div class="stamp-text">${escapeHtml(est.nameAr)}</div></div></div>
+      <div class="signature-box"><div class="signature-line"><div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.manager.name)}</div><div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.manager.title)}</div></div></div>
     </div>
     
-    <div style="text-align: center; padding: 10px; font-size: 9px; color: #666;">تم إنشاء هذا التقرير بتاريخ ${formatDate(new Date())} | Symbol AI ERP System</div>
+    <div style="text-align: center; padding: 10px; font-size: 9px; color: #666;">${reportFooterHtml(est)}</div>
   </div>
 </body>
 </html>
@@ -622,6 +642,8 @@ interface ExpenseHTMLData {
   month: number;
   year: number;
   branchName: string;
+  /** الجهة المُصدرة (الافتراضي: مؤسسة اسم الفرع) */
+  establishment?: Establishment;
   totalExpenses: number;
   approvedExpenses: number;
   pendingExpenses: number;
@@ -632,6 +654,8 @@ interface ExpenseHTMLData {
 }
 
 function generateExpenseHTML(data: ExpenseHTMLData): string {
+  const est = data.establishment ?? getReportEstablishment(data.branchName);
+  const estDetails = establishmentDetailsLine(est);
   return `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -644,7 +668,7 @@ function generateExpenseHTML(data: ExpenseHTMLData): string {
     body { font-family: 'Tajawal', sans-serif; font-size: 11px; line-height: 1.5; color: #1a1a1a; background: #fff; padding: 25px; direction: rtl; }
     .report-container { max-width: 800px; margin: 0 auto; }
     .header { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: #fff; padding: 20px 25px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; }
-    .logo { font-size: 24px; font-weight: 800; }
+    .logo { font-size: 20px; font-weight: 800; }
     .company-name { font-size: 10px; opacity: 0.9; }
     .report-title { font-size: 20px; font-weight: 700; text-align: center; }
     .report-subtitle { font-size: 10px; opacity: 0.8; text-align: center; }
@@ -679,18 +703,18 @@ function generateExpenseHTML(data: ExpenseHTMLData): string {
     .signature-line { border-top: 2px solid #333; padding-top: 10px; margin-top: 40px; }
     .signature-name { font-weight: 700; font-size: 12px; }
     .signature-title { font-size: 10px; color: #666; }
-    .stamp { width: 100px; height: 100px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; }
-    .stamp-logo { font-size: 14px; font-weight: 800; }
-    .stamp-text { font-size: 8px; }
+    .stamp { width: 130px; height: 130px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; text-align: center; padding: 8px; line-height: 1.3; }
+    .stamp-logo { font-size: 18px; font-weight: 800; }
+    .stamp-text { font-size: 10px; }
     @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
 <body>
   <div class="report-container">
     <div class="header">
-      <div><div class="logo">Symbol AI</div><div class="company-name">سيمبول للذكاء الاصطناعي</div></div>
+      <div><div class="logo">${escapeHtml(est.nameAr)}</div>${estDetails ? `<div class="company-name">${escapeHtml(estDetails)}</div>` : ''}</div>
       <div><div class="report-title">تقرير المصاريف الشهري</div><div class="report-subtitle">Monthly Expense Report</div></div>
-      <div style="text-align: left;"><div class="report-period">${getMonthName(data.month)} ${data.year}</div><div style="font-size: 10px; opacity: 0.8;">${data.branchName}</div></div>
+      <div style="text-align: left;"><div class="report-period">${getMonthName(data.month)} ${data.year}</div><div style="font-size: 10px; opacity: 0.8;">${escapeHtml(data.branchName)}</div></div>
     </div>
     
     <div class="summary-section">
@@ -726,19 +750,19 @@ function generateExpenseHTML(data: ExpenseHTMLData): string {
       <table>
         <thead><tr><th>التاريخ</th><th>الفئة</th><th>الوصف</th><th>الفرع</th><th>الحالة</th><th>المبلغ</th></tr></thead>
         <tbody>
-          ${data.expenses.map(e => `<tr><td>${e.date}</td><td><span class="category-badge">${e.category}</span></td><td>${e.description.substring(0, 30)}${e.description.length > 30 ? '...' : ''}</td><td>${e.branchName}</td><td><span class="status-badge status-${e.status.toLowerCase().replace(' ', '-')}">${e.status}</span></td><td>${formatCurrency(e.amount)}</td></tr>`).join('')}
+          ${data.expenses.map(e => `<tr><td>${e.date}</td><td><span class="category-badge">${e.category}</span></td><td>${escapeHtml(e.description.substring(0, 30))}${e.description.length > 30 ? '...' : ''}</td><td>${escapeHtml(e.branchName)}</td><td><span class="status-badge status-${e.status.toLowerCase().replace(' ', '-')}">${e.status}</span></td><td>${formatCurrency(e.amount)}</td></tr>`).join('')}
           <tr class="total-row"><td colspan="5">الإجمالي</td><td>${formatCurrency(data.totalExpenses)}</td></tr>
         </tbody>
       </table>
     </div>
     
     <div class="footer">
-      <div class="signature-box"><div class="signature-line"><div class="signature-name">سالم الوادعي</div><div class="signature-title">المشرف العام</div></div></div>
-      <div><div class="stamp"><div class="stamp-logo">Symbol</div><div class="stamp-text">معتمد</div></div></div>
-      <div class="signature-box"><div class="signature-line"><div class="signature-name">عمر المطيري</div><div class="signature-title">المدير العام</div></div></div>
+      <div class="signature-box"><div class="signature-line"><div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.supervisor.name)}</div><div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.supervisor.title)}</div></div></div>
+      <div><div class="stamp"><div class="stamp-logo">معتمد</div><div class="stamp-text">${escapeHtml(est.nameAr)}</div></div></div>
+      <div class="signature-box"><div class="signature-line"><div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.manager.name)}</div><div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.manager.title)}</div></div></div>
     </div>
     
-    <div style="text-align: center; padding: 10px; font-size: 9px; color: #666;">تم إنشاء هذا التقرير بتاريخ ${formatDate(new Date())} | Symbol AI ERP System</div>
+    <div style="text-align: center; padding: 10px; font-size: 9px; color: #666;">${reportFooterHtml(est)}</div>
   </div>
 </body>
 </html>
@@ -749,6 +773,8 @@ interface BonusHTMLData {
   month: number;
   year: number;
   branchName: string;
+  /** الجهة المُصدرة (الافتراضي: مؤسسة اسم الفرع) */
+  establishment?: Establishment;
   totalBonusAmount: number;
   weeksCount: number;
   totalEmployees: number;
@@ -756,10 +782,12 @@ interface BonusHTMLData {
   averageBonus: number;
   byTier: Array<{ tier: string; tierLabel: string; count: number; totalAmount: number; percentage: number }>;
   weeklyBreakdown: Array<{ weekNumber: number; weekStart: string; weekEnd: string; totalAmount: number; employeeCount: number }>;
-  employees: Array<{ employeeId: number; employeeName: string; employeeCode: string; branchName: string; totalRevenue: number; totalBonus: number; averageTier: string }>;
+  employees: Array<{ employeeId: number; employeeName: string; employeeCode: string; branchName: string; totalRevenue: number; totalBonus: number; averageTier: string; averageTierLabel: string }>;
 }
 
 function generateBonusHTML(data: BonusHTMLData): string {
+  const est = data.establishment ?? getReportEstablishment(data.branchName);
+  const estDetails = establishmentDetailsLine(est);
   return `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -772,7 +800,7 @@ function generateBonusHTML(data: BonusHTMLData): string {
     body { font-family: 'Tajawal', sans-serif; font-size: 11px; line-height: 1.5; color: #1a1a1a; background: #fff; padding: 25px; direction: rtl; }
     .report-container { max-width: 800px; margin: 0 auto; }
     .header { background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); color: #fff; padding: 20px 25px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; }
-    .logo { font-size: 24px; font-weight: 800; }
+    .logo { font-size: 20px; font-weight: 800; }
     .company-name { font-size: 10px; opacity: 0.9; }
     .report-title { font-size: 20px; font-weight: 700; text-align: center; }
     .report-subtitle { font-size: 10px; opacity: 0.8; text-align: center; }
@@ -800,18 +828,18 @@ function generateBonusHTML(data: BonusHTMLData): string {
     .signature-line { border-top: 2px solid #333; padding-top: 10px; margin-top: 40px; }
     .signature-name { font-weight: 700; font-size: 12px; }
     .signature-title { font-size: 10px; color: #666; }
-    .stamp { width: 100px; height: 100px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; }
-    .stamp-logo { font-size: 14px; font-weight: 800; }
-    .stamp-text { font-size: 8px; }
+    .stamp { width: 130px; height: 130px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; text-align: center; padding: 8px; line-height: 1.3; }
+    .stamp-logo { font-size: 18px; font-weight: 800; }
+    .stamp-text { font-size: 10px; }
     @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
 <body>
   <div class="report-container">
     <div class="header">
-      <div><div class="logo">Symbol AI</div><div class="company-name">سيمبول للذكاء الاصطناعي</div></div>
+      <div><div class="logo">${escapeHtml(est.nameAr)}</div>${estDetails ? `<div class="company-name">${escapeHtml(estDetails)}</div>` : ''}</div>
       <div><div class="report-title">تقرير البونص الشهري</div><div class="report-subtitle">Monthly Bonus Report</div></div>
-      <div style="text-align: left;"><div class="report-period">${getMonthName(data.month)} ${data.year}</div><div style="font-size: 10px; opacity: 0.8;">${data.branchName}</div></div>
+      <div style="text-align: left;"><div class="report-period">${getMonthName(data.month)} ${data.year}</div><div style="font-size: 10px; opacity: 0.8;">${escapeHtml(data.branchName)}</div></div>
     </div>
     
     <div class="summary-section">
@@ -848,19 +876,19 @@ function generateBonusHTML(data: BonusHTMLData): string {
       <table>
         <thead><tr><th>#</th><th>الموظف</th><th>الكود</th><th>الفرع</th><th>الإيرادات</th><th>المستوى</th><th>البونص</th></tr></thead>
         <tbody>
-          ${data.employees.slice(0, 15).map((e, i) => `<tr><td>${i + 1}</td><td>${e.employeeName}</td><td>${e.employeeCode}</td><td>${e.branchName}</td><td>${formatCurrency(e.totalRevenue)}</td><td><span class="tier-badge" style="background: ${getTierColor(e.averageTier)}">${getTierLabel(e.averageTier)}</span></td><td>${formatCurrency(e.totalBonus)}</td></tr>`).join('')}
+          ${data.employees.slice(0, 15).map((e, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(e.employeeName)}</td><td>${escapeHtml(e.employeeCode)}</td><td>${escapeHtml(e.branchName)}</td><td>${formatCurrency(e.totalRevenue)}</td><td><span class="tier-badge" style="background: ${getTierColor(e.averageTier)}">${e.averageTierLabel}</span></td><td>${formatCurrency(e.totalBonus)}</td></tr>`).join('')}
           <tr class="total-row"><td colspan="6">الإجمالي</td><td>${formatCurrency(data.totalBonusAmount)}</td></tr>
         </tbody>
       </table>
     </div>
     
     <div class="footer">
-      <div class="signature-box"><div class="signature-line"><div class="signature-name">سالم الوادعي</div><div class="signature-title">المشرف العام</div></div></div>
-      <div><div class="stamp"><div class="stamp-logo">Symbol</div><div class="stamp-text">معتمد</div></div></div>
-      <div class="signature-box"><div class="signature-line"><div class="signature-name">عمر المطيري</div><div class="signature-title">المدير العام</div></div></div>
+      <div class="signature-box"><div class="signature-line"><div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.supervisor.name)}</div><div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.supervisor.title)}</div></div></div>
+      <div><div class="stamp"><div class="stamp-logo">معتمد</div><div class="stamp-text">${escapeHtml(est.nameAr)}</div></div></div>
+      <div class="signature-box"><div class="signature-line"><div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.manager.name)}</div><div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.manager.title)}</div></div></div>
     </div>
     
-    <div style="text-align: center; padding: 10px; font-size: 9px; color: #666;">تم إنشاء هذا التقرير بتاريخ ${formatDate(new Date())} | Symbol AI ERP System</div>
+    <div style="text-align: center; padding: 10px; font-size: 9px; color: #666;">${reportFooterHtml(est)}</div>
   </div>
 </body>
 </html>
@@ -873,6 +901,7 @@ function generateBonusHTML(data: BonusHTMLData): string {
 export async function generateProfitLossReport(month: number, year: number, branchId?: number): Promise<Buffer> {
   const db = await getDb();
   if (!db) throw new Error('Database connection failed');
+  const reportEst = (await resolveReportBranch(branchId)).establishment;
   
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0);
@@ -975,6 +1004,7 @@ export async function generateProfitLossReport(month: number, year: number, bran
 </head>
 <body>
   <div class="header">
+    <div style="font-size: 15px; font-weight: bold; margin-bottom: 4px;">${escapeHtml(reportEst.nameAr)}</div>
     <h1>تقرير الربح والخسارة</h1>
     <p>شهر ${getMonthName(month)} ${year}</p>
   </div>
@@ -1023,8 +1053,8 @@ export async function generateProfitLossReport(month: number, year: number, bran
   </table>
   
   <div class="footer">
-    <div class="signature"><div class="signature-line">المشرف العام: سالم الوادعي</div></div>
-    <div class="signature"><div class="signature-line">المدير: عمر المطيري</div></div>
+    <div class="signature"><div class="signature-line">${escapeHtml(REPORT_SIGNATORIES.supervisor.title)}: ${escapeHtml(REPORT_SIGNATORIES.supervisor.name)}</div></div>
+    <div class="signature"><div class="signature-line">${escapeHtml(REPORT_SIGNATORIES.manager.title)}: ${escapeHtml(REPORT_SIGNATORIES.manager.name)}</div></div>
   </div>
 </body>
 </html>`;
@@ -1054,6 +1084,8 @@ export async function generatePayrollReport(month: number, year: number, branchI
     )
   ).orderBy(desc(payrolls.createdAt));
   const payrollsList = await payrollQuery || [];
+  // مؤسسة المسيرات (فرع واحد -> مؤسسته، وإلا الهوية العامة)
+  const reportEst = getReportEstablishment(payrollsList.map(p => p.branchName));
   
   if (payrollsList.length === 0) {
     const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>body{font-family:Arial;padding:40px;text-align:center;}</style></head><body><h1>لا يوجد مسير رواتب</h1><p>لم يتم العثور على مسير رواتب لشهر ${getMonthName(month)} ${year}</p></body></html>`;
@@ -1140,6 +1172,7 @@ export async function generatePayrollReport(month: number, year: number, branchI
 </head>
 <body>
   <div class="header">
+    <div style="font-size: 15px; font-weight: bold; margin-bottom: 4px;">${escapeHtml(reportEst.nameAr)}</div>
     <h1>مسير الرواتب الشهري</h1>
     <p>شهر ${getMonthName(month)} ${year} | عدد الموظفين: ${allDetails.length}</p>
   </div>
@@ -1172,7 +1205,7 @@ export async function generatePayrollReport(month: number, year: number, branchI
       ${allDetails.map((d, i) => `
         <tr>
           <td>${i + 1}</td>
-          <td>${d.branchName}</td>
+          <td>${escapeHtml(d.branchName)}</td>
           <td>${d.employeeName}</td>
           <td>${d.employeeCode}</td>
           <td>${d.position || '-'}</td>
@@ -1197,8 +1230,8 @@ export async function generatePayrollReport(month: number, year: number, branchI
   </table>
   
   <div class="footer">
-    <div class="signature"><div class="signature-line">المشرف العام: سالم الوادعي</div></div>
-    <div class="signature"><div class="signature-line">المدير: عمر المطيري</div></div>
+    <div class="signature"><div class="signature-line">${escapeHtml(REPORT_SIGNATORIES.supervisor.title)}: ${escapeHtml(REPORT_SIGNATORIES.supervisor.name)}</div></div>
+    <div class="signature"><div class="signature-line">${escapeHtml(REPORT_SIGNATORIES.manager.title)}: ${escapeHtml(REPORT_SIGNATORIES.manager.name)}</div></div>
   </div>
 </body>
 </html>`;

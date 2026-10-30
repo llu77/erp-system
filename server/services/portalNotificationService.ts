@@ -287,11 +287,14 @@ export async function notifyRequestApproved(
 ): Promise<number> {
   const typeLabels: Record<string, string> = {
     salary_advance: "سلفة",
+    advance: "سلفة",
+    vacation: "إجازة",
     leave: "إجازة",
     arrears: "صرف متأخرات",
     permission: "استئذان",
     objection: "اعتراض",
     resignation: "استقالة",
+    end_of_service: "إنهاء خدمة",
   };
 
   const label = typeLabels[requestType] || requestType;
@@ -321,11 +324,14 @@ export async function notifyRequestRejected(
 ): Promise<number> {
   const typeLabels: Record<string, string> = {
     salary_advance: "سلفة",
+    advance: "سلفة",
+    vacation: "إجازة",
     leave: "إجازة",
     arrears: "صرف متأخرات",
     permission: "استئذان",
     objection: "اعتراض",
     resignation: "استقالة",
+    end_of_service: "إنهاء خدمة",
   };
 
   const label = typeLabels[requestType] || requestType;
@@ -477,11 +483,14 @@ export async function notifySupervisorNewRequest(
 ): Promise<number> {
   const typeLabels: Record<string, string> = {
     salary_advance: "سلفة",
+    advance: "سلفة",
+    vacation: "إجازة",
     leave: "إجازة",
     arrears: "صرف متأخرات",
     permission: "استئذان",
     objection: "اعتراض",
     resignation: "استقالة",
+    end_of_service: "إنهاء خدمة",
   };
 
   const label = typeLabels[requestType] || requestType;

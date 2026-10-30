@@ -990,6 +990,8 @@ export async function getAllEmployees() {
     iqamaExpiryDate: employees.iqamaExpiryDate,
     healthCertExpiryDate: employees.healthCertExpiryDate,
     contractExpiryDate: employees.contractExpiryDate,
+    hireDate: employees.hireDate,
+    nationality: employees.nationality,
     isActive: employees.isActive,
     createdAt: employees.createdAt,
     updatedAt: employees.updatedAt,
@@ -1021,6 +1023,8 @@ export async function getEmployeesByBranch(branchId: number) {
     iqamaExpiryDate: employees.iqamaExpiryDate,
     healthCertExpiryDate: employees.healthCertExpiryDate,
     contractExpiryDate: employees.contractExpiryDate,
+    hireDate: employees.hireDate,
+    nationality: employees.nationality,
     isActive: employees.isActive,
     createdAt: employees.createdAt,
     updatedAt: employees.updatedAt,
@@ -1140,6 +1144,72 @@ export async function createEmployeeRevenue(data: InsertEmployeeRevenue) {
   await db.insert(employeeRevenues).values(data);
 }
 
+/**
+ * إنشاء الإيراد اليومي مع إيرادات الموظفين في معاملة واحدة
+ * - قفل صف الفرع ثم إعادة التحقق من عدم وجود إيراد لنفس اليوم (منع التكرار عند الحفظ المتزامن)
+ */
+export async function createDailyRevenueWithEmployees(
+  data: InsertDailyRevenue,
+  employeeRows: Array<Omit<InsertEmployeeRevenue, 'dailyRevenueId'>>
+): Promise<{ id: number }> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  return await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM branches WHERE id = ${data.branchId} FOR UPDATE`);
+
+    const startOfDay = new Date(data.date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(data.date);
+    endOfDay.setHours(23, 59, 59, 999);
+    const existing = await tx.select({ id: dailyRevenues.id })
+      .from(dailyRevenues)
+      .where(and(
+        eq(dailyRevenues.branchId, data.branchId),
+        gte(dailyRevenues.date, startOfDay),
+        lte(dailyRevenues.date, endOfDay)
+      ))
+      .limit(1);
+    if (existing.length > 0) {
+      throw new Error('ALREADY_EXISTS: يوجد إيراد بالفعل لهذا اليوم');
+    }
+
+    const result = await tx.insert(dailyRevenues).values(data);
+    const dailyRevenueId = Number(result[0].insertId);
+
+    if (employeeRows.length > 0) {
+      await tx.insert(employeeRevenues).values(
+        employeeRows.map(row => ({ ...row, dailyRevenueId }))
+      );
+    }
+
+    return { id: dailyRevenueId };
+  });
+}
+
+/**
+ * حذف إيراد يومي مع إيرادات موظفيه في معاملة واحدة
+ * يُرجع الفرع والتاريخ (قبل الحذف) لإعادة احتساب البونص، أو null إذا لم يوجد
+ */
+export async function deleteDailyRevenueWithEmployees(id: number): Promise<{ branchId: number; date: Date } | null> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  return await db.transaction(async (tx) => {
+    const [row] = await tx.select({ id: dailyRevenues.id, branchId: dailyRevenues.branchId, date: dailyRevenues.date })
+      .from(dailyRevenues)
+      .where(eq(dailyRevenues.id, id))
+      .limit(1);
+    if (!row) return null;
+
+    await tx.execute(sql`SELECT id FROM branches WHERE id = ${row.branchId} FOR UPDATE`);
+    await tx.delete(employeeRevenues).where(eq(employeeRevenues.dailyRevenueId, id));
+    await tx.delete(dailyRevenues).where(eq(dailyRevenues.id, id));
+
+    return { branchId: row.branchId, date: new Date(row.date) };
+  });
+}
+
 // ==================== دوال البونص الأسبوعي ====================
 export async function getWeeklyBonusesByBranch(branchId: number, limit = 10) {
   const db = await getDb();
@@ -1164,119 +1234,95 @@ export async function getCurrentWeekBonus(branchId: number, year: number, month:
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getPendingBonusRequests() {
+// branchId: لتقييد النتائج بفرع المشرف (null/undefined = كل الفروع)
+export async function getPendingBonusRequests(branchId?: number | null) {
   const db = await getDb();
   if (!db) return [];
   return await db.select().from(weeklyBonuses)
-    .where(eq(weeklyBonuses.status, "requested"))
+    .where(branchId
+      ? and(eq(weeklyBonuses.status, "requested"), eq(weeklyBonuses.branchId, branchId))
+      : eq(weeklyBonuses.status, "requested"))
     .orderBy(desc(weeklyBonuses.requestedAt));
 }
 
 // الحصول على جميع طلبات البونص (للعرض في السجل) - جميع الأسابيع التي تم حسابها
-export async function getAllBonusRequests(limit = 50) {
+export async function getAllBonusRequests(limit = 50, branchId?: number | null) {
   const db = await getDb();
   if (!db) return [];
   // جلب جميع البونصات التي تم حسابها (كل الحالات)
-  return await db.select().from(weeklyBonuses)
-    .orderBy(desc(weeklyBonuses.year), desc(weeklyBonuses.month), desc(weeklyBonuses.weekNumber))
+  const query = db.select().from(weeklyBonuses);
+  return await (branchId ? query.where(eq(weeklyBonuses.branchId, branchId)) : query)
+    .orderBy(desc(weeklyBonuses.year), desc(weeklyBonuses.month), desc(weeklyBonuses.weekNumber), desc(weeklyBonuses.id))
     .limit(limit);
 }
 
 // إحصائيات البونص
-export async function getBonusStats() {
-  const db = await getDb();
-  if (!db) return {
+// - المصروف = الحالة "تم الصرف" فقط (المبلغ المصروف الفعلي)
+// - الموافق عليه وغير المصروف يظهر بشكل منفصل
+// - المستفيدون = عدد الموظفين المختلفين (وليس عدد مرات الاستحقاق)
+export async function getBonusStats(branchId?: number | null) {
+  const empty = {
     totalPaidThisMonth: 0,
     totalPaidThisYear: 0,
     totalPaidAllTime: 0,
     totalBeneficiariesThisMonth: 0,
     totalBeneficiariesThisYear: 0,
     pendingRequestsCount: 0,
+    pendingRequestsAmount: 0,
     approvedNotPaidCount: 0,
+    approvedNotPaidAmount: 0,
     monthlyBreakdown: [] as { month: number; year: number; total: number; count: number }[],
   };
+  const db = await getDb();
+  if (!db) return empty;
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
-  // جلب جميع البونصات
-  const allBonuses = await db.select().from(weeklyBonuses);
-  
-  // حساب الإحصائيات
-  let totalPaidThisMonth = 0;
-  let totalPaidThisYear = 0;
-  let totalPaidAllTime = 0;
-  let pendingRequestsCount = 0;
-  let approvedNotPaidCount = 0;
+  const allBonuses = branchId
+    ? await db.select().from(weeklyBonuses).where(eq(weeklyBonuses.branchId, branchId))
+    : await db.select().from(weeklyBonuses);
+
+  const stats = { ...empty, monthlyBreakdown: [] as typeof empty.monthlyBreakdown };
   const monthlyMap = new Map<string, { total: number; count: number }>();
 
   for (const bonus of allBonuses) {
-    const amount = parseFloat(bonus.totalAmount || '0');
-    
-    // البونصات المصروفة أو الموافق عليها
-    if (bonus.status === 'paid' || bonus.status === 'approved') {
-      totalPaidAllTime += amount;
-      
+    if (bonus.status === 'paid') {
+      const amount = parseFloat(bonus.paidAmount ?? bonus.approvedAmount ?? bonus.totalAmount ?? '0') || 0;
+      stats.totalPaidAllTime += amount;
       if (bonus.year === currentYear) {
-        totalPaidThisYear += amount;
-        
-        if (bonus.month === currentMonth) {
-          totalPaidThisMonth += amount;
-        }
+        stats.totalPaidThisYear += amount;
+        if (bonus.month === currentMonth) stats.totalPaidThisMonth += amount;
       }
-      
-      // تجميع شهري
       const key = `${bonus.year}-${bonus.month}`;
       const existing = monthlyMap.get(key) || { total: 0, count: 0 };
       existing.total += amount;
       existing.count += 1;
       monthlyMap.set(key, existing);
-    }
-    
-    if (bonus.status === 'requested') {
-      pendingRequestsCount++;
-    }
-    
-    if (bonus.status === 'approved') {
-      approvedNotPaidCount++;
+    } else if (bonus.status === 'approved') {
+      stats.approvedNotPaidCount++;
+      stats.approvedNotPaidAmount += parseFloat(bonus.approvedAmount ?? bonus.totalAmount ?? '0') || 0;
+    } else if (bonus.status === 'requested') {
+      stats.pendingRequestsCount++;
+      stats.pendingRequestsAmount += parseFloat(bonus.totalAmount || '0') || 0;
     }
   }
 
-  // حساب عدد المستفيدين
-  const thisMonthBonusIds = allBonuses
-    .filter(b => b.year === currentYear && b.month === currentMonth && (b.status === 'paid' || b.status === 'approved'))
-    .map(b => b.id);
-  
-  const thisYearBonusIds = allBonuses
-    .filter(b => b.year === currentYear && (b.status === 'paid' || b.status === 'approved'))
-    .map(b => b.id);
-
-  let totalBeneficiariesThisMonth = 0;
-  let totalBeneficiariesThisYear = 0;
-
-  if (thisMonthBonusIds.length > 0) {
-    const monthDetails = await db.select()
+  const countDistinctBeneficiaries = async (ids: number[]) => {
+    if (ids.length === 0) return 0;
+    const rows = await db.select({ count: sql<number>`COUNT(DISTINCT ${bonusDetails.employeeId})` })
       .from(bonusDetails)
-      .where(and(
-        inArray(bonusDetails.weeklyBonusId, thisMonthBonusIds),
-        eq(bonusDetails.isEligible, true)
-      ));
-    totalBeneficiariesThisMonth = monthDetails.length;
-  }
+      .where(and(inArray(bonusDetails.weeklyBonusId, ids), eq(bonusDetails.isEligible, true)));
+    return Number(rows[0]?.count || 0);
+  };
 
-  if (thisYearBonusIds.length > 0) {
-    const yearDetails = await db.select()
-      .from(bonusDetails)
-      .where(and(
-        inArray(bonusDetails.weeklyBonusId, thisYearBonusIds),
-        eq(bonusDetails.isEligible, true)
-      ));
-    totalBeneficiariesThisYear = yearDetails.length;
-  }
+  const paidThisYear = allBonuses.filter(b => b.status === 'paid' && b.year === currentYear);
+  stats.totalBeneficiariesThisMonth = await countDistinctBeneficiaries(paidThisYear.filter(b => b.month === currentMonth).map(b => b.id));
+  stats.totalBeneficiariesThisYear = await countDistinctBeneficiaries(paidThisYear.map(b => b.id));
 
   // تحويل التجميع الشهري إلى مصفوفة
-  const monthlyBreakdown = Array.from(monthlyMap.entries())
+  stats.monthlyBreakdown = Array.from(monthlyMap.entries())
     .map(([key, value]) => {
       const [year, month] = key.split('-').map(Number);
       return { year, month, ...value };
@@ -1284,16 +1330,7 @@ export async function getBonusStats() {
     .sort((a, b) => b.year - a.year || b.month - a.month)
     .slice(0, 12); // آخر 12 شهر
 
-  return {
-    totalPaidThisMonth,
-    totalPaidThisYear,
-    totalPaidAllTime,
-    totalBeneficiariesThisMonth,
-    totalBeneficiariesThisYear,
-    pendingRequestsCount,
-    approvedNotPaidCount,
-    monthlyBreakdown,
-  };
+  return stats;
 }
 
 export async function getBonusDetails(weeklyBonusId: number) {
@@ -1307,39 +1344,16 @@ export async function getBonusDetails(weeklyBonusId: number) {
     weeklyRevenue: bonusDetails.weeklyRevenue,
     bonusAmount: bonusDetails.bonusAmount,
     bonusTier: bonusDetails.bonusTier,
+    tierName: bonusDetails.tierName,
     isEligible: bonusDetails.isEligible,
   })
     .from(bonusDetails)
     .leftJoin(employees, eq(bonusDetails.employeeId, employees.id))
     .where(eq(bonusDetails.weeklyBonusId, weeklyBonusId))
-    .orderBy(desc(bonusDetails.bonusAmount));
+    .orderBy(desc(bonusDetails.bonusAmount), desc(bonusDetails.weeklyRevenue));
 }
 
-export async function updateWeeklyBonusStatus(
-  id: number,
-  status: "pending" | "requested" | "approved" | "rejected",
-  userId: number,
-  rejectionReason?: string
-) {
-  const db = await getDb();
-  if (!db) return;
-  
-  const updateData: Partial<InsertWeeklyBonus> = { status };
-  
-  if (status === "requested") {
-    updateData.requestedAt = new Date();
-    updateData.requestedBy = userId;
-  } else if (status === "approved") {
-    updateData.approvedAt = new Date();
-    updateData.approvedBy = userId;
-  } else if (status === "rejected") {
-    updateData.rejectedAt = new Date();
-    updateData.rejectedBy = userId;
-    updateData.rejectionReason = rejectionReason;
-  }
-  
-  await db.update(weeklyBonuses).set(updateData).where(eq(weeklyBonuses.id, id));
-}
+// ملاحظة: تغيير حالة البونص يتم فقط عبر server/bonus/workflow.ts (تحديث مشروط بالحالة الحالية)
 
 // ==================== دوال سجل النظام ====================
 export async function createSystemLog(data: Omit<InsertSystemLog, "id" | "createdAt">) {
@@ -1399,7 +1413,7 @@ export async function getAllEmployeeRequests(filters?: {
     conditions.push(eq(employeeRequests.status, filters.status as "pending" | "approved" | "rejected" | "cancelled"));
   }
   if (filters?.requestType) {
-    conditions.push(eq(employeeRequests.requestType, filters.requestType as "advance" | "vacation" | "arrears" | "permission" | "objection" | "resignation"));
+    conditions.push(eq(employeeRequests.requestType, filters.requestType as "advance" | "vacation" | "arrears" | "permission" | "objection" | "resignation" | "end_of_service"));
   }
   if (filters?.employeeId) {
     conditions.push(eq(employeeRequests.employeeId, filters.employeeId));
@@ -1480,6 +1494,37 @@ export async function updateEmployeeRequestStatus(
   }
 }
 
+// مراجعة طلب قيد الانتظار (تحديث ذري): ينجح فقط إن كان الطلب ما زال قيد الانتظار ولم يُراجع من قبل
+export async function reviewPendingEmployeeRequest(
+  id: number,
+  data: {
+    status: "approved" | "rejected" | "cancelled";
+    reviewedBy: number;
+    reviewedByName: string;
+    reviewNotes?: string | null;
+    rejectionReason?: string | null;
+  }
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error('قاعدة البيانات غير متاحة');
+
+  const result = await db.update(employeeRequests)
+    .set({
+      status: data.status,
+      reviewedBy: data.reviewedBy,
+      reviewedByName: data.reviewedByName,
+      reviewedAt: new Date(),
+      reviewNotes: data.reviewNotes ?? null,
+      ...(data.status === 'rejected' && data.rejectionReason ? { rejectionReason: data.rejectionReason } : {}),
+    })
+    .where(and(
+      eq(employeeRequests.id, id),
+      eq(employeeRequests.status, 'pending'),
+      isNull(employeeRequests.reviewedAt)
+    ));
+  return Number((result as unknown as Array<{ affectedRows?: number }>)[0]?.affectedRows ?? 0) > 0;
+}
+
 // تحديث طلب
 export async function updateEmployeeRequest(id: number, data: Partial<InsertEmployeeRequest>) {
   const db = await getDb();
@@ -1535,7 +1580,7 @@ export async function getEmployeeRequestsByType(requestType: string) {
   if (!db) return [];
   
   return await db.select().from(employeeRequests)
-    .where(eq(employeeRequests.requestType, requestType as "advance" | "vacation" | "arrears" | "permission" | "objection" | "resignation"))
+    .where(eq(employeeRequests.requestType, requestType as "advance" | "vacation" | "arrears" | "permission" | "objection" | "resignation" | "end_of_service"))
     .orderBy(desc(employeeRequests.createdAt));
 }
 
@@ -1642,6 +1687,14 @@ export async function getPayrollDetails(payrollId: number) {
   return await db.select().from(payrollDetails)
     .where(eq(payrollDetails.payrollId, payrollId))
     .orderBy(payrollDetails.employeeName);
+}
+
+// الحصول على سطر مسيرة بالمعرف
+export async function getPayrollDetailById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(payrollDetails).where(eq(payrollDetails.id, id)).limit(1);
+  return result[0];
 }
 
 // إنشاء تفاصيل راتب موظف
@@ -1880,323 +1933,8 @@ export async function getPendingExpenses() {
 
 // ==================== دوال حساب الرواتب ====================
 
-// حساب راتب موظف (محدث مع أيام العمل)
-export function calculateEmployeeSalary(
-  baseSalary: number,
-  overtimeEnabled: boolean,
-  overtimeRate: number,
-  workDays: number,
-  incentiveAmount: number,
-  deductions: number,
-  advanceDeduction: number
-) {
-  // الساعات الإضافية (1000 إذا مفعل)
-  const overtime = overtimeEnabled ? overtimeRate : 0;
-  
-  // حساب الراتب اليومي (الأساسي + الساعات الإضافية) / 30
-  const dailyRate = (baseSalary + overtime) / 30;
-  
-  // حساب خصم الغياب (إذا أقل من 30 يوم)
-  const absentDays = 30 - workDays;
-  const absentDeduction = absentDays > 0 ? dailyRate * absentDays : 0;
-  
-  // إجمالي الراتب قبل الخصومات
-  const grossSalary = baseSalary + overtime + incentiveAmount;
-  
-  // إجمالي الخصومات
-  const totalDeductions = deductions + advanceDeduction + absentDeduction;
-  
-  // صافي الراتب
-  const netSalary = grossSalary - totalDeductions;
-  
-  return {
-    baseSalary,
-    overtimeAmount: overtime,
-    workDays,
-    absentDays,
-    absentDeduction,
-    incentiveAmount,
-    grossSalary,
-    totalDeductions,
-    netSalary,
-  };
-}
 
-// إنشاء مسيرة رواتب شهرية لفرع
-export async function generateMonthlyPayroll(
-  branchId: number,
-  branchName: string,
-  year: number,
-  month: number,
-  createdBy: number,
-  createdByName: string
-) {
-  const db = await getDb();
-  if (!db) return null;
-  
-  // التحقق من عدم وجود مسيرة سابقة
-  const existing = await getPayrollByBranchAndMonth(branchId, year, month);
-  if (existing) {
-    throw new Error("توجد مسيرة رواتب لهذا الشهر بالفعل");
-  }
-  
-  // الحصول على موظفي الفرع
-  const branchEmployees = await getEmployeesByBranch(branchId);
-  if (branchEmployees.length === 0) {
-    throw new Error("لا يوجد موظفين في هذا الفرع");
-  }
-  
-  // الحصول على إعدادات الرواتب
-  const salarySettings = await getAllEmployeeSalarySettings();
-  const settingsMap = new Map(salarySettings.map(s => [s.employeeId, s]));
-  
-  // الحصول على السلف الموافق عليها لهذا الشهر
-  const approvedAdvances = await db.select().from(employeeRequests)
-    .where(and(
-      eq(employeeRequests.requestType, "advance"),
-      eq(employeeRequests.status, "approved")
-    ));
-  
-  const advancesMap = new Map<number, number>();
-  approvedAdvances.forEach(adv => {
-    const current = advancesMap.get(adv.employeeId) || 0;
-    advancesMap.set(adv.employeeId, current + parseFloat(adv.advanceAmount || "0"));
-  });
-  
-  // حساب الرواتب
-  const payrollNumber = await generatePayrollNumber();
-  const periodStart = new Date(year, month - 1, 1);
-  const periodEnd = new Date(year, month, 0);
-  
-  let totalBaseSalary = 0;
-  let totalOvertime = 0;
-  let totalIncentives = 0;
-  let totalDeductions = 0;
-  let totalNetSalary = 0;
-  
-  const details: InsertPayrollDetail[] = [];
-  
-  for (const emp of branchEmployees) {
-    const settings = settingsMap.get(emp.id) || {
-      baseSalary: "2000.00",
-      overtimeEnabled: false,
-      overtimeRate: "1000.00",
-      isSupervisor: false,
-      supervisorIncentive: "400.00",
-      fixedDeduction: "0.00",
-    };
-    
-    const advanceDeduction = advancesMap.get(emp.id) || 0;
-    
-    // حساب الحوافز (للمشرف 400)
-    const incentive = settings.isSupervisor ? parseFloat(settings.supervisorIncentive as string) : 0;
-    
-    const salary = calculateEmployeeSalary(
-      parseFloat(settings.baseSalary as string),
-      settings.overtimeEnabled as boolean,
-      parseFloat(settings.overtimeRate as string),
-      30, // أيام العمل الافتراضية
-      incentive,
-      parseFloat(settings.fixedDeduction as string),
-      advanceDeduction
-    );
-    
-    totalBaseSalary += salary.baseSalary;
-    totalOvertime += salary.overtimeAmount;
-    totalIncentives += salary.incentiveAmount;
-    totalDeductions += salary.totalDeductions;
-    totalNetSalary += salary.netSalary;
-    
-    details.push({
-      payrollId: 0, // سيتم تحديثه بعد إنشاء المسيرة
-      employeeId: emp.id,
-      employeeName: emp.name,
-      employeeCode: emp.code,
-      position: emp.position,
-      baseSalary: salary.baseSalary.toFixed(2),
-      overtimeAmount: salary.overtimeAmount.toFixed(2),
-      overtimeEnabled: settings.overtimeEnabled as boolean,
-      incentiveAmount: salary.incentiveAmount.toFixed(2),
-      isSupervisor: settings.isSupervisor as boolean,
-      deductionAmount: parseFloat(settings.fixedDeduction as string).toFixed(2),
-      advanceDeduction: advanceDeduction.toFixed(2),
-      grossSalary: salary.grossSalary.toFixed(2),
-      totalDeductions: salary.totalDeductions.toFixed(2),
-      netSalary: salary.netSalary.toFixed(2),
-    });
-  }
-  
-  // إنشاء المسيرة
-  await db.insert(payrolls).values({
-    payrollNumber,
-    branchId,
-    branchName,
-    year,
-    month,
-    periodStart,
-    periodEnd,
-    totalBaseSalary: totalBaseSalary.toFixed(2),
-    totalOvertime: totalOvertime.toFixed(2),
-    totalIncentives: totalIncentives.toFixed(2),
-    totalDeductions: totalDeductions.toFixed(2),
-    totalNetSalary: totalNetSalary.toFixed(2),
-    employeeCount: branchEmployees.length,
-    status: "draft",
-    createdBy,
-    createdByName,
-  });
-  
-  // الحصول على معرف المسيرة
-  const newPayroll = await getPayrollByBranchAndMonth(branchId, year, month);
-  if (!newPayroll) {
-    throw new Error("فشل في إنشاء مسيرة الرواتب");
-  }
-  
-  // إضافة التفاصيل
-  const detailsWithPayrollId = details.map(d => ({ ...d, payrollId: newPayroll.id }));
-  await createPayrollDetails(detailsWithPayrollId);
-  
-  return newPayroll;
-}
 
-// إنشاء مسيرة رواتب مع التفاصيل (النموذج الجديد)
-export async function createPayrollWithDetails(
-  branchId: number,
-  branchName: string,
-  year: number,
-  month: number,
-  totalBaseSalary: number,
-  totalOvertime: number,
-  totalIncentives: number,
-  totalDeductions: number,
-  totalNetSalary: number,
-  employeeCount: number,
-  details: any[],
-  createdBy: number,
-  createdByName: string
-) {
-  const db = await getDb();
-  if (!db) return null;
-  
-  // التحقق من عدم وجود مسيرة سابقة
-  const existing = await getPayrollByBranchAndMonth(branchId, year, month);
-  if (existing) {
-    throw new Error("توجد مسيرة رواتب لهذا الشهر بالفعل");
-  }
-  
-  // إنشاء رقم المسيرة
-  const payrollNumber = await generatePayrollNumber();
-  const periodStart = new Date(year, month - 1, 1);
-  const periodEnd = new Date(year, month, 0);
-  
-  // إنشاء المسيرة بحالة "تحت الإجراء"
-  await db.insert(payrolls).values({
-    payrollNumber,
-    branchId,
-    branchName,
-    year,
-    month,
-    periodStart,
-    periodEnd,
-    totalBaseSalary: totalBaseSalary.toFixed(2),
-    totalOvertime: totalOvertime.toFixed(2),
-    totalIncentives: totalIncentives.toFixed(2),
-    totalDeductions: totalDeductions.toFixed(2),
-    totalNetSalary: totalNetSalary.toFixed(2),
-    employeeCount,
-    status: "pending", // تحت الإجراء لحين الموافقة
-    createdBy,
-    createdByName,
-  });
-  
-  // الحصول على معرف المسيرة
-  const newPayroll = await getPayrollByBranchAndMonth(branchId, year, month);
-  if (!newPayroll) {
-    throw new Error("فشل في إنشاء مسيرة الرواتب");
-  }
-  
-  // جلب الإجازات المعتمدة لجميع موظفي الفرع
-  const branchLeaves = await getApprovedLeavesForBranch(branchId, year, month);
-  
-  // جلب الفواتير السالبة للموظفين في هذا الشهر
-  const negativeInvoices = await getNegativeInvoicesForMonth(branchId, year, month);
-  
-  // إضافة التفاصيل مع الإجازات والفواتير السالبة
-  const detailsWithPayrollId = details.map(d => {
-    const empLeaves = branchLeaves.get(d.employeeId);
-    const empNegativeInvoices = negativeInvoices.get(d.employeeId);
-    let leaveDays = 0;
-    let leaveDeduction = 0;
-    let leaveType = '';
-    let leaveDetails = '';
-    
-    if (empLeaves && empLeaves.totalDays > 0) {
-      leaveDays = empLeaves.totalDays;
-      // حساب الخصم لكل إجازة
-      const baseSalaryNum = parseFloat(d.baseSalary) || 2000;
-      for (const leave of empLeaves.leaves) {
-        leaveDeduction += calculateLeaveDeduction(baseSalaryNum, leave.days, leave.type, d.workDays || 30);
-      }
-      // تجميع أنواع الإجازات
-      const types = Array.from(new Set(empLeaves.leaves.map(l => l.type)));
-      leaveType = types.join('، ');
-      leaveDetails = JSON.stringify(empLeaves.leaves);
-    }
-    
-    // حساب خصم الفواتير السالبة
-    // ملاحظة: الفواتير السالبة موجودة بالفعل في d.negativeInvoicesDeduction من الواجهة
-    // لذلك نستخدمها فقط لتحديث التفاصيل وليس لإعادة الحساب
-    let negativeInvoicesDeduction = parseFloat(d.negativeInvoicesDeduction) || 0;
-    let negativeInvoicesDetails = '';
-    
-    if (empNegativeInvoices && empNegativeInvoices.total > 0) {
-      // استخدام القيمة المرسلة من الواجهة (لأنها محسوبة بالفعل)
-      negativeInvoicesDetails = JSON.stringify(empNegativeInvoices.invoices.map(inv => ({
-        invoiceNumber: inv.invoiceNumber,
-        amount: inv.amount,
-        reason: inv.reason,
-        date: inv.invoiceDate,
-      })));
-    }
-    
-    // تحديث الخصومات والصافي (فقط الإجازات - الفواتير السالبة محسوبة بالفعل في الواجهة)
-    const currentTotalDeductions = parseFloat(d.totalDeductions) || 0;
-    const currentNetSalary = parseFloat(d.netSalary) || 0;
-    // إضافة خصم الإجازة فقط (الفواتير السالبة موجودة بالفعل في currentTotalDeductions)
-    const newTotalDeductions = currentTotalDeductions + leaveDeduction;
-    const newNetSalary = currentNetSalary - leaveDeduction;
-    
-    return {
-      payrollId: newPayroll.id,
-      employeeId: d.employeeId,
-      employeeName: d.employeeName,
-      employeeCode: d.employeeCode,
-      position: d.position || '',
-      baseSalary: d.baseSalary,
-      overtimeEnabled: d.overtimeEnabled,
-      overtimeAmount: d.overtimeAmount,
-      workDays: d.workDays,
-      absentDays: d.absentDays,
-      absentDeduction: d.absentDeduction,
-      incentiveAmount: d.incentiveAmount,
-      deductionAmount: d.deductionAmount,
-      advanceDeduction: d.advanceDeduction,
-      negativeInvoicesDeduction: negativeInvoicesDeduction.toFixed(2),
-      negativeInvoicesDetails: negativeInvoicesDetails || null,
-      leaveDays,
-      leaveDeduction: leaveDeduction.toFixed(2),
-      leaveType: leaveType || null,
-      leaveDetails: leaveDetails || null,
-      grossSalary: d.grossSalary,
-      totalDeductions: newTotalDeductions.toFixed(2),
-      netSalary: newNetSalary.toFixed(2),
-    };
-  });
-  
-  await createPayrollDetails(detailsWithPayrollId);
-  
-  return newPayroll;
-}
 
 // جلب الفواتير السالبة للموظفين في شهر معين
 export async function getNegativeInvoicesForMonth(
@@ -6330,12 +6068,16 @@ export async function getBonusAuditLogs(filters?: {
     .leftJoin(branches, eq(weeklyBonuses.branchId, branches.id))
     .orderBy(desc(bonusAuditLog.performedAt));
 
+  // دمج الشروط (استدعاء where مرتين يستبدل الشرط الأول)
+  const conditions: SQL[] = [];
   if (filters?.weeklyBonusId) {
-    query = query.where(eq(bonusAuditLog.weeklyBonusId, filters.weeklyBonusId)) as typeof query;
+    conditions.push(eq(bonusAuditLog.weeklyBonusId, filters.weeklyBonusId));
   }
-
   if (filters?.branchId) {
-    query = query.where(eq(weeklyBonuses.branchId, filters.branchId)) as typeof query;
+    conditions.push(eq(weeklyBonuses.branchId, filters.branchId));
+  }
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as typeof query;
   }
 
   if (filters?.limit) {
@@ -6356,6 +6098,14 @@ export async function detectBonusDiscrepancies(branchId: number, weekNumber: num
   const db = await getDb();
   if (!db) return { hasDiscrepancy: false, discrepancies: [], summary: null };
 
+  const { getWeekDateRange, calculateBonus } = await import('./bonus/calculator');
+  const { getActiveTierRules } = await import('./bonus/tiers');
+  const { isValidBonusPeriod } = await import('../shared/bonusHelpers');
+
+  if (!isValidBonusPeriod(weekNumber, month, year)) {
+    return { hasDiscrepancy: false, discrepancies: [], summary: null };
+  }
+
   // الحصول على البونص المسجل
   const weeklyBonus = await db
     .select()
@@ -6368,6 +6118,7 @@ export async function detectBonusDiscrepancies(branchId: number, weekNumber: num
         eq(weeklyBonuses.year, year)
       )
     )
+    .orderBy(asc(weeklyBonuses.id))
     .limit(1);
 
   if (weeklyBonus.length === 0) {
@@ -6389,47 +6140,9 @@ export async function detectBonusDiscrepancies(branchId: number, weekNumber: num
     .leftJoin(employees, eq(bonusDetails.employeeId, employees.id))
     .where(eq(bonusDetails.weeklyBonusId, bonusRecord.id));
 
-  // حساب تواريخ الأسبوع بشكل صحيح
-  // الأسبوع 1: أيام 1-7
-  // الأسبوع 2: أيام 8-14
-  // الأسبوع 3: أيام 15-21
-  // الأسبوع 4: أيام 22-28
-  // الأسبوع 5: أيام 29 إلى نهاية الشهر (يوم أو يومين أو ثلاثة حسب الشهر)
-  const lastDayOfMonth = new Date(year, month, 0).getDate();
-  
-  let startDay: number;
-  let endDay: number;
-  
-  switch (weekNumber) {
-    case 1:
-      startDay = 1;
-      endDay = 7;
-      break;
-    case 2:
-      startDay = 8;
-      endDay = 14;
-      break;
-    case 3:
-      startDay = 15;
-      endDay = 21;
-      break;
-    case 4:
-      startDay = 22;
-      endDay = 28;
-      break;
-    case 5:
-      startDay = 29;
-      endDay = lastDayOfMonth; // يوم أو يومين أو ثلاثة حسب الشهر
-      break;
-    default:
-      startDay = 1;
-      endDay = 7;
-  }
-  
-  const weekStart = new Date(year, month - 1, startDay);
-  weekStart.setUTCHours(0, 0, 0, 0);
-  const weekEnd = new Date(year, month - 1, endDay);
-  weekEnd.setUTCHours(23, 59, 59, 999);
+  // نفس حدود الفترة المستخدمة في الاحتساب (UTC) ونفس مستويات المدير
+  const { start: weekStart, end: weekEnd } = getWeekDateRange(weekNumber, month, year);
+  const tiers = await getActiveTierRules();
 
   // الحصول على الإيرادات الفعلية من قاعدة البيانات
   const actualRevenues = await getAllEmployeesWeeklyRevenues(branchId, weekStart, weekEnd);
@@ -6452,15 +6165,13 @@ export async function detectBonusDiscrepancies(branchId: number, weekNumber: num
     const registeredRevenue = Number(detail.registeredRevenue || 0);
     const registeredBonus = Number(detail.registeredBonus || 0);
 
-    // حساب البونص المتوقع بناءً على الإيراد الفعلي
-    const { calculateBonus } = await import('./bonus/calculator');
-    const expectedBonusCalc = calculateBonus(actualRevenue);
-    const expectedBonus = expectedBonusCalc.amount;
+    // حساب البونص المتوقع بناءً على الإيراد الفعلي ومستويات المدير
+    const expectedBonus = calculateBonus(actualRevenue, tiers).amount;
 
     const revenueDiff = actualRevenue - registeredRevenue;
     const bonusDiff = expectedBonus - registeredBonus;
 
-    // إذا كان هناك فرق كبير (أكثر من 1 ريال في الإيراد أو أكثر من 0.5 ريال في البونص)
+    // إذا كان هناك فرق (أكثر من 1 ريال في الإيراد وأكثر من 0.5 ريال في البونص)
     if (Math.abs(revenueDiff) > 1 && Math.abs(bonusDiff) > 0.5) {
       discrepancies.push({
         employeeId: detail.employeeId,
@@ -6480,8 +6191,7 @@ export async function detectBonusDiscrepancies(branchId: number, weekNumber: num
     const isRegistered = registeredDetails.some(d => d.employeeId === employeeId);
     if (!isRegistered && data.revenue > 0) {
       const emp = await db.select({ name: employees.name }).from(employees).where(eq(employees.id, employeeId)).limit(1);
-      const { calculateBonus } = await import('./bonus/calculator');
-      const expectedBonusCalc = calculateBonus(data.revenue);
+      const expectedBonus = calculateBonus(data.revenue, tiers).amount;
       
       discrepancies.push({
         employeeId,
@@ -6490,8 +6200,8 @@ export async function detectBonusDiscrepancies(branchId: number, weekNumber: num
         actualRevenue: data.revenue,
         revenueDiff: data.revenue,
         registeredBonus: 0,
-        expectedBonus: expectedBonusCalc.amount,
-        bonusDiff: expectedBonusCalc.amount,
+        expectedBonus,
+        bonusDiff: expectedBonus,
       });
     }
   }
@@ -6502,6 +6212,7 @@ export async function detectBonusDiscrepancies(branchId: number, weekNumber: num
     month,
     year,
     branchId,
+    status: bonusRecord.status,
     totalRegisteredBonus: Number(bonusRecord.totalAmount || 0),
     totalExpectedBonus: discrepancies.reduce((sum, d) => sum + d.expectedBonus, 0) + 
       registeredDetails.filter(d => !discrepancies.some(disc => disc.employeeId === d.employeeId))
@@ -6758,34 +6469,70 @@ export async function getBonusTierAuditLogs(limit: number = 50): Promise<Array<{
     .limit(limit);
 }
 
-// تهيئة مستويات البونص الافتراضية
-export async function initializeDefaultBonusTiers() {
+/**
+ * استبدال قائمة مستويات البونص بالكامل في معاملة واحدة (للمدير)
+ * - الصفوف مجهزة مسبقاً (مفاتيح tier_1..tier_N والحد الأقصى المشتق)
+ * - يُسجل التغيير في سجل تغييرات المستويات بالقيم القديمة والجديدة
+ * ملاحظة: المستويات الافتراضية تُضاف عبر ملف SQL (drizzle/pending/bonus.sql) وليس عند القراءة
+ */
+export async function replaceBonusTiers(
+  rows: Array<{
+    tierKey: string;
+    tierName: string;
+    minRevenue: number;
+    maxRevenue: number | null;
+    bonusAmount: number;
+    color: string;
+    sortOrder: number;
+  }>,
+  user: { id: number; name: string }
+): Promise<{ oldTiers: unknown[]; newTiers: unknown[] }> {
   const db = await getDb();
-  if (!db) return;
-  
-  const { bonusTierSettings } = await import('../drizzle/schema');
-  
-  // التحقق من وجود مستويات
-  const existing = await db.select().from(bonusTierSettings).limit(1);
-  if (existing.length > 0) return; // المستويات موجودة بالفعل
-  
-  // إضافة المستويات الافتراضية (محدثة 7 يناير 2026)
-  const defaultTiers = [
-    { tierKey: 'tier_7', tierName: 'المستوى 7', minRevenue: '3200', maxRevenue: null, bonusAmount: '190', color: 'purple', sortOrder: 7 },
-    { tierKey: 'tier_6', tierName: 'المستوى 6', minRevenue: '2800', maxRevenue: '3199.99', bonusAmount: '155', color: 'indigo', sortOrder: 6 },
-    { tierKey: 'tier_5', tierName: 'المستوى 5', minRevenue: '2500', maxRevenue: '2799.99', bonusAmount: '120', color: 'blue', sortOrder: 5 },
-    { tierKey: 'tier_4', tierName: 'المستوى 4', minRevenue: '2200', maxRevenue: '2499.99', bonusAmount: '90', color: 'cyan', sortOrder: 4 },
-    { tierKey: 'tier_3', tierName: 'المستوى 3', minRevenue: '1950', maxRevenue: '2199.99', bonusAmount: '65', color: 'green', sortOrder: 3 },
-    { tierKey: 'tier_2', tierName: 'المستوى 2', minRevenue: '1750', maxRevenue: '1949.99', bonusAmount: '55', color: 'yellow', sortOrder: 2 },
-    { tierKey: 'tier_1', tierName: 'المستوى 1', minRevenue: '1450', maxRevenue: '1749.99', bonusAmount: '35', color: 'orange', sortOrder: 1 },
-  ];
-  
-  for (const tier of defaultTiers) {
-    await db.insert(bonusTierSettings).values({
-      ...tier,
-      isActive: true,
+  if (!db) throw new Error('Database not available');
+
+  const { bonusTierSettings, bonusTierAuditLog } = await import('../drizzle/schema');
+
+  return await db.transaction(async (tx) => {
+    const oldRows = await tx.select().from(bonusTierSettings).orderBy(asc(bonusTierSettings.minRevenue)).for('update');
+    const oldTiers = oldRows.map(r => ({
+      tierKey: r.tierKey,
+      tierName: r.tierName,
+      minRevenue: Number(r.minRevenue),
+      maxRevenue: r.maxRevenue === null ? null : Number(r.maxRevenue),
+      bonusAmount: Number(r.bonusAmount),
+      color: r.color,
+      isActive: r.isActive,
+    }));
+
+    await tx.delete(bonusTierSettings);
+
+    if (rows.length > 0) {
+      await tx.insert(bonusTierSettings).values(rows.map(r => ({
+        tierKey: r.tierKey,
+        tierName: r.tierName,
+        minRevenue: r.minRevenue.toFixed(2),
+        maxRevenue: r.maxRevenue === null ? null : r.maxRevenue.toFixed(2),
+        bonusAmount: r.bonusAmount.toFixed(2),
+        color: r.color,
+        sortOrder: r.sortOrder,
+        isActive: true,
+      })));
+    }
+
+    const newTiers = rows.map(r => ({ ...r, isActive: true }));
+    await tx.insert(bonusTierAuditLog).values({
+      userId: user.id,
+      userName: user.name,
+      tierId: null,
+      tierKey: null,
+      changeType: 'update',
+      oldValues: JSON.stringify(oldTiers),
+      newValues: JSON.stringify(newTiers),
+      description: `تحديث قائمة مستويات البونص (${oldTiers.length} ← ${newTiers.length} مستوى)`,
     });
-  }
+
+    return { oldTiers, newTiers };
+  });
 }
 
 
@@ -6803,7 +6550,8 @@ export async function getWeeklyBonusById(id: number) {
   return result || null;
 }
 
-// تسجيل صرف البونص
+// تسجيل صرف البونص (تحديث مشروط: فقط من حالة "موافق عليه")
+// يُفضل استخدام server/bonus/workflow.ts الذي يسجل في سجل التدقيق ضمن نفس المعاملة
 export async function markBonusAsPaid(id: number, data: {
   paidBy: number;
   paymentMethod: 'cash' | 'bank_transfer' | 'check';
@@ -6818,20 +6566,23 @@ export async function markBonusAsPaid(id: number, data: {
       status: 'paid',
       paidAt: new Date(),
       paidBy: data.paidBy,
+      paidAmount: sql`COALESCE(${weeklyBonuses.approvedAmount}, ${weeklyBonuses.totalAmount})`,
       paymentMethod: data.paymentMethod,
       paymentReference: data.paymentReference || null,
       paymentNotes: data.paymentNotes || null,
     })
-    .where(eq(weeklyBonuses.id, id));
+    .where(and(eq(weeklyBonuses.id, id), eq(weeklyBonuses.status, 'approved')));
 }
 
 // الحصول على البونصات الموافق عليها للصرف
-export async function getApprovedBonusesForPayment() {
+export async function getApprovedBonusesForPayment(branchId?: number | null) {
   const db = await getDb();
   if (!db) return [];
   
   return await db.select().from(weeklyBonuses)
-    .where(eq(weeklyBonuses.status, 'approved'))
+    .where(branchId
+      ? and(eq(weeklyBonuses.status, 'approved'), eq(weeklyBonuses.branchId, branchId))
+      : eq(weeklyBonuses.status, 'approved'))
     .orderBy(desc(weeklyBonuses.approvedAt));
 }
 
@@ -7026,6 +6777,7 @@ export async function getAllApprovedAdvances(branchId?: number): Promise<Array<{
   approvedBy: string | null;
   isDeducted: boolean;
   deductedAt: Date | null;
+  deductedInPayrollId: number | null;
   createdAt: Date;
 }>> {
   const db = await getDb();
@@ -7053,6 +6805,7 @@ export async function getAllApprovedAdvances(branchId?: number): Promise<Array<{
     approvedBy: employeeRequests.reviewedByName,
     isDeducted: employeeRequests.isDeductedFromSalary,
     deductedAt: employeeRequests.deductedAt,
+    deductedInPayrollId: employeeRequests.deductedInPayrollId,
     createdAt: employeeRequests.createdAt,
   })
     .from(employeeRequests)
@@ -7128,16 +6881,27 @@ export async function getAdvancesStats(branchId?: number): Promise<{
 }
 
 
-// إحصائيات سندات القبض للفترة المحددة
-export async function getReceiptVouchersStats(startDate: Date, endDate: Date, branchId?: number) {
+// إحصائيات سندات القبض للفترة المحددة (السندات الملغاة لا تدخل في الإجماليات)
+// voucherType: الافتراضي سندات القبض فقط (مبالغ مُسلّمة من الفروع للإدارة)
+export async function getReceiptVouchersStats(
+  startDate: Date,
+  endDate: Date,
+  branchId?: number,
+  voucherType: 'receipt' | 'payment' | 'all' = 'receipt'
+) {
   const db = await getDb();
   if (!db) return { count: 0, totalAmount: 0 };
-  
-  const conditions = [
+
+  const conditions: SQL[] = [
     gte(receiptVouchers.voucherDate, startDate),
     lte(receiptVouchers.voucherDate, endDate),
+    sql`${receiptVouchers.status} <> 'cancelled'`,
   ];
-  
+
+  if (voucherType !== 'all') {
+    conditions.push(eq(receiptVouchers.voucherType, voucherType));
+  }
+
   if (branchId) {
     conditions.push(eq(receiptVouchers.branchId, branchId));
   }
@@ -9024,43 +8788,6 @@ export function calculateLeaveDeduction(
   }
 }
 
-// تحديث تفاصيل الراتب بالإجازات
-export async function updatePayrollDetailWithLeaves(
-  payrollDetailId: number,
-  leaveDays: number,
-  leaveDeduction: number,
-  leaveType: string,
-  leaveDetails: string
-): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-
-  // جلب تفاصيل الراتب الحالية
-  const detail = await db.select().from(payrollDetails)
-    .where(eq(payrollDetails.id, payrollDetailId))
-    .limit(1);
-
-  if (detail.length === 0) return;
-
-  const currentDetail = detail[0];
-  const currentTotalDeductions = parseFloat(currentDetail.totalDeductions as string) || 0;
-  const currentNetSalary = parseFloat(currentDetail.netSalary as string) || 0;
-
-  // تحديث الخصومات والصافي
-  const newTotalDeductions = currentTotalDeductions + leaveDeduction;
-  const newNetSalary = currentNetSalary - leaveDeduction;
-
-  await db.update(payrollDetails)
-    .set({
-      leaveDays,
-      leaveDeduction: leaveDeduction.toFixed(2),
-      leaveType,
-      leaveDetails,
-      totalDeductions: newTotalDeductions.toFixed(2),
-      netSalary: newNetSalary.toFixed(2),
-    })
-    .where(eq(payrollDetails.id, payrollDetailId));
-}
 
 
 // ==================== دوال بوابة الموظفين ====================
@@ -9085,6 +8812,10 @@ export async function getEmployeeProfile(employeeId: number) {
     isActive: employees.isActive,
     createdAt: employees.createdAt,
     photoUrl: employees.photoUrl,
+    hireDate: employees.hireDate,
+    nationality: employees.nationality,
+    iqamaNumber: employees.iqamaNumber,
+    employeeIsSupervisor: employees.isSupervisor,
   })
     .from(employees)
     .where(eq(employees.id, employeeId))
@@ -9093,29 +8824,41 @@ export async function getEmployeeProfile(employeeId: number) {
   if (result.length === 0) return null;
 
   // جلب اسم الفرع
-  const branch = await db.select({ name: branches.name })
+  const branch = await db.select({ name: branches.name, nameAr: branches.nameAr })
     .from(branches)
     .where(eq(branches.id, result[0].branchId))
     .limit(1);
 
-  // جلب إعدادات الراتب للموظف
-  const salarySettings = await db.select({
-    baseSalary: employeeSalarySettings.baseSalary,
-    overtimeEnabled: employeeSalarySettings.overtimeEnabled,
-    isSupervisor: employeeSalarySettings.isSupervisor,
-  })
+  // إعدادات الراتب كما أدخلتها الإدارة في ملف الموظف (للعرض فقط؛ لا يعدّلها الموظف)
+  const salarySettings = await db.select()
     .from(employeeSalarySettings)
     .where(eq(employeeSalarySettings.employeeId, employeeId))
     .limit(1);
 
+  const { employeeIsSupervisor, ...profile } = result[0];
+  const [{ getEstablishmentForBranch }, { employeeJobTitle }, { effectiveSalarySettings }] = await Promise.all([
+    import('../shared/branding'),
+    import('../shared/employeeFile'),
+    import('./employeeFile/schemas'),
+  ]);
+  // نفس القيم التي تحسب بها المسيرة (الافتراضية إن لم تحددها الإدارة بعد)
+  const salary = effectiveSalarySettings(salarySettings[0] ?? null);
   return {
-    ...result[0],
-    branchName: branch[0]?.name || 'غير محدد',
-    baseSalary: salarySettings[0]?.baseSalary || '2000.00',
-    overtimeEnabled: salarySettings[0]?.overtimeEnabled || false,
-    isSupervisor: salarySettings[0]?.isSupervisor || false,
-    hireDate: result[0].createdAt, // استخدام تاريخ الإنشاء كتاريخ تعيين
-    status: result[0].isActive ? 'active' : 'inactive',
+    ...profile,
+    position: employeeJobTitle(employeeIsSupervisor),
+    branchName: branch[0]?.nameAr || branch[0]?.name || 'غير محدد',
+    establishmentName: getEstablishmentForBranch(branch[0] ?? null).nameAr,
+    salaryConfigured: salarySettings.length > 0,
+    baseSalary: salary.baseSalary,
+    overtimeEnabled: salary.overtimeEnabled,
+    overtimeAllowance: salary.overtimeEnabled ? salary.overtimeRate : 0,
+    supervisorIncentive: salary.isSupervisor ? salary.supervisorIncentive : 0,
+    isSupervisor: Boolean(employeeIsSupervisor),
+    // تاريخ مباشرة العمل الفعلي (YYYY-MM-DD) وليس تاريخ إنشاء السجل
+    hireDate: profile.hireDate ?? null,
+    nationality: profile.nationality ?? null,
+    iqamaNumber: profile.iqamaNumber ?? null,
+    status: profile.isActive ? 'active' : 'inactive',
   };
 }
 
@@ -9132,34 +8875,26 @@ export async function getEmployeeSalarySlip(employeeId: number, year: number, mo
 
   if (employee.length === 0) return null;
 
-  // جلب مسير الرواتب للشهر المحدد
-  const payroll = await db.select()
-    .from(payrolls)
-    .where(
-      and(
-        eq(payrolls.branchId, employee[0].branchId),
-        eq(payrolls.year, year),
-        eq(payrolls.month, month)
-      )
-    )
-    .limit(1);
-
-  if (payroll.length === 0) return null;
-
-  // جلب تفاصيل راتب الموظف
-  const salaryDetail = await db.select()
+  // جلب سطر الموظف في مسيرة الشهر المعتمدة أو المدفوعة فقط
+  // (البحث بالموظف نفسه وليس بفرعه الحالي حتى لا تختفي مسيرة الراتب بعد النقل بين الفروع)
+  const rows = await db.select({ detail: payrollDetails, payroll: payrolls })
     .from(payrollDetails)
+    .innerJoin(payrolls, eq(payrolls.id, payrollDetails.payrollId))
     .where(
       and(
-        eq(payrollDetails.payrollId, payroll[0].id),
-        eq(payrollDetails.employeeId, employeeId)
+        eq(payrollDetails.employeeId, employeeId),
+        eq(payrolls.year, year),
+        eq(payrolls.month, month),
+        inArray(payrolls.status, ['approved', 'paid'])
       )
     )
+    .orderBy(desc(payrolls.id))
     .limit(1);
 
-  if (salaryDetail.length === 0) return null;
+  if (rows.length === 0) return null;
 
-  const detail = salaryDetail[0];
+  const payroll = [rows[0].payroll];
+  const detail = rows[0].detail;
 
   return {
     // معلومات الموظف
@@ -9195,6 +8930,7 @@ export async function getEmployeeSalarySlip(employeeId: number, year: number, mo
     deductionReason: detail.deductionReason,
     advanceDeduction: parseFloat(detail.advanceDeduction as string) || 0,
     negativeInvoicesDeduction: parseFloat(detail.negativeInvoicesDeduction as string) || 0,
+    violationsDeduction: parseFloat(detail.violationsDeduction as string) || 0,
     
     // الإجازات
     leaveDays: detail.leaveDays || 0,
@@ -9231,7 +8967,12 @@ export async function getEmployeeSalaryHistory(employeeId: number, limit: number
     netSalary: payrollDetails.netSalary,
   })
     .from(payrollDetails)
-    .where(eq(payrollDetails.employeeId, employeeId))
+    .innerJoin(payrolls, eq(payrolls.id, payrollDetails.payrollId))
+    .where(and(
+      eq(payrollDetails.employeeId, employeeId),
+      // الموظف يرى فقط الرواتب المعتمدة أو المدفوعة
+      inArray(payrolls.status, ['approved', 'paid'])
+    ))
     .orderBy(desc(payrollDetails.id))
     .limit(limit);
 
@@ -9261,6 +9002,67 @@ export async function getEmployeeSalaryHistory(employeeId: number, limit: number
   }
 
   return result;
+}
+
+// مسيرات رواتب الموظف في البوابة: المسيرات المعتمدة أو المصروفة التي له فيها سطر (الأحدث أولاً)
+export async function getEmployeeSalarySlips(employeeId: number): Promise<Array<{
+  payrollId: number;
+  payrollNumber: string;
+  year: number;
+  month: number;
+  status: 'approved' | 'paid';
+  netSalary: number;
+  approvedAt: Date | null;
+  paidAt: Date | null;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db.select({
+    payrollId: payrolls.id,
+    payrollNumber: payrolls.payrollNumber,
+    year: payrolls.year,
+    month: payrolls.month,
+    status: payrolls.status,
+    netSalary: payrollDetails.netSalary,
+    approvedAt: payrolls.approvedAt,
+    paidAt: payrolls.paidAt,
+  })
+    .from(payrollDetails)
+    .innerJoin(payrolls, eq(payrolls.id, payrollDetails.payrollId))
+    .where(and(
+      eq(payrollDetails.employeeId, employeeId),
+      inArray(payrolls.status, ['approved', 'paid'])
+    ))
+    .orderBy(desc(payrolls.year), desc(payrolls.month), desc(payrolls.id));
+
+  return rows.map(row => ({
+    payrollId: row.payrollId,
+    payrollNumber: row.payrollNumber,
+    year: row.year,
+    month: row.month,
+    status: row.status === 'paid' ? 'paid' as const : 'approved' as const,
+    netSalary: parseFloat(row.netSalary as string) || 0,
+    approvedAt: row.approvedAt ?? null,
+    paidAt: row.paidAt ?? null,
+  }));
+}
+
+// هل للموظف سطر في مسيرة معتمدة أو مصروفة؟ (شرط عرض مسيرة الراتب في البوابة)
+export async function isEmployeeSlipVisible(employeeId: number, payrollId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  const rows = await db.select({ id: payrollDetails.id })
+    .from(payrollDetails)
+    .innerJoin(payrolls, eq(payrolls.id, payrollDetails.payrollId))
+    .where(and(
+      eq(payrollDetails.payrollId, payrollId),
+      eq(payrollDetails.employeeId, employeeId),
+      inArray(payrolls.status, ['approved', 'paid'])
+    ))
+    .limit(1);
+  return rows.length > 0;
 }
 
 // جلب رصيد إجازات الموظف
@@ -9369,9 +9171,14 @@ export async function getEmployeeLeaveHistory(employeeId: number, year?: number)
 }
 
 // جلب تقرير البونص للموظف
+// - يعتمد على تفاصيل البونص للموظف نفسه (مهما كان الفرع) وليس الفرع الحالي فقط
+// - المبالغ المعتمدة/المصروفة فقط تُعتبر نهائية؛ غيرها "تقديري"
 export async function getEmployeeBonusReport(employeeId: number, year: number, month: number) {
   const db = await getDb();
   if (!db) return null;
+
+  const { getBonusStatusLabel, isFinalBonusStatus } = await import('../shared/bonusHelpers');
+  const { formatBonusPeriodLabel } = await import('../shared/bonus');
 
   // جلب بيانات الموظف
   const employee = await db.select()
@@ -9381,50 +9188,52 @@ export async function getEmployeeBonusReport(employeeId: number, year: number, m
 
   if (employee.length === 0) return null;
 
-  // جلب سجلات البونص الأسبوعية للفرع في الشهر المحدد
-  const weeklyBonusRecords = await db.select()
-    .from(weeklyBonuses)
-    .where(
-      and(
-        eq(weeklyBonuses.branchId, employee[0].branchId),
-        eq(weeklyBonuses.year, year),
-        eq(weeklyBonuses.month, month)
-      )
-    );
+  const rows = await db.select({
+    weeklyBonusId: weeklyBonuses.id,
+    weekNumber: weeklyBonuses.weekNumber,
+    weekStart: weeklyBonuses.weekStart,
+    weekEnd: weeklyBonuses.weekEnd,
+    status: weeklyBonuses.status,
+    branchName: branches.nameAr,
+    weeklyRevenue: bonusDetails.weeklyRevenue,
+    bonusAmount: bonusDetails.bonusAmount,
+    bonusTier: bonusDetails.bonusTier,
+    tierName: bonusDetails.tierName,
+  })
+    .from(bonusDetails)
+    .innerJoin(weeklyBonuses, eq(bonusDetails.weeklyBonusId, weeklyBonuses.id))
+    .leftJoin(branches, eq(weeklyBonuses.branchId, branches.id))
+    .where(and(
+      eq(bonusDetails.employeeId, employeeId),
+      eq(weeklyBonuses.year, year),
+      eq(weeklyBonuses.month, month)
+    ))
+    .orderBy(asc(weeklyBonuses.weekNumber), asc(weeklyBonuses.id));
 
-  // جلب تفاصيل البونص للموظف
-  const employeeBonusDetails: any[] = [];
-  for (const record of weeklyBonusRecords) {
-    const details = await db.select()
-      .from(bonusDetails)
-      .where(
-        and(
-          eq(bonusDetails.weeklyBonusId, record.id),
-          eq(bonusDetails.employeeId, employeeId)
-        )
-      );
-    employeeBonusDetails.push(...details.map(d => ({
-      ...d,
-      weekNumber: record.weekNumber,
-      weekStart: record.weekStart,
-      weekEnd: record.weekEnd,
-    })));
-  }
-
-  // حساب إجمالي البونص
+  // حساب الإجماليات (المؤكد = معتمد أو مصروف، التقديري = قيد الاحتساب أو بانتظار الموافقة)
   let totalBonus = 0;
+  let estimatedBonus = 0;
   let totalRevenue = 0;
-  const weeklyDetailsResult = employeeBonusDetails.map((detail: any) => {
-    const bonus = parseFloat(detail.bonusAmount) || 0;
-    const revenue = parseFloat(detail.weeklyRevenue) || 0;
-    totalBonus += bonus;
+  const weeklyDetailsResult = rows.map(row => {
+    const bonus = parseFloat(row.bonusAmount) || 0;
+    const revenue = parseFloat(row.weeklyRevenue) || 0;
+    const isFinal = isFinalBonusStatus(row.status);
     totalRevenue += revenue;
+    if (isFinal) totalBonus += bonus;
+    else if (row.status !== 'rejected') estimatedBonus += bonus;
     return {
-      weekNumber: detail.weekNumber,
-      startDate: detail.weekStart,
-      endDate: detail.weekEnd,
-      revenue: revenue,
-      bonus: bonus,
+      weekNumber: row.weekNumber,
+      periodLabel: formatBonusPeriodLabel(row.weekNumber, month, year),
+      startDate: row.weekStart,
+      endDate: row.weekEnd,
+      branchName: row.branchName,
+      revenue,
+      bonus,
+      tierName: row.tierName,
+      bonusTier: row.bonusTier,
+      status: row.status,
+      statusLabel: isFinal ? getBonusStatusLabel(row.status) : row.status === 'rejected' ? 'مرفوض' : 'تقديري',
+      isFinal,
     };
   });
 
@@ -9434,17 +9243,22 @@ export async function getEmployeeBonusReport(employeeId: number, year: number, m
     year,
     month,
     totalRevenue,
+    /** البونص المعتمد أو المصروف فقط */
     totalBonus,
+    /** بونص تقديري لم يُعتمد بعد */
+    estimatedBonus,
     bonusPercentage: totalRevenue > 0 ? ((totalBonus / totalRevenue) * 100).toFixed(1) : '0',
     weeksCount: weeklyDetailsResult.length,
     weeks: weeklyDetailsResult,
   };
 }
 
-// جلب سجل البونص للموظف
+// جلب سجل البونص للموظف (حسب الشهر) - المعتمد فقط في الإجمالي مع إظهار التقديري منفصلاً
 export async function getEmployeeBonusHistory(employeeId: number, limit: number = 6) {
   const db = await getDb();
   if (!db) return [];
+
+  const { isFinalBonusStatus } = await import('../shared/bonusHelpers');
 
   // جلب بيانات الموظف
   const employee = await db.select()
@@ -9458,6 +9272,7 @@ export async function getEmployeeBonusHistory(employeeId: number, limit: number 
   const details = await db.select({
     bonusAmount: bonusDetails.bonusAmount,
     weeklyRevenue: bonusDetails.weeklyRevenue,
+    status: weeklyBonuses.status,
     year: weeklyBonuses.year,
     month: weeklyBonuses.month,
   })
@@ -9467,12 +9282,14 @@ export async function getEmployeeBonusHistory(employeeId: number, limit: number 
     .orderBy(desc(weeklyBonuses.year), desc(weeklyBonuses.month));
 
   // تجميع حسب الشهر
-  const monthlyBonuses = new Map<string, { bonus: number; revenue: number }>();
+  const monthlyBonuses = new Map<string, { bonus: number; estimated: number; revenue: number }>();
   for (const detail of details) {
     const key = `${detail.year}-${detail.month}`;
-    const current = monthlyBonuses.get(key) || { bonus: 0, revenue: 0 };
+    const current = monthlyBonuses.get(key) || { bonus: 0, estimated: 0, revenue: 0 };
+    const amount = parseFloat(detail.bonusAmount) || 0;
     monthlyBonuses.set(key, {
-      bonus: current.bonus + (parseFloat(detail.bonusAmount) || 0),
+      bonus: current.bonus + (isFinalBonusStatus(detail.status) ? amount : 0),
+      estimated: current.estimated + (!isFinalBonusStatus(detail.status) && detail.status !== 'rejected' ? amount : 0),
       revenue: current.revenue + (parseFloat(detail.weeklyRevenue || '0') || 0),
     });
   }
@@ -9480,7 +9297,7 @@ export async function getEmployeeBonusHistory(employeeId: number, limit: number 
   return Array.from(monthlyBonuses.entries())
     .map(([key, data]) => {
       const [year, month] = key.split('-').map(Number);
-      return { year, month, totalBonus: data.bonus, totalRevenue: data.revenue };
+      return { year, month, totalBonus: data.bonus, estimatedBonus: data.estimated, totalRevenue: data.revenue };
     })
     .slice(0, limit);
 }
@@ -9544,15 +9361,33 @@ export async function cancelEmployeeRequest(requestId: number, employeeId: numbe
     return { success: false, error: 'لا يمكن إلغاء الطلب بعد المراجعة' };
   }
 
-  // إلغاء الطلب
-  await db.update(employeeRequests)
+  // طلب إنهاء الخدمة يُنشئه المدير ويُدار من صفحة إنهاء الخدمة فقط
+  if (request[0].requestType === 'end_of_service') {
+    return { success: false, error: 'لا يمكن إلغاء طلب إنهاء الخدمة من بوابة الموظف' };
+  }
+
+  // إلغاء الطلب: مشروط بأنه ما زال قيد المراجعة (لا يتغلب على اعتماد متزامن)
+  const cancelResult = await db.update(employeeRequests)
     .set({
       status: 'cancelled',
       updatedAt: new Date(),
     })
-    .where(eq(employeeRequests.id, requestId));
+    .where(and(
+      eq(employeeRequests.id, requestId),
+      eq(employeeRequests.employeeId, employeeId),
+      eq(employeeRequests.status, 'pending'),
+      isNull(employeeRequests.reviewedAt)
+    ));
+  if (portalUpdateAffectedRows(cancelResult) === 0) {
+    return { success: false, error: 'تمت مراجعة الطلب للتو، لا يمكن إلغاؤه' };
+  }
 
   return { success: true };
+}
+
+function portalUpdateAffectedRows(result: unknown): number {
+  const header = Array.isArray(result) ? result[0] : result;
+  return Number((header as { affectedRows?: number })?.affectedRows ?? 0);
 }
 
 // تحديث طلب موظف من بوابة الموظفين (فقط إذا كان قيد المراجعة)
@@ -9593,13 +9428,25 @@ export async function updateEmployeeRequestFromPortal(
     return { success: false, error: 'لا يمكن تعديل الطلب بعد المراجعة' };
   }
 
-  // تحديث الطلب
-  await db.update(employeeRequests)
+  if (request[0].requestType === 'end_of_service') {
+    return { success: false, error: 'لا يمكن تعديل طلب إنهاء الخدمة من بوابة الموظف' };
+  }
+
+  // تحديث الطلب: مشروط بأنه ما زال قيد المراجعة (لا يغيّر طلباً اعتُمد للتو)
+  const updateResult = await db.update(employeeRequests)
     .set({
       ...data,
       updatedAt: new Date(),
     })
-    .where(eq(employeeRequests.id, requestId));
+    .where(and(
+      eq(employeeRequests.id, requestId),
+      eq(employeeRequests.employeeId, employeeId),
+      eq(employeeRequests.status, 'pending'),
+      isNull(employeeRequests.reviewedAt)
+    ));
+  if (portalUpdateAffectedRows(updateResult) === 0) {
+    return { success: false, error: 'تمت مراجعة الطلب للتو، لا يمكن تعديله' };
+  }
 
   return { success: true };
 }
@@ -9609,11 +9456,14 @@ export async function getEmployeePortalRequestsStats(employeeId: number) {
   const db = await getDb();
   if (!db) return null;
 
-  const requests = await db.select({
+  const allRequests = await db.select({
     status: employeeRequests.status,
+    requestType: employeeRequests.requestType,
   })
     .from(employeeRequests)
     .where(eq(employeeRequests.employeeId, employeeId));
+  // إنهاء الخدمة يظهر للموظف بعد اعتماده فقط (نفس قائمة طلباتي)
+  const requests = allRequests.filter(r => r.requestType !== 'end_of_service' || r.status === 'approved');
 
   let total = 0;
   let pending = 0;
@@ -9683,6 +9533,15 @@ export async function deleteRequestAttachment(attachmentId: number, employeeId: 
     .limit(1);
   
   if (attachment.length === 0 || attachment[0].uploadedBy !== employeeId) {
+    return { success: false, error: 'غير مصرح بحذف هذا المرفق' };
+  }
+
+  // المرفق يجب أن يتبع طلباً للموظف نفسه
+  const ownerRequest = await db.select({ id: employeeRequests.id })
+    .from(employeeRequests)
+    .where(and(eq(employeeRequests.id, attachment[0].requestId), eq(employeeRequests.employeeId, employeeId)))
+    .limit(1);
+  if (ownerRequest.length === 0) {
     return { success: false, error: 'غير مصرح بحذف هذا المرفق' };
   }
   
@@ -9962,9 +9821,6 @@ export async function getEmployeesWithExpiringDocuments() {
   if (!db) return { expiring: { iqama: [], healthCert: [], contract: [] }, expired: { iqama: [], healthCert: [], contract: [] }, summary: { totalExpiring: 0, totalExpired: 0, expiringIqamaCount: 0, expiringHealthCertCount: 0, expiringContractCount: 0, expiredIqamaCount: 0, expiredHealthCertCount: 0, expiredContractCount: 0 } };
   
   const now = new Date();
-  const oneMonthFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  const twoMonthsFromNow = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
-  const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   
   const { employees, branches } = await import('../drizzle/schema');
   
@@ -9995,34 +9851,27 @@ export async function getEmployeesWithExpiringDocuments() {
   const expiredHealthCert: typeof allEmployees = [];
   const expiredContract: typeof allEmployees = [];
   
+  // نفس حالات لوحة الوثائق (أيام الرياض، والحدود في shared/employeeFile.ts) حتى يطابق التقرير الشاشة
+  const { describeDocumentExpiry } = await import('../shared/employeeFile');
+  const classify = (
+    kind: 'iqama' | 'health' | 'contract',
+    expiry: Date | null,
+    emp: (typeof allEmployees)[number],
+    expiredList: typeof allEmployees,
+    expiringList: typeof allEmployees
+  ) => {
+    const { status } = describeDocumentExpiry(kind, expiry, now);
+    if (status === 'expired') expiredList.push(emp);
+    else if (status === 'critical' || status === 'warning') expiringList.push(emp);
+  };
   for (const emp of allEmployees) {
-    if (emp.iqamaExpiryDate) {
-      if (emp.iqamaExpiryDate < now) {
-        expiredIqama.push(emp);
-      } else if (emp.iqamaExpiryDate <= oneMonthFromNow) {
-        expiringIqama.push(emp);
-      }
-    }
-    
-    if (emp.healthCertExpiryDate) {
-      if (emp.healthCertExpiryDate < now) {
-        expiredHealthCert.push(emp);
-      } else if (emp.healthCertExpiryDate <= oneWeekFromNow) {
-        expiringHealthCert.push(emp);
-      }
-    }
-    
-    if (emp.contractExpiryDate) {
-      if (emp.contractExpiryDate < now) {
-        expiredContract.push(emp);
-      } else if (emp.contractExpiryDate <= twoMonthsFromNow) {
-        expiringContract.push(emp);
-      }
-    }
+    classify('iqama', emp.iqamaExpiryDate, emp, expiredIqama, expiringIqama);
+    classify('health', emp.healthCertExpiryDate, emp, expiredHealthCert, expiringHealthCert);
+    classify('contract', emp.contractExpiryDate, emp, expiredContract, expiringContract);
   }
   
   const branchesData = await db.select().from(branches);
-  const branchMap = new Map(branchesData.map(b => [b.id, b.name]));
+  const branchMap = new Map(branchesData.map(b => [b.id, b.nameAr || b.name]));
   
   const addBranchName = (emps: typeof allEmployees) => 
     emps.map(emp => ({
@@ -10271,7 +10120,10 @@ export async function getEmployeesWithoutDocuments() {
       and(
         eq(employees.isActive, true),
         or(
-          isNull(employees.infoSubmittedAt),
+          // بيانات الوثائق ناقصة (أياً كان من أدخلها: الموظف أو الإدارة)
+          isNull(employees.iqamaExpiryDate),
+          isNull(employees.healthCertExpiryDate),
+          isNull(employees.contractExpiryDate),
           and(
             isNull(employees.iqamaImageUrl),
             isNull(employees.healthCertImageUrl),
@@ -10294,7 +10146,7 @@ export async function getEmployeesWithoutDocuments() {
     ...emp,
     branchName: branchMap.get(emp.branchId) || 'غير محدد',
     missingDocuments: {
-      info: !emp.infoSubmittedAt,
+      info: !emp.iqamaExpiryDate || !emp.healthCertExpiryDate || !emp.contractExpiryDate,
       iqamaImage: !emp.iqamaImageUrl,
       healthCertImage: !emp.healthCertImageUrl,
       contractImage: !emp.contractImageUrl,
@@ -10316,7 +10168,9 @@ export async function getDocumentStatistics() {
     .where(
       and(
         eq(employees.isActive, true),
-        isNotNull(employees.infoSubmittedAt)
+        isNotNull(employees.iqamaExpiryDate),
+        isNotNull(employees.healthCertExpiryDate),
+        isNotNull(employees.contractExpiryDate)
       )
     );
   
@@ -10463,6 +10317,9 @@ export async function getEmployeesForPortalAdmin(
   healthCertImageUrl: string | null;
   contractImageUrl: string | null;
   isSupervisor: boolean;
+  hireDate: string | null;
+  nationality: string | null;
+  baseSalary: number | null;
 }>> {
   const db = await getDb();
   if (!db) {
@@ -10491,8 +10348,12 @@ export async function getEmployeesForPortalAdmin(
         healthCertImageUrl: employees.healthCertImageUrl,
         contractImageUrl: employees.contractImageUrl,
         isSupervisor: employees.isSupervisor,
+        hireDate: employees.hireDate,
+        nationality: employees.nationality,
+        baseSalary: employeeSalarySettings.baseSalary,
       })
       .from(employees)
+      .leftJoin(employeeSalarySettings, eq(employeeSalarySettings.employeeId, employees.id))
       .where(eq(employees.isActive, true));
 
     const emps = await query;
@@ -10503,6 +10364,9 @@ export async function getEmployeesForPortalAdmin(
 
     let result = emps.map((emp: typeof emps[0]) => ({
       ...emp,
+      hireDate: emp.hireDate ?? null,
+      nationality: emp.nationality ?? null,
+      baseSalary: emp.baseSalary != null ? parseFloat(emp.baseSalary as string) || 0 : null,
       branchName: branchMap.get(emp.branchId) || 'غير محدد',
     }));
 
@@ -10565,8 +10429,23 @@ export async function getBranchesForPortalAdmin(): Promise<Array<{
   }
 }
 
-// جلب إحصائيات لوحة تحكم الأدمن في بوابة الموظفين
-export async function getPortalAdminDashboardStats(): Promise<{
+// مشرفو الفرع في بوابة الموظفين (لإشعارهم بالطلبات الجديدة)
+export async function getPortalSupervisorIdsForBranch(branchId: number): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ id: employees.id })
+    .from(employees)
+    .where(and(
+      eq(employees.branchId, branchId),
+      eq(employees.isSupervisor, true),
+      eq(employees.isActive, true),
+      eq(employees.hasPortalAccess, true)
+    ));
+  return rows.map(r => r.id);
+}
+
+// جلب إحصائيات لوحة تحكم الأدمن في بوابة الموظفين (branchId: نطاق المشرف، بدون = كل الفروع)
+export async function getPortalAdminDashboardStats(branchId?: number | null): Promise<{
   totalEmployees: number;
   activeEmployees: number;
   pendingRequests: number;
@@ -10589,21 +10468,27 @@ export async function getPortalAdminDashboardStats(): Promise<{
   }
 
   try {
+    const scoped = branchId != null;
     // عدد الموظفين
-    const allEmployees = await db.select({ id: employees.id }).from(employees);
+    const allEmployees = await db.select({ id: employees.id }).from(employees)
+      .where(scoped ? eq(employees.branchId, branchId) : undefined);
     const activeEmps = await db
       .select({ id: employees.id })
       .from(employees)
-      .where(eq(employees.isActive, true));
+      .where(scoped ? and(eq(employees.isActive, true), eq(employees.branchId, branchId)) : eq(employees.isActive, true));
 
-    // عدد الطلبات
-    const allRequests = await db.select({ id: employeeRequests.id, status: employeeRequests.status }).from(employeeRequests);
+    // عدد الطلبات (إنهاء الخدمة لا يظهر في البوابة قبل اعتماده)
+    const allRequests = (await db.select({ id: employeeRequests.id, status: employeeRequests.status, requestType: employeeRequests.requestType })
+      .from(employeeRequests)
+      .where(scoped ? eq(employeeRequests.branchId, branchId) : undefined))
+      .filter(r => r.requestType !== 'end_of_service' || r.status === 'approved');
     const pendingReqs = allRequests.filter((r: { status: string }) => r.status === 'pending').length;
     const approvedReqs = allRequests.filter((r: { status: string }) => r.status === 'approved').length;
     const rejectedReqs = allRequests.filter((r: { status: string }) => r.status === 'rejected').length;
 
     // عدد الفروع
-    const branchList = await db.select({ id: branches.id }).from(branches);
+    const branchList = await db.select({ id: branches.id }).from(branches)
+      .where(scoped ? eq(branches.id, branchId) : undefined);
 
     // الوثائق المنتهية (خلال 30 يوم)
     const thirtyDaysFromNow = new Date();
@@ -10615,6 +10500,7 @@ export async function getPortalAdminDashboardStats(): Promise<{
       .where(
         and(
           eq(employees.isActive, true),
+          scoped ? eq(employees.branchId, branchId) : undefined,
           or(
             and(
               isNotNull(employees.iqamaExpiryDate),
@@ -10667,9 +10553,36 @@ export async function getEmployeeDetailsForPortalAdmin(employeeId: number): Prom
   }
 
   try {
-    // جلب بيانات الموظف
+    // جلب بيانات الموظف (أعمدة محددة: لا تُعاد كلمة المرور أو إصدار الجلسة أو مفاتيح التخزين)
     const emp = await db
-      .select()
+      .select({
+        id: employees.id,
+        code: employees.code,
+        name: employees.name,
+        branchId: employees.branchId,
+        phone: employees.phone,
+        email: employees.email,
+        emailVerified: employees.emailVerified,
+        position: employees.position,
+        username: employees.username,
+        hasPortalAccess: employees.hasPortalAccess,
+        isSupervisor: employees.isSupervisor,
+        lastLogin: employees.lastLogin,
+        photoUrl: employees.photoUrl,
+        iqamaNumber: employees.iqamaNumber,
+        iqamaExpiryDate: employees.iqamaExpiryDate,
+        iqamaImageUrl: employees.iqamaImageUrl,
+        healthCertExpiryDate: employees.healthCertExpiryDate,
+        healthCertImageUrl: employees.healthCertImageUrl,
+        contractExpiryDate: employees.contractExpiryDate,
+        contractImageUrl: employees.contractImageUrl,
+        hireDate: employees.hireDate,
+        nationality: employees.nationality,
+        infoSubmittedAt: employees.infoSubmittedAt,
+        isActive: employees.isActive,
+        createdAt: employees.createdAt,
+        updatedAt: employees.updatedAt,
+      })
       .from(employees)
       .where(eq(employees.id, employeeId))
       .limit(1);
@@ -10732,12 +10645,19 @@ export interface VoucherReportData {
   vouchers: Array<{
     id: number;
     voucherId: string;
+    voucherType: 'receipt' | 'payment';
     voucherDate: Date;
     dueDate: Date | null;
     dueDateTo: Date | null;
+    partyName: string | null;
     payeeName: string;
     payeePhone: string | null;
+    description: string | null;
     totalAmount: string;
+    paymentMethod: string | null;
+    cashAmount: string;
+    bankAmount: string;
+    checkAmount: string;
     status: string;
     branchName: string | null;
     notes: string | null;
@@ -10745,15 +10665,22 @@ export interface VoucherReportData {
     createdAt: Date;
   }>;
   statistics: {
+    /** عدد السندات غير الملغاة */
     totalCount: number;
     draftCount: number;
     approvedCount: number;
     paidCount: number;
     cancelledCount: number;
+    /** إجمالي السندات غير الملغاة */
     totalAmount: number;
     draftAmount: number;
     approvedAmount: number;
     paidAmount: number;
+    cancelledAmount: number;
+    receiptCount: number;
+    receiptAmount: number;
+    paymentCount: number;
+    paymentAmount: number;
   };
   filters: {
     startDate: string;
@@ -10774,6 +10701,10 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
       lte(receiptVouchers.voucherDate, new Date(filters.endDate)),
     ];
 
+    if (filters.voucherType && filters.voucherType !== 'all') {
+      conditions.push(eq(receiptVouchers.voucherType, filters.voucherType));
+    }
+
     if (filters.status && filters.status !== 'all') {
       conditions.push(eq(receiptVouchers.status, filters.status));
     }
@@ -10786,15 +10717,25 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
     const vouchersResult = await db.select({
       id: receiptVouchers.id,
       voucherId: receiptVouchers.voucherId,
+      voucherType: receiptVouchers.voucherType,
       voucherDate: receiptVouchers.voucherDate,
       dueDate: receiptVouchers.dueDate,
+      dueDateTo: receiptVouchers.dueDateTo,
+      partyName: receiptVouchers.partyName,
       payeeName: receiptVouchers.payeeName,
       payeePhone: receiptVouchers.payeePhone,
+      description: receiptVouchers.description,
       totalAmount: receiptVouchers.totalAmount,
+      paymentMethod: receiptVouchers.paymentMethod,
+      cashAmount: receiptVouchers.cashAmount,
+      bankAmount: receiptVouchers.bankAmount,
+      checkAmount: receiptVouchers.checkAmount,
       status: receiptVouchers.status,
       branchId: receiptVouchers.branchId,
+      branchName: receiptVouchers.branchName,
       notes: receiptVouchers.notes,
       createdBy: receiptVouchers.createdBy,
+      createdByName: receiptVouchers.createdByName,
       createdAt: receiptVouchers.createdAt,
     })
       .from(receiptVouchers)
@@ -10824,19 +10765,35 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
       userMap = Object.fromEntries(usersResult.map(u => [u.id, u.name || '']));
     }
 
-    // حساب الإحصائيات
+    // حساب الإحصائيات (السندات الملغاة لا تدخل في الإجماليات)
     let totalAmount = 0;
     let draftAmount = 0;
     let approvedAmount = 0;
     let paidAmount = 0;
+    let cancelledAmount = 0;
     let draftCount = 0;
     let approvedCount = 0;
     let paidCount = 0;
     let cancelledCount = 0;
+    let receiptCount = 0;
+    let receiptAmount = 0;
+    let paymentCount = 0;
+    let paymentAmount = 0;
 
     const vouchers = vouchersResult.map(v => {
       const amount = parseFloat(v.totalAmount || '0');
-      totalAmount += amount;
+      if (v.status === 'cancelled') {
+        cancelledAmount += amount;
+      } else {
+        totalAmount += amount;
+        if (v.voucherType === 'payment') {
+          paymentCount++;
+          paymentAmount += amount;
+        } else {
+          receiptCount++;
+          receiptAmount += amount;
+        }
+      }
 
       switch (v.status) {
         case 'draft':
@@ -10859,16 +10816,23 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
       return {
         id: v.id,
         voucherId: v.voucherId,
+        voucherType: v.voucherType,
         voucherDate: v.voucherDate,
         dueDate: v.dueDate,
-        dueDateTo: null,
+        dueDateTo: v.dueDateTo,
+        partyName: v.partyName,
         payeeName: v.payeeName,
         payeePhone: v.payeePhone,
+        description: v.description,
         totalAmount: v.totalAmount,
+        paymentMethod: v.paymentMethod,
+        cashAmount: v.cashAmount,
+        bankAmount: v.bankAmount,
+        checkAmount: v.checkAmount,
         status: v.status,
-        branchName: v.branchId ? branchMap[v.branchId] || null : null,
+        branchName: (v.branchId ? branchMap[v.branchId] : null) || v.branchName || null,
         notes: v.notes,
-        createdByName: v.createdBy ? userMap[v.createdBy] || 'غير معروف' : 'غير معروف',
+        createdByName: v.createdByName || (v.createdBy ? userMap[v.createdBy] : '') || 'غير معروف',
         createdAt: v.createdAt,
       };
     });
@@ -10888,7 +10852,7 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
     return {
       vouchers,
       statistics: {
-        totalCount: vouchers.length,
+        totalCount: vouchers.length - cancelledCount,
         draftCount,
         approvedCount,
         paidCount,
@@ -10897,6 +10861,11 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
         draftAmount,
         approvedAmount,
         paidAmount,
+        cancelledAmount,
+        receiptCount,
+        receiptAmount,
+        paymentCount,
+        paymentAmount,
       },
       filters: {
         startDate: filters.startDate.toISOString(),
@@ -10907,8 +10876,9 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
       },
     };
   } catch (error) {
+    // فشل القراءة يُرفع للمستدعي حتى لا يظهر التقرير فارغاً كأنه لا توجد سندات
     console.error('Error getting vouchers for report:', error);
-    return null;
+    throw new Error('تعذر تحميل تقرير السندات من قاعدة البيانات');
   }
 }
 
@@ -10984,25 +10954,33 @@ export async function getExpensesByPaymentMethod(
 }
 
 /**
- * الحصول على سندات القبض مجمعة حسب طريقة الدفع
+ * الحصول على السندات مجمعة حسب طريقة الدفع (السندات الملغاة مستبعدة)
+ * - يُستخدم توزيع المبلغ (نقداً / حوالة / شيك) إن وجد، فالسند المختلط يظهر في أكثر من مجموعة
+ * - السندات القديمة بدون توزيع: كامل المبلغ في طريقة الدفع المسجلة
  * @param branchId معرف الفرع (اختياري)
  * @param startDate تاريخ البداية
  * @param endDate تاريخ النهاية
+ * @param voucherType نوع السند (الافتراضي: سندات القبض فقط للتوافق مع التدفق النقدي)
  */
 export async function getVouchersByPaymentMethod(
   startDate: string,
   endDate: string,
-  branchId?: number
+  branchId?: number,
+  voucherType: 'receipt' | 'payment' | 'all' = 'receipt'
 ) {
   const db = await getDb();
   if (!db) return null;
 
   try {
-    const conditions = [
+    const conditions: SQL[] = [
       gte(receiptVouchers.voucherDate, new Date(startDate)),
       lte(receiptVouchers.voucherDate, new Date(endDate)),
       inArray(receiptVouchers.status, ['draft', 'approved', 'paid']),
     ];
+
+    if (voucherType !== 'all') {
+      conditions.push(eq(receiptVouchers.voucherType, voucherType));
+    }
 
     if (branchId) {
       conditions.push(eq(receiptVouchers.branchId, branchId));
@@ -11023,21 +11001,31 @@ export async function getVouchersByPaymentMethod(
 
     let grandTotal = 0;
 
+    const addTo = (method: string, amount: number, voucher: (typeof allVouchers)[number]) => {
+      const bucket = byPaymentMethod[method] || byPaymentMethod.other;
+      bucket.count++;
+      bucket.total = Math.round((bucket.total + amount) * 100) / 100;
+      bucket.vouchers.push(voucher);
+    };
+
     for (const voucher of allVouchers) {
-      const method = voucher.paymentMethod || 'cash';
-      const amount = parseFloat(voucher.totalAmount);
-      
-      if (byPaymentMethod[method]) {
-        byPaymentMethod[method].count++;
-        byPaymentMethod[method].total += amount;
-        byPaymentMethod[method].vouchers.push(voucher);
+      const amount = parseFloat(voucher.totalAmount) || 0;
+      const cash = parseFloat(voucher.cashAmount || '0') || 0;
+      const bank = parseFloat(voucher.bankAmount || '0') || 0;
+      const check = parseFloat(voucher.checkAmount || '0') || 0;
+
+      if (cash > 0 || bank > 0 || check > 0) {
+        // توزيع صريح على طرق الدفع
+        if (cash > 0) addTo('cash', cash, voucher);
+        if (bank > 0) addTo('bank_transfer', bank, voucher);
+        if (check > 0) addTo('check', check, voucher);
       } else {
-        byPaymentMethod.other.count++;
-        byPaymentMethod.other.total += amount;
-        byPaymentMethod.other.vouchers.push(voucher);
+        // سندات قديمة أو طرق غير موزعة (بطاقة / أخرى)
+        const method = voucher.paymentMethod && voucher.paymentMethod !== 'mixed' ? voucher.paymentMethod : 'cash';
+        addTo(method, amount, voucher);
       }
-      
-      grandTotal += amount;
+
+      grandTotal = Math.round((grandTotal + amount) * 100) / 100;
     }
 
     return {
@@ -12236,12 +12224,13 @@ export async function checkPosConfirmationStatus(branchId: number, date: Date) {
 }
 
 // إنشاء سجل إيرادات من الكاشير
+// - تُحتسب الفواتير المكتملة فقط (لا يتم تغيير حالة الفواتير الملغاة أو المسترجعة)
+// - يُخزن التاريخ كيوم العمل (منتصف الليل UTC) مثل مسار الإدخال اليدوي
+// - إيراد كل موظف يُسجل في employeeRevenues داخل نفس المعاملة (ليصل للبونص تلقائياً)
 export async function createRevenueFromPOS(data: {
   branchId: number;
-  date: Date;
-  totalAmount: number;
-  cashAmount: number;
-  cardAmount: number;
+  /** يوم العمل بصيغة YYYY-MM-DD */
+  businessDayKey: string;
   balanceImageKey?: string;
   balanceImageUrl?: string;
   paidInvoices: { customerName: string; amount: number }[];
@@ -12249,86 +12238,145 @@ export async function createRevenueFromPOS(data: {
   notes?: string;
   confirmedBy: number;
   confirmedByName: string;
-  posInvoiceIds: number[];
 }) {
   const db = await getDb();
   if (!db) throw new Error('Database not available');
-  
+
+  const { aggregatePosInvoices } = await import('./bonus/posRevenue');
+  const { businessDayKeyToStoredDate, businessDayKeyToLocalDate, parseBusinessDayKey } = await import('./bonus/calculator');
+
+  const { year, month } = parseBusinessDayKey(data.businessDayKey);
+  const storedDate = businessDayKeyToStoredDate(data.businessDayKey);
+  const localStart = businessDayKeyToLocalDate(data.businessDayKey);
+  const localEnd = new Date(localStart);
+  localEnd.setHours(23, 59, 59, 999);
+
   // حساب إجمالي فواتير المدفوع
   const totalPaidInvoices = data.paidInvoices.reduce((sum, inv) => sum + inv.amount, 0);
-  
-  // الحصول على أو إنشاء السجل الشهري
-  const year = data.date.getFullYear();
-  const month = data.date.getMonth() + 1;
-  
-  let monthlyRecord = await db.select()
-    .from(monthlyRecords)
-    .where(
-      and(
-        eq(monthlyRecords.branchId, data.branchId),
-        eq(monthlyRecords.year, year),
-        eq(monthlyRecords.month, month)
+
+  return await db.transaction(async (tx) => {
+    // قفل صف الفرع لمنع التأكيد المزدوج لنفس اليوم
+    await tx.execute(sql`SELECT id FROM branches WHERE id = ${data.branchId} FOR UPDATE`);
+
+    // التحقق من عدم وجود إيراد لنفس اليوم
+    const existingRevenue = await tx.select({ id: dailyRevenues.id })
+      .from(dailyRevenues)
+      .where(and(
+        eq(dailyRevenues.branchId, data.branchId),
+        gte(dailyRevenues.date, localStart),
+        lte(dailyRevenues.date, localEnd)
+      ))
+      .limit(1);
+    if (existingRevenue.length > 0) {
+      throw new Error('ALREADY_CONFIRMED: تم تأكيد فواتير هذا اليوم مسبقاً');
+    }
+
+    // فواتير اليوم المكتملة فقط
+    const dayInvoices = await tx.select({
+      id: posInvoices.id,
+      employeeId: posInvoices.employeeId,
+      employeeName: posInvoices.employeeName,
+      total: posInvoices.total,
+      paymentMethod: posInvoices.paymentMethod,
+      cashAmount: posInvoices.cashAmount,
+      cardAmount: posInvoices.cardAmount,
+      status: posInvoices.status,
+    })
+      .from(posInvoices)
+      .where(and(
+        eq(posInvoices.branchId, data.branchId),
+        gte(posInvoices.invoiceDate, localStart),
+        lte(posInvoices.invoiceDate, localEnd)
+      ));
+
+    const aggregation = aggregatePosInvoices(dayInvoices);
+    if (aggregation.branch.invoiceCount === 0) {
+      throw new Error('NO_INVOICES: لا توجد فواتير مكتملة للتأكيد');
+    }
+
+    // الحصول على أو إنشاء السجل الشهري
+    const monthlyRecord = await tx.select()
+      .from(monthlyRecords)
+      .where(
+        and(
+          eq(monthlyRecords.branchId, data.branchId),
+          eq(monthlyRecords.year, year),
+          eq(monthlyRecords.month, month)
+        )
       )
-    )
-    .limit(1);
-  
-  let monthlyRecordId: number;
-  
-  if (monthlyRecord.length === 0) {
-    // إنشاء سجل شهري جديد
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0); // آخر يوم في الشهر
-    
-    const newRecord = await db.insert(monthlyRecords).values({
+      .limit(1);
+
+    let monthlyRecordId: number;
+    if (monthlyRecord.length === 0) {
+      const newRecord = await tx.insert(monthlyRecords).values({
+        branchId: data.branchId,
+        year,
+        month,
+        startDate: new Date(year, month - 1, 1),
+        endDate: new Date(year, month, 0), // آخر يوم في الشهر
+        status: 'active',
+      });
+      monthlyRecordId = Number(newRecord[0].insertId);
+    } else {
+      monthlyRecordId = monthlyRecord[0].id;
+    }
+
+    // إنشاء سجل الإيرادات اليومية
+    const now = new Date();
+    const result = await tx.insert(dailyRevenues).values({
+      monthlyRecordId,
       branchId: data.branchId,
-      year,
-      month,
-      startDate,
-      endDate,
-      status: 'active',
+      date: storedDate,
+      cash: aggregation.branch.cash.toFixed(2),
+      network: aggregation.branch.network.toFixed(2),
+      balance: aggregation.branch.network.toFixed(2), // الرصيد = الشبكة
+      paidInvoices: totalPaidInvoices.toFixed(2),
+      paidInvoicesNote: data.notes || null,
+      paidInvoicesCustomer: data.paidInvoices.length > 0
+        ? data.paidInvoices.map(inv => inv.customerName).join(', ')
+        : null,
+      loyalty: String(data.loyaltyInfo?.discountAmount || 0),
+      total: aggregation.branch.total.toFixed(2),
+      isMatched: true,
+      balanceImages: data.balanceImageUrl && data.balanceImageKey ? [{
+        url: data.balanceImageUrl,
+        key: data.balanceImageKey,
+        uploadedAt: now.toISOString(),
+      }] : [],
+      imageVerificationStatus: 'verified',
+      posConfirmed: true,
+      posConfirmedAt: now,
+      posConfirmedBy: data.confirmedByName,
+      createdBy: data.confirmedBy,
     });
-    monthlyRecordId = Number(newRecord[0].insertId);
-  } else {
-    monthlyRecordId = monthlyRecord[0].id;
-  }
-  
-  // إنشاء سجل الإيرادات اليومية
-  const result = await db.insert(dailyRevenues).values({
-    monthlyRecordId,
-    branchId: data.branchId,
-    date: data.date,
-    cash: String(data.cashAmount),
-    network: String(data.cardAmount),
-    balance: String(data.cardAmount), // الرصيد = الشبكة
-    paidInvoices: String(totalPaidInvoices),
-    paidInvoicesNote: data.notes || null,
-    paidInvoicesCustomer: data.paidInvoices.length > 0 
-      ? data.paidInvoices.map(inv => inv.customerName).join(', ') 
-      : null,
-    loyalty: String(data.loyaltyInfo?.discountAmount || 0),
-    total: String(data.totalAmount),
-    isMatched: true,
-    balanceImages: data.balanceImageUrl && data.balanceImageKey ? [{
-      url: data.balanceImageUrl,
-      key: data.balanceImageKey,
-      uploadedAt: new Date().toISOString(),
-    }] : [],
-    imageVerificationStatus: 'verified',
-    createdBy: data.confirmedBy,
+
+    const revenueId = Number(result[0].insertId);
+
+    // إيرادات الموظفين من فواتير الكاشير
+    if (aggregation.employees.length > 0) {
+      await tx.insert(employeeRevenues).values(
+        aggregation.employees.map(emp => ({
+          dailyRevenueId: revenueId,
+          employeeId: emp.employeeId,
+          cash: emp.cash.toFixed(2),
+          network: emp.network.toFixed(2),
+          total: emp.total.toFixed(2),
+        }))
+      );
+    }
+
+    return {
+      id: revenueId,
+      date: storedDate,
+      businessDayKey: data.businessDayKey,
+      summary: {
+        ...aggregation.branch,
+        excludedCount: aggregation.excludedCount,
+        employeesCount: aggregation.employees.length,
+        totalPaidInvoices,
+      },
+    };
   });
-  
-  const revenueId = Number(result[0].insertId);
-  
-  // تحديث فواتير الكاشير بربطها بالإيراد
-  if (data.posInvoiceIds.length > 0) {
-    await db.update(posInvoices)
-      .set({ 
-        status: 'completed',
-      })
-      .where(inArray(posInvoices.id, data.posInvoiceIds));
-  }
-  
-  return { id: revenueId };
 }
 
 // تحديث حالة فواتير الكاشير إلى مكتملة
@@ -13281,6 +13329,7 @@ export async function recordLoyaltyDiscountUsage(data: {
 // ============================================
 
 import { posPrintSettings, PosPrintSettings, InsertPosPrintSettings } from '../drizzle/schema';
+import { getEstablishmentForBranch, type BranchLike } from '../shared/branding';
 
 /**
  * جلب إعدادات الطباعة للفرع
@@ -13347,7 +13396,7 @@ export async function savePrintSettings(data: InsertPosPrintSettings): Promise<{
 /**
  * جلب إعدادات الطباعة الافتراضية
  */
-export function getDefaultPrintSettings(branchId: number): InsertPosPrintSettings {
+export function getDefaultPrintSettings(branchId: number, branch?: BranchLike): InsertPosPrintSettings {
   return {
     branchId,
     paperWidth: '80mm',
@@ -13356,7 +13405,8 @@ export function getDefaultPrintSettings(branchId: number): InsertPosPrintSetting
     showQRCode: true,
     showBranchPhone: true,
     showEmployeeName: true,
-    storeName: 'Symbol AI',
+    // اسم المتجر الافتراضي = مؤسسة الفرع (لبن -> قصه وتخفيف، طويق -> تدرج وتخفيف) وليس اسم النظام
+    storeName: getEstablishmentForBranch(branch).nameAr,
     storePhone: '',
     storeAddress: '',
     headerMessage: '',

@@ -3,11 +3,10 @@ import { generateUsername, generatePassword } from './employeeAuth';
 
 describe('Employee Authentication Utilities', () => {
   describe('generateUsername', () => {
-    it('should generate username from employee name', () => {
+    it('should generate a Latin username for an Arabic name (portal login pattern)', () => {
       const username = generateUsername('محمد أحمد', 'EMP001');
-      expect(username).toBeDefined();
-      expect(typeof username).toBe('string');
-      expect(username.length).toBeGreaterThan(0);
+      expect(username).toBe('empemp001');
+      expect(username).toMatch(/^[a-z0-9._-]{3,30}$/);
     });
 
     it('should generate username from English name', () => {
@@ -32,7 +31,8 @@ describe('Employee Authentication Utilities', () => {
     it('should generate password of correct length', () => {
       const password = generatePassword();
       expect(password).toBeDefined();
-      expect(password.length).toBe(8);
+      expect(password.length).toBe(10);
+      expect(generatePassword(16).length).toBe(16);
     });
 
     it('should generate different passwords each time', () => {
