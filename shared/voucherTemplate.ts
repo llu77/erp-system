@@ -433,9 +433,10 @@ const STYLES = (accent: string, accentSoft: string, fontFace: string) => `
   .sig-line { border-bottom: 1px solid #333; margin: 2px 10px 3px; }
   .sig-name { font-size: 11.5px; font-weight: 700; }
   .sig-name-en { font-size: 10px; color: #555; direction: ltr; }
-  .stamp-area { height: 136px; display: flex; align-items: center; justify-content: center; }
-  .stamp-img { width: 132px; height: 132px; object-fit: contain; opacity: 0.92; }
-  .stamp-placeholder { width: 112px; height: 112px; border: 2px dashed #bbb; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 10px; color: #888; }
+  .stamp-box .sig-title .en, .stamp-box .sig-title .sep { display: inline; }
+  .stamp-area { height: 118px; display: flex; align-items: center; justify-content: center; }
+  .stamp-img { width: 118px; height: 118px; object-fit: contain; opacity: 0.92; }
+  .stamp-placeholder { width: 100px; height: 100px; border: 2px dashed #bbb; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 10px; color: #888; }
   .approval-note { margin-top: 6px; text-align: center; font-size: 11px; color: #065f46; font-weight: 700; }
   .receiver { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 14px; margin-top: 12px; padding: 8px; border: 1px solid #999; border-radius: 4px; }
   .receiver-title { font-weight: 800; font-size: 12px; min-width: 110px; }
@@ -469,12 +470,11 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
       ? `<div class="watermark draft">مسودة / DRAFT</div>`
       : "";
 
-  const companyMetaAr = [company.address, !isPlaceholderValue(company.phone) ? company.phone : null]
-    .filter(Boolean).map(s => escapeHtml(s)).join(" - ");
-  const legal = [
-    !isPlaceholderValue(company.cr) ? company.cr : null,
-    !isPlaceholderValue(company.vat) ? company.vat : null,
-  ].filter(Boolean).map(s => escapeHtml(s)).join(" | ");
+  // العنوان والهاتف ثم الرقم الموحد والضريبي في سطر واحد (لا يزيد طول الترويسة)
+  const companyMetaAr = [
+    [company.address, !isPlaceholderValue(company.phone) ? company.phone : null].filter(Boolean).map(s => escapeHtml(s!)).join(" - "),
+    ...[company.cr, company.vat].filter(s => !isPlaceholderValue(s)).map(s => escapeHtml(s)),
+  ].filter(Boolean).join(" | ");
 
   const period = v.dueDateFrom || v.dueDateTo
     ? `${formatVoucherDate(v.dueDateFrom)} - ${formatVoucherDate(v.dueDateTo)}`
@@ -504,7 +504,6 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
           <div class="name">${escapeHtml(company.nameAr)}</div>
           ${company.subtitle ? `<div class="sub">${escapeHtml(company.subtitle)}</div>` : ""}
           ${companyMetaAr ? `<div class="meta">${companyMetaAr}</div>` : ""}
-          ${legal ? `<div class="meta">${legal}</div>` : ""}
         </div>
         ${logoImgHtml(assets.logo, "logo")}
         <div class="co co-en">

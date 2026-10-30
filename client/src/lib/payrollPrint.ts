@@ -193,8 +193,8 @@ const BASE_STYLES = `
   .sig .line { border-top: 1px solid #333; margin-top: 4px; padding-top: 4px; font-weight: 800; font-size: 12px; }
   .sig .role { font-size: 10px; color: #555; }
   .stamp { text-align: center; }
-  .stamp img { width: 170px; height: 170px; object-fit: contain; opacity: .92; }
-  .stamp .ph { width: 140px; height: 140px; border: 2px dashed #ccc; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 10px; }
+  .stamp img { width: 148px; height: 148px; object-fit: contain; opacity: .92; display: block; margin: 0 auto; }
+  .stamp .ph { width: 110px; height: 110px; border: 2px dashed #ccc; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 10px; }
   .footer { margin-top: 14px; border-top: 1px dashed #bbb; padding-top: 6px; display: flex; justify-content: space-between; font-size: 9.5px; color: #666; }
   @page { margin: 8mm; }
 `;
@@ -226,8 +226,10 @@ function signaturesBlock(
     <div class="signatures">
       ${sigBox(SIGNATURES.supervisor)}
       <div class="stamp">
-        ${approved ? `<img src="${escapeHtml(assetUrl(stamp))}" alt="${escapeHtml(SIGNATURES.stamp.label)}" onerror="this.style.display='none'" />` : `<div class="ph">الختم بعد الاعتماد</div>`}
-        <div class="role" style="font-size:10px;color:#555;margin-top:4px">${escapeHtml(SIGNATURES.stamp.label)}</div>
+        ${approved
+          // الختم نفسه يحمل اسم الإدارة؛ إزالة التسمية تعطي الختم الأكبر مساحته دون زيادة ارتفاع الصف
+          ? `<img src="${escapeHtml(assetUrl(stamp))}" alt="${escapeHtml(SIGNATURES.stamp.label)}" onerror="this.style.display='none'" />`
+          : `<div class="ph">الختم بعد الاعتماد</div><div class="role" style="font-size:10px;color:#555;margin-top:4px">${escapeHtml(SIGNATURES.stamp.label)}</div>`}
         ${approved && approvedByName ? `<div style="font-size:9.5px;color:#333;margin-top:2px">اعتمدها: ${escapeHtml(approvedByName)} — ${fmtDate(approvedAt)}</div>` : ""}
       </div>
       ${sigBox(SIGNATURES.manager)}

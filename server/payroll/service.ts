@@ -23,7 +23,7 @@ import {
   type PayrollDetail,
   type InsertPayrollDetail,
 } from "../../drizzle/schema";
-import { employeeJobTitle } from "../../shared/employeeFile";
+import { JOB_TITLE_SUPERVISOR, employeeJobTitle } from "../../shared/employeeFile";
 import {
   calculatePayrollLine,
   sumPayrollTotals,
@@ -760,18 +760,23 @@ async function rebuildPayrollInTx(
   await releaseLinkedItems(tx, payroll.id, employeeIds);
 
   const sources = await loadSources(tx, employeeIds, payroll.year, payroll.month, payroll.id);
-  // المسمى من حساب الموظف الحالي (قد تغيّرت علامة المشرف منذ إنشاء المسيرة)
-  const supervisorAccounts = new Set(
+  // المسمى من حساب الموظف الحالي (قد تغيّرت علامة المشرف منذ إنشاء المسيرة)،
+  // وللموظف المحذوف يبقى مسمى السطر المحفوظ
+  const accountSupervisor = new Map(
     (await tx
       .select({ id: employees.id, isSupervisor: employees.isSupervisor })
       .from(employees)
       .where(inArray(employees.id, employeeIds)))
-      .filter(e => e.isSupervisor)
-      .map(e => e.id)
+      .map(e => [e.id, !!e.isSupervisor] as const)
   );
   const lines = scope.map(d =>
     buildLine(
-      { id: d.employeeId, name: d.employeeName, code: d.employeeCode, isSupervisor: supervisorAccounts.has(d.employeeId) },
+      {
+        id: d.employeeId,
+        name: d.employeeName,
+        code: d.employeeCode,
+        isSupervisor: accountSupervisor.get(d.employeeId) ?? d.position === JOB_TITLE_SUPERVISOR,
+      },
       sources,
       resolveAdjustment(d.employeeId, sources.settings.get(d.employeeId), storedAdjustment(d), options.override)
     )

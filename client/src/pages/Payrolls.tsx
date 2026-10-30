@@ -624,7 +624,7 @@ export default function Payrolls() {
                                         {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
                                         <div>
                                           <div className="font-medium">{line.employeeName}</div>
-                                          <div className="text-muted-foreground text-[10px]">{line.employeeCode}{line.isSupervisor ? ' - مشرف' : ''}</div>
+                                          <div className="text-muted-foreground text-[10px]">{line.employeeCode}{line.position ? ` - ${line.position}` : ''}</div>
                                         </div>
                                       </button>
                                     </TableCell>

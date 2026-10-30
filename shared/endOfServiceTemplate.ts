@@ -162,10 +162,8 @@ function renderLetterhead(ctx: DocContext): string {
   const c = ctx.company;
   const shown = (v: string | null | undefined) =>
     !isPlaceholderValue(v) ? esc(String(v).trim()) : "";
-  const metaAr = [shown(c.address), shown(c.phone)]
-    .filter(Boolean)
-    .join(" &nbsp;|&nbsp; ");
-  const legal = [shown(c.cr), shown(c.vat)]
+  // العنوان والهاتف والرقم الموحد والضريبي في سطر واحد (لا يزيد طول الترويسة)
+  const metaAr = [shown(c.address), shown(c.phone), shown(c.cr), shown(c.vat)]
     .filter(Boolean)
     .join(" &nbsp;|&nbsp; ");
   const email = shown(c.email);
@@ -176,7 +174,6 @@ function renderLetterhead(ctx: DocContext): string {
         <div class="lh-name">${esc(c.nameAr)}</div>
         ${subtitle ? `<div class="lh-sub">${esc(subtitle)}</div>` : ""}
         ${metaAr ? `<div class="lh-meta">${metaAr}</div>` : ""}
-        ${legal ? `<div class="lh-meta">${legal}</div>` : ""}
       </div>
       ${ctx.assets.logo ? `<div class="lh-logo">${logoImgHtml(ctx.assets.logo, "lh-logo-img")}</div>` : ""}
       <div class="lh-side lh-en">
@@ -734,10 +731,10 @@ const STYLES = (fontFace: string) => `
   .sig-title { font-size: 11px; font-weight: 700; }
   .sig-title .sep { display: none; }
   .sig-title .en { display: block; }
-  .sig-area { position: relative; height: 96px; display: flex; align-items: center; justify-content: center; }
+  .sig-area { position: relative; height: 70px; display: flex; align-items: center; justify-content: center; }
   /* صور التوقيع فيها مساحات شفافة كبيرة: نعرض الشريط الأوسط الذي يحتوي التوقيع */
   .sig-img { width: 150px; height: 64px; object-fit: cover; object-position: center; position: relative; z-index: 2; }
-  .stamp-img { position: absolute; left: -14px; top: 50%; width: 132px; height: 132px; transform: translateY(-50%) rotate(-10deg); object-fit: contain; opacity: 0.9; z-index: 1; }
+  .stamp-img { position: absolute; left: -16px; bottom: -16px; width: 132px; height: 132px; transform: rotate(-10deg); object-fit: contain; opacity: 0.9; z-index: 1; }
   .sig-pending { font-size: 10px; color: #8a8f98; border: 1px dashed #b9bec7; border-radius: 4px; padding: 4px 10px; }
   .stamp-placeholder { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 76px; height: 76px; border: 1.5px dashed #c3c8d0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9.5px; color: #9aa0a9; }
   .sig-line { border-bottom: 1px solid #333; margin: 2px 12px 3px; }
@@ -830,7 +827,7 @@ const STYLES = (fontFace: string) => `
   .doc-settlement .sign-row { margin-top: 5px; }
   .doc-settlement .approval-note { margin-top: 3px; }
   .doc-settlement .push { flex-basis: 6px; }
-  .doc-settlement .sig-area { height: 78px; }
+  .doc-settlement .sig-area { height: 56px; }
   .doc-settlement .sig-img { height: 54px; width: 136px; }
   .doc-settlement .stamp-img { width: 112px; height: 112px; }
   .doc-settlement .stamp-placeholder { width: 66px; height: 66px; }

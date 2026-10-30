@@ -427,7 +427,7 @@ const ADVANCE_STYLES = `
   .decision-line { font-size: 11.5px; }
   .approval .sign-row { margin-top: 10px; justify-content: space-around; }
   .approval .sign-row .sig { flex: 0 0 68mm; }
-  .sig-area { height: 92px; }
+  .sig-area { height: 66px; }
   .sig-img { height: 60px; width: 146px; }
   .stamp-img { width: 130px; height: 130px; }
 `;

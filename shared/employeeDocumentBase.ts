@@ -152,10 +152,8 @@ export function renderLetterhead(ctx: EmployeeDocContext): string {
   const c = ctx.company;
   const shown = (v: string | null | undefined) =>
     !isPlaceholderValue(v) ? esc(String(v).trim()) : "";
-  const metaAr = [shown(c.address), shown(c.phone)]
-    .filter(Boolean)
-    .join(" &nbsp;|&nbsp; ");
-  const legal = [shown(c.cr), shown(c.vat)]
+  // العنوان والهاتف والرقم الموحد والضريبي في سطر واحد (لا يزيد طول الترويسة)
+  const metaAr = [shown(c.address), shown(c.phone), shown(c.cr), shown(c.vat)]
     .filter(Boolean)
     .join(" &nbsp;|&nbsp; ");
   const email = shown(c.email);
@@ -168,7 +166,6 @@ export function renderLetterhead(ctx: EmployeeDocContext): string {
         <div class="lh-name">${esc(c.nameAr)}</div>
         ${subtitle ? `<div class="lh-sub">${esc(subtitle)}</div>` : ""}
         ${metaAr ? `<div class="lh-meta">${metaAr}</div>` : ""}
-        ${legal ? `<div class="lh-meta">${legal}</div>` : ""}
       </div>
       ${logo ? `<div class="lh-logo">${logo}</div>` : ""}
       <div class="lh-side lh-en">
@@ -353,9 +350,9 @@ const BASE_STYLES = (fontFace: string) => `
   .sig-title { font-size: 11px; font-weight: 700; }
   .sig-title .sep { display: none; }
   .sig-title .en { display: block; }
-  .sig-area { position: relative; height: 82px; display: flex; align-items: center; justify-content: center; }
+  .sig-area { position: relative; height: 58px; display: flex; align-items: center; justify-content: center; }
   .sig-img { width: 136px; height: 54px; object-fit: cover; object-position: center; position: relative; z-index: 2; }
-  .stamp-img { position: absolute; left: -14px; top: 50%; width: 118px; height: 118px; transform: translateY(-50%) rotate(-10deg); object-fit: contain; opacity: 0.9; z-index: 1; }
+  .stamp-img { position: absolute; left: -16px; bottom: -16px; width: 118px; height: 118px; transform: rotate(-10deg); object-fit: contain; opacity: 0.9; z-index: 1; }
   .sig-pending { font-size: 10px; color: #8a8f98; border: 1px dashed #b9bec7; border-radius: 4px; padding: 4px 10px; }
   .stamp-placeholder { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 68px; height: 68px; border: 1.5px dashed #c3c8d0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9.5px; color: #9aa0a9; }
   .sig-line { border-bottom: 1px solid #333; margin: 2px 12px 3px; }
