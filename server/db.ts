@@ -1494,6 +1494,37 @@ export async function updateEmployeeRequestStatus(
   }
 }
 
+// مراجعة طلب قيد الانتظار (تحديث ذري): ينجح فقط إن كان الطلب ما زال قيد الانتظار ولم يُراجع من قبل
+export async function reviewPendingEmployeeRequest(
+  id: number,
+  data: {
+    status: "approved" | "rejected" | "cancelled";
+    reviewedBy: number;
+    reviewedByName: string;
+    reviewNotes?: string | null;
+    rejectionReason?: string | null;
+  }
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error('قاعدة البيانات غير متاحة');
+
+  const result = await db.update(employeeRequests)
+    .set({
+      status: data.status,
+      reviewedBy: data.reviewedBy,
+      reviewedByName: data.reviewedByName,
+      reviewedAt: new Date(),
+      reviewNotes: data.reviewNotes ?? null,
+      ...(data.status === 'rejected' && data.rejectionReason ? { rejectionReason: data.rejectionReason } : {}),
+    })
+    .where(and(
+      eq(employeeRequests.id, id),
+      eq(employeeRequests.status, 'pending'),
+      isNull(employeeRequests.reviewedAt)
+    ));
+  return Number((result as unknown as Array<{ affectedRows?: number }>)[0]?.affectedRows ?? 0) > 0;
+}
+
 // تحديث طلب
 export async function updateEmployeeRequest(id: number, data: Partial<InsertEmployeeRequest>) {
   const db = await getDb();
@@ -8781,6 +8812,10 @@ export async function getEmployeeProfile(employeeId: number) {
     isActive: employees.isActive,
     createdAt: employees.createdAt,
     photoUrl: employees.photoUrl,
+    hireDate: employees.hireDate,
+    nationality: employees.nationality,
+    iqamaNumber: employees.iqamaNumber,
+    employeeIsSupervisor: employees.isSupervisor,
   })
     .from(employees)
     .where(eq(employees.id, employeeId))
@@ -8789,7 +8824,7 @@ export async function getEmployeeProfile(employeeId: number) {
   if (result.length === 0) return null;
 
   // جلب اسم الفرع
-  const branch = await db.select({ name: branches.name })
+  const branch = await db.select({ name: branches.name, nameAr: branches.nameAr })
     .from(branches)
     .where(eq(branches.id, result[0].branchId))
     .limit(1);
@@ -8804,14 +8839,20 @@ export async function getEmployeeProfile(employeeId: number) {
     .where(eq(employeeSalarySettings.employeeId, employeeId))
     .limit(1);
 
+  const { employeeIsSupervisor, ...profile } = result[0];
+  const { getEstablishmentForBranch } = await import('../shared/branding');
   return {
-    ...result[0],
-    branchName: branch[0]?.name || 'غير محدد',
+    ...profile,
+    branchName: branch[0]?.nameAr || branch[0]?.name || 'غير محدد',
+    establishmentName: getEstablishmentForBranch(branch[0] ?? null).nameAr,
     baseSalary: salarySettings[0]?.baseSalary || '2000.00',
     overtimeEnabled: salarySettings[0]?.overtimeEnabled || false,
-    isSupervisor: salarySettings[0]?.isSupervisor || false,
-    hireDate: result[0].createdAt, // استخدام تاريخ الإنشاء كتاريخ تعيين
-    status: result[0].isActive ? 'active' : 'inactive',
+    isSupervisor: Boolean(employeeIsSupervisor || salarySettings[0]?.isSupervisor),
+    // تاريخ مباشرة العمل الفعلي (YYYY-MM-DD) وليس تاريخ إنشاء السجل
+    hireDate: profile.hireDate ?? null,
+    nationality: profile.nationality ?? null,
+    iqamaNumber: profile.iqamaNumber ?? null,
+    status: profile.isActive ? 'active' : 'inactive',
   };
 }
 
@@ -8955,6 +8996,67 @@ export async function getEmployeeSalaryHistory(employeeId: number, limit: number
   }
 
   return result;
+}
+
+// قسائم رواتب الموظف في البوابة: المسيرات المعتمدة أو المصروفة التي له فيها سطر (الأحدث أولاً)
+export async function getEmployeeSalarySlips(employeeId: number): Promise<Array<{
+  payrollId: number;
+  payrollNumber: string;
+  year: number;
+  month: number;
+  status: 'approved' | 'paid';
+  netSalary: number;
+  approvedAt: Date | null;
+  paidAt: Date | null;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db.select({
+    payrollId: payrolls.id,
+    payrollNumber: payrolls.payrollNumber,
+    year: payrolls.year,
+    month: payrolls.month,
+    status: payrolls.status,
+    netSalary: payrollDetails.netSalary,
+    approvedAt: payrolls.approvedAt,
+    paidAt: payrolls.paidAt,
+  })
+    .from(payrollDetails)
+    .innerJoin(payrolls, eq(payrolls.id, payrollDetails.payrollId))
+    .where(and(
+      eq(payrollDetails.employeeId, employeeId),
+      inArray(payrolls.status, ['approved', 'paid'])
+    ))
+    .orderBy(desc(payrolls.year), desc(payrolls.month), desc(payrolls.id));
+
+  return rows.map(row => ({
+    payrollId: row.payrollId,
+    payrollNumber: row.payrollNumber,
+    year: row.year,
+    month: row.month,
+    status: row.status === 'paid' ? 'paid' as const : 'approved' as const,
+    netSalary: parseFloat(row.netSalary as string) || 0,
+    approvedAt: row.approvedAt ?? null,
+    paidAt: row.paidAt ?? null,
+  }));
+}
+
+// هل للموظف سطر في مسيرة معتمدة أو مصروفة؟ (شرط عرض القسيمة في البوابة)
+export async function isEmployeeSlipVisible(employeeId: number, payrollId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  const rows = await db.select({ id: payrollDetails.id })
+    .from(payrollDetails)
+    .innerJoin(payrolls, eq(payrolls.id, payrollDetails.payrollId))
+    .where(and(
+      eq(payrollDetails.payrollId, payrollId),
+      eq(payrollDetails.employeeId, employeeId),
+      inArray(payrolls.status, ['approved', 'paid'])
+    ))
+    .limit(1);
+  return rows.length > 0;
 }
 
 // جلب رصيد إجازات الموظف
@@ -9404,6 +9506,15 @@ export async function deleteRequestAttachment(attachmentId: number, employeeId: 
     .limit(1);
   
   if (attachment.length === 0 || attachment[0].uploadedBy !== employeeId) {
+    return { success: false, error: 'غير مصرح بحذف هذا المرفق' };
+  }
+
+  // المرفق يجب أن يتبع طلباً للموظف نفسه
+  const ownerRequest = await db.select({ id: employeeRequests.id })
+    .from(employeeRequests)
+    .where(and(eq(employeeRequests.id, attachment[0].requestId), eq(employeeRequests.employeeId, employeeId)))
+    .limit(1);
+  if (ownerRequest.length === 0) {
     return { success: false, error: 'غير مصرح بحذف هذا المرفق' };
   }
   
@@ -10184,6 +10295,9 @@ export async function getEmployeesForPortalAdmin(
   healthCertImageUrl: string | null;
   contractImageUrl: string | null;
   isSupervisor: boolean;
+  hireDate: string | null;
+  nationality: string | null;
+  baseSalary: number | null;
 }>> {
   const db = await getDb();
   if (!db) {
@@ -10212,8 +10326,12 @@ export async function getEmployeesForPortalAdmin(
         healthCertImageUrl: employees.healthCertImageUrl,
         contractImageUrl: employees.contractImageUrl,
         isSupervisor: employees.isSupervisor,
+        hireDate: employees.hireDate,
+        nationality: employees.nationality,
+        baseSalary: employeeSalarySettings.baseSalary,
       })
       .from(employees)
+      .leftJoin(employeeSalarySettings, eq(employeeSalarySettings.employeeId, employees.id))
       .where(eq(employees.isActive, true));
 
     const emps = await query;
@@ -10224,6 +10342,9 @@ export async function getEmployeesForPortalAdmin(
 
     let result = emps.map((emp: typeof emps[0]) => ({
       ...emp,
+      hireDate: emp.hireDate ?? null,
+      nationality: emp.nationality ?? null,
+      baseSalary: emp.baseSalary != null ? parseFloat(emp.baseSalary as string) || 0 : null,
       branchName: branchMap.get(emp.branchId) || 'غير محدد',
     }));
 
@@ -10286,8 +10407,23 @@ export async function getBranchesForPortalAdmin(): Promise<Array<{
   }
 }
 
-// جلب إحصائيات لوحة تحكم الأدمن في بوابة الموظفين
-export async function getPortalAdminDashboardStats(): Promise<{
+// مشرفو الفرع في بوابة الموظفين (لإشعارهم بالطلبات الجديدة)
+export async function getPortalSupervisorIdsForBranch(branchId: number): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ id: employees.id })
+    .from(employees)
+    .where(and(
+      eq(employees.branchId, branchId),
+      eq(employees.isSupervisor, true),
+      eq(employees.isActive, true),
+      eq(employees.hasPortalAccess, true)
+    ));
+  return rows.map(r => r.id);
+}
+
+// جلب إحصائيات لوحة تحكم الأدمن في بوابة الموظفين (branchId: نطاق المشرف، بدون = كل الفروع)
+export async function getPortalAdminDashboardStats(branchId?: number | null): Promise<{
   totalEmployees: number;
   activeEmployees: number;
   pendingRequests: number;
@@ -10310,21 +10446,27 @@ export async function getPortalAdminDashboardStats(): Promise<{
   }
 
   try {
+    const scoped = branchId != null;
     // عدد الموظفين
-    const allEmployees = await db.select({ id: employees.id }).from(employees);
+    const allEmployees = await db.select({ id: employees.id }).from(employees)
+      .where(scoped ? eq(employees.branchId, branchId) : undefined);
     const activeEmps = await db
       .select({ id: employees.id })
       .from(employees)
-      .where(eq(employees.isActive, true));
+      .where(scoped ? and(eq(employees.isActive, true), eq(employees.branchId, branchId)) : eq(employees.isActive, true));
 
-    // عدد الطلبات
-    const allRequests = await db.select({ id: employeeRequests.id, status: employeeRequests.status }).from(employeeRequests);
+    // عدد الطلبات (إنهاء الخدمة لا يظهر في البوابة قبل اعتماده)
+    const allRequests = (await db.select({ id: employeeRequests.id, status: employeeRequests.status, requestType: employeeRequests.requestType })
+      .from(employeeRequests)
+      .where(scoped ? eq(employeeRequests.branchId, branchId) : undefined))
+      .filter(r => r.requestType !== 'end_of_service' || r.status === 'approved');
     const pendingReqs = allRequests.filter((r: { status: string }) => r.status === 'pending').length;
     const approvedReqs = allRequests.filter((r: { status: string }) => r.status === 'approved').length;
     const rejectedReqs = allRequests.filter((r: { status: string }) => r.status === 'rejected').length;
 
     // عدد الفروع
-    const branchList = await db.select({ id: branches.id }).from(branches);
+    const branchList = await db.select({ id: branches.id }).from(branches)
+      .where(scoped ? eq(branches.id, branchId) : undefined);
 
     // الوثائق المنتهية (خلال 30 يوم)
     const thirtyDaysFromNow = new Date();
@@ -10336,6 +10478,7 @@ export async function getPortalAdminDashboardStats(): Promise<{
       .where(
         and(
           eq(employees.isActive, true),
+          scoped ? eq(employees.branchId, branchId) : undefined,
           or(
             and(
               isNotNull(employees.iqamaExpiryDate),
@@ -10388,9 +10531,36 @@ export async function getEmployeeDetailsForPortalAdmin(employeeId: number): Prom
   }
 
   try {
-    // جلب بيانات الموظف
+    // جلب بيانات الموظف (أعمدة محددة: لا تُعاد كلمة المرور أو إصدار الجلسة أو مفاتيح التخزين)
     const emp = await db
-      .select()
+      .select({
+        id: employees.id,
+        code: employees.code,
+        name: employees.name,
+        branchId: employees.branchId,
+        phone: employees.phone,
+        email: employees.email,
+        emailVerified: employees.emailVerified,
+        position: employees.position,
+        username: employees.username,
+        hasPortalAccess: employees.hasPortalAccess,
+        isSupervisor: employees.isSupervisor,
+        lastLogin: employees.lastLogin,
+        photoUrl: employees.photoUrl,
+        iqamaNumber: employees.iqamaNumber,
+        iqamaExpiryDate: employees.iqamaExpiryDate,
+        iqamaImageUrl: employees.iqamaImageUrl,
+        healthCertExpiryDate: employees.healthCertExpiryDate,
+        healthCertImageUrl: employees.healthCertImageUrl,
+        contractExpiryDate: employees.contractExpiryDate,
+        contractImageUrl: employees.contractImageUrl,
+        hireDate: employees.hireDate,
+        nationality: employees.nationality,
+        infoSubmittedAt: employees.infoSubmittedAt,
+        isActive: employees.isActive,
+        createdAt: employees.createdAt,
+        updatedAt: employees.updatedAt,
+      })
       .from(employees)
       .where(eq(employees.id, employeeId))
       .limit(1);

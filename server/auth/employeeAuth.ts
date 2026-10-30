@@ -265,7 +265,9 @@ export async function changeEmployeePassword(
 }
 
 /** إعادة تعيين كلمة مرور الموظف (للإدارة): يتطلب حساباً له اسم مستخدم، ويُلغي الجلسات القائمة */
-export async function resetEmployeePassword(employeeId: number): Promise<{ success: true; password: string; newPassword: string }> {
+export async function resetEmployeePassword(
+  employeeId: number
+): Promise<{ success: true; password: string; newPassword: string; error?: undefined }> {
   const db = await requireDb();
   const rows = await db
     .select({ id: employees.id, username: employees.username })

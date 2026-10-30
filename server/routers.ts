@@ -1,8 +1,8 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, EMPLOYEE_UNAUTHED_ERR_MSG } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { localLogin, createLocalUser, changePassword, resetPassword, ensureAdminExists } from "./auth/localAuth";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, router, employeeProcedure, portalReviewerProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
@@ -3612,137 +3612,25 @@ export const appRouter = router({
         rejectionReason: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const request = await db.getEmployeeRequestById(input.id);
-        if (!request) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'الطلب غير موجود' });
-        }
-        // حالة طلب إنهاء الخدمة تتبع مخالصته (اعتماد/إلغاء) ولا تُغيّر من هنا
-        if (request.requestType === 'end_of_service') {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'يُدار إنهاء الخدمة من صفحة إنهاء الخدمة' });
-        }
-
-        const oldStatus = request.status;
-
-        // مشرف الفرع يعتمد طلبات موظفي فرعه فقط (حسب فرع الموظف الفعلي)
-        if (ctx.user.role === 'supervisor') {
-          const requestEmployee = await db.getEmployeeById(request.employeeId);
-          const employeeBranchId = requestEmployee?.branchId ?? request.branchId;
-          if (!employeeBranchId || !checkBranchAccess(ctx.user.branchId ?? null, employeeBranchId)) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك اعتماد طلبات فرع آخر' });
+        // خدمة المراجعة الموحدة: من قيد الانتظار فقط، نطاق الفرع، سجل الطلب، المسيرات، إشعارات الموظف
+        const { reviewEmployeeRequest } = await import('./employeeRequests/reviewService');
+        const result = await reviewEmployeeRequest(
+          {
+            requestId: input.id,
+            status: input.status,
+            reviewNotes: input.reviewNotes,
+            rejectionReason: input.rejectionReason,
+          },
+          {
+            kind: 'staff',
+            id: ctx.user.id,
+            name: ctx.user.name || ctx.user.username || 'مسؤول',
+            // مشرف الفرع يراجع طلبات موظفي فرعه فقط (حسب فرع الموظف الفعلي)
+            branchId: ctx.user.role === 'supervisor' ? ctx.user.branchId ?? null : null,
+            employeeId: null,
           }
-        }
-
-        // لا يمكن إلغاء/رفض سلفة مخصومة في مسيرة معتمدة أو مدفوعة
-        if (request.requestType === 'advance' && oldStatus === 'approved' && input.status !== 'approved') {
-          await runPayrollAction(() => payrollService.assertSourceNotLocked('advance', input.id));
-        }
-        
-        const statusResult = await db.updateEmployeeRequestStatus(
-          input.id,
-          input.status,
-          ctx.user.id,
-          ctx.user.name || 'مسؤول',
-          input.reviewNotes,
-          input.rejectionReason
         );
-        if (statusResult && !statusResult.success) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: statusResult.error || 'فشل في تحديث حالة الطلب' });
-        }
-
-        // السلف والإجازات تنعكس مباشرة على مسيرة الرواتب المفتوحة للموظف
-        if (request.requestType === 'advance' || request.requestType === 'vacation') {
-          try {
-            await payrollService.syncOpenPayrollsForEmployee(request.employeeId);
-          } catch (error) {
-            payrollLogger.error('خطأ في تحديث مسيرة الرواتب بعد تغيير حالة الطلب', error);
-          }
-        }
-
-        // تسجيل التغيير
-        await db.createEmployeeRequestLog({
-          requestId: input.id,
-          action: input.status === 'approved' ? 'موافقة' : input.status === 'rejected' ? 'رفض' : 'إلغاء',
-          oldStatus,
-          newStatus: input.status,
-          performedBy: ctx.user.id,
-          performedByName: ctx.user.name || 'مسؤول',
-          notes: input.rejectionReason || input.reviewNotes,
-        });
-
-        // إشعار الموظف
-        const statusText = input.status === 'approved' ? 'تمت الموافقة على' : input.status === 'rejected' ? 'تم رفض' : 'تم إلغاء';
-        await db.createNotification({
-          type: 'system',
-          title: `${statusText} طلبك`,
-          message: `${statusText} طلبك: ${request.title}${input.rejectionReason ? ` - السبب: ${input.rejectionReason}` : ''}`,
-          relatedType: 'employee_request',
-          relatedId: input.id,
-        });
-
-        // إرسال إشعار بريد إلكتروني بتحديث الحالة
-        emailNotifications.notifyRequestStatusUpdate({
-          employeeName: request.employeeName,
-          requestType: request.requestType,
-          title: request.title,
-          requestNumber: request.requestNumber,
-          oldStatus,
-          newStatus: input.status,
-          reviewNotes: input.reviewNotes,
-          rejectionReason: input.rejectionReason,
-          reviewerName: ctx.user.name || 'مسؤول',
-          branchId: request.branchId ?? undefined,
-          branchName: request.branchName ?? undefined,
-        }).catch(err => requestsLogger.error('خطأ في إرسال إشعار تحديث الحالة', err));
-        
-        // إرسال إشعار بريد للموظف بتحديث حالة طلبه
-        const employee = await db.getEmployeeById(request.employeeId);
-        if (employee?.email) {
-          if (input.status === 'approved') {
-            emailNotifications.notifyEmployeeRequestApproved({
-              employeeEmail: employee.email,
-              employeeName: request.employeeName,
-              requestType: request.requestType,
-              requestId: input.id,
-              approvedBy: ctx.user.name || 'مسؤول',
-              approvedAt: new Date(),
-              notes: input.reviewNotes,
-            }).catch(err => requestsLogger.error('خطأ في إرسال إشعار الموافقة للموظف', err));
-          } else if (input.status === 'rejected') {
-            emailNotifications.notifyEmployeeRequestRejected({
-              employeeEmail: employee.email,
-              employeeName: request.employeeName,
-              requestType: request.requestType,
-              requestId: input.id,
-              rejectedBy: ctx.user.name || 'مسؤول',
-              rejectedAt: new Date(),
-              reason: input.rejectionReason,
-            }).catch(err => requestsLogger.error('خطأ في إرسال إشعار الرفض للموظف', err));
-          }
-        }
-        
-        // إرسال إشعار SMS للموظف بتحديث حالة طلبه
-        if (employee?.phone) {
-          const requestTypeName = getRequestTypeName(request.requestType);
-          if (input.status === 'approved') {
-            twilioService.sendRequestApprovedNotification(
-              employee.phone,
-              request.employeeName,
-              requestTypeName,
-              request.requestNumber || String(input.id),
-              input.reviewNotes
-            ).catch(err => requestsLogger.error('خطأ في إرسال SMS الموافقة للموظف', err));
-          } else if (input.status === 'rejected') {
-            twilioService.sendRequestRejectedNotification(
-              employee.phone,
-              request.employeeName,
-              requestTypeName,
-              request.requestNumber || String(input.id),
-              input.rejectionReason
-            ).catch(err => requestsLogger.error('خطأ في إرسال SMS الرفض للموظف', err));
-          }
-        }
-
-        return { success: true, message: `تم ${statusText} الطلب بنجاح` };
+        return { success: true, message: result.message };
       }),
 
     // حذف طلب
@@ -3947,6 +3835,15 @@ export const appRouter = router({
                   absentDays: d.absentDays,
                 })),
               }).catch(err => payrollLogger.error('خطأ في إرسال قسائم الرواتب', err));
+
+              // إشعار بوابة الموظفين لكل موظف: الراتب جاهز (بعد حفظ الاعتماد؛ الفشل لا يؤثر على الاعتماد)
+              const salaryMonthLabel = `${monthNames[payroll.month] || `شهر ${payroll.month}`} ${payroll.year}`;
+              Promise.allSettled(rows.map(({ detail: d }) =>
+                portalNotificationService.notifySalaryReady(d.employeeId, salaryMonthLabel, parseFloat(d.netSalary || '0'))
+              )).then(results => {
+                const failed = results.filter(r => r.status === 'rejected').length;
+                if (failed > 0) payrollLogger.error(`تعذر إرسال إشعار الراتب في البوابة لـ ${failed} موظف`);
+              });
             }
           } catch (error) {
             payrollLogger.error('خطأ في إرسال إشعارات الراتب', error);
@@ -7716,29 +7613,58 @@ export const appRouter = router({
           isSupervisor: z.boolean().optional(),
         }).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { invokeLLM } = await import('./_core/llm');
         const { assistantTools, executeAssistantTool } = await import('./ai/assistantTools');
         const { supervisorTools, executeSupervisorTool } = await import('./ai/supervisorTools');
         const { getOrCreateActiveSession, saveMessage, getConversationContext, getPendingRequests } = await import('./ai/conversationMemory');
-        
-        // تحديد نوع المستخدم (موظف عادي أو مشرف)
-        const isSupervisor = input.employeeContext?.isSupervisor || false;
-        const supervisorName = input.employeeContext?.employeeName || '';
-        const supervisorBranchId = input.employeeContext?.branchId;
+        const { classifyConfirmationReply } = await import('./ai/confirmationSystem');
 
-        // إدارة الجلسة والذاكرة
-        let sessionId = input.sessionId;
+        // الهوية: موظف بجلسة البوابة (بياناته من الجلسة فقط، وتُتجاهل بيانات الواجهة) أو مستخدم النظام الرئيسي
+        const portalEmployee = ctx.employee ?? null;
+        if (!portalEmployee && !ctx.user) {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: EMPLOYEE_UNAUTHED_ERR_MSG });
+        }
+        type AssistantEmployeeContext = NonNullable<typeof input.employeeContext>;
+        let requestContext: AssistantEmployeeContext | undefined;
+        if (portalEmployee) {
+          const portalBranch = portalEmployee.branchId ? await db.getBranchById(portalEmployee.branchId) : undefined;
+          requestContext = {
+            employeeId: portalEmployee.id,
+            employeeName: portalEmployee.name,
+            branchId: portalEmployee.branchId ?? undefined,
+            branchName: portalBranch ? (portalBranch.nameAr || portalBranch.name) : undefined,
+            isSupervisor: portalEmployee.isSupervisor && portalEmployee.branchId != null,
+          };
+        } else if (ctx.user && input.employeeContext) {
+          // مستخدم النظام: كما كان، لكن أدوات المشرف لأدوار الإشراف فقط (ومشرف الفرع لفرعه)
+          const staffCanSupervise = ['admin', 'manager', 'supervisor', 'viewer'].includes(ctx.user.role);
+          requestContext = {
+            ...input.employeeContext,
+            isSupervisor: Boolean(input.employeeContext.isSupervisor) && staffCanSupervise,
+            branchId: ctx.user.role === 'supervisor' && ctx.user.branchId != null
+              ? ctx.user.branchId
+              : input.employeeContext.branchId,
+          };
+        }
+
+        // تحديد نوع المستخدم (موظف عادي أو مشرف)
+        const isSupervisor = requestContext?.isSupervisor || false;
+        const supervisorName = requestContext?.employeeName || '';
+        const supervisorBranchId = requestContext?.branchId;
+
+        // إدارة الجلسة والذاكرة (موظف البوابة: جلسته فقط، لا يُقبل معرف جلسة من الواجهة)
+        let sessionId = portalEmployee ? undefined : input.sessionId;
         let conversationContext: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
-        
+
         // إذا كان لدينا معلومات الموظف، نستخدم الذاكرة
-        if (input.employeeContext?.employeeId) {
+        if (requestContext?.employeeId) {
           try {
             sessionId = await getOrCreateActiveSession(
-              input.employeeContext.employeeId,
-              input.employeeContext.employeeName || '',
-              input.employeeContext.branchId,
-              input.employeeContext.branchName
+              requestContext.employeeId,
+              requestContext.employeeName || '',
+              requestContext.branchId,
+              requestContext.branchName
             );
             // تحميل آخر 10 رسائل كسياق
             conversationContext = await getConversationContext(sessionId, 10);
@@ -7762,7 +7688,7 @@ export const appRouter = router({
         const supervisorSection = isSupervisor ? `
 
 ## صلاحيات المشرف:
-أنت تتحدث مع **المشرف ${supervisorName}** (فرع ${input.employeeContext?.branchName}).
+أنت تتحدث مع **المشرف ${supervisorName}** (فرع ${requestContext?.branchName}).
 كمشرف، لديك صلاحيات موسعة:
 - عرض قائمة جميع موظفي الفرع (get_branch_employees)
 - عرض إيرادات الفرع الإجمالية (get_branch_revenue)
@@ -7827,7 +7753,7 @@ export const appRouter = router({
 - أنت لا تملك صلاحية الموافقة على الطلبات، فقط رفعها للمشرف
 - إذا لم تعرف الموظف، اطلب اسمه أولاً
 
-${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.employeeContext.employeeName} (رقم: ${input.employeeContext.employeeId}) - فرع: ${input.employeeContext.branchName}` : '**الموظف غير معروف بعد - اسأل عن اسمه**'}`;
+${requestContext?.employeeId ? `**الموظف الحالي:** ${requestContext.employeeName} (رقم: ${requestContext.employeeId}) - فرع: ${requestContext.branchName}` : '**الموظف غير معروف بعد - اسأل عن اسمه**'}`;
 
         // بناء الرسائل - دمج سياق الذاكرة مع المحادثة الحالية
         const historyMessages = conversationContext.length > 0 
@@ -7847,13 +7773,13 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         const requestKeywords = ['طلب سلفة', 'طلب إجازة', 'طلب استئذان', 'طلب استقالة', 'طلب متأخرات', 'طلب اعتراض',
           'رفع طلب', 'أريد سلفة', 'أريد إجازة', 'أريد استئذان', 'أريد استقالة',
           'أحتاج سلفة', 'أحتاج إجازة', 'أبغى سلفة', 'أبغى إجازة'];
-        const confirmKeywords = ['نعم', 'أكد', 'موافق', 'تمام', 'اوكي', 'أوكي', 'ايه', 'أيه', 'صح', 'ماشي'];
-        const cancelKeywords = ['لا', 'إلغاء', 'تراجع', 'لا أريد', 'ما أبغى'];
-        
+
         const messageText = input.message.toLowerCase();
         const isRequestIntent = requestKeywords.some(kw => messageText.includes(kw));
-        const isConfirmIntent = confirmKeywords.some(kw => messageText.trim() === kw || messageText.includes(kw));
-        const isCancelIntent = cancelKeywords.some(kw => messageText.includes(kw));
+        // التأكيد/الإلغاء بمطابقة كلمات كاملة ("صح" لا تطابق "صحيح"، و"لا" لا تطابق "الإجازة")
+        const replyIntent = classifyConfirmationReply(input.message);
+        const isConfirmIntent = replyIntent === 'confirm';
+        const isCancelIntent = replyIntent === 'cancel';
         
         // التحقق من وجود طلبات معلقة
         let hasPendingRequest = false;
@@ -7874,15 +7800,18 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         } else if (isCancelIntent && hasPendingRequest) {
           toolChoice = { type: 'function', function: { name: 'cancel_request' } };
           symbolAiLogger.info('إجبار استخدام cancel_request');
-        } else if (isRequestIntent && input.employeeContext?.employeeId) {
+        } else if (isRequestIntent && requestContext?.employeeId) {
           toolChoice = { type: 'function', function: { name: 'prepare_request' } };
           symbolAiLogger.info('إجبار استخدام prepare_request');
         }
         
-        // دمج أدوات المشرف إذا كان المستخدم مشرفاً
-        const allTools = isSupervisor 
-          ? [...assistantTools, ...supervisorTools] 
+        // دمج أدوات المشرف إذا كان المستخدم مشرفاً (موظف البوابة معروف من جلسته فلا يحتاج أداة التعرف)
+        const employeeTools = portalEmployee
+          ? assistantTools.filter(tool => tool.function.name !== 'identify_employee')
           : assistantTools;
+        const allTools = isSupervisor
+          ? [...employeeTools, ...supervisorTools]
+          : employeeTools;
         
         // استدعاء LLM مع الأدوات
         const response = await invokeLLM({
@@ -7902,28 +7831,48 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         // إذا كان هناك tool calls
         if (assistantMessage?.tool_calls && assistantMessage.tool_calls.length > 0) {
           const toolResults: any[] = [];
-          let employeeContext = input.employeeContext;
+          let employeeContext = requestContext;
+          // أدوات تعمل على بيانات موظف محدد: لموظف البوابة تُفرض هويته دائماً مهما اختار النموذج
+          const employeeScopedTools = ['submit_request', 'get_report', 'get_employee_revenue', 'prepare_request', 'confirm_request', 'cancel_request'];
 
           for (const toolCall of assistantMessage.tool_calls) {
-            const args = JSON.parse(toolCall.function.arguments);
-            
+            let args: any = {};
+            try {
+              args = JSON.parse(toolCall.function.arguments || '{}') ?? {};
+            } catch {
+              args = {};
+            }
+            if (portalEmployee && employeeScopedTools.includes(toolCall.function.name)) {
+              args.employeeId = portalEmployee.id;
+            }
+
             // تمرير sessionId و employeeContext للأدوات التي تحتاجها
             if (['prepare_request', 'confirm_request', 'cancel_request'].includes(toolCall.function.name)) {
               args.sessionId = sessionId;
-              if (input.employeeContext) {
-                args.employeeId = input.employeeContext.employeeId;
-                args.employeeName = input.employeeContext.employeeName;
-                args.branchId = input.employeeContext.branchId;
-                args.branchName = input.employeeContext.branchName;
+              if (requestContext) {
+                args.employeeId = requestContext.employeeId;
+                args.employeeName = requestContext.employeeName;
+                args.branchId = requestContext.branchId;
+                args.branchName = requestContext.branchName;
               }
+              // نص الموظف الفعلي لقرار التأكيد
+              args.userMessage = input.message;
               symbolAiLogger.info(`تنفيذ ${toolCall.function.name}`, { sessionId });
             }
-            
+
             // تحديد أي منفذ للأداة (موظف أو مشرف)
             const supervisorToolNames = ['get_branch_employees', 'get_branch_revenue', 'get_employee_revenue_supervisor', 'get_branch_employees_ranking', 'analyze_employee_performance'];
-            
+
             let result;
-            if (supervisorToolNames.includes(toolCall.function.name) && isSupervisor) {
+            if (portalEmployee && toolCall.function.name === 'identify_employee') {
+              result = {
+                success: false,
+                hasData: false,
+                dataCount: 0,
+                message: `أنت مسجل الدخول باسم ${portalEmployee.name}`,
+                source: 'جلسة بوابة الموظفين',
+              } as Awaited<ReturnType<typeof executeAssistantTool>>;
+            } else if (supervisorToolNames.includes(toolCall.function.name) && isSupervisor) {
               // تمرير branchId لأدوات المشرف
               args.branchId = supervisorBranchId;
               args.supervisorBranchId = supervisorBranchId;
@@ -7932,8 +7881,8 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
               result = await executeAssistantTool(toolCall.function.name, args);
             }
             
-            // تحديث سياق الموظف إذا تم التعرف عليه
-            if (toolCall.function.name === 'identify_employee' && result.success && result.data && !Array.isArray(result.data)) {
+            // تحديث سياق الموظف إذا تم التعرف عليه (مستخدمو النظام فقط)
+            if (!portalEmployee && toolCall.function.name === 'identify_employee' && result.success && result.data && !Array.isArray(result.data)) {
               employeeContext = {
                 employeeId: result.data.id,
                 employeeName: result.data.name,
@@ -8019,7 +7968,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           : 'حدث خطأ';
         
         // حفظ الرسائل في الذاكرة
-        if (sessionId && input.employeeContext?.employeeId) {
+        if (sessionId && requestContext?.employeeId) {
           try {
             await saveMessage(sessionId, { role: 'user', content: input.message });
             await saveMessage(sessionId, { role: 'assistant', content: responseContent });
@@ -8031,7 +7980,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         // التحقق من وجود طلب معلق
         let hasPendingReq = false;
         let pendingReqType = '';
-        if (sessionId && input.employeeContext?.employeeId) {
+        if (sessionId && requestContext?.employeeId) {
           try {
             const pendingReqs = await getPendingRequests(sessionId);
             if (pendingReqs.length > 0) {
@@ -8046,7 +7995,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         return {
           message: responseContent,
           sessionId,
-          employeeContext: input.employeeContext,
+          employeeContext: requestContext,
           toolResults: [],
           hasPendingRequest: hasPendingReq,
           pendingRequestType: pendingReqType,
@@ -8056,14 +8005,32 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
     // بدء محادثة جديدة
     startNewConversation: publicProcedure
       .input(z.object({
-        employeeId: z.number(),
-        employeeName: z.string(),
+        employeeId: z.number().optional(),
+        employeeName: z.string().optional(),
         branchId: z.number().optional(),
         branchName: z.string().optional(),
-      }))
-      .mutation(async ({ input }) => {
+      }).optional())
+      .mutation(async ({ ctx, input: rawInput }) => {
         const { createSession, closeSession, getOrCreateActiveSession } = await import('./ai/conversationMemory');
-        
+
+        // موظف البوابة: جلسته فقط (تُتجاهل بيانات الواجهة)؛ مستخدم النظام: كما كان
+        let input: { employeeId: number; employeeName: string; branchId?: number; branchName?: string };
+        if (ctx.employee) {
+          input = { employeeId: ctx.employee.id, employeeName: ctx.employee.name, branchId: ctx.employee.branchId ?? undefined };
+        } else if (ctx.user) {
+          if (!rawInput?.employeeId) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'الموظف غير محدد' });
+          }
+          input = {
+            employeeId: rawInput.employeeId,
+            employeeName: rawInput.employeeName || '',
+            branchId: rawInput.branchId,
+            branchName: rawInput.branchName,
+          };
+        } else {
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: EMPLOYEE_UNAUTHED_ERR_MSG });
+        }
+
         try {
           // إغلاق الجلسة الحالية إن وجدت
           const currentSession = await getOrCreateActiveSession(
@@ -8115,16 +8082,60 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
 
   // ========== مصادقة الموظفين ==========
   employeeAuth: router({
-    // تسجيل دخول الموظف
+    // تسجيل دخول الموظف: يصدر كوكي جلسة البوابة (جدول الموظفين فقط، مع حد للمحاولات الفاشلة)
     login: publicProcedure
       .input(z.object({
-        username: z.string().min(1, 'اسم المستخدم مطلوب'),
-        password: z.string().min(1, 'كلمة المرور مطلوبة'),
+        username: z.string().trim().min(1, 'اسم المستخدم مطلوب').max(100),
+        password: z.string().min(1, 'كلمة المرور مطلوبة').max(200),
       }))
-      .mutation(async ({ input }) => {
-        const { employeeLogin } = await import('./auth/employeeAuth');
-        return employeeLogin(input.username, input.password);
+      .mutation(async ({ ctx, input }) => {
+        const employeeAuth = await import('./auth/employeeAuth');
+        const employeeSession = await import('./auth/employeeSession');
+        if (!employeeSession.isEmployeeSessionConfigured()) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'إعداد الخادم غير مكتمل (JWT_SECRET غير مضبوط). تواصل مع الإدارة' });
+        }
+
+        const limiterKey = employeeAuth.loginLimiterKey(ctx.req.ip || ctx.req.socket?.remoteAddress, input.username);
+        const blockedMs = employeeAuth.employeeLoginLimiter.blockedForMs(limiterKey);
+        if (blockedMs > 0) {
+          throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message: `محاولات دخول فاشلة كثيرة. حاول مرة أخرى بعد ${Math.max(1, Math.ceil(blockedMs / 60000))} دقيقة`,
+          });
+        }
+
+        const result = await employeeAuth.employeeLogin(input.username, input.password);
+        if (!result.success) {
+          employeeAuth.employeeLoginLimiter.recordFailure(limiterKey);
+          throw new TRPCError({ code: 'UNAUTHORIZED', message: result.error });
+        }
+        employeeAuth.employeeLoginLimiter.reset(limiterKey);
+
+        const employee = await employeeAuth.getPortalMe(result.employeeId);
+        if (!employee) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'تعذر تحميل بيانات الموظف' });
+        }
+        const token = await employeeSession.signEmployeeSession({
+          employeeId: result.employeeId,
+          sessionVersion: result.sessionVersion,
+        });
+        employeeSession.setEmployeeSessionCookie(ctx.req, ctx.res, token);
+        return { success: true as const, employee };
       }),
+
+    // الموظف المسجل في البوابة (null بدون جلسة صالحة)
+    me: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.employee) return null;
+      const { getPortalMe } = await import('./auth/employeeAuth');
+      return getPortalMe(ctx.employee.id);
+    }),
+
+    // تسجيل الخروج من البوابة
+    logout: publicProcedure.mutation(async ({ ctx }) => {
+      const { clearEmployeeSessionCookie } = await import('./auth/employeeSession');
+      clearEmployeeSessionCookie(ctx.req, ctx.res);
+      return { success: true as const };
+    }),
 
     // إنشاء حسابات الموظفين (للأدمن فقط)
     createAccounts: adminProcedure
@@ -8140,36 +8151,57 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         return getEmployeeAccounts();
       }),
 
-    // إعادة تعيين كلمة مرور موظف
-    resetPassword: adminProcedure
+    // حساب البوابة لموظف (ملف الموظف)
+    getAccount: managerProcedure
+      .input(z.object({ employeeId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const { getEmployeeAccount } = await import('./auth/employeeAuth');
+        return getEmployeeAccount(input.employeeId);
+      }),
+
+    // حفظ حساب البوابة لموظف: اسم المستخدم، كلمة المرور (اختيارية)، التفعيل
+    saveAccount: managerProcedure
       .input(z.object({
-        employeeId: z.number(),
+        employeeId: z.number().int().positive(),
+        username: z.string().trim().min(3, 'اسم المستخدم قصير جداً').max(30, 'اسم المستخدم طويل جداً'),
+        password: z.string().max(128).nullable().optional(),
+        enabled: z.boolean(),
+      }))
+      .mutation(async ({ input }) => {
+        const { saveEmployeeAccount } = await import('./auth/employeeAuth');
+        return saveEmployeeAccount(input);
+      }),
+
+    // إعادة تعيين كلمة مرور موظف (تُعرض مرة واحدة وتُلغى جلساته القائمة)
+    resetPassword: managerProcedure
+      .input(z.object({
+        employeeId: z.number().int().positive(),
       }))
       .mutation(async ({ input }) => {
         const { resetEmployeePassword } = await import('./auth/employeeAuth');
         return resetEmployeePassword(input.employeeId);
       }),
 
-    // تغيير كلمة مرور الموظف (للموظف نفسه)
-    changePassword: publicProcedure
+    // تغيير كلمة مرور الموظف (للموظف نفسه): تُلغى الجلسات الأخرى ويُعاد إصدار كوكي هذه الجلسة
+    changePassword: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        oldPassword: z.string().min(1),
-        newPassword: z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
+        currentPassword: z.string().min(1, 'كلمة المرور الحالية مطلوبة').max(200),
+        newPassword: z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل').max(128),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { changeEmployeePassword } = await import('./auth/employeeAuth');
-        return changeEmployeePassword(input.employeeId, input.oldPassword, input.newPassword);
+        const { signEmployeeSession, setEmployeeSessionCookie } = await import('./auth/employeeSession');
+        const { sessionVersion } = await changeEmployeePassword(ctx.employee.id, input.currentPassword, input.newPassword);
+        const token = await signEmployeeSession({ employeeId: ctx.employee.id, sessionVersion });
+        setEmployeeSessionCookie(ctx.req, ctx.res, token);
+        return { success: true as const };
       }),
 
-    // جلب طلبات الموظف (لبوابة الموظفين)
-    getMyRequests: publicProcedure
-      .input(z.object({
-        employeeId: z.number(),
-      }))
-      .query(async ({ input }) => {
+    // جلب طلبات الموظف (للتوافق - نفس employeePortal.getMyRequests)
+    getMyRequests: employeeProcedure
+      .query(async ({ ctx }) => {
         // إنهاء الخدمة يظهر للموظف بعد اعتماده فقط
-        const requests = await db.getEmployeeRequestsByEmployeeId(input.employeeId);
+        const requests = await db.getEmployeeRequestsByEmployeeId(ctx.employee.id);
         return requests.filter(endOfService.isRequestVisibleToEmployee);
       }),
   }),
@@ -8206,13 +8238,12 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
 
   // ========== بوابة الموظفين - APIs الجديدة ==========
   employeePortal: router({
+    // جميع الإجراءات للموظف المسجل في البوابة فقط: الهوية من جلسة البوابة (لا تُقبل معرفات من الواجهة)
+
     // جلب الملف الشخصي للموظف
-    getProfile: publicProcedure
-      .input(z.object({
-        employeeId: z.number(),
-      }))
-      .query(async ({ input }) => {
-        const profile = await db.getEmployeeProfile(input.employeeId);
+    getProfile: employeeProcedure
+      .query(async ({ ctx }) => {
+        const profile = await db.getEmployeeProfile(ctx.employee.id);
         if (!profile) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
         }
@@ -8220,14 +8251,13 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
 
     // تحديث البيانات الشخصية
-    updateProfile: publicProcedure
+    updateProfile: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        phone: z.string().optional(),
-        email: z.string().email().optional(),
+        phone: z.string().trim().max(50).optional(),
+        email: z.string().trim().email({ message: 'الرجاء إدخال بريد إلكتروني صحيح' }).max(255).optional(),
       }))
-      .mutation(async ({ input }) => {
-        const success = await db.updateEmployeeProfile(input.employeeId, {
+      .mutation(async ({ ctx, input }) => {
+        const success = await db.updateEmployeeProfile(ctx.employee.id, {
           phone: input.phone,
           email: input.email,
         });
@@ -8238,52 +8268,60 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
 
     // حفظ البريد الإلكتروني عند أول تسجيل دخول
-    setupEmail: publicProcedure
+    setupEmail: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        email: z.string().email({ message: 'الرجاء إدخال بريد إلكتروني صحيح' }),
+        email: z.string().trim().email({ message: 'الرجاء إدخال بريد إلكتروني صحيح' }).max(255),
       }))
-      .mutation(async ({ input }) => {
-        const success = await db.setupEmployeeEmail(input.employeeId, input.email);
+      .mutation(async ({ ctx, input }) => {
+        const success = await db.setupEmployeeEmail(ctx.employee.id, input.email);
         if (!success) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في حفظ البريد الإلكتروني' });
         }
         return { success: true, message: 'تم حفظ البريد الإلكتروني بنجاح' };
       }),
 
-    // جلب كشف الراتب لشهر محدد
-    getSalarySlip: publicProcedure
-      .input(z.object({
-        employeeId: z.number(),
-        year: z.number(),
-        month: z.number().min(1).max(12),
-      }))
-      .query(async ({ input }) => {
-        const slip = await db.getEmployeeSalarySlip(input.employeeId, input.year, input.month);
-        if (!slip) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'لا يوجد كشف راتب لهذا الشهر' });
-        }
-        return slip;
+    // ==================== الرواتب ====================
+
+    // قائمة قسائم الرواتب (المسيرات المعتمدة أو المصروفة فقط، الأحدث أولاً)
+    getSalarySlips: employeeProcedure
+      .query(async ({ ctx }) => {
+        return await db.getEmployeeSalarySlips(ctx.employee.id);
+      }),
+
+    // قسيمة راتب مفصلة لمسيرة (سطر الموظف نفسه فقط)
+    getSalarySlip: employeeProcedure
+      .input(z.object({ payrollId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const { getOwnPayslipData } = await import('./employeePortal/service');
+        return getOwnPayslipData(ctx.employee.id, input.payrollId);
+      }),
+
+    // قسيمة الراتب PDF
+    payslipPdf: employeeProcedure
+      .input(z.object({ payrollId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { getOwnPayslipPdf } = await import('./employeePortal/service');
+        return getOwnPayslipPdf(ctx.employee.id, input.payrollId);
       }),
 
     // جلب سجل الرواتب
-    getSalaryHistory: publicProcedure
+    getSalaryHistory: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        limit: z.number().optional().default(12),
-      }))
-      .query(async ({ input }) => {
-        return await db.getEmployeeSalaryHistory(input.employeeId, input.limit);
+        limit: z.number().int().min(1).max(60).optional().default(12),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        return await db.getEmployeeSalaryHistory(ctx.employee.id, input?.limit ?? 12);
       }),
 
+    // ==================== الإجازات والبونص ====================
+
     // جلب رصيد الإجازات
-    getLeaveBalance: publicProcedure
+    getLeaveBalance: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        year: z.number(),
+        year: z.number().int().min(2000).max(2100),
       }))
-      .query(async ({ input }) => {
-        const balance = await db.getEmployeeLeaveBalance(input.employeeId, input.year);
+      .query(async ({ ctx, input }) => {
+        const balance = await db.getEmployeeLeaveBalance(ctx.employee.id, input.year);
         if (!balance) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في جلب رصيد الإجازات' });
         }
@@ -8291,68 +8329,108 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
 
     // جلب سجل الإجازات
-    getLeaveHistory: publicProcedure
+    getLeaveHistory: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        year: z.number().optional(),
-      }))
-      .query(async ({ input }) => {
-        return await db.getEmployeeLeaveHistory(input.employeeId, input.year);
+        year: z.number().int().min(2000).max(2100).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        return await db.getEmployeeLeaveHistory(ctx.employee.id, input?.year);
       }),
 
     // جلب تقرير البونص
-    getBonusReport: publicProcedure
+    getBonusReport: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        year: z.number(),
-        month: z.number().min(1).max(12),
+        year: z.number().int().min(2000).max(2100),
+        month: z.number().int().min(1).max(12),
       }))
-      .query(async ({ input }) => {
-        return await db.getEmployeeBonusReport(input.employeeId, input.year, input.month);
+      .query(async ({ ctx, input }) => {
+        return await db.getEmployeeBonusReport(ctx.employee.id, input.year, input.month);
       }),
 
     // جلب سجل البونص
-    getBonusHistory: publicProcedure
+    getBonusHistory: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        limit: z.number().optional().default(6),
-      }))
-      .query(async ({ input }) => {
-        return await db.getEmployeeBonusHistory(input.employeeId, input.limit);
+        limit: z.number().int().min(1).max(24).optional().default(6),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        return await db.getEmployeeBonusHistory(ctx.employee.id, input?.limit ?? 6);
       }),
 
-    // إلغاء طلب
-    cancelRequest: publicProcedure
+    // ==================== الطلبات ====================
+
+    // طلبات الموظف (مع بيانات المراجعة: المراجع، تاريخ المراجعة، سبب الرفض، طريقة السداد)
+    getMyRequests: employeeProcedure
+      .query(async ({ ctx }) => {
+        // إنهاء الخدمة يظهر للموظف بعد اعتماده فقط
+        const requests = await db.getEmployeeRequestsByEmployeeId(ctx.employee.id);
+        return requests.filter(endOfService.isRequestVisibleToEmployee);
+      }),
+
+    // تقديم طلب سلفة
+    createAdvanceRequest: employeeProcedure
       .input(z.object({
-        requestId: z.number(),
-        employeeId: z.number(),
+        amount: z.number().finite().min(1, 'أقل مبلغ للسلفة 1 ريال').max(100000, 'أعلى مبلغ للسلفة 100,000 ريال'),
+        reason: z.string().trim().min(3, 'سبب السلفة مطلوب (3 أحرف على الأقل)').max(1000, 'سبب السلفة طويل جداً'),
+        repaymentMethod: z.enum(['salary_deduction', 'installments', 'full_payment']),
       }))
-      .mutation(async ({ input }) => {
-        const result = await db.cancelEmployeeRequest(input.requestId, input.employeeId);
+      .mutation(async ({ ctx, input }) => {
+        const { createPortalAdvanceRequest } = await import('./employeePortal/service');
+        return createPortalAdvanceRequest(ctx.employee.id, input);
+      }),
+
+    // طلب السلفة PDF (سلفة الموظف نفسه، أي حالة - الختم بعد الموافقة فقط)
+    advanceRequestPdf: employeeProcedure
+      .input(z.object({ requestId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { getOwnAdvanceRequestPdf } = await import('./employeePortal/service');
+        return getOwnAdvanceRequestPdf(ctx.employee.id, input.requestId);
+      }),
+
+    // إلغاء طلب (قيد الانتظار فقط)
+    cancelRequest: employeeProcedure
+      .input(z.object({
+        requestId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.cancelEmployeeRequest(input.requestId, ctx.employee.id);
         if (!result.success) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في إلغاء الطلب' });
+        }
+        try {
+          await db.createEmployeeRequestLog({
+            requestId: input.requestId,
+            action: 'إلغاء',
+            oldStatus: 'pending',
+            newStatus: 'cancelled',
+            performedBy: ctx.employee.id,
+            performedByName: `${ctx.employee.name} (بوابة الموظفين)`,
+            notes: 'ألغى الموظف الطلب من بوابة الموظفين',
+          });
+        } catch (error) {
+          requestsLogger.error('خطأ في تسجيل إلغاء الطلب', error);
         }
         return { success: true };
       }),
 
-    // تحديث طلب
-    updateRequest: publicProcedure
+    // تحديث طلب (قيد الانتظار فقط)
+    updateRequest: employeeProcedure
       .input(z.object({
-        requestId: z.number(),
-        employeeId: z.number(),
-        description: z.string().optional(),
-        advanceAmount: z.string().optional(),
-        advanceReason: z.string().optional(),
+        requestId: z.number().int().positive(),
+        description: z.string().max(2000).optional(),
+        advanceAmount: z.string().trim().regex(/^\d{1,6}(\.\d{1,2})?$/, 'مبلغ غير صالح')
+          .refine(v => parseFloat(v) >= 1 && parseFloat(v) <= 100000, 'المبلغ يجب أن يكون بين 1 و 100,000')
+          .optional(),
+        advanceReason: z.string().max(1000).optional(),
         vacationStartDate: z.date().optional(),
         vacationEndDate: z.date().optional(),
-        vacationDays: z.number().optional(),
+        vacationDays: z.number().int().min(0).max(365).optional(),
         permissionDate: z.date().optional(),
-        permissionStartTime: z.string().optional(),
-        permissionEndTime: z.string().optional(),
+        permissionStartTime: z.string().max(10).optional(),
+        permissionEndTime: z.string().max(10).optional(),
       }))
-      .mutation(async ({ input }) => {
-        const { requestId, employeeId, ...data } = input;
-        const result = await db.updateEmployeeRequestFromPortal(requestId, employeeId, data);
+      .mutation(async ({ ctx, input }) => {
+        const { requestId, ...data } = input;
+        const result = await db.updateEmployeeRequestFromPortal(requestId, ctx.employee.id, data);
         if (!result.success) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في تحديث الطلب' });
         }
@@ -8360,86 +8438,73 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
 
     // جلب إحصائيات الطلبات
-    getRequestsStats: publicProcedure
-      .input(z.object({
-        employeeId: z.number(),
-      }))
-      .query(async ({ input }) => {
-        return await db.getEmployeePortalRequestsStats(input.employeeId);
+    getRequestsStats: employeeProcedure
+      .query(async ({ ctx }) => {
+        return await db.getEmployeePortalRequestsStats(ctx.employee.id);
       }),
 
     // ==================== APIs المرفقات ====================
-    
-    // رفع مرفق لطلب
-    uploadAttachment: publicProcedure
+
+    // رفع مرفق لطلب (طلبات الموظف نفسه فقط)
+    uploadAttachment: employeeProcedure
       .input(z.object({
-        requestId: z.number(),
-        employeeId: z.number(),
-        fileName: z.string(),
-        base64Data: z.string(),
-        contentType: z.string(),
+        requestId: z.number().int().positive(),
+        fileName: z.string().max(255),
+        base64Data: z.string().max(8 * 1024 * 1024),
+        contentType: z.string().max(100),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        const portal = await import('./employeePortal/service');
+        const request = await portal.getOwnVisibleRequest(ctx.employee.id, input.requestId);
+        const file = portal.decodePortalUpload({
+          data: input.base64Data,
+          contentType: input.contentType,
+          fileName: input.fileName,
+          allowedTypes: portal.PORTAL_ATTACHMENT_TYPES,
+        });
         try {
           const { storagePut } = await import('./storage');
-          
-          // تحويل base64 إلى Buffer
-          const base64Content = input.base64Data.replace(/^data:[^;]+;base64,/, '');
-          const buffer = Buffer.from(base64Content, 'base64');
-          
-          // التحقق من حجم الملف (5MB max)
-          const maxSize = 5 * 1024 * 1024;
-          if (buffer.length > maxSize) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: 'حجم الملف يجب أن يكون أقل من 5 ميجابايت',
-            });
-          }
-          
-          // إنشاء اسم ملف فريد
-          const timestamp = Date.now();
-          const randomSuffix = Math.random().toString(36).substring(2, 8);
-          const fileKey = `request-attachments/${input.requestId}/${timestamp}-${randomSuffix}-${input.fileName}`;
-          
-          const { url } = await storagePut(fileKey, buffer, input.contentType);
-          
-          // حفظ المرفق في قاعدة البيانات
+          const { randomBytes } = await import('crypto');
+          const fileKey = `request-attachments/${request.id}/${Date.now()}-${randomBytes(4).toString('hex')}-${file.safeFileName}`;
+          const { url } = await storagePut(fileKey, file.buffer, file.contentType);
+
           await db.addRequestAttachment({
-            requestId: input.requestId,
-            fileName: input.fileName,
+            requestId: request.id,
+            fileName: input.fileName.slice(0, 255),
             fileUrl: url,
-            fileType: input.contentType,
-            fileSize: buffer.length,
-            uploadedBy: input.employeeId,
+            fileType: file.contentType,
+            fileSize: file.buffer.length,
+            uploadedBy: ctx.employee.id,
           });
-          
+
           return { success: true, url };
         } catch (error: any) {
           if (error instanceof TRPCError) throw error;
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: error?.message || 'فشل رفع الملف',
+            message: 'فشل رفع الملف',
           });
         }
       }),
 
-    // جلب مرفقات طلب
-    getAttachments: publicProcedure
+    // جلب مرفقات طلب (طلبات الموظف نفسه فقط)
+    getAttachments: employeeProcedure
       .input(z.object({
-        requestId: z.number(),
+        requestId: z.number().int().positive(),
       }))
-      .query(async ({ input }) => {
-        return await db.getRequestAttachments(input.requestId);
+      .query(async ({ ctx, input }) => {
+        const { getOwnVisibleRequest } = await import('./employeePortal/service');
+        const request = await getOwnVisibleRequest(ctx.employee.id, input.requestId);
+        return await db.getRequestAttachments(request.id);
       }),
 
     // حذف مرفق
-    deleteAttachment: publicProcedure
+    deleteAttachment: employeeProcedure
       .input(z.object({
-        attachmentId: z.number(),
-        employeeId: z.number(),
+        attachmentId: z.number().int().positive(),
       }))
-      .mutation(async ({ input }) => {
-        const result = await db.deleteRequestAttachment(input.attachmentId, input.employeeId);
+      .mutation(async ({ ctx, input }) => {
+        const result = await db.deleteRequestAttachment(input.attachmentId, ctx.employee.id);
         if (!result.success) {
           throw new TRPCError({ code: 'FORBIDDEN', message: result.error || 'فشل في حذف المرفق' });
         }
@@ -8447,77 +8512,66 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
 
     // ==================== APIs تتبع الطلب ====================
-    
-    // جلب تتبع طلب
-    getRequestTimeline: publicProcedure
+
+    // جلب تتبع طلب (سجل الطلب، طلبات الموظف نفسه فقط)
+    getRequestTimeline: employeeProcedure
       .input(z.object({
-        requestId: z.number(),
+        requestId: z.number().int().positive(),
       }))
-      .query(async ({ input }) => {
-        return await db.getRequestTimeline(input.requestId);
+      .query(async ({ ctx, input }) => {
+        const { getOwnRequestTimeline } = await import('./employeePortal/service');
+        return getOwnRequestTimeline(ctx.employee.id, input.requestId);
       }),
 
     // ==================== APIs رصيد الإجازات ====================
-    
-    // تهيئة رصيد إجازات موظف
-    initializeLeaveBalance: publicProcedure
+
+    // تهيئة رصيد إجازات الموظف
+    initializeLeaveBalance: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        year: z.number(),
+        year: z.number().int().min(2000).max(2100),
       }))
-      .mutation(async ({ input }) => {
-        return await db.initializeEmployeeLeaveBalance(input.employeeId, input.year);
+      .mutation(async ({ ctx, input }) => {
+        return await db.initializeEmployeeLeaveBalance(ctx.employee.id, input.year);
       }),
 
     // ==================== APIs إشعارات الموظفين ====================
-    
+
     // جلب إشعارات الموظف
-    getNotifications: publicProcedure
+    getNotifications: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        limit: z.number().optional().default(50),
-      }))
-      .query(async ({ input }) => {
-        return await db.getEmployeeNotifications(input.employeeId, input.limit);
+        limit: z.number().int().min(1).max(100).optional().default(50),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        return await db.getEmployeeNotifications(ctx.employee.id, input?.limit ?? 50);
       }),
 
     // جلب عدد الإشعارات غير المقروءة
-    getUnreadCount: publicProcedure
-      .input(z.object({
-        employeeId: z.number(),
-      }))
-      .query(async ({ input }) => {
-        return await db.getUnreadNotificationCount(input.employeeId);
+    getUnreadCount: employeeProcedure
+      .query(async ({ ctx }) => {
+        return await db.getUnreadNotificationCount(ctx.employee.id);
       }),
 
     // تحديد إشعار كمقروء
-    markAsRead: publicProcedure
+    markAsRead: employeeProcedure
       .input(z.object({
-        notificationId: z.number(),
-        employeeId: z.number(),
+        notificationId: z.number().int().positive(),
       }))
-      .mutation(async ({ input }) => {
-        return await db.markEmployeeNotificationAsRead(input.notificationId, input.employeeId);
+      .mutation(async ({ ctx, input }) => {
+        return await db.markEmployeeNotificationAsRead(input.notificationId, ctx.employee.id);
       }),
 
     // تحديد جميع الإشعارات كمقروءة
-    markAllAsRead: publicProcedure
-      .input(z.object({
-        employeeId: z.number(),
-      }))
-      .mutation(async ({ input }) => {
-        return await db.markAllEmployeeNotificationsAsRead(input.employeeId);
+    markAllAsRead: employeeProcedure
+      .mutation(async ({ ctx }) => {
+        return await db.markAllEmployeeNotificationsAsRead(ctx.employee.id);
       }),
 
     // ==================== APIs معلومات الموظف ====================
-    
+
     // جلب معلومات الوثائق للموظف
-    getDocumentInfo: publicProcedure
-      .input(z.object({
-        employeeId: z.number(),
-      }))
-      .query(async ({ input }) => {
-        const info = await db.getEmployeeDocumentInfo(input.employeeId);
+    getDocumentInfo: employeeProcedure
+      .query(async ({ ctx }) => {
+        const info = await db.getEmployeeDocumentInfo(ctx.employee.id);
         if (!info) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
         }
@@ -8525,33 +8579,37 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
 
     // التحقق مما إذا كان الموظف قد سجل معلوماته
-    hasSubmittedInfo: publicProcedure
-      .input(z.object({
-        employeeId: z.number(),
-      }))
-      .query(async ({ input }) => {
-        const hasSubmitted = await db.hasEmployeeSubmittedInfo(input.employeeId);
+    hasSubmittedInfo: employeeProcedure
+      .query(async ({ ctx }) => {
+        const hasSubmitted = await db.hasEmployeeSubmittedInfo(ctx.employee.id);
         return { hasSubmitted };
       }),
 
     // تسجيل معلومات الموظف (لمرة واحدة فقط)
-    submitInfo: publicProcedure
+    submitInfo: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
-        iqamaNumber: z.string().optional(),
-        iqamaExpiryDate: z.union([z.date(), z.string()]).optional(),
-        healthCertExpiryDate: z.union([z.date(), z.string()]).optional(),
-        contractExpiryDate: z.union([z.date(), z.string()]).optional(),
+        iqamaNumber: z.string().trim().max(20).optional(),
+        iqamaExpiryDate: z.union([z.date(), z.string().max(40)]).optional(),
+        healthCertExpiryDate: z.union([z.date(), z.string().max(40)]).optional(),
+        contractExpiryDate: z.union([z.date(), z.string().max(40)]).optional(),
       }))
-      .mutation(async ({ input }) => {
-        const { employeeId, iqamaExpiryDate, healthCertExpiryDate, contractExpiryDate, ...rest } = input;
+      .mutation(async ({ ctx, input }) => {
+        const { iqamaExpiryDate, healthCertExpiryDate, contractExpiryDate, ...rest } = input;
+        const toDate = (value: Date | string | undefined) => {
+          if (!value) return undefined;
+          const date = new Date(value);
+          if (Number.isNaN(date.getTime())) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'تاريخ غير صالح' });
+          }
+          return date;
+        };
         const data = {
           ...rest,
-          iqamaExpiryDate: iqamaExpiryDate ? new Date(iqamaExpiryDate) : undefined,
-          healthCertExpiryDate: healthCertExpiryDate ? new Date(healthCertExpiryDate) : undefined,
-          contractExpiryDate: contractExpiryDate ? new Date(contractExpiryDate) : undefined,
+          iqamaExpiryDate: toDate(iqamaExpiryDate),
+          healthCertExpiryDate: toDate(healthCertExpiryDate),
+          contractExpiryDate: toDate(contractExpiryDate),
         };
-        const result = await db.submitEmployeeInfo(employeeId, data);
+        const result = await db.submitEmployeeInfo(ctx.employee.id, data);
         if (!result.success) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في تسجيل المعلومات' });
         }
@@ -8559,73 +8617,75 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
       }),
 
     // رفع صورة وثيقة
-    uploadDocumentImage: publicProcedure
+    uploadDocumentImage: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
         documentType: z.enum(['iqama', 'healthCert', 'contract']),
-        imageData: z.string(), // Base64 encoded image
-        fileName: z.string(),
-        mimeType: z.string(),
+        imageData: z.string().max(8 * 1024 * 1024), // Base64 encoded image
+        fileName: z.string().max(255),
+        mimeType: z.string().max(100),
       }))
-      .mutation(async ({ input }) => {
-        const { employeeId, documentType, imageData, fileName, mimeType } = input;
-        
+      .mutation(async ({ ctx, input }) => {
+        const employeeId = ctx.employee.id;
+        const { documentType } = input;
+
         // التحقق من أن الموظف لم يسجل معلوماته بعد (يمكنه رفع الصور فقط قبل التسجيل النهائي)
         const hasSubmitted = await db.hasEmployeeSubmittedInfo(employeeId);
         if (hasSubmitted) {
-          throw new TRPCError({ 
-            code: 'BAD_REQUEST', 
-            message: 'تم تسجيل المعلومات مسبقاً. لتعديل الصور يرجى التواصل مع الإدارة.' 
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'تم تسجيل المعلومات مسبقاً. لتعديل الصور يرجى التواصل مع الإدارة.'
           });
         }
-        
-        // تحويل Base64 إلى Buffer
-        const base64Data = imageData.replace(/^data:[^;]+;base64,/, '');
-        const buffer = Buffer.from(base64Data, 'base64');
-        
+
+        const { decodePortalUpload, PORTAL_IMAGE_TYPES } = await import('./employeePortal/service');
+        const file = decodePortalUpload({
+          data: input.imageData,
+          contentType: input.mimeType,
+          fileName: input.fileName,
+          allowedTypes: PORTAL_IMAGE_TYPES,
+        });
+
         // إنشاء اسم ملف فريد
-        const timestamp = Date.now();
-        const randomSuffix = Math.random().toString(36).substring(2, 8);
-        const extension = fileName.split('.').pop() || 'jpg';
-        const fileKey = `employees/${employeeId}/documents/${documentType}-${timestamp}-${randomSuffix}.${extension}`;
-        
+        const { randomBytes } = await import('crypto');
+        const fileKey = `employees/${employeeId}/documents/${documentType}-${Date.now()}-${randomBytes(4).toString('hex')}.${file.extension}`;
+
         // رفع الصورة إلى S3
         const { storagePut } = await import('./storage');
-        const { url } = await storagePut(fileKey, buffer, mimeType);
-        
+        const { url } = await storagePut(fileKey, file.buffer, file.contentType);
+
         // تحديث رابط الصورة في قاعدة البيانات
         const result = await db.updateEmployeeDocumentImage(employeeId, documentType, url);
         if (!result.success) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في حفظ رابط الصورة' });
         }
-        
+
         return { success: true, url, message: 'تم رفع الصورة بنجاح' };
       }),
 
     // حذف صورة وثيقة
-    deleteDocumentImage: publicProcedure
+    deleteDocumentImage: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
         documentType: z.enum(['iqama', 'healthCert', 'contract']),
       }))
-      .mutation(async ({ input }) => {
-        const { employeeId, documentType } = input;
-        
+      .mutation(async ({ ctx, input }) => {
+        const employeeId = ctx.employee.id;
+        const { documentType } = input;
+
         // التحقق من أن الموظف لم يسجل معلوماته بعد
         const hasSubmitted = await db.hasEmployeeSubmittedInfo(employeeId);
         if (hasSubmitted) {
-          throw new TRPCError({ 
-            code: 'BAD_REQUEST', 
-            message: 'تم تسجيل المعلومات مسبقاً. لحذف الصور يرجى التواصل مع الإدارة.' 
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'تم تسجيل المعلومات مسبقاً. لحذف الصور يرجى التواصل مع الإدارة.'
           });
         }
-        
+
         // حذف رابط الصورة من قاعدة البيانات
         const result = await db.updateEmployeeDocumentImage(employeeId, documentType, null);
         if (!result.success) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'فشل في حذف الصورة' });
         }
-        
+
         return { success: true, message: 'تم حذف الصورة بنجاح' };
       }),
   }),
@@ -8794,152 +8854,100 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
 
   // ==================== لوحة تحكم الأدمن في بوابة الموظفين ====================
   portalAdmin: router({
-    // جلب قائمة الموظفين (للأدمن في بوابة الموظفين)
-    // المشرف يرى فقط موظفي فرعه، الأدمن يرى الكل
-    getEmployees: publicProcedure
+    // المراجع من الجلسة فقط: مستخدم النظام (مسؤول/مدير/مشرف عام/مشرف) أو مشرف من الموظفين بجلسة البوابة
+    // المراجع المرتبط بفرع يرى ويعتمد فرعه فقط
+
+    // جلب قائمة الموظفين (المشرف يرى فقط موظفي فرعه)
+    getEmployees: portalReviewerProcedure
       .input(z.object({
-        adminId: z.number(),
-        branchId: z.number().optional(),
-        search: z.string().optional(),
-      }))
-      .query(async ({ input }) => {
-        // التحقق من صلاحيات الأدمن
-        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
-        if (!adminCheck.isAdmin) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
-        }
-        
-        // إذا كان مشرف، فلتر حسب فرعه فقط
-        const branchFilter = adminCheck.branchId || input.branchId;
-        
-        return await db.getEmployeesForPortalAdmin(branchFilter, input.search);
+        branchId: z.number().int().positive().optional(),
+        search: z.string().max(100).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const branchFilter = ctx.reviewer.branchId ?? input?.branchId;
+        return await db.getEmployeesForPortalAdmin(branchFilter, input?.search);
       }),
 
-    // جلب قائمة الفروع (للأدمن في بوابة الموظفين)
-    getBranches: publicProcedure
-      .input(z.object({
-        adminId: z.number(),
-      }))
-      .query(async ({ input }) => {
-        // التحقق من صلاحيات الأدمن
-        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
-        if (!adminCheck.isAdmin) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
-        }
-        
-        return await db.getBranchesForPortalAdmin();
+    // جلب قائمة الفروع (المشرف يرى فرعه فقط)
+    getBranches: portalReviewerProcedure
+      .query(async ({ ctx }) => {
+        const branchList = await db.getBranchesForPortalAdmin();
+        const scopeBranchId = ctx.reviewer.branchId;
+        return scopeBranchId == null ? branchList : branchList.filter(branch => branch.id === scopeBranchId);
       }),
 
-    // جلب قائمة الطلبات (للأدمن في بوابة الموظفين)
-    // المشرف يرى فقط طلبات موظفي فرعه
-    getRequests: publicProcedure
+    // جلب قائمة الطلبات (المشرف يرى فقط طلبات موظفي فرعه)
+    getRequests: portalReviewerProcedure
       .input(z.object({
-        adminId: z.number(),
-        status: z.string().optional(),
-        requestType: z.string().optional(),
-        branchId: z.number().optional(),
-      }))
-      .query(async ({ input }) => {
-        // التحقق من صلاحيات الأدمن
-        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
-        if (!adminCheck.isAdmin) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
-        }
-        
-        const { adminId, ...filters } = input;
-        // إذا كان مشرف، فلتر حسب فرعه فقط
-        if (adminCheck.branchId) {
-          filters.branchId = adminCheck.branchId;
+        status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(),
+        requestType: z.enum(['advance', 'vacation', 'arrears', 'permission', 'objection', 'resignation', 'end_of_service']).optional(),
+        branchId: z.number().int().positive().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const filters = { ...(input ?? {}) };
+        if (ctx.reviewer.branchId != null) {
+          filters.branchId = ctx.reviewer.branchId;
         }
         // بوابة الموظفين لا تعرض إنهاء الخدمة قبل اعتماده (قد يكون المشرف نفسه هو الموظف المعني)
         const requests = await db.getAllEmployeeRequests(filters);
         return requests.filter(endOfService.isRequestVisibleToEmployee);
       }),
 
-    // تحديث حالة طلب (للأدمن في بوابة الموظفين)
-    updateRequestStatus: publicProcedure
+    // تحديث حالة طلب: خدمة المراجعة الموحدة (قيد الانتظار فقط، الفرع، منع اعتماد الطلب الشخصي، السجل، المسيرات، الإشعارات)
+    updateRequestStatus: portalReviewerProcedure
       .input(z.object({
-        adminId: z.number(),
-        requestId: z.number(),
+        requestId: z.number().int().positive(),
         status: z.enum(['approved', 'rejected']),
-        reviewNotes: z.string().optional(),
+        reviewNotes: z.string().max(2000).optional(),
+        rejectionReason: z.string().max(2000).optional(),
       }))
-      .mutation(async ({ input }) => {
-        // التحقق من صلاحيات الأدمن
-        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
-        if (!adminCheck.isAdmin) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
-        }
-        
-        const existingRequest = await db.getEmployeeRequestById(input.requestId);
-        if (existingRequest?.requestType === 'end_of_service') {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'يُدار إنهاء الخدمة من صفحة إنهاء الخدمة' });
-        }
-        if (existingRequest?.requestType === 'advance' && existingRequest.status === 'approved' && input.status !== 'approved') {
-          await runPayrollAction(() => payrollService.assertSourceNotLocked('advance', input.requestId));
-        }
-
-        const result = await db.updateEmployeeRequestStatus(
-          input.requestId,
-          input.status,
-          input.adminId,
-          adminCheck.adminName || 'Admin',
-          input.reviewNotes
+      .mutation(async ({ ctx, input }) => {
+        const { reviewEmployeeRequest } = await import('./employeeRequests/reviewService');
+        const result = await reviewEmployeeRequest(
+          {
+            requestId: input.requestId,
+            status: input.status,
+            reviewNotes: input.reviewNotes,
+            rejectionReason: input.rejectionReason,
+          },
+          {
+            kind: ctx.reviewer.kind,
+            id: ctx.reviewer.id,
+            name: ctx.reviewer.name,
+            branchId: ctx.reviewer.branchId,
+            employeeId: ctx.reviewer.employeeId,
+          }
         );
-        
-        if (!result.success) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في تحديث الطلب' });
-        }
-
-        // لا تُحدَّث المسيرات من هذا المسار (غير مرتبط بجلسة دخول)؛
-        // المسيرة المفتوحة تُعاد حسابها تلقائياً عند اعتمادها أو من زر "إعادة الحساب"
-        return { success: true };
+        return { success: true, message: result.message };
       }),
 
-    // جلب الوثائق المنتهية (للأدمن في بوابة الموظفين)
-    getExpiringDocuments: publicProcedure
-      .input(z.object({
-        adminId: z.number(),
-      }))
-      .query(async ({ input }) => {
-        // التحقق من صلاحيات الأدمن
-        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
-        if (!adminCheck.isAdmin) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
-        }
-        
-        return await db.getEmployeesWithExpiringDocuments();
+    // جلب الوثائق المنتهية والقريبة من الانتهاء (نطاق فرع المراجع)
+    getExpiringDocuments: portalReviewerProcedure
+      .query(async ({ ctx }) => {
+        const { scopeExpiringDocuments } = await import('./employeePortal/service');
+        return scopeExpiringDocuments(await db.getEmployeesWithExpiringDocuments(), ctx.reviewer.branchId);
       }),
 
-    // جلب إحصائيات لوحة التحكم (للأدمن في بوابة الموظفين)
-    getDashboardStats: publicProcedure
-      .input(z.object({
-        adminId: z.number(),
-      }))
-      .query(async ({ input }) => {
-        // التحقق من صلاحيات الأدمن
-        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
-        if (!adminCheck.isAdmin) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
-        }
-        
-        return await db.getPortalAdminDashboardStats();
+    // جلب إحصائيات لوحة التحكم (نطاق فرع المراجع)
+    getDashboardStats: portalReviewerProcedure
+      .query(async ({ ctx }) => {
+        return await db.getPortalAdminDashboardStats(ctx.reviewer.branchId);
       }),
 
-    // جلب تفاصيل موظف (للأدمن في بوابة الموظفين)
-    getEmployeeDetails: publicProcedure
+    // جلب تفاصيل موظف (بدون كلمة المرور، نطاق فرع المراجع)
+    getEmployeeDetails: portalReviewerProcedure
       .input(z.object({
-        adminId: z.number(),
-        employeeId: z.number(),
+        employeeId: z.number().int().positive(),
       }))
-      .query(async ({ input }) => {
-        // التحقق من صلاحيات الأدمن
-        const adminCheck = await db.checkPortalAdminAccess(input.adminId);
-        if (!adminCheck.isAdmin) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
+      .query(async ({ ctx, input }) => {
+        const details = await db.getEmployeeDetailsForPortalAdmin(input.employeeId);
+        if (!details || (ctx.reviewer.branchId != null && details.employee.branchId !== ctx.reviewer.branchId)) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
         }
-        
-        return await db.getEmployeeDetailsForPortalAdmin(input.employeeId);
+        return {
+          ...details,
+          requests: details.requests.filter(endOfService.isRequestVisibleToEmployee),
+        };
       }),
   }),
 
@@ -9225,10 +9233,11 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
 
   // ==================== إشعارات بوابة الموظفين ====================
   portalNotifications: router({
+    // إشعارات الموظف المسجل في البوابة فقط (الهوية من جلسة البوابة)
+
     // جلب الإشعارات
-    getNotifications: publicProcedure
+    getNotifications: employeeProcedure
       .input(z.object({
-        employeeId: z.number(),
         unreadOnly: z.boolean().optional(),
         type: z.enum([
           "request_approved", "request_rejected", "request_pending",
@@ -9236,45 +9245,41 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           "bonus_approved", "announcement", "task_assigned",
           "reminder", "system"
         ]).optional(),
-        limit: z.number().optional(),
-        offset: z.number().optional(),
-      }))
-      .query(async ({ input }) => {
-        return await portalNotificationService.getNotifications(input);
+        limit: z.number().int().min(1).max(100).optional(),
+        offset: z.number().int().min(0).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        return await portalNotificationService.getNotifications({ ...(input ?? {}), employeeId: ctx.employee.id });
       }),
 
     // عدد الإشعارات غير المقروءة
-    getUnreadCount: publicProcedure
-      .input(z.object({ employeeId: z.number() }))
-      .query(async ({ input }) => {
-        return await portalNotificationService.getUnreadCount(input.employeeId);
+    getUnreadCount: employeeProcedure
+      .query(async ({ ctx }) => {
+        return await portalNotificationService.getUnreadCount(ctx.employee.id);
       }),
 
     // تحديد إشعار كمقروء
-    markAsRead: publicProcedure
+    markAsRead: employeeProcedure
       .input(z.object({
-        notificationId: z.number(),
-        employeeId: z.number(),
+        notificationId: z.number().int().positive(),
       }))
-      .mutation(async ({ input }) => {
-        return await portalNotificationService.markAsRead(input.notificationId, input.employeeId);
+      .mutation(async ({ ctx, input }) => {
+        return await portalNotificationService.markAsRead(input.notificationId, ctx.employee.id);
       }),
 
     // تحديد جميع الإشعارات كمقروءة
-    markAllAsRead: publicProcedure
-      .input(z.object({ employeeId: z.number() }))
-      .mutation(async ({ input }) => {
-        return await portalNotificationService.markAllAsRead(input.employeeId);
+    markAllAsRead: employeeProcedure
+      .mutation(async ({ ctx }) => {
+        return await portalNotificationService.markAllAsRead(ctx.employee.id);
       }),
 
     // حذف إشعار
-    deleteNotification: publicProcedure
+    deleteNotification: employeeProcedure
       .input(z.object({
-        notificationId: z.number(),
-        employeeId: z.number(),
+        notificationId: z.number().int().positive(),
       }))
-      .mutation(async ({ input }) => {
-        return await portalNotificationService.deleteNotification(input.notificationId, input.employeeId);
+      .mutation(async ({ ctx, input }) => {
+        return await portalNotificationService.deleteNotification(input.notificationId, ctx.employee.id);
       }),
 
     // إنشاء إشعار (للاستخدام الداخلي أو من الأدمن)
