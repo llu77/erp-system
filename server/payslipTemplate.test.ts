@@ -253,14 +253,19 @@ describe("قالب قسيمة الراتب", () => {
     }
   });
 
-  it("shows the fixed job title from the payroll line's supervisor flag", () => {
+  it("shows the fixed job title saved from the employee account", () => {
     const titleCell = (title: string) =>
       `<div class="lbl">المسمى الوظيفي</div><div class="val">${title}</div>`;
-    const supervisor = render(payroll(), detail({ isSupervisor: true, position: "حلاق" }));
-    expect(supervisor).toContain(titleCell("مشرف"));
-    const barber = render(payroll(), detail({ isSupervisor: false, position: "مدير صالون" }));
-    expect(barber).toContain(titleCell("حلاق"));
-    expect(barber).not.toContain("مدير صالون");
+    // المسمى المحفوظ من الحساب يتقدم على علامة إعدادات الراتب (التي تحدد الحافز فقط)
+    const supervisorAccount = render(payroll(), detail({ isSupervisor: false, position: "مشرف" }));
+    expect(supervisorAccount).toContain(titleCell("مشرف"));
+    const barberAccount = render(payroll(), detail({ isSupervisor: true, position: "حلاق" }));
+    expect(barberAccount).toContain(titleCell("حلاق"));
+    // سطور قديمة بمسمى حر: من علامة المشرف في السطر
+    const legacy = render(payroll(), detail({ isSupervisor: false, position: "مدير صالون" }));
+    expect(legacy).toContain(titleCell("حلاق"));
+    expect(legacy).not.toContain("مدير صالون");
+    expect(render(payroll(), detail({ isSupervisor: true, position: null }))).toContain(titleCell("مشرف"));
   });
 
   it("brands the payslip with the establishment of the payroll branch", () => {

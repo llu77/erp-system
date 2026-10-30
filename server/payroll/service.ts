@@ -147,7 +147,8 @@ interface EmployeeRow {
   id: number;
   name: string;
   code: string;
-  position: string | null;
+  /** علامة المشرف في حساب الموظف (employees.isSupervisor): تحدد المسمى فقط */
+  isSupervisor: boolean;
 }
 
 interface SourceData {
@@ -402,7 +403,8 @@ function buildLine(
     employeeId: emp.id,
     employeeName: emp.name,
     employeeCode: emp.code,
-    position: employeeJobTitle(settings?.isSupervisor),
+    // المسمى من حساب الموظف (مشرف / حلاق)؛ علامة إعدادات الراتب تحدد حافز المشرف فقط
+    position: employeeJobTitle(emp.isSupervisor),
     isSupervisor: !!settings?.isSupervisor,
     overtimeRate,
     inputs: cleanedInputs,
@@ -473,7 +475,7 @@ function lineToDetailValues(line: PayrollPreviewLine): Omit<InsertPayrollDetail,
 
 async function getActiveBranchEmployees(q: Exec, branchId: number): Promise<EmployeeRow[]> {
   return await q
-    .select({ id: employees.id, name: employees.name, code: employees.code, position: employees.position })
+    .select({ id: employees.id, name: employees.name, code: employees.code, isSupervisor: employees.isSupervisor })
     .from(employees)
     .where(and(eq(employees.branchId, branchId), eq(employees.isActive, true)))
     .orderBy(asc(employees.name));
@@ -758,9 +760,18 @@ async function rebuildPayrollInTx(
   await releaseLinkedItems(tx, payroll.id, employeeIds);
 
   const sources = await loadSources(tx, employeeIds, payroll.year, payroll.month, payroll.id);
+  // المسمى من حساب الموظف الحالي (قد تغيّرت علامة المشرف منذ إنشاء المسيرة)
+  const supervisorAccounts = new Set(
+    (await tx
+      .select({ id: employees.id, isSupervisor: employees.isSupervisor })
+      .from(employees)
+      .where(inArray(employees.id, employeeIds)))
+      .filter(e => e.isSupervisor)
+      .map(e => e.id)
+  );
   const lines = scope.map(d =>
     buildLine(
-      { id: d.employeeId, name: d.employeeName, code: d.employeeCode, position: d.position },
+      { id: d.employeeId, name: d.employeeName, code: d.employeeCode, isSupervisor: supervisorAccounts.has(d.employeeId) },
       sources,
       resolveAdjustment(d.employeeId, sources.settings.get(d.employeeId), storedAdjustment(d), options.override)
     )

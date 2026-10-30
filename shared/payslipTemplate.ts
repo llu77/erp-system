@@ -8,7 +8,7 @@
  */
 
 import type { Establishment } from "./branding";
-import { employeeJobTitle } from "./employeeFile";
+import { JOB_TITLE_BARBER, JOB_TITLE_SUPERVISOR, employeeJobTitle } from "./employeeFile";
 import {
   LEAVE_DEDUCTION_RATE,
   LEAVE_KIND_LABELS,
@@ -146,6 +146,16 @@ export interface EmployeeDocumentTemplateOptions {
 /** التوقيعات والختم: للمسيرة المعتمدة أو المصروفة فقط */
 export function isPayslipSigned(status: string | null | undefined): boolean {
   return status === "approved" || status === "paid";
+}
+
+/**
+ * مسمى الموظف في سطر المسيرة: المحفوظ وقت الإنشاء من حساب الموظف (حلاق / مشرف)،
+ * وللسطور القديمة بمسمى آخر يُشتق من علامة المشرف في السطر
+ */
+function payrollLineJobTitle(detail: Pick<PayslipDetailSource, "position" | "isSupervisor">): string {
+  const saved = detail.position?.trim();
+  if (saved === JOB_TITLE_BARBER || saved === JOB_TITLE_SUPERVISOR) return saved;
+  return employeeJobTitle(detail.isSupervisor);
 }
 
 /** اسم مستند راتب الموظف الشهري (مسيرة الراتب، وليس قسيمة) */
@@ -314,8 +324,8 @@ export function buildPayslipDocumentData(
       id: detail.employeeId ?? 0,
       name: detail.employeeName,
       code: detail.employeeCode,
-      // المسمى الثابت من علامة المشرف في سطر المسيرة (حلاق / مشرف)
-      position: employeeJobTitle(detail.isSupervisor),
+      // المسمى الثابت المحفوظ في السطر من حساب الموظف (حلاق / مشرف)
+      position: payrollLineJobTitle(detail),
       iqamaNumber: text(extras.iqamaNumber),
       nationality: text(extras.nationality),
       hireDate: ymd(extras.hireDate),

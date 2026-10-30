@@ -6,7 +6,7 @@ import { _internal, canActorTransition } from "./payroll/service";
 
 const { buildLine, resolveAdjustment, lineToDetailValues, storedAdjustment } = _internal;
 
-const emp = { id: 7, name: "محمد إسماعيل", code: "E007", position: "حلاق" };
+const emp = { id: 7, name: "محمد إسماعيل", code: "E007", isSupervisor: false };
 
 function sources(overrides: Partial<Record<string, any>> = {}) {
   return {
@@ -40,6 +40,17 @@ describe("payroll service line building", () => {
     const line = buildLine(emp, src, inputs);
     expect(line.calc.overtimeAmount).toBe(1000);
     expect(line.calc.grossSalary).toBe(3400);
+  });
+
+  it("takes the job title from the employee account; the settings flag only drives the incentive", () => {
+    const noSettings = sources();
+    const supervisorAccount = buildLine({ ...emp, isSupervisor: true }, noSettings, resolveAdjustment(7, undefined, undefined, undefined));
+    expect(supervisorAccount.position).toBe("مشرف");
+    expect(supervisorAccount.isSupervisor).toBe(false);
+    const withIncentive = sources({ settings: [[7, settingsRow({ isSupervisor: true })]] });
+    const barberAccount = buildLine(emp, withIncentive, resolveAdjustment(7, withIncentive.settings.get(7), undefined, undefined));
+    expect(barberAccount.position).toBe("حلاق");
+    expect(barberAccount.isSupervisor).toBe(true);
   });
 
   it("falls back to defaults when the employee has no salary settings", () => {
