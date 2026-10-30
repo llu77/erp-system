@@ -69,6 +69,7 @@ import {
   Bell,
   ArrowUpCircle,
   Layers,
+  UserX,
 } from "lucide-react";
 import { CSSProperties, createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -184,6 +185,7 @@ const menuStructure: MenuItem[] = [
     children: [
       { icon: FilePlus, label: "تقديم طلب", path: "/submit-request", roles: ["admin", "manager", "employee", "supervisor"] },
       { icon: ClipboardList, label: "إدارة الطلبات", path: "/manage-requests", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: UserX, label: "إنهاء الخدمة", path: "/end-of-service", roles: ["admin", "manager", "viewer", "supervisor"] },
       { icon: Gift, label: "طلبات البونص", path: "/bonus-requests", roles: ["admin", "manager"] },
       { icon: Layers, label: "إعدادات مستويات البونص", path: "/bonus-tiers", roles: ["admin", "manager"] },
     ]

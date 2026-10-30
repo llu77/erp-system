@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { toVoucherDateString } from "@shared/vouchers";
 import { 
   Users, 
   Plus, 
@@ -28,7 +29,8 @@ import {
   IdCard,
   Calendar,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  Briefcase
 } from "lucide-react";
 
 interface EmployeeFormData {
@@ -42,6 +44,15 @@ interface EmployeeFormData {
   iqamaExpiryDate: string;
   healthCertExpiryDate: string;
   contractExpiryDate: string;
+  // لخطاب إنهاء الخدمة والمخالصة النهائية
+  hireDate: string;
+  nationality: string;
+}
+
+/** بيانات التوظيف كما كانت عند فتح التعديل (تُرسل فقط إذا تغيرت حتى لا تُمسح قيمة لم تُحمّل) */
+interface ProfileSnapshot {
+  hireDate: string;
+  nationality: string;
 }
 
 const initialFormData: EmployeeFormData = {
@@ -55,6 +66,8 @@ const initialFormData: EmployeeFormData = {
   iqamaExpiryDate: "",
   healthCertExpiryDate: "",
   contractExpiryDate: "",
+  hireDate: "",
+  nationality: "",
 };
 
 export default function Employees() {
@@ -65,6 +78,7 @@ export default function Employees() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [formData, setFormData] = useState<EmployeeFormData>(initialFormData);
+  const [originalProfile, setOriginalProfile] = useState<ProfileSnapshot>({ hireDate: "", nationality: "" });
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBranchId, setFilterBranchId] = useState<string>("all");
 
@@ -120,8 +134,15 @@ export default function Employees() {
       return;
     }
 
+    const nationality = formData.nationality.trim();
+
     if (editingId) {
+      // تاريخ المباشرة والجنسية: تُرسل عند التغيير فقط (null يمسح القيمة)
+      const profileChanges: { hireDate?: string | null; nationality?: string | null } = {};
+      if (formData.hireDate !== originalProfile.hireDate) profileChanges.hireDate = formData.hireDate || null;
+      if (nationality !== originalProfile.nationality) profileChanges.nationality = nationality || null;
       updateMutation.mutate({ 
+        ...profileChanges,
         id: editingId, 
         code: formData.code,
         name: formData.name,
@@ -135,7 +156,12 @@ export default function Employees() {
         contractExpiryDate: formData.contractExpiryDate ? new Date(formData.contractExpiryDate) : undefined,
       });
     } else {
+      const profileFields: { hireDate?: string; nationality?: string } = {
+        hireDate: formData.hireDate || undefined,
+        nationality: nationality || undefined,
+      };
       createMutation.mutate({
+        ...profileFields,
         code: formData.code,
         name: formData.name,
         phone: formData.phone || undefined,
@@ -151,8 +177,16 @@ export default function Employees() {
   };
 
   const handleEdit = (employee: NonNullable<typeof employees>[number]) => {
+    // الحقلان اختياريان في القائمة (قد لا يُرجعهما الخادم)
+    const profile = employee as { hireDate?: string | Date | null; nationality?: string | null };
+    const snapshot: ProfileSnapshot = {
+      hireDate: toVoucherDateString(profile.hireDate ?? null) ?? "",
+      nationality: profile.nationality?.trim() ?? "",
+    };
+    setOriginalProfile(snapshot);
     setEditingId(employee.id);
     setFormData({
+      ...snapshot,
       code: employee.code,
       name: employee.name,
       phone: employee.phone || "",
@@ -180,6 +214,7 @@ export default function Employees() {
 
   const openAddDialog = () => {
     setEditingId(null);
+    setOriginalProfile({ hireDate: "", nationality: "" });
     setFormData(initialFormData);
     setShowDialog(true);
   };
@@ -495,6 +530,40 @@ export default function Employees() {
                   className="mt-2"
                 />
               </div>
+              {/* بيانات التوظيف (لخطاب إنهاء الخدمة والمخالصة النهائية) */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                  <Briefcase className="h-4 w-4" />
+                  بيانات التوظيف
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="hireDate">تاريخ المباشرة</Label>
+                    <Input
+                      id="hireDate"
+                      type="date"
+                      value={formData.hireDate}
+                      onChange={(e) => setFormData({ ...formData, hireDate: e.target.value })}
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="nationality">الجنسية</Label>
+                    <Input
+                      id="nationality"
+                      value={formData.nationality}
+                      onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                      placeholder="مثال: مصري"
+                      maxLength={100}
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  تظهر في خطاب إنهاء الخدمة والمخالصة النهائية وتُستخدم لحساب مدة الخدمة
+                </p>
+              </div>
+
               {/* قسم الوثائق والإقامة */}
               <div className="border-t pt-4 mt-4">
                 <h4 className="text-sm font-medium mb-3 flex items-center gap-2">

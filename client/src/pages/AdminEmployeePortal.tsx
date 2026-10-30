@@ -50,7 +50,8 @@ import {
   Activity,
   Shield,
   Settings,
-  Home
+  Home,
+  ExternalLink
 } from 'lucide-react';
 
 // أنواع الطلبات
@@ -61,7 +62,12 @@ const REQUEST_TYPE_NAMES: Record<string, string> = {
   permission: 'استئذان',
   objection: 'اعتراض على مخالفة',
   resignation: 'استقالة',
+  end_of_service: 'إنهاء خدمة',
 };
+
+// طلب إنهاء الخدمة يُعتمد ويُلغى من صفحة إنهاء الخدمة في نظام الإدارة فقط
+const isEndOfServiceRequest = (request: { requestType?: string } | null | undefined) =>
+  request?.requestType === 'end_of_service';
 
 // حالات الطلب
 const STATUS_NAMES: Record<string, string> = {
@@ -770,6 +776,7 @@ export default function AdminEmployeePortal() {
                         <SelectItem value="arrears">صرف متأخرات</SelectItem>
                         <SelectItem value="objection">اعتراض</SelectItem>
                         <SelectItem value="resignation">استقالة</SelectItem>
+                        <SelectItem value="end_of_service">إنهاء خدمة</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1203,8 +1210,14 @@ export default function AdminEmployeePortal() {
                 )}
               </div>
               
+              {isEndOfServiceRequest(selectedRequest) && (
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-slate-300">
+                  يُدار طلب إنهاء الخدمة (الخطاب والمخالصة النهائية والاعتماد والإلغاء) من صفحة إنهاء الخدمة في نظام الإدارة.
+                </div>
+              )}
+
               {/* ملاحظات المراجعة (للطلبات المعلقة) */}
-              {selectedRequest.status === 'pending' && (
+              {selectedRequest.status === 'pending' && !isEndOfServiceRequest(selectedRequest) && (
                 <div className="p-4 bg-slate-700/50 rounded-lg">
                   <h4 className="font-bold text-white mb-3">ملاحظات المراجعة</h4>
                   <Textarea
@@ -1220,7 +1233,16 @@ export default function AdminEmployeePortal() {
           )}
           
           <DialogFooter className="flex gap-2">
-            {selectedRequest?.status === 'pending' && (
+            {isEndOfServiceRequest(selectedRequest) && (
+              <Button
+                onClick={() => setLocation('/end-of-service')}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                <ExternalLink className="h-4 w-4 ml-2" />
+                صفحة إنهاء الخدمة
+              </Button>
+            )}
+            {selectedRequest?.status === 'pending' && !isEndOfServiceRequest(selectedRequest) && (
               <>
                 <Button
                   variant="outline"

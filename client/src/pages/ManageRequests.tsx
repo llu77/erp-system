@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,10 +14,11 @@ import { toast } from "sonner";
 import { 
   Loader2, Search, Filter, CheckCircle, XCircle, Clock, Eye, 
   FileText, Calendar, DollarSign, AlertTriangle, LogOut, User,
-  Building, MessageSquare, Trash2
+  Building, MessageSquare, Trash2, UserX, ExternalLink, RefreshCw
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { END_OF_SERVICE_REQUEST_TYPE } from "@shared/endOfService";
 
 const requestTypes = [
   { value: "advance", label: "سلفة", icon: DollarSign },
@@ -25,7 +27,11 @@ const requestTypes = [
   { value: "permission", label: "استئذان", icon: Clock },
   { value: "objection", label: "اعتراض", icon: AlertTriangle },
   { value: "resignation", label: "استقالة", icon: LogOut },
+  { value: "end_of_service", label: "إنهاء خدمة", icon: UserX },
 ];
+
+// طلب إنهاء الخدمة يُعتمد ويُلغى من صفحة المخالصة فقط (لا موافقة/رفض من هنا)
+const isEndOfServiceRequest = (requestType: string) => requestType === END_OF_SERVICE_REQUEST_TYPE;
 
 const statusConfig: Record<string, { label: string; color: string; icon: typeof Clock }> = {
   pending: { label: "قيد الانتظار", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: Clock },
@@ -52,11 +58,15 @@ export default function ManageRequests() {
   const [reviewNotes, setReviewNotes] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [deleteRequestId, setDeleteRequestId] = useState<number | null>(null);
+  const [openingRequestId, setOpeningRequestId] = useState<number | null>(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const canManageEndOfService = user?.role === 'admin' || user?.role === 'manager';
+  const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
 
   // جلب البيانات
-  const { data: requests, isLoading, refetch } = trpc.employeeRequests.list.useQuery({
+  const { data: requests, isLoading, error: requestsError, isFetching: requestsFetching, refetch } = trpc.employeeRequests.list.useQuery({
     status: statusFilter !== "all" ? statusFilter : undefined,
     requestType: typeFilter !== "all" ? typeFilter : undefined,
   });
@@ -113,6 +123,23 @@ export default function ManageRequests() {
     });
   };
 
+  // فتح مخالصة إنهاء الخدمة المرتبطة بالطلب
+  const openSettlement = async (requestId: number) => {
+    setOpeningRequestId(requestId);
+    try {
+      const settlement: { id: number } | null = await utils.endOfService.getByRequestId.fetch({ requestId });
+      if (!settlement) {
+        toast.error("لم يتم العثور على مخالصة مرتبطة بهذا الطلب");
+        return;
+      }
+      navigate(`/end-of-service/${settlement.id}`);
+    } catch (error) {
+      toast.error((error as { message?: string })?.message || "تعذر فتح المخالصة");
+    } finally {
+      setOpeningRequestId(null);
+    }
+  };
+
   const viewDetails = (requestId: number) => {
     setSelectedRequest(requestId);
     setIsDetailOpen(true);
@@ -139,7 +166,7 @@ export default function ManageRequests() {
 
   return (
     <div className="p-6 space-y-6" dir="rtl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-3">
             <div className="kpi-icon" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.25) 100%)' }}>
@@ -149,6 +176,15 @@ export default function ManageRequests() {
           </h1>
           <p className="text-muted-foreground mt-1">مراجعة والموافقة على طلبات الموظفين</p>
         </div>
+        {canManageEndOfService && (
+          <Button
+            onClick={() => navigate("/end-of-service?new=1")}
+            className="bg-red-700 hover:bg-red-800 text-white shrink-0"
+          >
+            <UserX className="h-4 w-4 ml-2" />
+            إنهاء خدمة
+          </Button>
+        )}
       </div>
 
       {/* إحصائيات */}
@@ -231,6 +267,7 @@ export default function ManageRequests() {
                 <SelectItem value="pending">قيد الانتظار</SelectItem>
                 <SelectItem value="approved">موافق عليه</SelectItem>
                 <SelectItem value="rejected">مرفوض</SelectItem>
+                <SelectItem value="cancelled">ملغي</SelectItem>
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -255,13 +292,21 @@ export default function ManageRequests() {
         <CardHeader>
           <CardTitle>الطلبات</CardTitle>
           <CardDescription>
-            {filteredRequests?.length || 0} طلب
+            {requestsError ? "—" : `${filteredRequests?.length || 0} طلب`}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : requestsError ? (
+            <div className="text-center py-8 space-y-3">
+              <p className="text-red-500">تعذر تحميل الطلبات: {requestsError.message}</p>
+              <Button variant="outline" size="sm" onClick={() => refetch()} disabled={requestsFetching}>
+                <RefreshCw className={`h-4 w-4 ml-2 ${requestsFetching ? "animate-spin" : ""}`} />
+                إعادة المحاولة
+              </Button>
             </div>
           ) : !filteredRequests || filteredRequests.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -336,7 +381,22 @@ export default function ManageRequests() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            {request.status === "pending" && (
+                            {isEndOfServiceRequest(request.requestType) ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openSettlement(request.id)}
+                                disabled={openingRequestId === request.id}
+                                title="فتح المخالصة"
+                              >
+                                {openingRequestId === request.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <ExternalLink className="h-4 w-4" />
+                                )}
+                                <span className="mr-1 hidden sm:inline">فتح المخالصة</span>
+                              </Button>
+                            ) : request.status === "pending" && (
                               <>
                                 <Button
                                   variant="ghost"
@@ -447,6 +507,18 @@ export default function ManageRequests() {
                 )}
 
                 {/* تفاصيل حسب النوع */}
+                {isEndOfServiceRequest(requestDetail.requestType) && (
+                  <div className="p-4 bg-red-500/10 rounded-lg space-y-1">
+                    <h4 className="font-medium text-red-400 flex items-center gap-2">
+                      <UserX className="h-4 w-4" />
+                      إنهاء خدمة - انتهاء العقد وعدم التجديد
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      يُدار هذا الطلب من صفحة إنهاء الخدمة: الخطاب والمخالصة النهائية والاعتماد والصرف والإلغاء.
+                    </p>
+                  </div>
+                )}
+
                 {requestDetail.requestType === "advance" && requestDetail.advanceAmount && (
                   <div className="p-4 bg-green-500/10 rounded-lg space-y-2">
                     <h4 className="font-medium text-green-400">تفاصيل السلفة</h4>
@@ -628,7 +700,19 @@ export default function ManageRequests() {
             <Button variant="outline" onClick={() => setIsDetailOpen(false)}>
               إغلاق
             </Button>
-            {requestDetail?.status === "pending" && (
+            {requestDetail && isEndOfServiceRequest(requestDetail.requestType) ? (
+              <Button
+                onClick={() => openSettlement(requestDetail.id)}
+                disabled={openingRequestId === requestDetail.id}
+              >
+                {openingRequestId === requestDetail.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                ) : (
+                  <ExternalLink className="h-4 w-4 ml-2" />
+                )}
+                فتح المخالصة
+              </Button>
+            ) : requestDetail?.status === "pending" && (
               <>
                 <Button
                   variant="default"
