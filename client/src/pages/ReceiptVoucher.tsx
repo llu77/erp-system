@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc';
+import { downloadBase64Pdf } from '@/lib/downloadPdf';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { toast } from 'sonner';
 import {
@@ -142,18 +143,6 @@ function statusBadgeClass(status: string): string {
     default:
       return '';
   }
-}
-
-function downloadBase64Pdf(base64: string, filename: string) {
-  const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /** الحد الأقصى لعدد السندات في القائمة */

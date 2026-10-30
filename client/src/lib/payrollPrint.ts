@@ -4,17 +4,22 @@
  * - تُبنى من القيم المحفوظة في الخادم فقط (لا إعادة حساب في الواجهة)
  * - كل مكوّن خصم له عمود/سطر مستقل حتى يطابق (الإجمالي - الخصومات = الصافي)
  * - التوقيعات والختم تظهر فقط بعد الاعتماد (معتمدة / مدفوعة)
+ * - الترويسة باسم مؤسسة فرع المسيرة (getEstablishmentForBranch) وليس اسم النظام
+ * - قسيمة الراتب تستخدم القالب الرسمي المشترك مع PDF الخادم (shared/payslipTemplate.ts)
  */
-import { SIGNATURES, COMPANY_INFO } from "@/utils/pdfTemplates";
 import {
-  parseLinkedItems,
-  parseJsonArray,
-  LEAVE_KIND_LABELS,
-  type PayrollAdvanceItem,
-  type PayrollViolationItem,
-  type PayrollLeaveItem,
-  type PayrollNegativeInvoiceItem,
-} from "@shared/payroll";
+  SIGNATURES,
+  getEstablishmentForBranch,
+  isPlaceholderValue,
+  type Establishment,
+} from "@shared/branding";
+import {
+  buildPayslipDocumentData,
+  renderPayslipHtml,
+  type PayslipDetailSource,
+  type PayslipDocumentData,
+  type PayslipEmployeeExtras,
+} from "@shared/payslipTemplate";
 import { amountToArabicWords } from "@shared/vouchers";
 
 const ARABIC_MONTHS = [
@@ -31,7 +36,9 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export interface PrintablePayroll {
+  id?: number;
   payrollNumber: string;
+  branchId?: number | null;
   branchName: string;
   year: number;
   month: number;
@@ -44,6 +51,7 @@ export interface PrintablePayroll {
 }
 
 export interface PrintableDetail {
+  employeeId?: number;
   employeeName: string;
   employeeCode: string;
   position?: string | null;
@@ -118,6 +126,32 @@ export function writeAndPrint(win: Window, html: string) {
   else win.onload = trigger;
 }
 
+/** كتابة مستند كامل في نافذة الطباعة (المستند يتضمن سكربت الطباعة التلقائية) */
+export function writePrintDocument(win: Window, html: string) {
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+/** رسالة انتظار مؤقتة في نافذة الطباعة أثناء جلب البيانات من الخادم */
+export function writePrintLoading(win: Window, message = "جاري تجهيز المستند للطباعة...") {
+  writePrintDocument(
+    win,
+    `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8" /><title>${escapeHtml(message)}</title></head>` +
+      `<body style="font-family:Tahoma,Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:90vh;color:#555">${escapeHtml(message)}</body></html>`
+  );
+}
+
+/** أساس روابط الصور في نافذة الطباعة (النافذة الفارغة لا تملك عنواناً خاصاً بها) */
+function browserOrigin(): string | undefined {
+  return typeof window !== "undefined" && window.location ? window.location.origin : undefined;
+}
+
+function assetUrl(path: string, base = browserOrigin()): string {
+  if (!path || /^(data:|https?:|blob:)/i.test(path) || !base) return path;
+  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+}
+
 const BASE_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -165,43 +199,65 @@ const BASE_STYLES = `
   @page { margin: 8mm; }
 `;
 
-function signaturesBlock(approved: boolean, approvedByName?: string | null, approvedAt?: Date | string | null) {
-  const sigBox = (title: string, s: { name: string; title: string; image: string }) => `
+/** مؤسسة المسيرة: من اسم فرع المسيرة المحفوظ (لبن -> قصه وتخفيف، طويق -> تدرج وتخفيف، وإلا الهوية العامة) */
+export function payrollEstablishment(payroll: Pick<PrintablePayroll, "branchName">): Establishment {
+  return getEstablishmentForBranch(payroll.branchName);
+}
+
+function signaturesBlock(
+  company: Establishment,
+  approved: boolean,
+  approvedByName?: string | null,
+  approvedAt?: Date | string | null
+) {
+  const sigBox = (s: { name: string; title: string; image: string }) => `
     <div class="sig">
-      <div class="t">${escapeHtml(title)}</div>
+      <div class="t">اعتماد ${escapeHtml(s.title)}</div>
       <div class="img">${
         approved
-          ? `<img src="${s.image}" alt="${escapeHtml(s.name)}" onerror="this.outerHTML='<span>✓ موقّع</span>'" />`
+          ? `<img src="${escapeHtml(assetUrl(s.image))}" alt="${escapeHtml(s.name)}" onerror="this.outerHTML='<span>✓ موقّع</span>'" />`
           : `<span class="wait">بانتظار الاعتماد</span>`
       }</div>
       <div class="line">${escapeHtml(s.name)}</div>
       <div class="role">${escapeHtml(s.title)}</div>
     </div>`;
+  const stamp = company.stamp || SIGNATURES.stamp.image;
   return `
     <div class="signatures">
-      ${sigBox("اعتماد المشرف العام", SIGNATURES.supervisor)}
+      ${sigBox(SIGNATURES.supervisor)}
       <div class="stamp">
-        ${approved ? `<img src="${SIGNATURES.stamp.image}" alt="ختم الإدارة" onerror="this.style.display='none'" />` : `<div class="ph">الختم بعد الاعتماد</div>`}
+        ${approved ? `<img src="${escapeHtml(assetUrl(stamp))}" alt="${escapeHtml(SIGNATURES.stamp.label)}" onerror="this.style.display='none'" />` : `<div class="ph">الختم بعد الاعتماد</div>`}
         <div class="role" style="font-size:10px;color:#555;margin-top:4px">${escapeHtml(SIGNATURES.stamp.label)}</div>
         ${approved && approvedByName ? `<div style="font-size:9.5px;color:#333;margin-top:2px">اعتمدها: ${escapeHtml(approvedByName)} — ${fmtDate(approvedAt)}</div>` : ""}
       </div>
-      ${sigBox("اعتماد المدير العام", SIGNATURES.manager)}
+      ${sigBox(SIGNATURES.manager)}
     </div>`;
 }
 
-function headerBlock(titleAr: string, titleEn: string, payroll: PrintablePayroll) {
+/** ترويسة المؤسسة: الشعار فقط إن وُجد (وإلا ترويسة نصية)، وبدون القيم المؤقتة مثل XXXX */
+function brandBlock(company: Establishment): string {
+  const shown = (v: string | null | undefined) => (v && !isPlaceholderValue(v) ? escapeHtml(v.trim()) : "");
+  const sub = [shown(company.subtitle), shown(company.cr), shown(company.vat)].filter(Boolean).join(" | ");
+  const logo = company.logo
+    ? `<img src="${escapeHtml(assetUrl(company.logo))}" alt="logo" onerror="this.style.display='none'" />`
+    : "";
+  return `
+      <div class="brand">
+        ${logo}
+        <div><div class="name">${escapeHtml(company.nameAr)}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>
+      </div>`;
+}
+
+function headerBlock(titleAr: string, titleEn: string, payroll: PrintablePayroll, company: Establishment) {
   const approved = isPayrollApproved(payroll.status);
   return `
     <div class="header">
-      <div class="brand">
-        <img src="${COMPANY_INFO.logo}" alt="logo" onerror="this.style.display='none'" />
-        <div><div class="name">${escapeHtml(COMPANY_INFO.name)}</div><div class="sub">${escapeHtml(COMPANY_INFO.subtitle)}</div></div>
-      </div>
+      ${brandBlock(company)}
       <div class="title"><h1>${escapeHtml(titleAr)}</h1><div class="en">${escapeHtml(titleEn)}</div></div>
       <div class="meta">
         <div><b>رقم المسيرة:</b> ${escapeHtml(payroll.payrollNumber)}</div>
         <div><b>الفترة:</b> ${ARABIC_MONTHS[payroll.month - 1]} ${payroll.year}</div>
-        <div><b>الحالة:</b> <span class="badge ${approved ? "ok" : ""}">${STATUS_LABELS[payroll.status] ?? payroll.status}</span></div>
+        <div><b>الحالة:</b> <span class="badge ${approved ? "ok" : ""}">${escapeHtml(STATUS_LABELS[payroll.status] ?? payroll.status)}</span></div>
       </div>
     </div>`;
 }
@@ -212,14 +268,15 @@ function watermark(status: string) {
   return "";
 }
 
-function footer() {
+function footer(company: Establishment) {
   const now = new Date();
-  return `<div class="footer"><span>${escapeHtml(COMPANY_INFO.name)} - ${escapeHtml(COMPANY_INFO.subtitle)}</span><span>طُبعت في ${now.toLocaleDateString("ar-SA-u-ca-gregory")} ${now.toLocaleTimeString("ar-SA")}</span></div>`;
+  return `<div class="footer"><span>${escapeHtml(company.nameAr)}</span><span>طُبعت في ${now.toLocaleDateString("ar-SA-u-ca-gregory")} ${now.toLocaleTimeString("ar-SA")}</span></div>`;
 }
 
 /** مسيرة الرواتب الكاملة (أفقي A4) */
 export function buildPayrollSheetHtml(payroll: PrintablePayroll, details: PrintableDetail[]): string {
   const approved = isPayrollApproved(payroll.status);
+  const company = payrollEstablishment(payroll);
   const sum = (key: keyof PrintableDetail) => details.reduce((s, d) => s + num(d[key]), 0);
 
   const rows = details
@@ -255,7 +312,7 @@ export function buildPayrollSheetHtml(payroll: PrintablePayroll, details: Printa
 <style>${BASE_STYLES} @page { size: A4 landscape; margin: 7mm; }</style></head><body>
 ${watermark(payroll.status)}
 <div class="doc">
-  ${headerBlock("مسيرة رواتب الموظفين", "Monthly Payroll Sheet", payroll)}
+  ${headerBlock("مسيرة رواتب الموظفين", "Monthly Payroll Sheet", payroll, company)}
   <div class="info">
     <div><label>الفرع</label><span>${escapeHtml(payroll.branchName)}</span></div>
     <div><label>عدد الموظفين</label><span>${details.length}</span></div>
@@ -279,82 +336,40 @@ ${watermark(payroll.status)}
     </tr></tfoot>
   </table>
   <div style="margin-top:8px;font-size:11px;font-weight:700">صافي المسيرة كتابةً: ${escapeHtml(netInWords(totalNet))}</div>
-  ${signaturesBlock(approved, payroll.approvedByName, payroll.approvedAt)}
-  ${footer()}
+  ${signaturesBlock(company, approved, payroll.approvedByName, payroll.approvedAt)}
+  ${footer(company)}
 </div></body></html>`;
 }
 
-/** قسيمة راتب موظف (عمودي A4) */
-export function buildPayslipHtml(payroll: PrintablePayroll, d: PrintableDetail): string {
-  const approved = isPayrollApproved(payroll.status);
-  const advances = parseLinkedItems<PayrollAdvanceItem>(d.advanceDetails).items;
-  const violations = parseLinkedItems<PayrollViolationItem>(d.violationsDetails).items;
-  const leaves = parseJsonArray<PayrollLeaveItem>(d.leaveDetails);
-  const invoices = parseJsonArray<PayrollNegativeInvoiceItem>(d.negativeInvoicesDetails);
+/** خيارات قسيمة الراتب في المتصفح */
+export interface PayslipPrintOptions {
+  /** طباعة تلقائية بعد تحميل الصفحة والخطوط (الافتراضي: نعم) */
+  autoPrint?: boolean;
+  /** أساس روابط الصور والخط (الافتراضي: عنوان الصفحة الحالية) */
+  assetBaseUrl?: string;
+}
 
-  const row = (label: string, value: unknown, negative = false, note = "") =>
-    `<tr><td class="name">${escapeHtml(label)}${note ? `<span class="sub-note">${note}</span>` : ""}</td><td style="width:140px">${negative ? "-" : ""}${money(value)} ر.س</td></tr>`;
+/**
+ * قسيمة الراتب الرسمية من بيانات الخادم (payrolls.payslipDocument) بنفس قالب PDF
+ * - الطباعة التلقائية مضمّنة في المستند: اكتبه بـ writePrintDocument (وليس writeAndPrint)
+ */
+export function buildPayslipDocumentHtml(data: PayslipDocumentData, options: PayslipPrintOptions = {}): string {
+  return renderPayslipHtml(data, {
+    assetBaseUrl: options.assetBaseUrl ?? browserOrigin(),
+    autoPrint: options.autoPrint ?? true,
+  });
+}
 
-  const earnings = [
-    row("الراتب الأساسي", d.baseSalary),
-    num(d.overtimeAmount) > 0 ? row("بدل ساعات إضافية", d.overtimeAmount) : "",
-    num(d.incentiveAmount) > 0 ? row("حوافز", d.incentiveAmount) : "",
-  ].join("");
-
-  const deductions = [
-    num(d.absentDeduction) > 0 ? row(`خصم غياب (${d.absentDays} يوم)`, d.absentDeduction, true) : "",
-    num(d.leaveDays) > 0
-      ? row(
-          `إجازات (${d.leaveDays} يوم)`,
-          d.leaveDeduction,
-          true,
-          leaves.map(l => `${escapeHtml(LEAVE_KIND_LABELS[l.kind] ?? l.type)}: ${l.days} يوم (${escapeHtml(l.startDate)} → ${escapeHtml(l.endDate)})`).join(" | ")
-        )
-      : "",
-    num(d.advanceDeduction) > 0
-      ? row("سلف مستردة", d.advanceDeduction, true, advances.map(a => `${escapeHtml(a.title)}: ${money(a.amount)}`).join(" | "))
-      : "",
-    num(d.violationsDeduction) > 0
-      ? row("مخالفات", d.violationsDeduction, true, violations.map(v => `${escapeHtml(v.violationType)} (${escapeHtml(v.violationDate)}): ${money(v.amount)}`).join(" | "))
-      : "",
-    num(d.negativeInvoicesDeduction) > 0
-      ? row("فواتير سالبة", d.negativeInvoicesDeduction, true, invoices.map(i => `${escapeHtml(i.invoiceNumber)}: ${money(i.amount)}${i.reason ? " - " + escapeHtml(i.reason) : ""}`).join(" | "))
-      : "",
-    num(d.deductionAmount) > 0 ? row("خصومات أخرى", d.deductionAmount, true, escapeHtml(d.deductionReason || "")) : "",
-  ].join("");
-
-  return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8" />
-<title>قسيمة راتب - ${escapeHtml(d.employeeName)}</title>
-<style>${BASE_STYLES} @page { size: A4 portrait; margin: 10mm; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
-  .box h3 { font-size: 13px; padding: 6px 8px; background: #111; color: #fff; }
-  .box table td { text-align: left; }
-  .box table td.name { text-align: right; }
-  .box .total td { font-weight: 900; background: #eee !important; }
-  .net { margin-top: 12px; border: 2px solid #111; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
-  .net .v { font-size: 22px; font-weight: 900; }
-  .words { font-size: 11px; font-weight: 700; margin-top: 4px; }
-  .receiver { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 12px; font-weight: 700; }
-  .receiver div { border-bottom: 1px dotted #333; padding-bottom: 18px; }
-</style></head><body>
-${watermark(payroll.status)}
-<div class="doc">
-  ${headerBlock("قسيمة راتب", "Salary Slip", payroll)}
-  <div class="info">
-    <div><label>اسم الموظف</label><span>${escapeHtml(d.employeeName)}</span></div>
-    <div><label>الرقم الوظيفي</label><span>${escapeHtml(d.employeeCode)}</span></div>
-    <div><label>الفرع</label><span>${escapeHtml(payroll.branchName)}</span></div>
-    <div><label>أيام العمل</label><span>${d.workDays} / 30</span></div>
-  </div>
-  <div class="grid2">
-    <div class="box"><h3>▲ المستحقات</h3><table>${earnings}<tr class="total"><td class="name">إجمالي المستحقات</td><td>${money(d.grossSalary)} ر.س</td></tr></table></div>
-    <div class="box"><h3>▼ الاستقطاعات</h3><table>${deductions || `<tr><td class="name">لا توجد استقطاعات</td><td>0.00 ر.س</td></tr>`}<tr class="total"><td class="name">إجمالي الاستقطاعات</td><td>-${money(d.totalDeductions)} ر.س</td></tr></table></div>
-  </div>
-  <div class="net"><span style="font-weight:800">صافي الراتب المستحق</span><span class="v">${money(d.netSalary)} ر.س</span></div>
-  <div class="words">${escapeHtml(netInWords(num(d.netSalary)))}</div>
-  ${d.notes ? `<div style="margin-top:6px;font-size:11px">ملاحظات: ${escapeHtml(d.notes)}</div>` : ""}
-  <div class="receiver"><div>اسم المستلم: ${escapeHtml(d.employeeName)}</div><div>توقيع المستلم:</div></div>
-  ${signaturesBlock(approved, payroll.approvedByName, payroll.approvedAt)}
-  ${footer()}
-</div></body></html>`;
+/**
+ * قسيمة راتب موظف من صفوف المسيرة المحمّلة في الصفحة (للتوافق مع الاستدعاءات القديمة)
+ * - نفس القالب الرسمي؛ بيانات ملف الموظف (الإقامة، الجنسية، البنك) تُمرر في extras إن توفرت
+ * - بدون طباعة تلقائية مضمّنة لأن writeAndPrint يطبع بنفسه
+ */
+export function buildPayslipHtml(
+  payroll: PrintablePayroll,
+  detail: PrintableDetail,
+  extras: PayslipEmployeeExtras = {}
+): string {
+  const data = buildPayslipDocumentData(payroll, detail as PayslipDetailSource, extras);
+  return buildPayslipDocumentHtml(data, { autoPrint: false });
 }

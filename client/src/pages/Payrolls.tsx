@@ -52,6 +52,7 @@ import {
   RefreshCw,
   Pencil,
   RotateCcw,
+  FileDown,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -68,10 +69,13 @@ import {
 } from "@shared/payroll";
 import {
   buildPayrollSheetHtml,
-  buildPayslipHtml,
+  buildPayslipDocumentHtml,
   openPrintWindow,
   writeAndPrint,
+  writePrintDocument,
+  writePrintLoading,
 } from "@/lib/payrollPrint";
+import { downloadBase64Pdf } from "@/lib/downloadPdf";
 
 // أسماء الأشهر بالعربية
 const arabicMonths = [
@@ -326,14 +330,37 @@ export default function Payrolls() {
     }
   };
 
-  // طباعة قسيمة راتب فردية
-  const handlePrintPayslip = (detail: any, payroll: any) => {
+  // طباعة قسيمة راتب فردية: بيانات الخادم (ملف الموظف + لقطة المسيرة) بنفس قالب PDF الرسمي
+  const handlePrintPayslip = async (detail: any, payroll: any) => {
+    // فتح النافذة مباشرة من حدث النقر لتجنب حظر النوافذ المنبثقة
     const win = openPrintWindow();
     if (!win) {
       toast.error("يرجى السماح بالنوافذ المنبثقة للطباعة");
       return;
     }
-    writeAndPrint(win, buildPayslipHtml(payroll, detail));
+    writePrintLoading(win);
+    try {
+      const data = await utils.payrolls.payslipDocument.fetch({ payrollId: payroll.id, employeeId: detail.employeeId });
+      writePrintDocument(win, buildPayslipDocumentHtml(data));
+    } catch (error: any) {
+      win.close();
+      toast.error(error?.message || "تعذر تجهيز قسيمة الراتب للطباعة");
+    }
+  };
+
+  // تحميل قسيمة الراتب PDF (مولّدة في الخادم)
+  const payslipPdfMutation = trpc.payrolls.payslipPdf.useMutation();
+  const payslipPdfPendingFor = payslipPdfMutation.isPending ? payslipPdfMutation.variables?.employeeId ?? null : null;
+  const handleDownloadPayslipPdf = async (detail: any, payroll: any) => {
+    const toastId = `payslip-pdf-${payroll.id}-${detail.employeeId}`;
+    try {
+      toast.loading("جاري توليد ملف PDF...", { id: toastId });
+      const result = await payslipPdfMutation.mutateAsync({ payrollId: payroll.id, employeeId: detail.employeeId });
+      downloadBase64Pdf(result.pdf, result.filename);
+      toast.success("تم تحميل قسيمة الراتب", { id: toastId });
+    } catch (error: any) {
+      toast.error(error?.message || "فشل توليد ملف PDF", { id: toastId });
+    }
   };
 
   const openEditDetail = (detail: any) => {
@@ -1125,6 +1152,21 @@ export default function Payrolls() {
                                 title="طباعة قسيمة الراتب"
                               >
                                 <Printer className="h-3.5 w-3.5 text-blue-500" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => currentPayroll && handleDownloadPayslipPdf(detail, currentPayroll)}
+                                disabled={payslipPdfPendingFor === detail.employeeId}
+                                title="تحميل قسيمة الراتب PDF"
+                                aria-label="تحميل قسيمة الراتب PDF"
+                              >
+                                {payslipPdfPendingFor === detail.employeeId ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <FileDown className="h-3.5 w-3.5 text-emerald-600" />
+                                )}
                               </Button>
                             </div>
                           </TableCell>
