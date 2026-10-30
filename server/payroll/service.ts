@@ -376,11 +376,11 @@ function buildLine(
   const leaves = sources.leaves.get(emp.id) ?? [];
   const negativeInvoices = sources.negativeInvoices.get(emp.id) ?? [];
 
-  // الاحتفاظ فقط بمعرّفات التأجيل التي ما زالت قائمة
+  // قرار التأجيل يبقى محفوظاً حتى لو لم يكن البند متاحاً مؤقتاً (مرتبط بمسيرة أخرى أو أُعيد اعتماده)
   const cleanedInputs: ResolvedAdjustment = {
     ...inputs,
-    deferredAdvanceIds: advances.filter(a => a.deferred).map(a => a.id),
-    deferredViolationIds: violations.filter(v => v.deferred).map(v => v.id),
+    deferredAdvanceIds: Array.from(new Set(inputs.deferredAdvanceIds)),
+    deferredViolationIds: Array.from(new Set(inputs.deferredViolationIds)),
   };
 
   const calc = calculatePayrollLine({
@@ -448,11 +448,13 @@ function lineToDetailValues(line: PayrollPreviewLine): Omit<InsertPayrollDetail,
     advanceDetails: JSON.stringify({
       items: line.advances.filter(a => !a.deferred).map(({ deferred, ...a }) => a),
       deferredIds: line.inputs.deferredAdvanceIds,
+      deferredItems: line.advances.filter(a => a.deferred).map(({ deferred, ...a }) => a),
     }),
     violationsDeduction: c.violationsDeduction.toFixed(2),
     violationsDetails: JSON.stringify({
       items: line.violations.filter(v => !v.deferred).map(({ deferred, ...v }) => v),
       deferredIds: line.inputs.deferredViolationIds,
+      deferredItems: line.violations.filter(v => v.deferred).map(({ deferred, ...v }) => v),
     }),
     negativeInvoicesDeduction: c.negativeInvoicesDeduction.toFixed(2),
     negativeInvoicesDetails: line.negativeInvoices.length ? JSON.stringify(line.negativeInvoices) : null,
@@ -475,12 +477,45 @@ async function getActiveBranchEmployees(q: Exec, branchId: number): Promise<Empl
     .orderBy(asc(employees.name));
 }
 
+/**
+ * الموظفون الموجودون في مسيرة أخرى غير ملغاة لنفس الشهر (مثلاً بعد نقلهم بين الفروع)
+ * يُستبعدون حتى لا يُصرف لهم راتب الشهر مرتين
+ */
+async function findEmployeesInOtherPayrolls(
+  q: Exec,
+  employeeIds: number[],
+  year: number,
+  month: number
+): Promise<Map<number, string>> {
+  const result = new Map<number, string>();
+  if (employeeIds.length === 0) return result;
+  const rows = await q
+    .select({ employeeId: payrollDetails.employeeId, payrollNumber: payrolls.payrollNumber })
+    .from(payrollDetails)
+    .innerJoin(payrolls, eq(payrolls.id, payrollDetails.payrollId))
+    .where(
+      and(
+        inArray(payrollDetails.employeeId, employeeIds),
+        eq(payrolls.year, year),
+        eq(payrolls.month, month),
+        ne(payrolls.status, "cancelled")
+      )
+    );
+  for (const r of rows) result.set(r.employeeId, r.payrollNumber);
+  return result;
+}
+
 // ==================== المعاينة ====================
 
 /** معاينة مسيرة فرع لشهر معين (نفس الحساب المستخدم عند الحفظ) */
 export async function previewPayroll(branchId: number, year: number, month: number) {
   const db = await requireDb();
-  const emps = await getActiveBranchEmployees(db, branchId);
+  const branchEmps = await getActiveBranchEmployees(db, branchId);
+  const inOtherPayrolls = await findEmployeesInOtherPayrolls(db, branchEmps.map(e => e.id), year, month);
+  const emps = branchEmps.filter(e => !inOtherPayrolls.has(e.id));
+  const excludedEmployees = branchEmps
+    .filter(e => inOtherPayrolls.has(e.id))
+    .map(e => ({ employeeId: e.id, employeeName: e.name, payrollNumber: inOtherPayrolls.get(e.id)! }));
   const sources = await loadSources(db, emps.map(e => e.id), year, month, null);
   const lines = emps.map(emp =>
     buildLine(emp, sources, resolveAdjustment(emp.id, sources.settings.get(emp.id), undefined, undefined))
@@ -490,6 +525,7 @@ export async function previewPayroll(branchId: number, year: number, month: numb
     lines,
     totals: sumPayrollTotals(lines.map(l => l.calc)),
     existingPayroll: existing ? { id: existing.id, payrollNumber: existing.payrollNumber, status: existing.status } : null,
+    excludedEmployees,
   };
 }
 
@@ -646,8 +682,16 @@ export async function createPayroll(input: {
           throw new PayrollError(`توجد مسيرة رواتب لهذا الشهر بالفعل (${existing.payrollNumber})`, "CONFLICT");
         }
 
-        const emps = await getActiveBranchEmployees(tx, input.branchId);
-        if (emps.length === 0) throw new PayrollError("لا يوجد موظفين نشطين في هذا الفرع");
+        const branchEmps = await getActiveBranchEmployees(tx, input.branchId);
+        const inOtherPayrolls = await findEmployeesInOtherPayrolls(tx, branchEmps.map(e => e.id), input.year, input.month);
+        const emps = branchEmps.filter(e => !inOtherPayrolls.has(e.id));
+        if (emps.length === 0) {
+          throw new PayrollError(
+            branchEmps.length === 0
+              ? "لا يوجد موظفين نشطين في هذا الفرع"
+              : "جميع موظفي الفرع موجودون في مسيرات أخرى لنفس الشهر"
+          );
+        }
 
         const sources = await loadSources(tx, emps.map(e => e.id), input.year, input.month, null);
         const lines = emps.map(emp =>
@@ -729,22 +773,35 @@ async function rebuildPayrollInTx(
 }
 
 async function loadEditablePayroll(tx: Tx, payrollId: number): Promise<Payroll> {
-  const rows = await tx.select().from(payrolls).where(eq(payrolls.id, payrollId)).limit(1);
-  const payroll = rows[0];
-  if (!payroll) throw new PayrollError("المسيرة غير موجودة", "NOT_FOUND");
+  const payroll = await loadPayrollForUpdate(tx, payrollId);
   if (!isPayrollEditable(payroll.status)) {
     throw new PayrollError("لا يمكن تعديل مسيرة معتمدة أو مدفوعة أو ملغاة", "CONFLICT");
   }
   return payroll;
 }
 
+/**
+ * قراءة فرع المسيرة خارج المعاملة: داخل المعاملة يجب أن يكون قفل الفرع أول عملية
+ * حتى تُقرأ بعده أحدث البيانات (REPEATABLE READ يثبّت اللقطة عند أول قراءة عادية)
+ */
+async function getPayrollBranchId(db: Db, payrollId: number): Promise<number> {
+  const rows = await db.select({ branchId: payrolls.branchId }).from(payrolls).where(eq(payrolls.id, payrollId)).limit(1);
+  if (!rows[0]) throw new PayrollError("المسيرة غير موجودة", "NOT_FOUND");
+  return rows[0].branchId;
+}
+
+async function loadPayrollForUpdate(tx: Tx, payrollId: number): Promise<Payroll> {
+  const rows = await tx.select().from(payrolls).where(eq(payrolls.id, payrollId)).for("update").limit(1);
+  if (!rows[0]) throw new PayrollError("المسيرة غير موجودة", "NOT_FOUND");
+  return rows[0];
+}
+
 /** إعادة حساب مسيرة مفتوحة بالكامل (سحب السلف/المخالفات/الإجازات الجديدة) */
 export async function recalculatePayroll(payrollId: number) {
   const db = await requireDb();
+  const branchId = await getPayrollBranchId(db, payrollId);
   return await db.transaction(async tx => {
-    const head = await tx.select({ branchId: payrolls.branchId }).from(payrolls).where(eq(payrolls.id, payrollId)).limit(1);
-    if (!head[0]) throw new PayrollError("المسيرة غير موجودة", "NOT_FOUND");
-    await lockBranch(tx, head[0].branchId);
+    await lockBranch(tx, branchId);
     const payroll = await loadEditablePayroll(tx, payrollId);
     await rebuildPayrollInTx(tx, payroll);
     return { success: true };
@@ -754,13 +811,12 @@ export async function recalculatePayroll(payrollId: number) {
 /** تعديل المدخلات اليدوية لسطر موظف ثم إعادة حسابه وحساب إجماليات المسيرة */
 export async function updatePayrollLine(detailId: number, adjustment: Omit<PayrollAdjustment, "employeeId">) {
   const db = await requireDb();
+  const rows = await db.select().from(payrollDetails).where(eq(payrollDetails.id, detailId)).limit(1);
+  const detail = rows[0];
+  if (!detail) throw new PayrollError("سطر المسيرة غير موجود", "NOT_FOUND");
+  const branchId = await getPayrollBranchId(db, detail.payrollId);
   return await db.transaction(async tx => {
-    const rows = await tx.select().from(payrollDetails).where(eq(payrollDetails.id, detailId)).limit(1);
-    const detail = rows[0];
-    if (!detail) throw new PayrollError("سطر المسيرة غير موجود", "NOT_FOUND");
-    const head = await tx.select({ branchId: payrolls.branchId }).from(payrolls).where(eq(payrolls.id, detail.payrollId)).limit(1);
-    if (!head[0]) throw new PayrollError("المسيرة غير موجودة", "NOT_FOUND");
-    await lockBranch(tx, head[0].branchId);
+    await lockBranch(tx, branchId);
     const payroll = await loadEditablePayroll(tx, detail.payrollId);
     await rebuildPayrollInTx(tx, payroll, {
       employeeIds: [detail.employeeId],
@@ -788,7 +844,7 @@ export async function syncOpenPayrollsForEmployee(employeeId: number): Promise<n
   for (const p of open) {
     await db.transaction(async tx => {
       await lockBranch(tx, p.branchId);
-      const rows = await tx.select().from(payrolls).where(eq(payrolls.id, p.id)).limit(1);
+      const rows = await tx.select().from(payrolls).where(eq(payrolls.id, p.id)).for("update").limit(1);
       if (!rows[0] || !isPayrollEditable(rows[0].status)) return;
       await rebuildPayrollInTx(tx, rows[0], { employeeIds: [employeeId] });
       updated++;
@@ -851,11 +907,37 @@ export function canActorTransition(actor: PayrollActor, payroll: Pick<Payroll, "
 
 export async function transitionPayrollStatus(payrollId: number, to: PayrollStatus, actor: PayrollActor) {
   const db = await requireDb();
+  const branchId = await getPayrollBranchId(db, payrollId);
+
+  // قبل الاعتماد: إعادة حساب المسيرة من البيانات الحالية (سلف/مخالفات/إجازات أُلغيت أو اعتُمدت بعد الإنشاء،
+  // ومسيرات قديمة أُنشئت بالنظام السابق). إذا تغيّرت الأرقام لا تُعتمد حتى يراجعها المدير.
+  if (to === "approved") {
+    const changed = await db.transaction(async tx => {
+      await lockBranch(tx, branchId);
+      const current = await loadPayrollForUpdate(tx, payrollId);
+      if (!isPayrollEditable(current.status)) return false;
+      if (!canActorTransition(actor, current, to)) {
+        throw new PayrollError("ليس لديك صلاحية لتنفيذ هذا الإجراء على المسيرة", "FORBIDDEN");
+      }
+      await rebuildPayrollInTx(tx, current);
+      const after = await loadPayrollForUpdate(tx, payrollId);
+      return (
+        after.totalNetSalary !== current.totalNetSalary ||
+        after.totalDeductions !== current.totalDeductions ||
+        after.employeeCount !== current.employeeCount
+      );
+    });
+    if (changed) {
+      throw new PayrollError(
+        "تغيّرت بيانات المسيرة منذ إعدادها (سلف أو مخالفات أو إجازات)، وتمت إعادة حسابها. يرجى مراجعة الأرقام الجديدة ثم الاعتماد",
+        "CONFLICT"
+      );
+    }
+  }
+
   return await db.transaction(async tx => {
-    const head = await tx.select().from(payrolls).where(eq(payrolls.id, payrollId)).limit(1);
-    const payroll = head[0];
-    if (!payroll) throw new PayrollError("المسيرة غير موجودة", "NOT_FOUND");
-    await lockBranch(tx, payroll.branchId);
+    await lockBranch(tx, branchId);
+    const payroll = await loadPayrollForUpdate(tx, payrollId);
 
     if (!canActorTransition(actor, payroll, to)) {
       throw new PayrollError("ليس لديك صلاحية لتنفيذ هذا الإجراء على المسيرة", "FORBIDDEN");
@@ -889,11 +971,11 @@ export async function transitionPayrollStatus(payrollId: number, to: PayrollStat
 /** حذف مسيرة (غير مدفوعة) مع تحرير السلف والمخالفات المرتبطة */
 export async function deletePayrollSafely(payrollId: number) {
   const db = await requireDb();
+  const branchId = await getPayrollBranchId(db, payrollId);
   await db.transaction(async tx => {
-    const head = await tx.select().from(payrolls).where(eq(payrolls.id, payrollId)).limit(1);
-    if (!head[0]) throw new PayrollError("المسيرة غير موجودة", "NOT_FOUND");
-    if (head[0].status === "paid") throw new PayrollError("لا يمكن حذف مسيرة مدفوعة", "CONFLICT");
-    await lockBranch(tx, head[0].branchId);
+    await lockBranch(tx, branchId);
+    const payroll = await loadPayrollForUpdate(tx, payrollId);
+    if (payroll.status === "paid") throw new PayrollError("لا يمكن حذف مسيرة مدفوعة", "CONFLICT");
     await releaseLinkedItems(tx, payrollId);
     await tx.delete(payrollDetails).where(eq(payrollDetails.payrollId, payrollId));
     await tx.delete(payrolls).where(eq(payrolls.id, payrollId));

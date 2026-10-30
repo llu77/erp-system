@@ -7,7 +7,7 @@
  * القواعد:
  * - الشهر المحاسبي = 30 يوماً
  * - الأجر اليومي = (الأساسي + الإضافي) / 30
- * - خصم الغياب = الأجر اليومي × أيام الغياب (أيام الغياب = 30 - أيام العمل)
+ * - خصم الغياب = الأجر اليومي × أيام الغياب (أيام الغياب = 30 - أيام العمل - أيام الإجازة المعتمدة)
  * - الإجازة السنوية والمرضية: مدفوعة (بدون خصم)
  * - الإجازة الطارئة: خصم 50% من الأجر اليومي
  * - الإجازة بدون راتب (أو غير محددة): خصم كامل
@@ -124,23 +124,26 @@ export function calculatePayrollLine(input: PayrollLineInput): PayrollLineResult
   const overtimeAmount = input.overtimeEnabled ? roundMoney(toAmount(input.overtimeRate)) : 0;
   const incentiveAmount = roundMoney(toAmount(input.incentiveAmount));
   const workDays = clampWorkDays(input.workDays);
-  const absentDays = PAYROLL_MONTH_DAYS - workDays;
   const dailyRate = (baseSalary + overtimeAmount) / PAYROLL_MONTH_DAYS;
 
-  const absentDeduction = roundMoney(dailyRate * absentDays);
-
+  // الإجازات المعتمدة: مجموعها في الشهر المحاسبي لا يتجاوز 30 يوماً
   let leaveDays = 0;
   let paidLeaveDays = 0;
   let leaveDeductionRaw = 0;
   for (const leave of input.leaves ?? []) {
-    const days = Math.max(0, Math.floor(toAmount(leave.days)));
-    if (days === 0) continue;
+    const requested = Math.max(0, Math.floor(toAmount(leave.days)));
+    const days = Math.min(requested, PAYROLL_MONTH_DAYS - leaveDays);
+    if (days <= 0) continue;
     const kind = normalizeLeaveKind(leave.type);
     leaveDays += days;
     if (LEAVE_DEDUCTION_RATE[kind] === 0) paidLeaveDays += days;
     leaveDeductionRaw += dailyRate * days * LEAVE_DEDUCTION_RATE[kind];
   }
   const leaveDeduction = roundMoney(leaveDeductionRaw);
+
+  // أيام الإجازة المعتمدة ليست غياباً: الغياب = الأيام غير المعمولة خارج الإجازات
+  const absentDays = Math.max(0, PAYROLL_MONTH_DAYS - workDays - leaveDays);
+  const absentDeduction = roundMoney(dailyRate * absentDays);
 
   const advanceDeduction = roundMoney(toAmount(input.advanceDeduction));
   const violationsDeduction = roundMoney(toAmount(input.violationsDeduction));
@@ -227,6 +230,8 @@ export function countOverlapDays(
   const s = Math.max(toSerial(start), monthStart);
   const e = Math.min(toSerial(end), monthEnd);
   if (e < s) return 0;
+  // إجازة تغطي الشهر كاملاً = 30 يوماً محاسبياً (حتى في فبراير)
+  if (s === monthStart && e === monthEnd) return PAYROLL_MONTH_DAYS;
   // لا تتجاوز أيام الإجازة في الشهر المحاسبي 30 يوماً
   return Math.min(PAYROLL_MONTH_DAYS, e - s + 1);
 }
@@ -271,6 +276,8 @@ export interface PayrollLinkedItems<T> {
   items: T[];
   /** بنود أجّلها المدير إلى مسيرة لاحقة */
   deferredIds: number[];
+  /** تفاصيل البنود المؤجلة المتاحة وقت الحساب (للعرض فقط) */
+  deferredItems: T[];
 }
 
 export interface PayrollAdvanceItem {
@@ -307,18 +314,19 @@ export interface PayrollNegativeInvoiceItem {
 
 /** قراءة JSON محفوظ في تفاصيل المسيرة بأمان (يدعم الصيغة القديمة: مصفوفة فقط) */
 export function parseLinkedItems<T>(raw: string | null | undefined): PayrollLinkedItems<T> {
-  if (!raw) return { items: [], deferredIds: [] };
+  if (!raw) return { items: [], deferredIds: [], deferredItems: [] };
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return { items: parsed as T[], deferredIds: [] };
+    if (Array.isArray(parsed)) return { items: parsed as T[], deferredIds: [], deferredItems: [] };
     return {
       items: Array.isArray(parsed?.items) ? (parsed.items as T[]) : [],
       deferredIds: Array.isArray(parsed?.deferredIds)
         ? parsed.deferredIds.filter((n: unknown) => Number.isInteger(n))
         : [],
+      deferredItems: Array.isArray(parsed?.deferredItems) ? (parsed.deferredItems as T[]) : [],
     };
   } catch {
-    return { items: [], deferredIds: [] };
+    return { items: [], deferredIds: [], deferredItems: [] };
   }
 }
 

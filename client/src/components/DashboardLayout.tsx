@@ -68,6 +68,7 @@ import {
   Sparkles,
   Bell,
   Layers,
+  ArrowUpCircle,
 } from "lucide-react";
 import { CSSProperties, createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -155,6 +156,7 @@ const menuStructure: MenuItem[] = [
       { icon: Wallet, label: "مسيرات الرواتب", path: "/payrolls", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: FileWarning, label: "مخالفات الموظفين", path: "/violations", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: FileText, label: "سند قبض", path: "/receipt-voucher", roles: ["admin", "manager", "supervisor"] },
+      { icon: ArrowUpCircle, label: "سند صرف", path: "/payment-voucher", roles: ["admin", "manager", "supervisor"] },
       { icon: BarChart3, label: "تقارير السندات", path: "/receipt-voucher-reports", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Wallet, label: "التدفق النقدي", path: "/cash-flow", roles: ["admin", "manager"] },
     ]

@@ -1,220 +1,172 @@
-import { sendEmail } from './email/emailService';
+import { sendEmail, type EmailAttachment } from './email/emailService';
 import { getDb } from './db';
 import { users } from '../drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
+import {
+  VOUCHER_TITLES,
+  amountToArabicWords,
+  amountToEnglishWords,
+  escapeHtml,
+  formatPaymentSplitText,
+  formatVoucherAmount,
+  formatVoucherDate,
+  getVoucherStatusLabel,
+  isVoucherSigned,
+  type VoucherType,
+} from '../shared/vouchers';
+import type { VoucherTemplateData } from '../shared/voucherTemplate';
+import { generateVoucherPDF, renderVoucherHtmlEmbedded, voucherFileName } from './voucherPdf';
+import { getVoucherWithItems } from './receiptVoucher';
+
+/** بيانات السند للبريد (صف السند + البنود) */
+export type VoucherEmailData = VoucherTemplateData & {
+  branchId?: number | null;
+  payeeEmail?: string | null;
+};
+
+function typeOf(v: VoucherEmailData): VoucherType {
+  return v.voucherType === 'payment' ? 'payment' : 'receipt';
+}
+
+/**
+ * محتوى البريد: ملخص ثنائي اللغة (جداول بأنماط مضمّنة تعمل في كل برامج البريد)
+ * جميع النصوص المُدخلة من المستخدم مُهرّبة. السند الكامل يُرفق كملف PDF.
+ */
+export function buildVoucherEmailHtml(v: VoucherEmailData, intro?: string): string {
+  const type = typeOf(v);
+  const titles = VOUCHER_TITLES[type];
+  const status = getVoucherStatusLabel(v.status, type);
+  const total = Number(v.totalAmount) || 0;
+  const accent = type === 'receipt' ? '#1f3a5f' : '#7a1f1f';
+  const row = (labelAr: string, labelEn: string, value: string, shaded = false) => `
+        <tr${shaded ? ' style="background-color:#f9fafb;"' : ''}>
+          <td style="padding:8px;font-weight:bold;width:35%;border-bottom:1px solid #eee;">${labelAr} <span style="color:#888;font-weight:normal;font-size:12px;">/ ${labelEn}</span></td>
+          <td style="padding:8px;border-bottom:1px solid #eee;">${value}</td>
+        </tr>`;
+
+  const items = (v.items ?? []).map((item, index) => `
+          <tr>
+            <td style="border:1px solid #ddd;padding:6px;text-align:center;">${index + 1}</td>
+            <td style="border:1px solid #ddd;padding:6px;">${escapeHtml(item.description)}</td>
+            <td style="border:1px solid #ddd;padding:6px;text-align:left;direction:ltr;">${formatVoucherAmount(item.amount)}</td>
+          </tr>`).join('');
+
+  const receivedBy = type === 'receipt' && v.payeeName && v.payeeName !== v.partyName
+    ? row('المستلم', 'Received By', escapeHtml(v.payeeName), true)
+    : '';
+
+  return `
+    <div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;color:#222;max-width:640px;margin:0 auto;">
+      <div style="background-color:${accent};color:#fff;padding:16px 20px;border-radius:8px 8px 0 0;">
+        <h1 style="margin:0;font-size:22px;">${escapeHtml(titles.ar)} <span style="font-size:14px;opacity:0.85;">/ ${escapeHtml(titles.en)}</span></h1>
+        <p style="margin:6px 0 0;font-size:14px;direction:ltr;text-align:right;">${escapeHtml(v.voucherId)}</p>
+      </div>
+      <div style="border:1px solid #e5e7eb;border-top:none;padding:16px 20px;border-radius:0 0 8px 8px;">
+        ${intro ? `<p style="margin:0 0 12px;font-size:14px;">${escapeHtml(intro)}</p>` : ''}
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          ${row('التاريخ', 'Date', escapeHtml(formatVoucherDate(v.voucherDate)))}
+          ${row(titles.partyAr, titles.partyEn, escapeHtml(v.partyName || v.payeeName || '-'), true)}
+          ${receivedBy}
+          ${row('المبلغ', 'Amount', `<b>${formatVoucherAmount(total)} SAR</b>`)}
+          ${row('مبلغاً وقدره', 'The Sum of', `${escapeHtml(amountToArabicWords(total))}<br><span style="color:#555;font-size:12px;direction:ltr;">${escapeHtml(amountToEnglishWords(total))}</span>`, true)}
+          ${row('وذلك عن', 'Being for', escapeHtml(v.description || '-'))}
+          ${row('طريقة الدفع', 'Payment', escapeHtml(formatPaymentSplitText(v) || '-'), true)}
+          ${row('الفرع', 'Branch', escapeHtml(v.branchName || '-'))}
+          ${row('الحالة', 'Status', escapeHtml(`${status.ar} / ${status.en}`), true)}
+          ${row('أُعد بواسطة', 'Prepared By', escapeHtml(v.createdByName || '-'))}
+        </table>
+        ${items ? `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:14px;">
+          <thead>
+            <tr style="background-color:#f3f4f6;">
+              <th style="border:1px solid #ddd;padding:6px;width:8%;">#</th>
+              <th style="border:1px solid #ddd;padding:6px;">البيان / Description</th>
+              <th style="border:1px solid #ddd;padding:6px;width:28%;">المبلغ / Amount</th>
+            </tr>
+          </thead>
+          <tbody>${items}</tbody>
+        </table>` : ''}
+        <p style="margin:14px 0 0;padding:10px;background-color:#f0f9ff;border-right:4px solid #0284c7;font-size:12px;color:#0c4a6e;">
+          ${isVoucherSigned(v.status)
+            ? 'السند معتمد من الإدارة. النسخة الرسمية الموقعة والمختومة مرفقة بهذا البريد.'
+            : 'السند بانتظار اعتماد الإدارة؛ النسخة المرفقة غير موقعة ولا تُعد سنداً نهائياً حتى الاعتماد.'}
+        </p>
+      </div>
+    </div>`;
+}
+
+/** مرفق السند: PDF، أو HTML قابل للطباعة إذا تعذر توليد PDF */
+async function buildVoucherAttachment(v: VoucherEmailData): Promise<EmailAttachment | null> {
+  try {
+    const pdf = await generateVoucherPDF(v);
+    return { filename: voucherFileName(v, 'pdf'), content: pdf, contentType: 'application/pdf' };
+  } catch (error) {
+    console.warn('[Vouchers] تعذر توليد PDF للبريد، سيتم إرفاق نسخة HTML:', error);
+    try {
+      const html = renderVoucherHtmlEmbedded(v, { includeFont: false });
+      return { filename: voucherFileName(v, 'html'), content: Buffer.from(html, 'utf8'), contentType: 'text/html' };
+    } catch {
+      return null;
+    }
+  }
+}
 
 /**
  * إرسال السند عبر البريد الإلكتروني
- * المستقبلون:
- * 1. المدفوع له (إن وجد بريده)
- * 2. مشرف الفرع المختار
- * 3. المشرف العام
- * 4. الأدمن
+ * المستقبلون (كل مستقبل برسالة مستقلة، بدون تكرار):
+ * 1. الطرف / المستلم (إن وجد بريده)
+ * 2. مشرف الفرع
+ * 3. المديرون
+ * 4. المسؤولون
  */
-export async function sendReceiptVoucherEmail(data: {
-  voucherId: string;
-  voucherNumber: string;
-  voucherDate: string;
-  payeeName: string;
-  payeeEmail?: string;
-  totalAmount: string;
-  branchId?: number;
-  branchName?: string;
-  items: Array<{
-    description: string;
-    amount: string;
-  }>;
-  createdByName: string;
-}): Promise<{ success: boolean; sentTo: string[]; error?: string }> {
+export async function sendVoucherEmail(v: VoucherEmailData): Promise<{ success: boolean; sentTo: string[]; error?: string }> {
   const db = await getDb();
   if (!db) return { success: false, sentTo: [], error: 'خطأ في الاتصال بقاعدة البيانات' };
 
   try {
+    const type = typeOf(v);
+    const titles = VOUCHER_TITLES[type];
+    const staff = await db
+      .select({ id: users.id, name: users.name, username: users.username, email: users.email, role: users.role, branchId: users.branchId })
+      .from(users)
+      .where(inArray(users.role, ['admin', 'manager', 'supervisor']));
+
+    const recipients: Array<{ email: string; label: string; intro?: string }> = [];
+    const seen = new Set<string>();
+    const add = (email: string | null | undefined, label: string, intro?: string) => {
+      const e = String(email ?? '').trim();
+      if (!e || !e.includes('@') || seen.has(e.toLowerCase())) return;
+      seen.add(e.toLowerCase());
+      recipients.push({ email: e, label, intro });
+    };
+
+    const partyLabel = v.partyName || v.payeeName || '';
+    add(v.payeeEmail, partyLabel);
+    if (v.branchId) {
+      for (const s of staff.filter(u => u.role === 'supervisor' && u.branchId === v.branchId)) {
+        add(s.email, `مشرف الفرع: ${s.name || s.username || ''}`);
+      }
+    }
+    const reviewIntro = isVoucherSigned(v.status) ? undefined : `${titles.ar} جديد بانتظار مراجعتك واعتمادك.`;
+    for (const m of staff.filter(u => u.role === 'manager')) add(m.email, `المدير: ${m.name || m.username || ''}`, reviewIntro);
+    for (const a of staff.filter(u => u.role === 'admin')) add(a.email, `المسؤول: ${a.name || a.username || ''}`, reviewIntro);
+
+    if (recipients.length === 0) {
+      return { success: false, sentTo: [], error: 'لا يوجد مستقبلون لديهم بريد إلكتروني' };
+    }
+
+    const attachment = await buildVoucherAttachment(v);
+    const subject = `${titles.ar} رقم ${v.voucherId}${partyLabel ? ` - ${partyLabel}` : ''}`.replace(/[\r\n]+/g, ' ');
     const sentTo: string[] = [];
-
-    // الحصول على المشرفين والأدمن
-    const admins = await db.select()
-      .from(users)
-      .where(eq(users.role, 'admin'));
-
-    const managers = await db.select()
-      .from(users)
-      .where(eq(users.role, 'manager'));
-
-    let branchSupervisors: typeof users.$inferSelect[] = [];
-    if (data.branchId) {
-      branchSupervisors = await db.select()
-        .from(users)
-        .where(eq(users.branchId, data.branchId));
-    }
-
-    // بناء جدول البنود
-    const itemsHtml = data.items
-      .map(
-        (item, index) =>
-          `<tr>
-        <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${index + 1}</td>
-        <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${item.description}</td>
-        <td style="border: 1px solid #ddd; padding: 8px; text-align: left;">${parseFloat(item.amount).toLocaleString('ar-SA')} ر.س</td>
-      </tr>`
-      )
-      .join('');
-
-    // بناء محتوى البريد
-    const emailContent = `
-      <div dir="rtl" style="font-family: Arial, sans-serif; color: #333;">
-        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-          <h1 style="color: #1e40af; margin: 0 0 10px 0;">سند قبض</h1>
-          <p style="margin: 5px 0; font-size: 14px;">وثيقة مالية رسمية من نظام Symbol AI</p>
-        </div>
-
-        <div style="margin-bottom: 20px;">
-          <h2 style="color: #374151; font-size: 16px; margin-bottom: 10px;">بيانات السند</h2>
-          <table style="width: 100%; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 8px; font-weight: bold; width: 30%;">رقم السند:</td>
-              <td style="padding: 8px;">${data.voucherNumber}</td>
-            </tr>
-            <tr style="background-color: #f9fafb;">
-              <td style="padding: 8px; font-weight: bold;">التاريخ:</td>
-              <td style="padding: 8px;">${new Date(data.voucherDate).toLocaleDateString('ar-SA')}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px; font-weight: bold;">المدفوع له:</td>
-              <td style="padding: 8px;">${data.payeeName}</td>
-            </tr>
-            ${data.branchName ? `<tr style="background-color: #f9fafb;">
-              <td style="padding: 8px; font-weight: bold;">الفرع:</td>
-              <td style="padding: 8px;">${data.branchName}</td>
-            </tr>` : ''}
-          </table>
-        </div>
-
-        <div style="margin-bottom: 20px;">
-          <h2 style="color: #374151; font-size: 16px; margin-bottom: 10px;">البنود</h2>
-          <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-              <tr style="background-color: #e5e7eb;">
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">#</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">الوصف</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">المبلغ</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsHtml}
-              <tr style="background-color: #dbeafe; font-weight: bold;">
-                <td colspan="2" style="border: 1px solid #ddd; padding: 8px; text-align: right;">المجموع</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: left;">${parseFloat(data.totalAmount).toLocaleString('ar-SA')} ر.س</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #f0f9ff; border-right: 4px solid #0284c7; border-radius: 4px;">
-          <p style="margin: 0; font-size: 13px; color: #0c4a6e;">
-            <strong>ملاحظة:</strong> هذا السند تم إنشاؤه بواسطة نظام Symbol AI للإدارة المتكاملة. يرجى الاحتفاظ بنسخة منه للمراجعة.
-          </p>
-        </div>
-
-        <div style="border-top: 1px solid #e5e7eb; padding-top: 15px; font-size: 12px; color: #6b7280;">
-          <p style="margin: 5px 0;">تم الإنشاء بواسطة: ${data.createdByName}</p>
-          <p style="margin: 5px 0;">التاريخ: ${new Date().toLocaleString('ar-SA')}</p>
-        </div>
-      </div>
-    `;
-
-    // 1. إرسال للمدفوع له
-    if (data.payeeEmail) {
-      try {
-        await sendEmail({
-          to: data.payeeEmail,
-          subject: `سند قبض رقم ${data.voucherNumber}`,
-          html: emailContent,
-        });
-        sentTo.push(`${data.payeeName} (${data.payeeEmail})`);
-      } catch (error) {
-        console.error(`فشل إرسال البريد للمدفوع له: ${error}`);
-      }
-    }
-
-    // 2. إرسال لمشرف الفرع المختار
-    for (const supervisor of branchSupervisors) {
-      if (supervisor.email && supervisor.role === 'supervisor') {
-        try {
-          await sendEmail({
-            to: supervisor.email,
-            subject: `سند قبض جديد - ${data.voucherNumber} - ${data.payeeName}`,
-            html: `
-              <div dir="rtl" style="font-family: Arial, sans-serif;">
-                <h2>سند قبض جديد بانتظار مراجعتك</h2>
-                <p>رقم السند: <strong>${data.voucherNumber}</strong></p>
-                <p>المدفوع له: <strong>${data.payeeName}</strong></p>
-                <p>المبلغ: <strong>${parseFloat(data.totalAmount).toLocaleString('ar-SA')} ر.س</strong></p>
-                <p>الفرع: <strong>${data.branchName || 'غير محدد'}</strong></p>
-                <hr/>
-                ${emailContent}
-              </div>
-            `,
-          });
-          sentTo.push(`مشرف الفرع: ${supervisor.name || supervisor.username} (${supervisor.email})`);
-        } catch (error) {
-          console.error(`فشل إرسال البريد لمشرف الفرع: ${error}`);
-        }
-      }
-    }
-
-    // 3. إرسال للمشرف العام (manager)
-    for (const manager of managers) {
-      if (manager.email) {
-        try {
-          await sendEmail({
-            to: manager.email,
-            subject: `سند قبض جديد - ${data.voucherNumber} - ${data.payeeName}`,
-            html: `
-              <div dir="rtl" style="font-family: Arial, sans-serif;">
-                <h2>سند قبض جديد بانتظار مراجعتك</h2>
-                <p>رقم السند: <strong>${data.voucherNumber}</strong></p>
-                <p>المدفوع له: <strong>${data.payeeName}</strong></p>
-                <p>المبلغ: <strong>${parseFloat(data.totalAmount).toLocaleString('ar-SA')} ر.س</strong></p>
-                <p>الفرع: <strong>${data.branchName || 'غير محدد'}</strong></p>
-                <p>تم الإنشاء بواسطة: <strong>${data.createdByName}</strong></p>
-                <hr/>
-                ${emailContent}
-              </div>
-            `,
-          });
-          sentTo.push(`المشرف العام: ${manager.name || manager.username} (${manager.email})`);
-        } catch (error) {
-          console.error(`فشل إرسال البريد للمشرف العام: ${error}`);
-        }
-      }
-    }
-
-    // 4. إرسال للأدمن
-    for (const admin of admins) {
-      if (admin.email) {
-        try {
-          await sendEmail({
-            to: admin.email,
-            subject: `سند قبض جديد - ${data.voucherNumber} - ${data.payeeName}`,
-            html: `
-              <div dir="rtl" style="font-family: Arial, sans-serif;">
-                <h2>سند قبض جديد بانتظار مراجعتك</h2>
-                <p>رقم السند: <strong>${data.voucherNumber}</strong></p>
-                <p>المدفوع له: <strong>${data.payeeName}</strong></p>
-                <p>المبلغ: <strong>${parseFloat(data.totalAmount).toLocaleString('ar-SA')} ر.س</strong></p>
-                <p>الفرع: <strong>${data.branchName || 'غير محدد'}</strong></p>
-                <p>تم الإنشاء بواسطة: <strong>${data.createdByName}</strong></p>
-                <hr/>
-                ${emailContent}
-              </div>
-            `,
-          });
-          sentTo.push(`الأدمن: ${admin.name || admin.username} (${admin.email})`);
-        } catch (error) {
-          console.error(`فشل إرسال البريد للأدمن: ${error}`);
-        }
-      }
+    for (const r of recipients) {
+      const result = await sendEmail({
+        to: r.email,
+        subject,
+        html: buildVoucherEmailHtml(v, r.intro),
+        attachments: attachment ? [attachment] : undefined,
+      });
+      if (result.success) sentTo.push(`${r.label} (${r.email})`);
+      else console.error(`فشل إرسال السند إلى ${r.email}: ${result.error}`);
     }
 
     return {
@@ -224,10 +176,19 @@ export async function sendReceiptVoucherEmail(data: {
     };
   } catch (error) {
     console.error('خطأ في إرسال البريد:', error);
-    return {
-      success: false,
-      sentTo: [],
-      error: 'حدث خطأ أثناء إرسال البريد',
-    };
+    return { success: false, sentTo: [], error: 'حدث خطأ أثناء إرسال البريد' };
   }
+}
+
+/**
+ * @deprecated استخدم sendVoucherEmail - يبقى للتوافق مع الاستدعاءات القديمة
+ */
+export async function sendReceiptVoucherEmail(data: {
+  voucherId: string;
+  voucherNumber?: string;
+  [key: string]: unknown;
+}): Promise<{ success: boolean; sentTo: string[]; error?: string }> {
+  const voucher = await getVoucherWithItems(data.voucherNumber || data.voucherId);
+  if (!voucher) return { success: false, sentTo: [], error: 'السند غير موجود' };
+  return sendVoucherEmail(voucher);
 }

@@ -92,6 +92,31 @@ describe("calculatePayrollLine", () => {
     expect(r.leaveDeduction).toBe(roundMoney(daily * 3 * 0.5 + daily * 3));
   });
 
+  it("does not charge approved leave days again as absence", () => {
+    // 10 أيام إجازة سنوية والموظف عمل 20 يوماً: لا خصم غياب ولا خصم إجازة
+    const annual = calculatePayrollLine({ ...base, workDays: 20, leaves: [{ type: "annual", days: 10 }] });
+    expect(annual.absentDays).toBe(0);
+    expect(annual.totalDeductions).toBe(0);
+    // 10 أيام بدون راتب: تُخصم مرة واحدة فقط
+    const unpaid = calculatePayrollLine({ ...base, workDays: 20, leaves: [{ type: "unpaid", days: 10 }] });
+    expect(unpaid.absentDays).toBe(0);
+    expect(unpaid.totalDeductions).toBe(roundMoney((2000 / 30) * 10));
+    // غياب حقيقي خارج أيام الإجازة يُخصم
+    const mixed = calculatePayrollLine({ ...base, workDays: 15, leaves: [{ type: "annual", days: 10 }] });
+    expect(mixed.absentDays).toBe(5);
+  });
+
+  it("caps total leave days at 30 per month", () => {
+    const r = calculatePayrollLine({
+      ...base,
+      workDays: 0,
+      leaves: [{ type: "unpaid", days: 15 }, { type: "unpaid", days: 16 }],
+    });
+    expect(r.leaveDays).toBe(30);
+    expect(r.absentDays).toBe(0);
+    expect(r.netSalary).toBe(0);
+  });
+
   it("sums every deduction source exactly once", () => {
     const r = calculatePayrollLine({
       ...base,
@@ -156,6 +181,10 @@ describe("countOverlapDays", () => {
     expect(countOverlapDays({ year: 2026, month: 9, day: 28 }, { year: 2026, month: 10, day: 3 }, 2026, 10)).toBe(3);
     expect(countOverlapDays({ year: 2026, month: 10, day: 30 }, { year: 2026, month: 11, day: 2 }, 2026, 10)).toBe(2);
     expect(countOverlapDays({ year: 2026, month: 11, day: 1 }, { year: 2026, month: 11, day: 2 }, 2026, 10)).toBe(0);
+  });
+  it("counts a full calendar month as 30 days (february too)", () => {
+    expect(countOverlapDays({ year: 2026, month: 2, day: 1 }, { year: 2026, month: 2, day: 28 }, 2026, 2)).toBe(30);
+    expect(countOverlapDays({ year: 2026, month: 10, day: 1 }, { year: 2026, month: 10, day: 31 }, 2026, 10)).toBe(30);
   });
   it("never exceeds 30 payroll days", () => {
     expect(countOverlapDays({ year: 2026, month: 1, day: 1 }, { year: 2026, month: 12, day: 31 }, 2026, 10)).toBe(30);

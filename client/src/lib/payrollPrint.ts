@@ -94,6 +94,12 @@ const cell = (v: unknown, negative = false) => (num(v) !== 0 ? `${negative ? "-"
 const fmtDate = (d: Date | string | null | undefined) =>
   d ? new Date(d).toLocaleDateString("ar-SA-u-ca-gregory", { year: "numeric", month: "2-digit", day: "2-digit" }) : "—";
 
+/** الصافي كتابةً: الصافي السالب يُكتب كمبلغ مستحق على الموظف وليس كمبلغ مستحق له */
+function netInWords(net: number): string {
+  if (net < 0) return `لا يوجد صافي مستحق للموظف — مستحق على الموظف: ${amountToArabicWords(Math.abs(net))}`;
+  return amountToArabicWords(net);
+}
+
 export function isPayrollApproved(status: string): boolean {
   return status === "approved" || status === "paid";
 }
@@ -272,7 +278,7 @@ ${watermark(payroll.status)}
       <td>${money(sum("totalDeductions"))}</td><td>${money(totalNet)}</td><td></td>
     </tr></tfoot>
   </table>
-  <div style="margin-top:8px;font-size:11px;font-weight:700">صافي المسيرة كتابةً: ${escapeHtml(amountToArabicWords(totalNet))}</div>
+  <div style="margin-top:8px;font-size:11px;font-weight:700">صافي المسيرة كتابةً: ${escapeHtml(netInWords(totalNet))}</div>
   ${signaturesBlock(approved, payroll.approvedByName, payroll.approvedAt)}
   ${footer()}
 </div></body></html>`;
@@ -345,7 +351,7 @@ ${watermark(payroll.status)}
     <div class="box"><h3>▼ الاستقطاعات</h3><table>${deductions || `<tr><td class="name">لا توجد استقطاعات</td><td>0.00 ر.س</td></tr>`}<tr class="total"><td class="name">إجمالي الاستقطاعات</td><td>-${money(d.totalDeductions)} ر.س</td></tr></table></div>
   </div>
   <div class="net"><span style="font-weight:800">صافي الراتب المستحق</span><span class="v">${money(d.netSalary)} ر.س</span></div>
-  <div class="words">${escapeHtml(amountToArabicWords(num(d.netSalary)))}</div>
+  <div class="words">${escapeHtml(netInWords(num(d.netSalary)))}</div>
   ${d.notes ? `<div style="margin-top:6px;font-size:11px">ملاحظات: ${escapeHtml(d.notes)}</div>` : ""}
   <div class="receiver"><div>اسم المستلم: ${escapeHtml(d.employeeName)}</div><div>توقيع المستلم:</div></div>
   ${signaturesBlock(approved, payroll.approvedByName, payroll.approvedAt)}

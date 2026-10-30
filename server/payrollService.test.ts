@@ -73,10 +73,15 @@ describe("payroll service line building", () => {
     expect(deferred.advances.find(a => a.id === 12)?.deferred).toBe(true);
   });
 
-  it("drops deferred ids that no longer exist", () => {
+  it("keeps a manager's deferral even when the item is temporarily unavailable", () => {
     const src = sources({ advances: [[7, [{ id: 11, amount: 500, title: "سلفة", approvedAt: null }]]] });
-    const line = buildLine(emp, src, resolveAdjustment(7, undefined, undefined, { employeeId: 7, deferredAdvanceIds: [11, 99] }));
-    expect(line.inputs.deferredAdvanceIds).toEqual([11]);
+    const line = buildLine(emp, src, resolveAdjustment(7, undefined, undefined, { employeeId: 7, deferredAdvanceIds: [11, 99, 99] }));
+    expect(line.inputs.deferredAdvanceIds).toEqual([11, 99]);
+    expect(line.calc.advanceDeduction).toBe(0);
+    // البند المؤجل يُحفظ في التفاصيل للعرض
+    const stored = JSON.parse(lineToDetailValues(line).advanceDetails as string);
+    expect(stored.items).toEqual([]);
+    expect(stored.deferredItems.map((a: any) => a.id)).toEqual([11]);
   });
 
   it("stores and restores manual inputs without loss (used by recalculation)", () => {
@@ -98,8 +103,9 @@ describe("payroll service line building", () => {
     const stored = lineToDetailValues(line);
     expect(stored.advanceDeduction).toBe("500.00");
     expect(stored.leaveDeduction).toBe("200.00"); // (2000+1000)/30 * 2
-    expect(stored.absentDeduction).toBe("200.00");
-    expect(Number(stored.totalDeductions)).toBeCloseTo(500 + 200 + 200 + 75, 2);
+    // يومان من 30 هما أيام الإجازة نفسها، فلا غياب إضافي
+    expect(stored.absentDeduction).toBe("0.00");
+    expect(Number(stored.totalDeductions)).toBeCloseTo(500 + 200 + 75, 2);
 
     const restored = storedAdjustment({ ...stored, id: 1, payrollId: 1 } as any);
     expect(restored).toMatchObject({
