@@ -3401,7 +3401,9 @@ export const appRouter = router({
           throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بعرض الطلبات' });
         }
         
-        const requests = await db.getAllEmployeeRequests(input);
+        // طلبات إنهاء الخدمة تتبع صلاحيات المخالصات (مشرف الفرع فرعه فقط)
+        const requests = (await db.getAllEmployeeRequests(input))
+          .filter(req => endOfService.canViewEndOfServiceRequest(ctx.user, req));
         
         // المشرف يرى طلبات فرعه فقط (إذا كان مرتبط بفرع)
         if (ctx.user.role === 'supervisor' && ctx.user.branchId !== null) {
@@ -3427,15 +3429,20 @@ export const appRouter = router({
     }),
 
     // الطلبات المعلقة - متاح للمشرف العام والمدير والمسؤول
-    pending: supervisorViewProcedure.query(async () => {
-      return await db.getPendingEmployeeRequests();
+    pending: supervisorViewProcedure.query(async ({ ctx }) => {
+      const requests = await db.getPendingEmployeeRequests();
+      return requests.filter(req => endOfService.canViewEndOfServiceRequest(ctx.user, req));
     }),
 
     // تفاصيل طلب
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return await db.getEmployeeRequestById(input.id);
+      .query(async ({ ctx, input }) => {
+        const request = await db.getEmployeeRequestById(input.id);
+        if (request && !endOfService.canViewEndOfServiceRequest(ctx.user, request)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بعرض طلب إنهاء الخدمة هذا' });
+        }
+        return request;
       }),
 
     // إحصائيات الطلبات - متاح للمشرف العام والمدير والمسؤول
@@ -3765,7 +3772,11 @@ export const appRouter = router({
     // سجلات الطلب
     logs: protectedProcedure
       .input(z.object({ requestId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        const request = await db.getEmployeeRequestById(input.requestId);
+        if (request && !endOfService.canViewEndOfServiceRequest(ctx.user, request)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بعرض طلب إنهاء الخدمة هذا' });
+        }
         return await db.getEmployeeRequestLogs(input.requestId);
       }),
   }),

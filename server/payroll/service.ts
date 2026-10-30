@@ -886,6 +886,34 @@ async function assertNotSettledInEndOfService(
 }
 
 /**
+ * مخالصة نهائية معتمدة احتسبت أن راتب شهر المسيرة يُصرف ضمنها (آخر مسيرة للموظف):
+ * إلغاء المسيرة أو حذفها يترك ذلك الشهر بلا صرف بعد تعطيل الموظف، فيُمنع حتى تُلغى المخالصة
+ */
+async function assertNoSettlementDependsOnPayroll(tx: Tx, payroll: Payroll) {
+  const rows = await tx
+    .select({ settlementNumber: endOfServiceSettlements.settlementNumber, employeeName: endOfServiceSettlements.employeeName })
+    .from(endOfServiceSettlements)
+    .innerJoin(
+      payrollDetails,
+      and(eq(payrollDetails.payrollId, payroll.id), eq(payrollDetails.employeeId, endOfServiceSettlements.employeeId))
+    )
+    .where(
+      and(
+        inArray(endOfServiceSettlements.status, ["approved", "paid"]),
+        eq(endOfServiceSettlements.lastPayrollYear, payroll.year),
+        eq(endOfServiceSettlements.lastPayrollMonth, payroll.month)
+      )
+    )
+    .limit(1);
+  if (rows[0]) {
+    throw new PayrollError(
+      `لا يمكن إلغاء المسيرة أو حذفها: المخالصة النهائية ${rows[0].settlementNumber} للموظف ${rows[0].employeeName} احتسبت أن راتب هذا الشهر يُصرف ضمن هذه المسيرة. ألغِ المخالصة أولاً`,
+      "CONFLICT"
+    );
+  }
+}
+
+/**
  * التحقق قبل إلغاء/حذف سلفة أو مخالفة: يُمنع إذا كانت مخصومة في مسيرة معتمدة أو مدفوعة
  * أو في مخالصة نهائية (إنهاء خدمة)
  */
@@ -978,6 +1006,7 @@ export async function transitionPayrollStatus(payrollId: number, to: PayrollStat
       update.paidAt = now;
       await tx.update(payrollDetails).set({ isPaid: true, paidAt: now }).where(eq(payrollDetails.payrollId, payrollId));
     } else if (to === "cancelled") {
+      await assertNoSettlementDependsOnPayroll(tx, payroll);
       await releaseLinkedItems(tx, payrollId);
     }
 
@@ -998,6 +1027,7 @@ export async function deletePayrollSafely(payrollId: number) {
     await lockBranch(tx, branchId);
     const payroll = await loadPayrollForUpdate(tx, payrollId);
     if (payroll.status === "paid") throw new PayrollError("لا يمكن حذف مسيرة مدفوعة", "CONFLICT");
+    await assertNoSettlementDependsOnPayroll(tx, payroll);
     await releaseLinkedItems(tx, payrollId);
     await tx.delete(payrollDetails).where(eq(payrollDetails.payrollId, payrollId));
     await tx.delete(payrolls).where(eq(payrolls.id, payrollId));

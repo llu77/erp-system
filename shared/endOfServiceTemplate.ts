@@ -12,6 +12,7 @@ import {
   END_OF_SERVICE_DOCUMENT_TITLES,
   END_OF_SERVICE_PAYMENT_METHODS,
   END_OF_SERVICE_REASON_LABELS,
+  formatServicePeriod,
   getEndOfServiceStatusLabel,
   isEndOfServiceSigned,
   parseDateOnly,
@@ -330,14 +331,31 @@ function deductionRows(items: EndOfServiceDeductionItem[], tag: string): string 
 
 function renderEntitlements(data: EndOfServiceDocumentData): string {
   const c = data.calculation;
-  const daily = money(c.dailyWage);
-  const firstFive = Math.min(c.service.yearsDecimal, 5);
-  const afterFive = Math.max(0, c.service.yearsDecimal - 5);
+  // صيغة تُعيد إنتاج المبلغ: الأيام × (الأجر ÷ 30) بدل أجر يوم مقرّب
+  const perDay = `(${money(c.monthlyWage)} ÷ 30)`;
+  // سنوات الخدمة المحتسبة بعد استبعاد أيام وقف العقد (المادة 116)؛ المخالصات القديمة بلا استبعاد
+  const awardYears = Number.isFinite(c.awardYears) ? c.awardYears : c.service.yearsDecimal;
+  const excludedDays = Number(c.excludedServiceDays) || 0;
+  const firstFive = Math.min(awardYears, 5);
+  const afterFive = Math.max(0, awardYears - 5);
+  // بدون استبعاد تُكتب المدة بالسنوات والأشهر والأيام (سنوات + أشهر/12 + أيام/365) فتطابق المبلغ تماماً
+  const s = c.service;
+  const firstFiveText = excludedDays > 0
+    ? `${firstFive.toFixed(4)} سنة`
+    : s.years >= 5
+      ? formatServicePeriod({ years: 5, months: 0, days: 0 })
+      : formatServicePeriod(s);
+  const afterFiveText = excludedDays > 0
+    ? `${afterFive.toFixed(4)} سنة`
+    : formatServicePeriod({ years: Math.max(0, s.years - 5), months: s.months, days: s.days });
 
-  const eosLines = afterFive > 0
-    ? `<div>نصف أجر شهر × ${firstFive.toFixed(3)} سنة <span class="sub">= ${money(c.eosFirstFiveYears)}</span></div>
-              <div>أجر شهر × ${afterFive.toFixed(3)} سنة <span class="sub">= ${money(c.eosAfterFiveYears)}</span></div>`
-    : `<div>نصف أجر شهر × ${firstFive.toFixed(3)} سنة</div>`;
+  const eosLines = (afterFive > 0
+    ? `<div>نصف أجر شهر × ${firstFiveText} <span class="sub">= ${money(c.eosFirstFiveYears)}</span></div>
+              <div>أجر شهر × ${afterFiveText} <span class="sub">= ${money(c.eosAfterFiveYears)}</span></div>`
+    : `<div>نصف أجر شهر × ${firstFiveText}</div>`) +
+    (excludedDays > 0
+      ? `<div class="sub">(بعد استبعاد ${formatDays(excludedDays)} يوم إجازة بدون أجر تزيد على 20 يوماً - المادة 116)</div>`
+      : "");
 
   const leaveDetail = c.leaveBalanceIsManual
     ? `(رصيد معتمد يدوياً${present(data.leaveNote) ? `: ${esc(present(data.leaveNote))}` : ""})`
@@ -379,12 +397,12 @@ function renderEntitlements(data: EndOfServiceDocumentData): string {
           </tr>
           <tr>
             <td>مقابل الإجازة السنوية غير المستخدمة (المادة 111)</td>
-            <td class="calc"><div>${formatDays(c.leaveBalanceDays)} يوم × ${daily}</div><div class="sub">${leaveDetail}</div></td>
+            <td class="calc"><div>${formatDays(c.leaveBalanceDays)} يوم × ${perDay}</div><div class="sub">${leaveDetail}</div></td>
             <td class="amt">${money(c.leaveCompensation)}</td>
           </tr>
           <tr>
             <td>الأجر المستحق حتى آخر يوم عمل</td>
-            <td class="calc"><div>${formatDays(c.salaryDays)} يوم × ${daily}</div>${salaryDetail ? `<div class="sub">${salaryDetail}</div>` : ""}</td>
+            <td class="calc"><div>${formatDays(c.salaryDays)} يوم × ${perDay}</div>${salaryDetail ? `<div class="sub">${salaryDetail}</div>` : ""}</td>
             <td class="amt">${money(c.salaryDue)}</td>
           </tr>${otherRow}
         </tbody>
@@ -446,9 +464,16 @@ function renderDeclaration(ctx: DocContext): string {
   const amount = `<strong>${money(Math.abs(c.netAmount))} ريال سعودي</strong>`;
   const words = esc(c.netAmountWords);
 
-  const text = c.netAmount >= 0
-    ? `أقر أنا الموقع أدناه / ${name}${idClause}، بأنني استلمت من ${company} كامل مستحقاتي العمالية عن كامل مدة خدمتي لديها من تاريخ <strong>${esc(proseDate(d.hireDate))}</strong> حتى تاريخ <strong>${esc(proseDate(d.lastWorkingDay))}</strong>، بما في ذلك مكافأة نهاية الخدمة ومقابل الإجازات والأجور وجميع البدلات، بمبلغ صافٍ وقدره (${amount}) ${words}، وأنه لم يعد لي أي حق أو مطالبة من أي نوع قِبَل المنشأة، وأبرئ ذمتها إبراءً عاماً شاملاً نهائياً.`
-    : `أقر أنا الموقع أدناه / ${name}${idClause}، بأن ذمتي مشغولة للمنشأة بمبلغ وقدره (${amount}) ${words} بعد تسوية جميع مستحقاتي، وأتعهد بسداده.`;
+  const period = `عن كامل مدة خدمتي لديها من تاريخ <strong>${esc(proseDate(d.hireDate))}</strong> حتى تاريخ <strong>${esc(proseDate(d.lastWorkingDay))}</strong>`;
+  let text: string;
+  if (c.netAmount >= 0) {
+    text = `أقر أنا الموقع أدناه / ${name}${idClause}، بأنني استلمت من ${company} كامل مستحقاتي العمالية ${period}، بما في ذلك مكافأة نهاية الخدمة ومقابل الإجازات والأجور وجميع البدلات، بمبلغ صافٍ وقدره (${amount}) ${words}، وأنه لم يعد لي أي حق أو مطالبة من أي نوع قِبَل المنشأة، وأبرئ ذمتها إبراءً عاماً شاملاً نهائياً.`;
+  } else if (ctx.status === "paid") {
+    // صافٍ سالب تم تحصيله: الموظف سدّد المتبقي عليه
+    text = `أقر أنا الموقع أدناه / ${name}${idClause}، بأنه بعد تسوية جميع مستحقاتي العمالية ${period} مع ما عليّ من التزامات، قد سددت لـ${company} المتبقي عليّ وقدره (${amount}) ${words}، وبذلك لم يعد لأي من الطرفين حق أو مطالبة قِبَل الآخر.`;
+  } else {
+    text = `أقر أنا الموقع أدناه / ${name}${idClause}، بأن ذمتي مشغولة للمنشأة بمبلغ وقدره (${amount}) ${words} بعد تسوية جميع مستحقاتي، وأتعهد بسداده.`;
+  }
 
   return `
     <section class="declaration">
@@ -477,8 +502,9 @@ function renderSettlementSignatures(ctx: DocContext): string {
   let note = "";
   if (ctx.signed) {
     const approved = `اعتُمدت بواسطة ${esc(present(d.approvedByName) ?? SIGNATURES.manager.title)}${d.approvedAt ? ` بتاريخ ${esc(formatVoucherDateTime(d.approvedAt))}` : ""}`;
+    const paidWord = d.calculation.netAmount < 0 ? "تم التحصيل" : "تم الصرف";
     const paid = ctx.status === "paid"
-      ? ` &nbsp;|&nbsp; تم الصرف${present(d.paidByName) ? ` بواسطة ${esc(present(d.paidByName))}` : ""}${d.paidAt ? ` بتاريخ ${esc(formatVoucherDateTime(d.paidAt))}` : ""}`
+      ? ` &nbsp;|&nbsp; ${paidWord}${present(d.paidByName) ? ` بواسطة ${esc(present(d.paidByName))}` : ""}${d.paidAt ? ` بتاريخ ${esc(formatVoucherDateTime(d.paidAt))}` : ""}`
       : "";
     note = `<div class="approval-note">&#10004; ${approved}${paid}</div>`;
   }
@@ -497,8 +523,10 @@ export function renderFinalSettlementHtml(data: EndOfServiceDocumentData, option
   const ctx = buildContext(data, options);
   const c = data.calculation;
   const title = END_OF_SERVICE_DOCUMENT_TITLES.settlement;
-  const statusLabel = getEndOfServiceStatusLabel(ctx.status);
   const negative = c.netAmount < 0;
+  // صافٍ سالب: "الصرف" يعني تحصيل المبلغ من الموظف
+  const statusLabel = ctx.status === "paid" && negative ? { ar: "تم التحصيل", en: "Collected" } : getEndOfServiceStatusLabel(ctx.status);
+  const payWord = negative ? "التحصيل" : "الصرف";
 
   const cell = (label: string, value: unknown, cls = "") =>
     `<div class="cell${cls ? ` ${cls}` : ""}"><div class="lbl">${label}</div><div class="val">${present(value) ? esc(present(value)) : "-"}</div></div>`;
@@ -507,9 +535,9 @@ export function renderFinalSettlementHtml(data: EndOfServiceDocumentData, option
   const payment = ctx.status === "paid"
     ? `
     <div class="payment-line">
-      <span><b>طريقة الصرف:</b> ${paymentMethod ? esc(END_OF_SERVICE_PAYMENT_METHODS[paymentMethod]?.ar ?? paymentMethod) : "-"}</span>
+      <span><b>طريقة ${payWord}:</b> ${paymentMethod ? esc(END_OF_SERVICE_PAYMENT_METHODS[paymentMethod]?.ar ?? paymentMethod) : "-"}</span>
       <span><b>المرجع:</b> ${present(data.paymentReference) ? esc(present(data.paymentReference)) : "-"}</span>
-      ${data.paidAt ? `<span><b>تاريخ الصرف:</b> ${esc(formatVoucherDateTime(data.paidAt))}</span>` : ""}
+      ${data.paidAt ? `<span><b>تاريخ ${payWord}:</b> ${esc(formatVoucherDateTime(data.paidAt))}</span>` : ""}
     </div>`
     : "";
 

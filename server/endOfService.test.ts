@@ -4,6 +4,7 @@ import {
   canTransitionEndOfService,
   computeAccruedAnnualLeaveDays,
   computeEndOfServiceAward,
+  computeExcludedServiceDays,
   computeServicePeriod,
   computeUnpaidSalaryPeriod,
   formatEndOfServiceNumber,
@@ -129,6 +130,15 @@ describe("computeUnpaidSalaryPeriod", () => {
   it("is zero when a payroll already covers the last month", () => {
     expect(computeUnpaidSalaryPeriod("2026-10-15", { year: 2026, month: 10 })).toEqual({ fromDate: null, days: 0, coveredByPayroll: true });
   });
+  it("never starts before the hire date, counting a partial month by its actual days", () => {
+    // مباشرة 20 أكتوبر وآخر يوم 31 أكتوبر بلا مسيرة: 12 يوماً لا 30
+    expect(computeUnpaidSalaryPeriod("2026-10-31", null, "2026-10-20")).toEqual({ fromDate: "2026-10-20", days: 12, coveredByPayroll: false });
+    // مباشرة في منتصف شهر بعد آخر مسيرة: الشهر الأول جزئي ثم شهر كامل ثم الشهر الأخير
+    expect(computeUnpaidSalaryPeriod("2026-11-10", { year: 2026, month: 8 }, "2026-09-16")).toEqual({ fromDate: "2026-09-16", days: 15 + 30 + 10, coveredByPayroll: false });
+    // مباشرة بعد آخر يوم (بيانات خاطئة) لا تعطي أياماً
+    expect(computeUnpaidSalaryPeriod("2026-10-05", null, "2026-10-20").days).toBe(0);
+  });
+
   it("without any payroll it starts from the last month", () => {
     expect(computeUnpaidSalaryPeriod("2026-10-12", null)).toEqual({ fromDate: "2026-10-01", days: 12, coveredByPayroll: false });
   });
@@ -185,6 +195,30 @@ describe("calculateEndOfServiceSettlement", () => {
     expect(c.netAmount).toBeLessThan(0);
     expect(c.netAmountWords).not.toContain("-");
     expect(c.warnings.join(" ")).toContain("مستحق على الموظف");
+  });
+
+  it("does not overpay an employee hired inside the last month", () => {
+    const c = calc({ hireDate: "2026-10-20", lastWorkingDay: "2026-10-31", lastPayrollMonth: null, leaveBalanceDaysOverride: 0 });
+    expect(c.salaryDays).toBe(12);
+    expect(c.salaryDue).toBe(1200);
+  });
+
+  it("warns when no payroll ever paid the months before the last one", () => {
+    const c = calc({ lastPayrollMonth: null });
+    expect(c.salaryFromDate).toBe("2026-10-01");
+    expect(c.warnings.join(" ")).toContain("لا توجد مسيرة رواتب سابقة");
+  });
+
+  it("excludes unpaid leave beyond 20 days from the service years (Article 116)", () => {
+    expect(computeExcludedServiceDays([90, 15, 21])).toBe(70 + 0 + 1);
+    const c = calc({ excludedServiceDays: 73, annualLeaveDaysTaken: 0 });
+    expect(c.excludedServiceDays).toBe(73);
+    expect(c.awardYears).toBeCloseTo(5 - 73 / 365, 10);
+    expect(c.eosAward).toBe(Math.round(3000 * (5 - 73 / 365) * 0.5 * 100) / 100);
+    expect(c.accruedLeaveDays).toBeCloseTo(21 * (5 - 73 / 365), 1);
+    expect(c.warnings.join(" ")).toContain("المادة 116");
+    // لا يتجاوز الاستبعاد مدة الخدمة
+    expect(calc({ excludedServiceDays: 99999 }).awardYears).toBe(0);
   });
 
   it("rejects invalid input", () => {

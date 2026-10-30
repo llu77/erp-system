@@ -207,10 +207,15 @@ export interface UnpaidSalaryPeriod {
 
 /**
  * أيام الأجر غير المدفوع حتى آخر يوم عمل
- * - تبدأ من أول الشهر التالي لآخر مسيرة شملت الموظف (أو أول شهر آخر يوم عمل إن لم توجد مسيرة)
- * - الشهر الكامل = 30 يوماً، والشهر الأخير = رقم اليوم (آخر يوم في الشهر = 30)
+ * - تبدأ من أول الشهر التالي لآخر مسيرة شملت الموظف (أو أول شهر آخر يوم عمل إن لم توجد مسيرة)،
+ *   ولا تبدأ قبل تاريخ مباشرة العمل
+ * - مثل المسيرات: الشهر الميلادي الكامل = 30 يوماً، والشهر الجزئي = عدد أيامه الفعلية (بحد أقصى 30)
  */
-export function computeUnpaidSalaryPeriod(lastWorkingDay: string, lastPayrollMonth: PayrollMonthRef | null): UnpaidSalaryPeriod {
+export function computeUnpaidSalaryPeriod(
+  lastWorkingDay: string,
+  lastPayrollMonth: PayrollMonthRef | null,
+  hireDate?: string | null
+): UnpaidSalaryPeriod {
   const end = parseDateOnly(lastWorkingDay);
   if (!end) return { fromDate: null, days: 0, coveredByPayroll: false };
 
@@ -224,21 +229,40 @@ export function computeUnpaidSalaryPeriod(lastWorkingDay: string, lastPayrollMon
   } else {
     from = { year: end.year, month: end.month, day: 1 };
   }
+  const hire = parseDateOnly(hireDate ?? null);
+  if (hire && compareDateOnly(hire, from) > 0) from = hire;
+  if (compareDateOnly(from, end) > 0) return { fromDate: null, days: 0, coveredByPayroll: false };
 
   let days = 0;
   let y = from.year;
   let m = from.month;
-  while (y * 12 + m < end.year * 12 + end.month) {
-    days += PAYROLL_MONTH_DAYS;
+  while (y * 12 + m <= end.year * 12 + end.month) {
+    const monthLength = daysInMonth(y, m);
+    const firstDay = y === from.year && m === from.month ? from.day : 1;
+    const lastDay = y === end.year && m === end.month ? end.day : monthLength;
+    days += firstDay === 1 && lastDay === monthLength ? PAYROLL_MONTH_DAYS : Math.min(lastDay - firstDay + 1, PAYROLL_MONTH_DAYS);
     m += 1;
     if (m > 12) {
       m = 1;
       y += 1;
     }
   }
-  const lastMonthDays = end.day >= daysInMonth(end.year, end.month) ? PAYROLL_MONTH_DAYS : Math.min(end.day, PAYROLL_MONTH_DAYS);
-  days += lastMonthDays;
   return { fromDate: formatDateOnly(from), days, coveredByPayroll: false };
+}
+
+/**
+ * أيام لا تُحتسب من مدة الخدمة (المادة 116): الإجازة بدون أجر يوقف فيها العقد فيما زاد على 20 يوماً
+ * (لكل إجازة على حدة)
+ */
+export const UNPAID_LEAVE_SUSPENSION_THRESHOLD_DAYS = 20;
+
+export function computeExcludedServiceDays(unpaidLeaveDays: number[]): number {
+  let total = 0;
+  for (const raw of unpaidLeaveDays) {
+    const days = Number(raw);
+    if (Number.isFinite(days) && days > UNPAID_LEAVE_SUSPENSION_THRESHOLD_DAYS) total += days - UNPAID_LEAVE_SUSPENSION_THRESHOLD_DAYS;
+  }
+  return Math.round(total * 100) / 100;
 }
 
 // ==================== المخالصة ====================
@@ -261,6 +285,8 @@ export interface EndOfServiceCalcInput {
   fixedAllowances: number;
   /** أيام الإجازة السنوية المستخدمة خلال الخدمة (من سجل الإجازات) */
   annualLeaveDaysTaken: number;
+  /** أيام لا تُحتسب من الخدمة: الإجازة بدون أجر فيما زاد على 20 يوماً (المادة 116) */
+  excludedServiceDays?: number;
   /** رصيد إجازة يدوي (يتجاوز المحسوب) */
   leaveBalanceDaysOverride?: number | null;
   /** آخر شهر صُرف فيه راتب للموظف (من المسيرات غير الملغاة) */
@@ -276,6 +302,10 @@ export interface EndOfServiceCalcInput {
 export interface EndOfServiceCalculation {
   service: ServicePeriod;
   serviceText: string;
+  /** أيام مستبعدة من مدة الخدمة (المادة 116) */
+  excludedServiceDays: number;
+  /** سنوات الخدمة المحتسبة للمكافأة والإجازة (بعد الاستبعاد) */
+  awardYears: number;
   monthlyWage: number;
   dailyWage: number;
   eosAward: number;
@@ -333,15 +363,19 @@ export function calculateEndOfServiceSettlement(input: EndOfServiceCalcInput): E
   const perDay = dailyWage(monthlyWage);
   const warnings: string[] = [];
 
+  // سنوات الخدمة المحتسبة: المدة الفعلية ناقص أيام وقف العقد (المادة 116)
+  const excludedServiceDays = Math.min(nonNegative(input.excludedServiceDays), service.totalDays);
+  const awardYears = Math.max(0, service.yearsDecimal - excludedServiceDays / SERVICE_YEAR_DAYS);
+
   // المكافأة
-  const firstFiveYears = Math.min(service.yearsDecimal, 5);
-  const afterFiveYears = Math.max(0, service.yearsDecimal - 5);
+  const firstFiveYears = Math.min(awardYears, 5);
+  const afterFiveYears = Math.max(0, awardYears - 5);
   const eosFirstFiveYears = roundMoney(monthlyWage * firstFiveYears * 0.5);
   const eosAfterFiveYears = roundMoney(monthlyWage * afterFiveYears);
   const eosAward = roundMoney(eosFirstFiveYears + eosAfterFiveYears);
 
   // الإجازة
-  const accruedLeaveDays = computeAccruedAnnualLeaveDays(service.yearsDecimal);
+  const accruedLeaveDays = computeAccruedAnnualLeaveDays(awardYears);
   const annualLeaveDaysTaken = nonNegative(input.annualLeaveDaysTaken);
   const computedLeaveBalanceDays = Math.max(0, Math.round((accruedLeaveDays - annualLeaveDaysTaken) * 100) / 100);
   const leaveOverride = optionalNonNegative(input.leaveBalanceDaysOverride);
@@ -349,12 +383,18 @@ export function calculateEndOfServiceSettlement(input: EndOfServiceCalcInput): E
   const leaveCompensation = roundMoney(perDay * leaveBalanceDays);
 
   // الأجر المستحق
-  const unpaid = computeUnpaidSalaryPeriod(input.lastWorkingDay, input.lastPayrollMonth);
+  const unpaid = computeUnpaidSalaryPeriod(input.lastWorkingDay, input.lastPayrollMonth, input.hireDate);
   const salaryOverride = optionalNonNegative(input.salaryDaysOverride);
   const salaryDays = salaryOverride ?? unpaid.days;
   const salaryDue = roundMoney(perDay * salaryDays);
   if (unpaid.coveredByPayroll && salaryOverride === null) {
     warnings.push("الموظف مشمول بمسيرة رواتب لشهر آخر يوم عمل؛ تأكد من أيام العمل في تلك المسيرة حتى لا يُصرف له أكثر من مستحقه");
+  }
+  if (!input.lastPayrollMonth && salaryOverride === null && unpaid.fromDate && unpaid.fromDate > input.hireDate) {
+    warnings.push("لا توجد مسيرة رواتب سابقة للموظف في النظام؛ الأجر المستحق محسوب من بداية شهر آخر يوم عمل فقط، تأكد من صرف رواتب الأشهر السابقة");
+  }
+  if (excludedServiceDays > 0) {
+    warnings.push(`استُبعد ${excludedServiceDays} يوماً من مدة الخدمة (إجازات بدون أجر تزيد على 20 يوماً - المادة 116)`);
   }
   if (leaveOverride === null && annualLeaveDaysTaken === 0 && accruedLeaveDays > 0) {
     warnings.push("لم تُسجل إجازات سنوية مستخدمة في النظام؛ راجع رصيد الإجازة قبل الاعتماد");
@@ -375,6 +415,8 @@ export function calculateEndOfServiceSettlement(input: EndOfServiceCalcInput): E
     calculation: {
       service,
       serviceText: formatServicePeriod(service),
+      excludedServiceDays,
+      awardYears,
       monthlyWage,
       dailyWage: roundMoney(perDay),
       eosAward,

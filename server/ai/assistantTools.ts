@@ -8,6 +8,7 @@
  */
 
 import { getDb } from "../db";
+import { isRequestVisibleToEmployee } from "../endOfService/service";
 import { 
   employees, 
   branches, 
@@ -454,11 +455,14 @@ export async function getQuickReport(input: ReportInput): Promise<ToolResult> {
 
     // ========== تقرير الطلبات ==========
     if (input.reportType === 'requests') {
-      const requests = await db.select()
+      // إنهاء الخدمة لا يظهر للموظف قبل اعتماده (نفس قاعدة بوابة الموظف)
+      const requests = (await db.select()
         .from(employeeRequests)
         .where(eq(employeeRequests.employeeId, input.employeeId))
         .orderBy(desc(employeeRequests.createdAt))
-        .limit(10);
+        .limit(20))
+        .filter(isRequestVisibleToEmployee)
+        .slice(0, 10);
 
       if (requests.length === 0) {
         return {

@@ -33,6 +33,7 @@ import {
   END_OF_SERVICE_STATUSES,
   calculateEndOfServiceSettlement,
   canTransitionEndOfService,
+  computeExcludedServiceDays,
   computeServicePeriod,
   formatEndOfServiceNumber,
   getEndOfServiceStatusLabel,
@@ -127,10 +128,16 @@ export interface EmployeeContext {
   branchName: string | null;
   wage: WageDefaults;
   annualLeaveDaysTaken: number;
+  /** أيام لا تُحتسب من الخدمة: الإجازات بدون أجر فيما زاد على 20 يوماً (المادة 116) */
+  excludedServiceDays: number;
   lastPayroll: LastPayrollRef | null;
   advances: EndOfServiceDeductionItem[];
   violations: EndOfServiceDeductionItem[];
 }
+
+/** بيانات الحساب المطلوبة من قاعدة البيانات (الاستبعاد اختياري للمخالصات القديمة) */
+type CalcContext = Pick<EmployeeContext, "annualLeaveDaysTaken" | "lastPayroll" | "advances" | "violations"> &
+  Partial<Pick<EmployeeContext, "excludedServiceDays">>;
 
 export interface EndOfServiceListRow {
   id: number;
@@ -238,6 +245,23 @@ export function assertCanViewSettlement(viewer: EndOfServiceViewer, settlement: 
   }
 }
 
+/**
+ * هل يمكن عرض طلب في صفحات الطلبات العامة: طلبات إنهاء الخدمة تتبع صلاحيات المخالصات
+ * (المسؤول والمدير والمشرف العام كل الفروع، ومشرف الفرع فرعه فقط، وغيرهم لا)
+ */
+export function canViewEndOfServiceRequest(
+  viewer: EndOfServiceViewer,
+  request: { requestType: string; branchId: number | null }
+): boolean {
+  if (request.requestType !== "end_of_service") return true;
+  try {
+    assertCanViewSettlement(viewer, { branchId: request.branchId });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ==================== حسابات مساعدة (دوال نقية) ====================
 
 /** الأجر الافتراضي من إعدادات الراتب: الأساسي + الساعات الإضافية الثابتة (إن فُعّلت) + حافز الإشراف */
@@ -288,6 +312,22 @@ export function sumAnnualLeaveDays(rows: VacationRow[], untilDate?: string | nul
 }
 
 /**
+ * أيام وقف العقد (المادة 116): لكل إجازة بدون أجر معتمدة، ما زاد على 20 يوماً
+ * untilDate: تُستبعد الإجازات التي تبدأ بعد آخر يوم عمل
+ */
+export function sumExcludedServiceDays(rows: VacationRow[], untilDate?: string | null): number {
+  const until = untilDate && parseDateOnly(untilDate) ? untilDate : null;
+  const unpaid: number[] = [];
+  for (const row of rows) {
+    if (normalizeLeaveKind(row.vacationType) !== "unpaid") continue;
+    const start = toVoucherDateString(row.vacationStartDate);
+    if (until && start && start > until) continue;
+    unpaid.push(vacationRowDays(row));
+  }
+  return computeExcludedServiceDays(unpaid);
+}
+
+/**
  * الإجازات السنوية المستخدمة: الأكبر بين طلبات الإجازة المعتمدة وأرصدة الإجازات السنوية المسجلة.
  * المصدران قد يسجلان نفس الإجازة، فلا يُجمعان حتى لا تُخصم مرتين
  */
@@ -311,13 +351,14 @@ export function validateFormDates(form: Pick<EndOfServiceForm, "hireDate" | "con
 }
 
 /** مدخلات الحساب من النموذج + بيانات قاعدة البيانات */
-export function toCalcInput(form: EndOfServiceForm, ctx: Pick<EmployeeContext, "annualLeaveDaysTaken" | "lastPayroll" | "advances" | "violations">): EndOfServiceCalcInput {
+export function toCalcInput(form: EndOfServiceForm, ctx: CalcContext): EndOfServiceCalcInput {
   return {
     hireDate: form.hireDate,
     lastWorkingDay: form.lastWorkingDay,
     baseSalary: form.baseSalary,
     fixedAllowances: form.fixedAllowances,
     annualLeaveDaysTaken: ctx.annualLeaveDaysTaken,
+    excludedServiceDays: ctx.excludedServiceDays ?? 0,
     leaveBalanceDaysOverride: form.leaveBalanceDaysOverride ?? null,
     lastPayrollMonth: ctx.lastPayroll ? { year: ctx.lastPayroll.year, month: ctx.lastPayroll.month } : null,
     salaryDaysOverride: form.salaryDaysOverride ?? null,
@@ -328,7 +369,7 @@ export function toCalcInput(form: EndOfServiceForm, ctx: Pick<EmployeeContext, "
   };
 }
 
-export function calculateOrThrow(form: EndOfServiceForm, ctx: Pick<EmployeeContext, "annualLeaveDaysTaken" | "lastPayroll" | "advances" | "violations">): EndOfServiceCalculation {
+export function calculateOrThrow(form: EndOfServiceForm, ctx: CalcContext): EndOfServiceCalculation {
   validateFormDates(form);
   const result = calculateEndOfServiceSettlement(toCalcInput(form, ctx));
   if (!result.ok) throw new EndOfServiceError(result.error);
@@ -660,6 +701,7 @@ async function loadEmployeeContext(
     branchName,
     wage: buildWageDefaults(settingsRows[0]),
     annualLeaveDaysTaken: annualLeaveDaysTaken(sumAnnualLeaveDays(vacationRows, options.untilDate), balanceRows[0]?.usedDays),
+    excludedServiceDays: sumExcludedServiceDays(vacationRows, options.untilDate),
     lastPayroll,
     advances,
     violations,
@@ -707,8 +749,27 @@ async function loadSettlementForUpdate(tx: Tx, id: number): Promise<EndOfService
  * موظف المخالصة يُقرأ خارج المعاملة (لا يتغير)، وداخلها يُقفل صف الموظف أولاً ثم المخالصة
  * بنفس الترتيب في كل العمليات حتى لا يحدث تعارض أقفال
  */
-async function lockEmployeeAndSettlement(tx: Tx, employeeId: number, id: number) {
+/** فرع الموظف (قراءة خارج المعاملة لمعرفة الفرع الذي يُقفل أولاً) */
+async function employeeBranchId(q: Exec, employeeId: number): Promise<number | null> {
+  return (await loadEmployee(q, employeeId, false)).branchId ?? null;
+}
+
+/**
+ * قفل فرع الموظف ثم صف الموظف، كأول عبارة في المعاملة.
+ * المسيرات تُنشأ تحت قفل الفرع نفسه، فلا تتزامن مخالصة مع إنشاء مسيرة تشمل الموظف،
+ * وتُقرأ مسيرات الموظف بعد القفل فتظهر أي مسيرة اكتملت قبله
+ */
+async function lockBranchThenEmployee(tx: Tx, employeeId: number, branchId: number | null): Promise<Employee> {
+  if (branchId != null) await tx.execute(sql`SELECT id FROM branches WHERE id = ${branchId} FOR UPDATE`);
   const employee = await loadEmployee(tx, employeeId, true);
+  if ((employee.branchId ?? null) !== branchId) {
+    throw new EndOfServiceError("تغير فرع الموظف أثناء العملية، يرجى إعادة المحاولة", "CONFLICT");
+  }
+  return employee;
+}
+
+async function lockEmployeeAndSettlement(tx: Tx, employeeId: number, id: number, branchId: number | null) {
+  const employee = await lockBranchThenEmployee(tx, employeeId, branchId);
   const settlement = await loadSettlementForUpdate(tx, id);
   if (settlement.employeeId !== employeeId) throw new EndOfServiceError("تم تعديل المخالصة، يرجى التحديث", "CONFLICT");
   return { employee, settlement };
@@ -866,10 +927,11 @@ export async function createSettlement(form: EndOfServiceForm, actor: EndOfServi
   validateFormDates(form);
   const db = await requireDb();
 
+  const branchId = await employeeBranchId(db, form.employeeId);
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       return await db.transaction(async tx => {
-        const employee = await loadEmployee(tx, form.employeeId, true);
+        const employee = await lockBranchThenEmployee(tx, form.employeeId, branchId);
         if (!employee.isActive) throw new EndOfServiceError("الموظف غير نشط، لا يمكن إنشاء إنهاء خدمة له", "CONFLICT");
 
         const existing = await findActiveSettlement(tx, employee.id);
@@ -932,12 +994,13 @@ export async function updateSettlement(id: number, form: EndOfServiceForm, actor
   validateFormDates(form);
   const db = await requireDb();
   const current = await loadSettlement(db, id);
+  const branchId = await employeeBranchId(db, current.employeeId);
   if (form.employeeId !== current.employeeId) {
     throw new EndOfServiceError("لا يمكن تغيير الموظف في المخالصة");
   }
 
   return await db.transaction(async tx => {
-    const { employee, settlement } = await lockEmployeeAndSettlement(tx, current.employeeId, id);
+    const { employee, settlement } = await lockEmployeeAndSettlement(tx, current.employeeId, id, branchId);
     if (!isEndOfServiceEditable(settlement.status)) {
       throw new EndOfServiceError("لا يمكن تعديل مخالصة معتمدة أو مصروفة أو ملغاة", "CONFLICT");
     }
@@ -1049,9 +1112,10 @@ async function syncOpenPayrollsSafely(employeeId: number) {
 export async function approveSettlement(id: number, actor: EndOfServiceActor) {
   const db = await requireDb();
   const current = await loadSettlement(db, id);
+  const branchId = await employeeBranchId(db, current.employeeId);
 
   const outcome = await db.transaction(async tx => {
-    const { employee, settlement } = await lockEmployeeAndSettlement(tx, current.employeeId, id);
+    const { employee, settlement } = await lockEmployeeAndSettlement(tx, current.employeeId, id, branchId);
     if (!canTransitionEndOfService(settlement.status, "approved")) {
       throw new EndOfServiceError(
         `لا يمكن اعتماد مخالصة حالتها "${getEndOfServiceStatusLabel(settlement.status).ar}"`,
@@ -1076,6 +1140,11 @@ export async function approveSettlement(id: number, actor: EndOfServiceActor) {
         .set(values)
         .where(and(eq(endOfServiceSettlements.id, id), eq(endOfServiceSettlements.status, "draft")));
       if (affectedRows(res) === 0) throw new EndOfServiceError("تم تعديل المخالصة من مستخدم آخر، يرجى التحديث", "CONFLICT");
+      // وصف الطلب يحمل صافي المخالصة: يُحدّث مع الأرقام الجديدة
+      await tx
+        .update(employeeRequests)
+        .set({ description: requestDescription(form, calc, settlement.settlementNumber) })
+        .where(eq(employeeRequests.id, settlement.requestId));
       await addRequestLog(tx, settlement.requestId, actor, "إعادة حساب المخالصة قبل الاعتماد", "pending", "pending", `الصافي الجديد: ${calc.netAmount.toFixed(2)} ر.س`);
       return { changed: true as const };
     }
@@ -1092,7 +1161,13 @@ export async function approveSettlement(id: number, actor: EndOfServiceActor) {
 
     await tx
       .update(employeeRequests)
-      .set({ status: "approved", reviewedBy: actor.id, reviewedByName: name, reviewedAt: now })
+      .set({
+        status: "approved",
+        reviewedBy: actor.id,
+        reviewedByName: name,
+        reviewedAt: now,
+        description: requestDescription(form, calc, settlement.settlementNumber),
+      })
       .where(eq(employeeRequests.id, settlement.requestId));
 
     // انتهاء الخدمة: الموظف لا يدخل مسيرات الرواتب اللاحقة
@@ -1151,9 +1226,10 @@ export async function cancelSettlement(id: number, reason: string, actor: EndOfS
   if (!cleanReason || cleanReason.length < 3) throw new EndOfServiceError("سبب الإلغاء مطلوب");
   const db = await requireDb();
   const current = await loadSettlement(db, id);
+  const branchId = await employeeBranchId(db, current.employeeId);
 
   const result = await db.transaction(async tx => {
-    const { employee, settlement } = await lockEmployeeAndSettlement(tx, current.employeeId, id);
+    const { employee, settlement } = await lockEmployeeAndSettlement(tx, current.employeeId, id, branchId);
     if (settlement.status === "paid") throw new EndOfServiceError("لا يمكن إلغاء مخالصة تم صرفها");
     if (!canTransitionEndOfService(settlement.status, "cancelled")) {
       throw new EndOfServiceError("المخالصة ملغاة بالفعل", "CONFLICT");

@@ -155,6 +155,13 @@ export function CalculationBreakdown({
     <div className="space-y-3">
       <Section title="مدة الخدمة والأجر">
         <Row label="مدة الخدمة" value={<span dir="rtl">{c.serviceText}</span>} hint={`${c.service.totalDays.toLocaleString('en-US')} يوماً (${c.service.yearsDecimal.toFixed(2)} سنة)`} />
+        {c.excludedServiceDays > 0 && (
+          <Row
+            label="سنوات الخدمة المحتسبة"
+            value={`${c.awardYears.toFixed(2)} سنة`}
+            hint={`بعد استبعاد ${c.excludedServiceDays} يوماً إجازة بدون أجر تزيد على 20 يوماً (المادة 116)`}
+          />
+        )}
         <Row label="الأجر الشهري المعتمد للحساب" value={formatSar(c.monthlyWage)} />
         <Row label="أجر اليوم (الأجر ÷ 30)" value={formatSar(c.dailyWage)} />
       </Section>

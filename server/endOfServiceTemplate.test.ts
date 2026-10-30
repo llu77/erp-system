@@ -226,14 +226,16 @@ describe("المخالصة النهائية", () => {
 
   it("explains each entitlement and totals them", () => {
     expect(text).toContain("مكافأة نهاية الخدمة (المادة 84 من نظام العمل)");
-    expect(text).toContain("نصف أجر شهر × 5.000 سنة");
-    expect(text).toContain(`أجر شهر × ${(c.service.yearsDecimal - 5).toFixed(3)} سنة`);
+    // المدة بالسنوات والأشهر والأيام: أجر شهر × (2 + 7/12 + 22/365) يطابق المبلغ المطبوع
+    expect(text).toContain("نصف أجر شهر × 5 سنوات = 14,375.00");
+    expect(text).toContain(`أجر شهر × سنتان و7 أشهر و22 يوماً = ${formatVoucherAmount(c.eosAfterFiveYears)}`);
+    expect(Math.round(5750 * (2 + 7 / 12 + 22 / 365) * 100) / 100).toBe(c.eosAfterFiveYears);
     expect(text).toContain(formatVoucherAmount(c.eosAward));
     expect(text).toContain("مقابل الإجازة السنوية غير المستخدمة (المادة 111)");
-    expect(text).toContain(`${String(c.leaveBalanceDays)} يوم × ${formatVoucherAmount(c.dailyWage)}`);
+    expect(text).toContain(`${String(c.leaveBalanceDays)} يوم × (5,750.00 ÷ 30)`);
     expect(text).toContain(`(المستحق ${c.accruedLeaveDays} − المستخدم 96)`);
     expect(text).toContain("الأجر المستحق حتى آخر يوم عمل");
-    expect(text).toContain(`30 يوم × ${formatVoucherAmount(c.dailyWage)}`);
+    expect(text).toContain(`30 يوم × (5,750.00 ÷ 30)`);
     expect(text).toContain("من 01/10/2026 حتى 31/10/2026");
     expect(text).toContain("مستحقات أخرى بدل تذاكر سفر 300.00");
     expect(text).toContain(`إجمالي المستحقات ${formatVoucherAmount(c.totalEntitlements)}`);
@@ -281,7 +283,7 @@ describe("المخالصة النهائية", () => {
   it("omits the after-five-years line for shorter service", () => {
     const d2 = doc({}, { hireDate: "2023-11-01" });
     const t2 = visibleText(settlement(d2));
-    expect(t2).toContain("نصف أجر شهر × 3.000 سنة");
+    expect(t2).toContain("نصف أجر شهر × 3 سنوات");
     expect(t2).not.toContain("أجر شهر × 0");
   });
 
@@ -291,11 +293,28 @@ describe("المخالصة النهائية", () => {
       { leaveBalanceDaysOverride: 12.5, salaryDaysOverride: 18 }
     );
     const t2 = visibleText(settlement(d2));
-    expect(t2).toContain(`12.5 يوم × ${formatVoucherAmount(d2.calculation.dailyWage)}`);
+    expect(t2).toContain(`12.5 يوم × (5,750.00 ÷ 30)`);
     expect(t2).toContain("(رصيد معتمد يدوياً: حسب سجل الموارد البشرية)");
     expect(t2).not.toContain("(المستحق");
-    expect(t2).toContain(`18 يوم × ${formatVoucherAmount(d2.calculation.dailyWage)}`);
+    expect(t2).toContain(`18 يوم × (5,750.00 ÷ 30)`);
     expect(t2).toContain("(أيام عمل فعلية)");
+  });
+
+  it("uses collection wording when a negative net is marked paid", () => {
+    const d2 = doc({ status: "paid", paymentMethod: "cash", paidAt: "2026-11-02T09:00:00Z" }, { otherDeductions: 90000 });
+    const t2 = visibleText(settlement(d2));
+    expect(t2).toContain("تم التحصيل");
+    expect(t2).toContain("طريقة التحصيل: نقداً");
+    expect(t2).not.toContain("طريقة الصرف");
+    expect(t2).toContain("قد سددت لـ");
+    expect(t2).not.toContain("وأتعهد بسداده");
+  });
+
+  it("prints years with decimals and the Article 116 note when unpaid leave is excluded", () => {
+    const d2 = doc({}, { excludedServiceDays: 70 });
+    const t2 = visibleText(settlement(d2));
+    expect(t2).toContain("بعد استبعاد 70 يوم إجازة بدون أجر تزيد على 20 يوماً - المادة 116");
+    expect(t2).toContain(`أجر شهر × ${d2.calculation.awardYears > 5 ? (d2.calculation.awardYears - 5).toFixed(4) : "0"} سنة`);
   });
 
   it("uses the 'owed by the employee' wording when deductions exceed entitlements", () => {

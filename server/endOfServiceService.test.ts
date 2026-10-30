@@ -18,6 +18,8 @@ import {
   storedCalculation,
   sumAnnualLeaveDays,
   annualLeaveDaysTaken,
+  canViewEndOfServiceRequest,
+  sumExcludedServiceDays,
   toDocumentData,
   toListRow,
   vacationRowDays,
@@ -331,6 +333,36 @@ describe("settlement rows", () => {
 
   it("stores the request's last working day at Riyadh midnight", () => {
     expect(_internal.riyadhMidnight("2026-10-31").toISOString()).toBe("2026-10-30T21:00:00.000Z");
+  });
+});
+
+describe("Article 116 excluded service days", () => {
+  it("counts only approved unpaid leave beyond 20 days, per leave, up to the last working day", () => {
+    const rows = [
+      { vacationType: "بدون راتب", vacationStartDate: "2024-01-01", vacationEndDate: null, vacationDays: 50 },
+      { vacationType: "unpaid", vacationStartDate: "2025-01-01", vacationEndDate: null, vacationDays: 20 },
+      { vacationType: "سنوية", vacationStartDate: "2025-06-01", vacationEndDate: null, vacationDays: 40 },
+      { vacationType: "unpaid", vacationStartDate: "2026-12-01", vacationEndDate: null, vacationDays: 45 },
+    ];
+    expect(sumExcludedServiceDays(rows)).toBe(30 + 0 + 25);
+    expect(sumExcludedServiceDays(rows, "2026-10-31")).toBe(30);
+  });
+});
+
+describe("generic request endpoints", () => {
+  const eos = (branchId: number | null) => ({ requestType: "end_of_service", branchId });
+  it("let admins, managers and general supervisors see every end-of-service request", () => {
+    for (const role of ["admin", "manager", "viewer"]) expect(canViewEndOfServiceRequest({ role, branchId: 1 }, eos(2))).toBe(true);
+  });
+  it("limit branch supervisors to their branch and hide them from everyone else", () => {
+    expect(canViewEndOfServiceRequest({ role: "supervisor", branchId: 1 }, eos(1))).toBe(true);
+    expect(canViewEndOfServiceRequest({ role: "supervisor", branchId: 1 }, eos(2))).toBe(false);
+    expect(canViewEndOfServiceRequest({ role: "supervisor", branchId: null }, eos(1))).toBe(false);
+    expect(canViewEndOfServiceRequest({ role: "employee", branchId: 1 }, eos(1))).toBe(false);
+    expect(canViewEndOfServiceRequest({ role: "user", branchId: null }, eos(1))).toBe(false);
+  });
+  it("leave other request types unchanged", () => {
+    expect(canViewEndOfServiceRequest({ role: "employee", branchId: null }, { requestType: "advance", branchId: 2 })).toBe(true);
   });
 });
 
