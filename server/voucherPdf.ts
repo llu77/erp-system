@@ -95,9 +95,11 @@ export function renderVoucherHtmlEmbedded(voucher: VoucherTemplateData, options:
 export async function generateVoucherPDF(voucher: VoucherTemplateData): Promise<Buffer> {
   const html = renderVoucherHtmlEmbedded(voucher);
   const { default: puppeteer } = await import('puppeteer');
+  // نفس متصفح باقي تقارير PDF، مع الرجوع لمتصفح puppeteer المثبت إن لم يوجد
+  const systemChromium = '/usr/bin/chromium-browser';
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath: '/usr/bin/chromium-browser',
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (fs.existsSync(systemChromium) ? systemChromium : undefined),
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
   });
   try {
