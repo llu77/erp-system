@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isPlaceholderValue,
   ESTABLISHMENTS,
   GROUP_ESTABLISHMENT,
   getEstablishmentForBranch,
@@ -37,6 +38,19 @@ describe("getEstablishmentForBranch", () => {
       expect(e.logo).toBe("");
       expect(`${e.nameAr} ${e.email}`).not.toMatch(/symbol|سيمبول/i);
     }
+  });
+});
+
+describe("establishment unified numbers", () => {
+  it("prints each establishment's unified number and hides the group placeholder", () => {
+    expect(getEstablishmentForBranch("فرع لبن").cr).toBe("الرقم الموحد: 7032291507");
+    expect(getEstablishmentForBranch("فرع طويق").cr).toBe("الرقم الموحد: 7036161573");
+    expect(isPlaceholderValue(getEstablishmentForBranch("فرع لبن").cr)).toBe(false);
+    expect(isPlaceholderValue(getEstablishmentForBranch("فرع طويق").cr)).toBe(false);
+    expect(isPlaceholderValue(getEstablishmentForBranch("فرع العليا").cr)).toBe(true);
+    // الهاتف والرقم الضريبي لم يُعبآ بعد: لا يُطبعان
+    expect(isPlaceholderValue(getEstablishmentForBranch("فرع لبن").phone)).toBe(true);
+    expect(isPlaceholderValue(getEstablishmentForBranch("فرع لبن").vat)).toBe(true);
   });
 });
 

@@ -249,15 +249,15 @@ export async function generateReceiptVoucherReportPDF(data: ReportData): Promise
       text-align: center;
       line-height: 1.3;
       padding: 6px;
-      font-size: 10px;
-      width: 100px;
-      height: 100px;
+      font-size: 13px;
+      width: 130px;
+      height: 130px;
       border: 3px solid #1a1a1a;
       border-radius: 50%;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
+      font-size: 16px;
       font-weight: 700;
       color: #1a1a1a;
     }
@@ -885,8 +885,8 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
       text-align: center;
       line-height: 1.3;
       padding: 6px;
-      width: 100px;
-      height: 100px;
+      width: 130px;
+      height: 130px;
       border: 3px solid #1a4a7a;
       border-radius: 50%;
       display: flex;
@@ -895,7 +895,7 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
       justify-content: center;
       font-weight: 700;
       color: #1a4a7a;
-      font-size: 11px;
+      font-size: 14px;
       margin: 0 auto;
     }
     
@@ -1519,8 +1519,8 @@ export async function generateVouchersReportPDF(data: VoucherReportPDFData): Pro
       text-align: center;
       line-height: 1.3;
       padding: 4px;
-      width: 80px;
-      height: 80px;
+      width: 104px;
+      height: 104px;
       border: 3px solid #1e3a5f;
       border-radius: 50%;
       display: flex;
@@ -1531,13 +1531,13 @@ export async function generateVouchersReportPDF(data: VoucherReportPDFData): Pro
     }
     
     .stamp-text {
-      font-size: 10px;
+      font-size: 13px;
       font-weight: 700;
       color: #1e3a5f;
     }
     
     .stamp-company {
-      font-size: 8px;
+      font-size: 10px;
       color: #6b7280;
     }
     
@@ -2176,15 +2176,15 @@ export async function generateServicePerformancePDF(data: ServicePerformanceData
       text-align: center;
       line-height: 1.3;
       padding: 6px;
-      width: 80px;
-      height: 80px;
+      width: 104px;
+      height: 104px;
       border: 3px solid #1e3a5f;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       margin: 0 auto;
-      font-size: 8pt;
+      font-size: 10pt;
       color: #1e3a5f;
       font-weight: 700;
       text-align: center;
@@ -2729,15 +2729,15 @@ export async function generateEmployeePerformancePDF(data: {
       text-align: center;
       line-height: 1.3;
       padding: 6px;
-      width: 80px;
-      height: 80px;
+      width: 104px;
+      height: 104px;
       border: 3px solid #059669;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       margin: 0 auto 10px;
-      font-size: 10px;
+      font-size: 13px;
       color: #059669;
       font-weight: 600;
       text-align: center;

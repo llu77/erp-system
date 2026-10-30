@@ -67,15 +67,17 @@ const COMMON_ESTABLISHMENT_FIELDS = {
   email: '',
   logo: '',
   stamp: SIGNATURES.stamp.image,
-  cr: 'س.ت: XXXXXXXXXX',
+  /** رقم المنشأة كما يُطبع (الرقم الموحد)؛ XXXX = غير معبأ ولا يُطبع */
+  cr: 'الرقم الموحد: XXXXXXXXXX',
   vat: 'الرقم الضريبي: XXXXXXXXXXXXXXX',
 };
 
+// الرقم الموحد للمنشأة (700) يحل محل رقم السجل التجاري في المستندات
 export const ESTABLISHMENTS: Record<'qessa' | 'tadarruj', Establishment> = {
   // فرع لبن
-  qessa: { key: 'qessa', nameAr: 'مؤسسة قصه وتخفيف', ...COMMON_ESTABLISHMENT_FIELDS },
+  qessa: { key: 'qessa', nameAr: 'مؤسسة قصه وتخفيف', ...COMMON_ESTABLISHMENT_FIELDS, cr: 'الرقم الموحد: 7032291507' },
   // فرع طويق
-  tadarruj: { key: 'tadarruj', nameAr: 'مؤسسة تدرج وتخفيف', ...COMMON_ESTABLISHMENT_FIELDS },
+  tadarruj: { key: 'tadarruj', nameAr: 'مؤسسة تدرج وتخفيف', ...COMMON_ESTABLISHMENT_FIELDS, cr: 'الرقم الموحد: 7036161573' },
 };
 
 /** الهوية العامة: للتقارير المجمّعة لعدة فروع أو لفرع غير معروف */

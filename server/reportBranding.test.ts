@@ -53,7 +53,8 @@ describe("getReportEstablishment", () => {
 
 describe("establishmentDetailsLine", () => {
   it("يخفي القيم المؤقتة (XXXX) ويجمع الباقي", () => {
-    expect(establishmentDetailsLine(ESTABLISHMENTS.qessa)).toBe("");
+    expect(establishmentDetailsLine(GROUP_ESTABLISHMENT)).toBe("");
+    expect(establishmentDetailsLine(ESTABLISHMENTS.qessa)).toBe("الرقم الموحد: 7032291507");
     expect(
       establishmentDetailsLine({ subtitle: "صالون رجالي", cr: "س.ت: 1010123456", vat: "الرقم الضريبي: XXXXXXXXXXXXXXX" })
     ).toBe("صالون رجالي | س.ت: 1010123456");

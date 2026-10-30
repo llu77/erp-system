@@ -193,8 +193,8 @@ const BASE_STYLES = `
   .sig .line { border-top: 1px solid #333; margin-top: 4px; padding-top: 4px; font-weight: 800; font-size: 12px; }
   .sig .role { font-size: 10px; color: #555; }
   .stamp { text-align: center; }
-  .stamp img { width: 130px; height: 130px; object-fit: contain; opacity: .92; }
-  .stamp .ph { width: 110px; height: 110px; border: 2px dashed #ccc; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 10px; }
+  .stamp img { width: 170px; height: 170px; object-fit: contain; opacity: .92; }
+  .stamp .ph { width: 140px; height: 140px; border: 2px dashed #ccc; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 10px; }
   .footer { margin-top: 14px; border-top: 1px dashed #bbb; padding-top: 6px; display: flex; justify-content: space-between; font-size: 9.5px; color: #666; }
   @page { margin: 8mm; }
 `;

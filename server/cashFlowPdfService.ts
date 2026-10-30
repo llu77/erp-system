@@ -493,8 +493,8 @@ export function generateCashFlowReportHTML(data: CashFlowPDFData): string {
     }
     
     .stamp {
-      width: 90px;
-      height: 90px;
+      width: 117px;
+      height: 117px;
       border: 3px solid #a855f7;
       border-radius: 50%;
       display: flex;
@@ -507,14 +507,14 @@ export function generateCashFlowReportHTML(data: CashFlowPDFData): string {
     }
     
     .stamp .company {
-      font-size: 8px;
+      font-size: 10px;
       line-height: 1.2;
       text-align: center;
       padding: 0 4px;
     }
     
     .stamp .symbol {
-      font-size: 16px;
+      font-size: 21px;
     }
     
     /* الفوتر */

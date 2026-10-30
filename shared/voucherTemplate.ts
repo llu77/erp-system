@@ -433,9 +433,9 @@ const STYLES = (accent: string, accentSoft: string, fontFace: string) => `
   .sig-line { border-bottom: 1px solid #333; margin: 2px 10px 3px; }
   .sig-name { font-size: 11.5px; font-weight: 700; }
   .sig-name-en { font-size: 10px; color: #555; direction: ltr; }
-  .stamp-area { height: 96px; display: flex; align-items: center; justify-content: center; }
-  .stamp-img { width: 92px; height: 92px; object-fit: contain; opacity: 0.92; }
-  .stamp-placeholder { width: 86px; height: 86px; border: 2px dashed #bbb; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 10px; color: #888; }
+  .stamp-area { height: 136px; display: flex; align-items: center; justify-content: center; }
+  .stamp-img { width: 132px; height: 132px; object-fit: contain; opacity: 0.92; }
+  .stamp-placeholder { width: 112px; height: 112px; border: 2px dashed #bbb; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 10px; color: #888; }
   .approval-note { margin-top: 6px; text-align: center; font-size: 11px; color: #065f46; font-weight: 700; }
   .receiver { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 14px; margin-top: 12px; padding: 8px; border: 1px solid #999; border-radius: 4px; }
   .receiver-title { font-weight: 800; font-size: 12px; min-width: 110px; }

@@ -568,9 +568,9 @@ function generateRevenueHTML(data: RevenueHTMLData): string {
     .signature-line { border-top: 2px solid #333; padding-top: 10px; margin-top: 40px; }
     .signature-name { font-weight: 700; font-size: 12px; }
     .signature-title { font-size: 10px; color: #666; }
-    .stamp { width: 100px; height: 100px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; text-align: center; padding: 8px; line-height: 1.3; }
-    .stamp-logo { font-size: 14px; font-weight: 800; }
-    .stamp-text { font-size: 8px; }
+    .stamp { width: 130px; height: 130px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; text-align: center; padding: 8px; line-height: 1.3; }
+    .stamp-logo { font-size: 18px; font-weight: 800; }
+    .stamp-text { font-size: 10px; }
     @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
@@ -703,9 +703,9 @@ function generateExpenseHTML(data: ExpenseHTMLData): string {
     .signature-line { border-top: 2px solid #333; padding-top: 10px; margin-top: 40px; }
     .signature-name { font-weight: 700; font-size: 12px; }
     .signature-title { font-size: 10px; color: #666; }
-    .stamp { width: 100px; height: 100px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; text-align: center; padding: 8px; line-height: 1.3; }
-    .stamp-logo { font-size: 14px; font-weight: 800; }
-    .stamp-text { font-size: 8px; }
+    .stamp { width: 130px; height: 130px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; text-align: center; padding: 8px; line-height: 1.3; }
+    .stamp-logo { font-size: 18px; font-weight: 800; }
+    .stamp-text { font-size: 10px; }
     @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
@@ -828,9 +828,9 @@ function generateBonusHTML(data: BonusHTMLData): string {
     .signature-line { border-top: 2px solid #333; padding-top: 10px; margin-top: 40px; }
     .signature-name { font-weight: 700; font-size: 12px; }
     .signature-title { font-size: 10px; color: #666; }
-    .stamp { width: 100px; height: 100px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; text-align: center; padding: 8px; line-height: 1.3; }
-    .stamp-logo { font-size: 14px; font-weight: 800; }
-    .stamp-text { font-size: 8px; }
+    .stamp { width: 130px; height: 130px; border: 3px solid #1a4a7a; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; color: #1a4a7a; text-align: center; padding: 8px; line-height: 1.3; }
+    .stamp-logo { font-size: 18px; font-weight: 800; }
+    .stamp-text { font-size: 10px; }
     @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>

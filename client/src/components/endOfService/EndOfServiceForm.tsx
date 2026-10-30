@@ -38,6 +38,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
+  END_OF_SERVICE_FIXED_AWARD,
   getEndOfServiceStatusLabel,
   parseDateOnly,
 } from "@shared/endOfService";
@@ -441,8 +442,9 @@ function PreviewPanel({
         </div>
       )}
       <p className="text-[11px] text-muted-foreground leading-relaxed">
-        يُحسب على الخادم بنفس دالة الحفظ: المكافأة وفق المادة 84، والإجازة 21
-        يوماً سنوياً (30 بعد خمس سنوات)، وأجر اليوم = الأجر الشهري ÷ 30.
+        يُحسب على الخادم بنفس دالة الحفظ: مكافأة نهاية الخدمة مبلغ ثابت{" "}
+        {formatSar(END_OF_SERVICE_FIXED_AWARD)} حسب سياسة المنشأة، وأجر اليوم = الأجر
+        الشهري ÷ 30.
       </p>
     </div>
   );

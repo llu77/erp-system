@@ -535,8 +535,8 @@ export function generateDocumentReportHTML(data: DocumentReportData): string {
     }
     
     .stamp {
-      width: 70px;
-      height: 70px;
+      width: 91px;
+      height: 91px;
       border: 3px solid #a855f7;
       border-radius: 50%;
       display: flex;
@@ -549,14 +549,14 @@ export function generateDocumentReportHTML(data: DocumentReportData): string {
     }
     
     .stamp .company {
-      font-size: 7px;
+      font-size: 9px;
       line-height: 1.2;
       text-align: center;
       padding: 0 4px;
     }
     
     .stamp .symbol {
-      font-size: 14px;
+      font-size: 18px;
     }
     
     /* الفوتر */
