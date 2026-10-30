@@ -1,4 +1,5 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
+import { getMainSessionSecret } from "./sessionSecret";
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
 import { COOKIE_NAME } from "../../shared/const";
@@ -31,8 +32,9 @@ export async function createContext(
       const cookieHeader = opts.req.headers.cookie;
       const token = cookieHeader ? parseCookieHeader(cookieHeader)[COOKIE_NAME] : undefined;
 
-      if (token) {
-        const secret = new TextEncoder().encode(process.env.JWT_SECRET || "fallback-secret");
+      // بدون مفتاح في الإنتاج لا تُقبل أي جلسة محلية (لا مفتاح احتياطي معروف)
+      const secret = token ? getMainSessionSecret() : null;
+      if (token && secret) {
         const { payload } = await jwtVerify(token, secret);
 
         // رمز جلسة بوابة الموظفين لا يصلح كجلسة للنظام الرئيسي

@@ -397,7 +397,16 @@ export const appRouter = router({
         
         // إنشاء جلسة للمستخدم
         const { SignJWT } = await import('jose');
-        const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret');
+        const { requireMainSessionSecret, MainSessionSecretMissingError } = await import('./_core/sessionSecret');
+        let secret: Uint8Array;
+        try {
+          secret = requireMainSessionSecret();
+        } catch (error) {
+          if (error instanceof MainSessionSecretMissingError) {
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'إعدادات الخادم غير مكتملة (JWT_SECRET)، تواصل مع مسؤول النظام' });
+          }
+          throw error;
+        }
         
         const token = await new SignJWT({
           userId: result.user!.id,
