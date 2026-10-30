@@ -285,7 +285,11 @@ export default function ReceiptVoucher({ initialType }: { initialType?: VoucherT
   const handleSendEmail = async (voucherId: string) => {
     try {
       const result = await sendEmailMutation.mutateAsync({ voucherId });
-      if (result.success) toast.success(`تم إرسال السند إلى ${result.sentTo.length} مستلم`);
+      if (result.partial) {
+        toast.warning(
+          `تم إرسال السند إلى ${result.sentTo.length} مستلم، وتعذر الإرسال إلى: ${result.failed.map(f => f.email).join('، ')}`
+        );
+      } else if (result.success) toast.success(`تم إرسال السند إلى ${result.sentTo.length} مستلم`);
       else toast.error(result.error || 'فشل في إرسال البريد الإلكتروني');
     } catch (error: any) {
       toast.error(error?.message || 'فشل في إرسال البريد الإلكتروني');
@@ -644,14 +648,17 @@ export default function ReceiptVoucher({ initialType }: { initialType?: VoucherT
             <DialogFooter className="flex flex-wrap gap-2 sm:justify-between">
               {renderActions(previewQuery.data, false)}
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => handleSendEmail(previewQuery.data!.voucherId)}
-                  disabled={sendEmailMutation.isPending}
-                >
-                  <Mail className="w-4 h-4 ml-2" />
-                  {sendEmailMutation.isPending ? 'جاري الإرسال...' : 'إرسال بالبريد'}
-                </Button>
+                {/* السند الملغي لا يُرسل بالبريد */}
+                {previewQuery.data.status !== 'cancelled' && (
+                  <Button
+                    variant="outline"
+                    onClick={() => handleSendEmail(previewQuery.data!.voucherId)}
+                    disabled={sendEmailMutation.isPending}
+                  >
+                    <Mail className="w-4 h-4 ml-2" />
+                    {sendEmailMutation.isPending ? 'جاري الإرسال...' : 'إرسال بالبريد'}
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => handleDownloadPdf(previewQuery.data!.voucherId)}

@@ -7028,6 +7028,10 @@ export const appRouter = router({
         const { getVoucher } = await import('./receiptVoucher');
         const { sendVoucherEmail } = await import('./receiptVoucherEmail');
         const voucher = await runVoucherAction(() => getVoucher(input.voucherId, voucherActor(ctx.user)));
+        // السند الملغي لا يُرسل (كان البريد يطلب من المديرين اعتماده)
+        if (voucher.status === 'cancelled') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إرسال سند ملغي بالبريد الإلكتروني' });
+        }
         return sendVoucherEmail(voucher);
       }),
 
