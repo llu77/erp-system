@@ -21,6 +21,8 @@ interface ExportData {
   headers: string[];
   rows: (string | number)[][];
   summary?: { label: string; value: string | number }[];
+  /** فرع التقرير لترويسة المؤسسة (بدون فرع = الهوية العامة) */
+  branchName?: string | null;
 }
 
 interface ExportReportsProps {
@@ -177,7 +179,7 @@ export function ExportReports({ data, filename }: ExportReportsProps) {
   <style>${PDF_BASE_STYLES}</style>
 </head>
 <body>
-  ${getPDFHeader(data.title)}
+  ${getPDFHeader(data.title, { branchName: data.branchName })}
   
   <table class="pdf-table">
     <thead>
@@ -196,7 +198,7 @@ export function ExportReports({ data, filename }: ExportReportsProps) {
   
   ${data.summary && data.summary.length > 0 ? getPDFSummarySection(data.summary) : ""}
   
-  ${getPDFFooter()}
+  ${getPDFFooter(undefined, { branchName: data.branchName })}
 </body>
 </html>
       `;

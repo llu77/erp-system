@@ -10475,7 +10475,7 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         .query(async ({ input }) => {
           const settings = await db.getPrintSettings(input.branchId);
           if (!settings) {
-            return db.getDefaultPrintSettings(input.branchId);
+            return db.getDefaultPrintSettings(input.branchId, await db.getBranchById(input.branchId));
           }
           return settings;
         }),

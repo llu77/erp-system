@@ -1,9 +1,13 @@
 /**
  * خدمة توليد تقرير التدفق النقدي PDF
- * Symbol AI - نظام إدارة الأعمال
- * قالب احترافي للشركات مع شعار وختم وتوقيعات
+ * قالب احترافي للشركات مع ختم وتوقيعات
  * يستخدم HTML مباشرة للطباعة من المتصفح
+ * الجهة المُصدرة: مؤسسة الفرع المحدد، أو الهوية العامة لجميع الفروع (بدون اسم النظام)
  */
+
+import { SIGNATURES } from '../shared/branding';
+import { escapeHtml } from '../shared/vouchers';
+import { establishmentDetailsLine, getReportEstablishment, reportFooterHtml } from '../shared/reportBranding';
 
 interface CashFlowPDFData {
   reportTitle: string;
@@ -96,6 +100,8 @@ export function generateCashFlowReportHTML(data: CashFlowPDFData): string {
     : `${data.startDate} - ${data.endDate}`;
 
   const branchLabel = data.branchName || 'جميع الفروع';
+  const est = getReportEstablishment(data.branchName);
+  const estDetails = establishmentDetailsLine(est);
   const isPositive = data.summary.remainingCash >= 0;
   const growthColor = data.kpis.growthRate >= 0 ? '#22c55e' : '#ef4444';
   const growthIcon = data.kpis.growthRate >= 0 ? '↑' : '↓';
@@ -501,7 +507,10 @@ export function generateCashFlowReportHTML(data: CashFlowPDFData): string {
     }
     
     .stamp .company {
-      font-size: 9px;
+      font-size: 8px;
+      line-height: 1.2;
+      text-align: center;
+      padding: 0 4px;
     }
     
     .stamp .symbol {
@@ -552,15 +561,14 @@ export function generateCashFlowReportHTML(data: CashFlowPDFData): string {
     <!-- الهيدر -->
     <div class="header">
       <div class="logo-section">
-        <div class="logo">S</div>
         <div class="company-info">
-          <h1>Symbol AI</h1>
-          <p>نظام إدارة الأعمال المتكامل</p>
+          <h1>${escapeHtml(est.nameAr)}</h1>
+          ${estDetails ? `<p>${escapeHtml(estDetails)}</p>` : ''}
         </div>
       </div>
       <div class="report-meta">
         <p>تاريخ الإصدار: <span class="date">${formatDate(data.generatedAt)}</span></p>
-        <p>أعده: ${data.generatedBy}</p>
+        <p>أعده: ${escapeHtml(data.generatedBy)}</p>
         <p>رقم التقرير: CF-${data.year}${data.month ? String(data.month).padStart(2, '0') : '00'}-${Date.now().toString().slice(-4)}</p>
       </div>
     </div>
@@ -569,7 +577,7 @@ export function generateCashFlowReportHTML(data: CashFlowPDFData): string {
     <div class="report-title">
       <h2>تقرير التدفق النقدي</h2>
       <span class="period">${periodLabel}</span>
-      <span class="branch">${branchLabel}</span>
+      <span class="branch">${escapeHtml(branchLabel)}</span>
     </div>
     
     <!-- بطاقات الملخص -->
@@ -714,7 +722,7 @@ export function generateCashFlowReportHTML(data: CashFlowPDFData): string {
         <tbody>
           ${data.branches.map(branch => `
             <tr>
-              <td><strong>${branch.branchName}</strong></td>
+              <td><strong>${escapeHtml(branch.branchName)}</strong></td>
               <td class="positive">${formatCurrency(branch.cashRevenue)}</td>
               <td class="negative">${formatCurrency(branch.cashExpenses)}</td>
               <td style="color: #ea580c;">${formatCurrency(branch.cashVouchers)}</td>
@@ -731,27 +739,27 @@ export function generateCashFlowReportHTML(data: CashFlowPDFData): string {
     <div class="signatures-section">
       <div class="signatures-grid">
         <div class="signature-box">
-          <div class="title">المشرف العام</div>
+          <div class="title">${escapeHtml(SIGNATURES.supervisor.title)}</div>
           <div class="line">
-            <div class="name">سالم الوادعي</div>
-            <div class="role">General Supervisor</div>
+            <div class="name">${escapeHtml(SIGNATURES.supervisor.name)}</div>
+            <div class="role">${escapeHtml(SIGNATURES.supervisor.titleEn)}</div>
           </div>
         </div>
         
         <div class="signature-box stamp-box">
           <div class="stamp">
-            <span class="company">Symbol AI</span>
+            <span class="company">${escapeHtml(est.nameAr)}</span>
             <span class="symbol">✓</span>
             <span class="company">معتمد</span>
           </div>
-          <div class="role">ختم الشركة</div>
+          <div class="role">${escapeHtml(SIGNATURES.stamp.label)}</div>
         </div>
         
         <div class="signature-box">
-          <div class="title">المدير</div>
+          <div class="title">${escapeHtml(SIGNATURES.manager.title)}</div>
           <div class="line">
-            <div class="name">عمر المطيري</div>
-            <div class="role">Manager</div>
+            <div class="name">${escapeHtml(SIGNATURES.manager.name)}</div>
+            <div class="role">${escapeHtml(SIGNATURES.manager.titleEn)}</div>
           </div>
         </div>
       </div>
@@ -759,8 +767,7 @@ export function generateCashFlowReportHTML(data: CashFlowPDFData): string {
     
     <!-- الفوتر -->
     <div class="footer">
-      <p>هذا التقرير تم إنشاؤه آلياً بواسطة نظام Symbol AI لإدارة الأعمال</p>
-      <p class="copyright">All rights reserved to Symbol AI © ${new Date().getFullYear()}</p>
+      <p>${reportFooterHtml(est)}</p>
     </div>
   </div>
   

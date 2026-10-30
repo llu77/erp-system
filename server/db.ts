@@ -13137,6 +13137,7 @@ export async function recordLoyaltyDiscountUsage(data: {
 // ============================================
 
 import { posPrintSettings, PosPrintSettings, InsertPosPrintSettings } from '../drizzle/schema';
+import { getEstablishmentForBranch, type BranchLike } from '../shared/branding';
 
 /**
  * جلب إعدادات الطباعة للفرع
@@ -13203,7 +13204,7 @@ export async function savePrintSettings(data: InsertPosPrintSettings): Promise<{
 /**
  * جلب إعدادات الطباعة الافتراضية
  */
-export function getDefaultPrintSettings(branchId: number): InsertPosPrintSettings {
+export function getDefaultPrintSettings(branchId: number, branch?: BranchLike): InsertPosPrintSettings {
   return {
     branchId,
     paperWidth: '80mm',
@@ -13212,7 +13213,8 @@ export function getDefaultPrintSettings(branchId: number): InsertPosPrintSetting
     showQRCode: true,
     showBranchPhone: true,
     showEmployeeName: true,
-    storeName: 'Symbol AI',
+    // اسم المتجر الافتراضي = مؤسسة الفرع (لبن -> قصه وتخفيف، طويق -> تدرج وتخفيف) وليس اسم النظام
+    storeName: getEstablishmentForBranch(branch).nameAr,
     storePhone: '',
     storeAddress: '',
     headerMessage: '',

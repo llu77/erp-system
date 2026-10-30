@@ -347,7 +347,7 @@ export default function ExecutiveDashboard() {
   </style>
 </head>
 <body>
-  ${getPDFHeader('تقرير لوحة التحكم التنفيذية', { reportNumber: `RPT-EXEC-${Date.now()}` })}
+  ${getPDFHeader('تقرير لوحة التحكم التنفيذية', { reportNumber: `RPT-EXEC-${Date.now()}`, branchName })}
   
   ${getPDFInfoSection([
     { label: 'الفرع', value: branchName },
@@ -466,7 +466,7 @@ export default function ExecutiveDashboard() {
     approvalDate: new Date().toLocaleDateString('ar-SA')
   })}
   
-  ${getPDFFooter()}
+  ${getPDFFooter(undefined, { branchName })}
 </body>
 </html>
       `;

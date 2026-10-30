@@ -411,7 +411,7 @@ export default function SalesDashboard() {
   </style>
 </head>
 <body>
-  ${getPDFHeader('تقرير لوحة الإيرادات', { reportNumber: `RPT-REV-${Date.now()}` })}
+  ${getPDFHeader('تقرير لوحة الإيرادات', { reportNumber: `RPT-REV-${Date.now()}`, branchName })}
   
   ${getPDFInfoSection([
     { label: 'الفرع', value: branchName },
@@ -569,7 +569,7 @@ export default function SalesDashboard() {
     approvalDate: new Date().toLocaleDateString('ar-SA')
   })}
   
-  ${getPDFFooter()}
+  ${getPDFFooter(undefined, { branchName })}
 </body>
 </html>
       `;

@@ -1,7 +1,8 @@
 import puppeteer from 'puppeteer';
 import type { VoucherTemplateData } from '../shared/voucherTemplate';
 import { generateVoucherPDF } from './voucherPdf';
-import { escapeHtml } from '../shared/vouchers';
+import { escapeHtml, formatVoucherDate } from '../shared/vouchers';
+import { REPORT_SIGNATORIES, establishmentDetailsLine, getReportEstablishment, reportFooterHtml } from '../shared/reportBranding';
 import { formatBonusPeriodLabel } from '../shared/bonus';
 import { getTierDisplayName, getTierColorHex } from '../shared/bonusHelpers';
 
@@ -56,6 +57,9 @@ export async function generateSingleReceiptVoucherPDF(voucher: VoucherTemplateDa
  * توليد PDF لتقرير سندات القبض
  */
 export async function generateReceiptVoucherReportPDF(data: ReportData): Promise<Buffer> {
+  // الجهة المُصدرة: مؤسسة الفرع، أو الهوية العامة لعدة فروع
+  const reportEst = getReportEstablishment(data.branchName);
+  const reportEstDetails = establishmentDetailsLine(reportEst);
   const htmlContent = `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -242,6 +246,10 @@ export async function generateReceiptVoucherReportPDF(data: ReportData): Promise
     }
     
     .stamp {
+      text-align: center;
+      line-height: 1.3;
+      padding: 6px;
+      font-size: 10px;
       width: 100px;
       height: 100px;
       border: 3px solid #1a1a1a;
@@ -270,28 +278,28 @@ export async function generateReceiptVoucherReportPDF(data: ReportData): Promise
 </head>
 <body>
   <div class="header">
-    <div class="logo">Symbol AI</div>
-    <div class="company-name">سيمبول للذكاء الاصطناعي - صالونات قصه وتخفيف وفروعها</div>
-    <div class="report-title">${data.title}</div>
+    <div class="logo">${escapeHtml(reportEst.nameAr)}</div>
+    ${reportEstDetails ? `<div class="company-name">${escapeHtml(reportEstDetails)}</div>` : ''}
+    <div class="report-title">${escapeHtml(data.title)}</div>
     <div class="report-number">رقم التقرير: RVR-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}</div>
   </div>
   
   <div class="info-section">
     <div class="info-item">
       <div class="info-label">نوع الفترة</div>
-      <div class="info-value">${data.periodType}</div>
+      <div class="info-value">${escapeHtml(data.periodType)}</div>
     </div>
     <div class="info-item">
       <div class="info-label">من تاريخ</div>
-      <div class="info-value">${data.startDate}</div>
+      <div class="info-value">${escapeHtml(data.startDate)}</div>
     </div>
     <div class="info-item">
       <div class="info-label">إلى تاريخ</div>
-      <div class="info-value">${data.endDate}</div>
+      <div class="info-value">${escapeHtml(data.endDate)}</div>
     </div>
     <div class="info-item">
       <div class="info-label">الفرع</div>
-      <div class="info-value">${data.branchName}</div>
+      <div class="info-value">${escapeHtml(data.branchName)}</div>
     </div>
   </div>
   
@@ -330,12 +338,12 @@ export async function generateReceiptVoucherReportPDF(data: ReportData): Promise
       ` : data.receipts.map((receipt, index) => `
         <tr>
           <td>${index + 1}</td>
-          <td>${receipt.voucherId}</td>
-          <td>${receipt.voucherDate}</td>
-          <td>${receipt.payeeName || '-'}</td>
+          <td>${escapeHtml(receipt.voucherId)}</td>
+          <td>${escapeHtml(receipt.voucherDate)}</td>
+          <td>${escapeHtml(receipt.payeeName || '-')}</td>
           <td>${formatCurrency(parseFloat(receipt.totalAmount) || 0)}</td>
-          <td>${receipt.createdByName || '-'}</td>
-          <td class="status-${receipt.status || 'draft'}">${getStatusLabel(receipt.status)}</td>
+          <td>${escapeHtml(receipt.createdByName || '-')}</td>
+          <td class="status-${escapeHtml(receipt.status || 'draft')}">${getStatusLabel(receipt.status)}</td>
         </tr>
       `).join('')}
       <tr class="total-row">
@@ -350,26 +358,26 @@ export async function generateReceiptVoucherReportPDF(data: ReportData): Promise
     <div class="signatures">
       <div class="signature-box">
         <div class="signature-line">
-          <div class="signature-name">سالم الوادعي</div>
-          <div class="signature-title">مدير المالية</div>
+          <div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.supervisor.name)}</div>
+          <div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.supervisor.title)}</div>
         </div>
       </div>
       <div class="signature-box">
         <div class="stamp">
-          <div>Symbol AI<br/>الإدارة</div>
+          <div>${escapeHtml(reportEst.nameAr)}<br/>الإدارة</div>
         </div>
       </div>
       <div class="signature-box">
         <div class="signature-line">
-          <div class="signature-name">عمر المطيري</div>
-          <div class="signature-title">المراجع المالي</div>
+          <div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.manager.name)}</div>
+          <div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.manager.title)}</div>
         </div>
       </div>
     </div>
   </div>
   
   <div class="print-info">
-    تم إنشاء هذا التقرير بواسطة نظام Symbol AI | التاريخ: ${new Date().toLocaleDateString('ar-SA')} | الوقت: ${new Date().toLocaleTimeString('ar-SA')}
+    ${reportFooterHtml(reportEst)}
   </div>
 </body>
 </html>
@@ -471,6 +479,9 @@ const getMonthName = (month: number): string => {
  * توليد PDF لتقرير البونص الأسبوعي
  */
 export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData): Promise<Buffer> {
+  // الجهة المُصدرة: مؤسسة فرع البونص (لبن -> قصه وتخفيف، طويق -> تدرج وتخفيف)
+  const reportEst = getReportEstablishment(data.branchName);
+  const reportEstDetails = establishmentDetailsLine(reportEst);
   const formatDate = (date: Date | string | null | undefined): string => {
     if (!date) return 'غير محدد';
     const d = new Date(date);
@@ -502,7 +513,7 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>تقرير البونص الأسبوعي - ${data.branchName}</title>
+  <title>تقرير البونص الأسبوعي - ${escapeHtml(data.branchName)}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;600;700;800&display=swap');
     
@@ -543,7 +554,7 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
     }
     
     .logo {
-      font-size: 28px;
+      font-size: 22px;
       font-weight: 800;
       margin-bottom: 5px;
     }
@@ -871,6 +882,9 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
     }
     
     .stamp {
+      text-align: center;
+      line-height: 1.3;
+      padding: 6px;
       width: 100px;
       height: 100px;
       border: 3px solid #1a4a7a;
@@ -910,8 +924,8 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
     <!-- رأس التقرير -->
     <div class="header">
       <div class="logo-section">
-        <div class="logo">Symbol AI</div>
-        <div class="company-name">سيمبول للذكاء الاصطناعي</div>
+        <div class="logo">${escapeHtml(reportEst.nameAr)}</div>
+        ${reportEstDetails ? `<div class="company-name">${escapeHtml(reportEstDetails)}</div>` : ''}
       </div>
       <div class="report-title-section">
         <div class="report-title">تقرير البونص الأسبوعي</div>
@@ -919,7 +933,7 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
       </div>
       <div class="status-section">
         <div class="status-label">الحالة</div>
-        <span class="status-badge status-${data.status}">${getBonusStatusLabel(data.status)}</span>
+        <span class="status-badge status-${escapeHtml(data.status)}">${getBonusStatusLabel(data.status)}</span>
       </div>
     </div>
     
@@ -927,7 +941,7 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
     <div class="info-bar">
       <div class="info-item">
         <div class="info-label">الفرع</div>
-        <div class="info-value">${data.branchName}</div>
+        <div class="info-value">${escapeHtml(data.branchName)}</div>
       </div>
       <div class="info-item">
         <div class="info-label">الفترة</div>
@@ -976,7 +990,7 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
           .map(([tier, stats]) => `
             <div class="tier-card" style="background: ${getTierColor(tier)}">
               <div class="tier-count">${stats.count}</div>
-              <div class="tier-name">${stats.name}</div>
+              <div class="tier-name">${escapeHtml(stats.name)}</div>
               <div class="tier-amount">${formatCurrencyLocal(stats.total)}</div>
             </div>
           `).join('')}
@@ -1002,11 +1016,11 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
           ${data.employees.map((emp, index) => `
             <tr class="${!emp.isEligible ? 'not-eligible' : ''}">
               <td>${index + 1}</td>
-              <td class="employee-name">${emp.name}</td>
-              <td class="employee-code">${emp.code || '-'}</td>
+              <td class="employee-name">${escapeHtml(emp.name)}</td>
+              <td class="employee-code">${escapeHtml(emp.code || '-')}</td>
               <td>${formatCurrencyLocal(emp.weeklyRevenue)}</td>
               <td>
-                <span class="tier-badge" style="background: ${getTierColor(emp.tier)}">${getTierLabel(emp.tier, emp.tierName)}</span>
+                <span class="tier-badge" style="background: ${getTierColor(emp.tier)}">${escapeHtml(getTierLabel(emp.tier, emp.tierName))}</span>
               </td>
               <td class="bonus-amount">${emp.isEligible ? formatCurrencyLocal(emp.bonusAmount) : '-'}</td>
             </tr>
@@ -1036,7 +1050,7 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
         </div>
         <div class="payment-item">
           <div class="payment-label">مرجع الدفع</div>
-          <div class="payment-value">${data.paymentReference || '-'}</div>
+          <div class="payment-value">${escapeHtml(data.paymentReference || '-')}</div>
         </div>
       </div>
     </div>
@@ -1046,27 +1060,27 @@ export async function generateWeeklyBonusReportPDF(data: WeeklyBonusReportData):
     <div class="signatures-section">
       <div class="signature-box">
         <div class="signature-line">
-          <div class="signature-name">سالم الوادعي</div>
-          <div class="signature-title">مدير المالية</div>
+          <div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.supervisor.name)}</div>
+          <div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.supervisor.title)}</div>
         </div>
       </div>
       <div class="signature-box">
         <div class="stamp">
-          <div>Symbol AI</div>
+          <div>${escapeHtml(reportEst.nameAr)}</div>
           <div>الإدارة</div>
         </div>
       </div>
       <div class="signature-box">
         <div class="signature-line">
-          <div class="signature-name">عمر المطيري</div>
-          <div class="signature-title">المراجع المالي</div>
+          <div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.manager.name)}</div>
+          <div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.manager.title)}</div>
         </div>
       </div>
     </div>
     
     <!-- ذيل التقرير -->
     <div class="footer">
-      تم إنشاء هذا التقرير بواسطة نظام Symbol AI | التاريخ: ${new Date().toLocaleDateString('ar-SA')} | الوقت: ${new Date().toLocaleTimeString('ar-SA')}
+      ${reportFooterHtml(reportEst)}
     </div>
   </div>
 </body>
@@ -1139,6 +1153,9 @@ interface VoucherReportPDFData {
 }
 
 export async function generateVouchersReportPDF(data: VoucherReportPDFData): Promise<Buffer> {
+  // الجهة المُصدرة: مؤسسة الفرع المحدد، أو الهوية العامة لجميع الفروع
+  const reportEst = getReportEstablishment(data.filters.branchName);
+  const reportEstDetails = establishmentDetailsLine(reportEst);
   const formatDate = (date: Date | string): string => {
     const d = new Date(date);
     return d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -1499,6 +1516,9 @@ export async function generateVouchersReportPDF(data: VoucherReportPDFData): Pro
     }
     
     .stamp {
+      text-align: center;
+      line-height: 1.3;
+      padding: 4px;
       width: 80px;
       height: 80px;
       border: 3px solid #1e3a5f;
@@ -1548,15 +1568,14 @@ export async function generateVouchersReportPDF(data: VoucherReportPDFData): Pro
     <!-- رأس التقرير -->
     <div class="report-header">
       <div class="logo-section">
-        <div class="logo">S</div>
         <div class="company-info">
-          <h1>Symbol AI</h1>
-          <p>نظام إدارة الموارد المتكامل</p>
+          <h1>${escapeHtml(reportEst.nameAr)}</h1>
+          ${reportEstDetails ? `<p>${escapeHtml(reportEstDetails)}</p>` : ''}
         </div>
       </div>
       <div class="report-title-section">
         <div class="report-title">تقرير السندات الشهري - ${voucherTypeLabel(data.filters.voucherType)}</div>
-        <div class="report-date">تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</div>
+        <div class="report-date">تاريخ التقرير: ${formatVoucherDate(new Date())}</div>
       </div>
     </div>
     
@@ -1669,30 +1688,30 @@ export async function generateVouchersReportPDF(data: VoucherReportPDFData): Pro
       <div class="signature-box">
         <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCA0MGMxNS0yMCAzMC0xMCA0NS0yNSIgc3Ryb2tlPSIjMWUzYTVmIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiLz48cGF0aCBkPSJNNTUgMTVjMTAgMTUgMjAgMjAgMzUgMjUiIHN0cm9rZT0iIzFlM2E1ZiIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJub25lIi8+PC9zdmc+" class="signature-image" alt="توقيع">
         <div class="signature-line">
-          <div class="signature-name">سالم الوادعي</div>
-          <div class="signature-title">مدير المالية</div>
+          <div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.supervisor.name)}</div>
+          <div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.supervisor.title)}</div>
         </div>
       </div>
       
       <div class="stamp-section">
         <div class="stamp">
           <div class="stamp-text">الإدارة</div>
-          <div class="stamp-company">Symbol AI</div>
+          <div class="stamp-company">${escapeHtml(reportEst.nameAr)}</div>
         </div>
       </div>
       
       <div class="signature-box">
         <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAzNWMyMC0xMCA0MC01IDYwLTIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik03MCAxNWM1IDEwIDEwIDE1IDIwIDIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" class="signature-image" alt="توقيع">
         <div class="signature-line">
-          <div class="signature-name">عمر المطيري</div>
-          <div class="signature-title">المراجع المالي</div>
+          <div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.manager.name)}</div>
+          <div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.manager.title)}</div>
         </div>
       </div>
     </div>
     
     <!-- ذيل التقرير -->
     <div class="report-footer">
-      تم إنشاء هذا التقرير بواسطة نظام Symbol AI | التاريخ: ${new Date().toLocaleDateString('ar-SA')} | الوقت: ${new Date().toLocaleTimeString('ar-SA')}
+      ${reportFooterHtml(reportEst)}
     </div>
   </div>
 </body>
@@ -1769,6 +1788,9 @@ interface ServicePerformanceData {
 }
 
 export async function generateServicePerformancePDF(data: ServicePerformanceData): Promise<Buffer> {
+  // الجهة المُصدرة: مؤسسة الفرع، أو الهوية العامة لجميع الفروع
+  const reportEst = getReportEstablishment(data.branchName);
+  const reportEstDetails = establishmentDetailsLine(reportEst);
   const formatCurrencyLocal = (amount: number): string => {
     return `${amount.toLocaleString('ar-SA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ر.س`;
   };
@@ -2151,6 +2173,9 @@ export async function generateServicePerformancePDF(data: ServicePerformanceData
     }
     
     .stamp {
+      text-align: center;
+      line-height: 1.3;
+      padding: 6px;
       width: 80px;
       height: 80px;
       border: 3px solid #1e3a5f;
@@ -2187,16 +2212,15 @@ export async function generateServicePerformancePDF(data: ServicePerformanceData
     <!-- Header -->
     <div class="header">
       <div class="logo-section">
-        <div class="logo">S</div>
         <div class="company-info">
-          <h1>Symbol AI</h1>
-          <p>سيمبول للذكاء الاصطناعي - صالونات قصه وتخفيف</p>
+          <h1>${escapeHtml(reportEst.nameAr)}</h1>
+          ${reportEstDetails ? `<p>${escapeHtml(reportEstDetails)}</p>` : ''}
         </div>
       </div>
       <div class="report-info">
         <h2>تقرير أداء الخدمات</h2>
-        <p>${data.month} ${data.year}</p>
-        <p>الفرع: ${data.branchName}</p>
+        <p>${escapeHtml(data.month)} ${escapeHtml(data.year)}</p>
+        <p>الفرع: ${escapeHtml(data.branchName)}</p>
       </div>
     </div>
     
@@ -2328,28 +2352,28 @@ export async function generateServicePerformancePDF(data: ServicePerformanceData
         <div class="signature-box">
           <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAzNWMyMC0xMCA0MC01IDYwLTIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik03MCAxNWM1IDEwIDEwIDE1IDIwIDIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" class="signature-image" alt="توقيع">
           <div class="signature-line">
-            <div class="signature-name">سالم الوادعي</div>
-            <div class="signature-title">المشرف العام</div>
+            <div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.supervisor.name)}</div>
+            <div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.supervisor.title)}</div>
           </div>
         </div>
         
         <div class="signature-box">
           <div class="stamp">
-            <div>Symbol AI<br/>الإدارة</div>
+            <div>${escapeHtml(reportEst.nameAr)}<br/>الإدارة</div>
           </div>
         </div>
         
         <div class="signature-box">
           <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAzNWMyMC0xMCA0MC01IDYwLTIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik03MCAxNWM1IDEwIDEwIDE1IDIwIDIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" class="signature-image" alt="توقيع">
           <div class="signature-line">
-            <div class="signature-name">عمر المطيري</div>
-            <div class="signature-title">المدير</div>
+            <div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.manager.name)}</div>
+            <div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.manager.title)}</div>
           </div>
         </div>
       </div>
       
       <div class="report-footer">
-        تم إنشاء هذا التقرير بواسطة نظام Symbol AI | التاريخ: ${new Date().toLocaleDateString('ar-SA')} | الوقت: ${new Date().toLocaleTimeString('ar-SA')}
+        ${reportFooterHtml(reportEst)}
       </div>
     </div>
   </div>
@@ -2422,6 +2446,9 @@ export async function generateEmployeePerformancePDF(data: {
   branchName: string;
 }): Promise<Buffer> {
   const { employees, summary, dailyData, month, year, branchName } = data;
+  // الجهة المُصدرة: مؤسسة الفرع، أو الهوية العامة لجميع الفروع
+  const reportEst = getReportEstablishment(branchName);
+  const reportEstDetails = establishmentDetailsLine(reportEst);
 
   const formatCurrency = (amount: number) => `${amount.toLocaleString('ar-SA')} ر.س`;
   const formatNumber = (num: number) => num.toLocaleString('ar-SA');
@@ -2699,6 +2726,9 @@ export async function generateEmployeePerformancePDF(data: {
     }
     
     .stamp {
+      text-align: center;
+      line-height: 1.3;
+      padding: 6px;
       width: 80px;
       height: 80px;
       border: 3px solid #059669;
@@ -2727,15 +2757,14 @@ export async function generateEmployeePerformancePDF(data: {
   <div class="container">
     <div class="header">
       <div class="logo-section">
-        <div class="logo">S</div>
         <div class="company-info">
-          <h1>Symbol AI</h1>
-          <p>نظام إدارة الموارد المتكامل</p>
+          <h1>${escapeHtml(reportEst.nameAr)}</h1>
+          ${reportEstDetails ? `<p>${escapeHtml(reportEstDetails)}</p>` : ''}
         </div>
       </div>
       <div class="report-info">
         <h2>تقرير أداء الموظفين</h2>
-        <p>${month} ${year} | ${branchName}</p>
+        <p>${escapeHtml(month)} ${escapeHtml(year)} | ${escapeHtml(branchName)}</p>
       </div>
     </div>
     
@@ -2810,28 +2839,28 @@ export async function generateEmployeePerformancePDF(data: {
       <div class="signature-box">
         <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik01IDQwYzE1LTIwIDMwLTMwIDQ1LTI1czI1IDEwIDQwIDUiIHN0cm9rZT0iIzFlM2E1ZiIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTkwIDE1YzAgMTAtNSAxNS0xMCAxNSIgc3Ryb2tlPSIjMWUzYTVmIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiLz48L3N2Zz4=" class="signature-image" alt="توقيع">
         <div class="signature-line">
-          <div class="signature-name">سالم الوادعي</div>
-          <div class="signature-title">المشرف العام</div>
+          <div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.supervisor.name)}</div>
+          <div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.supervisor.title)}</div>
         </div>
       </div>
       
       <div class="signature-box">
         <div class="stamp">
-          <div>Symbol AI<br/>الإدارة</div>
+          <div>${escapeHtml(reportEst.nameAr)}<br/>الإدارة</div>
         </div>
       </div>
       
       <div class="signature-box">
         <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiPjxwYXRoIGQ9Ik0xMCAzNWMyMC0xMCA0MC01IDYwLTIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik03MCAxNWM1IDEwIDEwIDE1IDIwIDIwIiBzdHJva2U9IiMxZTNhNWYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" class="signature-image" alt="توقيع">
         <div class="signature-line">
-          <div class="signature-name">عمر المطيري</div>
-          <div class="signature-title">المدير</div>
+          <div class="signature-name">${escapeHtml(REPORT_SIGNATORIES.manager.name)}</div>
+          <div class="signature-title">${escapeHtml(REPORT_SIGNATORIES.manager.title)}</div>
         </div>
       </div>
     </div>
     
     <div class="footer">
-      تم إنشاء هذا التقرير بواسطة نظام Symbol AI | التاريخ: ${new Date().toLocaleDateString('ar-SA')} | الوقت: ${new Date().toLocaleTimeString('ar-SA')}
+      ${reportFooterHtml(reportEst)}
     </div>
   </div>
 </body>

@@ -6,7 +6,8 @@
  * - يرمي خطأ إذا منع المتصفح فتح نافذة الطباعة
  */
 
-import { SIGNATURES } from "@shared/branding";
+import { SIGNATURES, type Establishment } from "@shared/branding";
+import { establishmentDetailsLine, getReportEstablishment } from "@shared/reportBranding";
 import { formatBonusPeriodLabel } from "@shared/bonus";
 import {
   BONUS_PAYMENT_METHOD_LABELS,
@@ -71,6 +72,13 @@ export interface BonusPdfOptions {
   tiers?: BonusPdfTier[] | null;
   /** عنوان التقرير */
   title?: string;
+  /** الجهة المُصدرة (الافتراضي: مؤسسة فرع البونص) */
+  establishment?: Establishment;
+}
+
+/** الجهة المُصدرة لتقرير البونص: مؤسسة فرعه (لبن -> قصه وتخفيف، طويق -> تدرج وتخفيف، وإلا الهوية العامة) */
+export function bonusReportEstablishment(request: Pick<BonusPdfRequest, "branchName">): Establishment {
+  return getReportEstablishment(request.branchName);
 }
 
 /** خطأ منع النوافذ المنبثقة */
@@ -124,6 +132,9 @@ export function buildBonusReportHtml(request: BonusPdfRequest, options: BonusPdf
   const isFinal = isFinalBonusStatus(request.status);
   const periodLabel = request.periodLabel || formatBonusPeriodLabel(request.weekNumber, request.month, request.year);
   const totalRevenue = request.details.reduce((sum, emp) => sum + (parseFloat(String(emp.weeklyRevenue)) || 0), 0);
+  const company = options.establishment ?? bonusReportEstablishment(request);
+  const companyDetails = establishmentDetailsLine(company);
+  const stampImage = company.stamp || SIGNATURES.stamp.image;
 
   // صفوف الجدول
   const tableRows = request.details
@@ -191,7 +202,7 @@ export function buildBonusReportHtml(request: BonusPdfRequest, options: BonusPdf
               <div class="role">${escapeHtml(SIGNATURES.supervisor.title)}</div>
             </div>
             <div class="signature-box">
-              <img src="${SIGNATURES.stamp.image}" alt="${escapeHtml(SIGNATURES.stamp.label)}" class="stamp">
+              <img src="${escapeHtml(stampImage)}" alt="${escapeHtml(SIGNATURES.stamp.label)}" class="stamp">
               <div class="role">${escapeHtml(SIGNATURES.stamp.label)}</div>
             </div>
             <div class="signature-box">
@@ -304,11 +315,11 @@ export function buildBonusReportHtml(request: BonusPdfRequest, options: BonusPdf
         <!-- رأس التقرير -->
         <div class="header">
           <div class="header-info">
-            <h1>Symbol AI</h1>
-            <div class="subtitle">نظام إدارة الصالونات</div>
+            <h1>${escapeHtml(company.nameAr)}</h1>
+            ${companyDetails ? `<div class="subtitle">${escapeHtml(companyDetails)}</div>` : ""}
             <div class="report-title">${escapeHtml(options.title || "تقرير البونص")}</div>
           </div>
-          <img src="/symbol-ai-logo.png" alt="Logo" class="logo">
+          ${company.logo ? `<img src="${escapeHtml(company.logo)}" alt="Logo" class="logo" onerror="this.style.display='none'">` : ""}
         </div>
 
         <div class="gold-line"></div>
@@ -372,7 +383,7 @@ export function buildBonusReportHtml(request: BonusPdfRequest, options: BonusPdf
 
         <!-- ذيل التقرير -->
         <div class="footer">
-          Symbol AI ERP System | تاريخ الإنشاء: ${formatDate(new Date())} | رقم التقرير: BR-${request.id || "-"}
+          ${escapeHtml(company.nameAr)} | تاريخ الإنشاء: ${formatDate(new Date())} | رقم التقرير: BR-${request.id || "-"}
         </div>
       </div>
     </body>
