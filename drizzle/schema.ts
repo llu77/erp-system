@@ -1727,20 +1727,28 @@ export const receiptVouchers = mysqlTable("receiptVouchers", {
   id: int("id").autoincrement().primaryKey(),
   
   // معرف السند
-  voucherId: varchar("voucherId", { length: 50 }).notNull().unique(), // RV-2026-001
-  
+  voucherId: varchar("voucherId", { length: 50 }).notNull().unique(), // RV-2026-0001 / PV-2026-0001
+
+  // نوع السند: سند قبض أو سند صرف
+  voucherType: mysqlEnum("voucherType", ["receipt", "payment"]).default("receipt").notNull(),
+
   // بيانات المستند
   voucherDate: date("voucherDate").notNull(),
   dueDateFrom: date("dueDateFrom"),
   dueDateTo: date("dueDateTo"),
   dueDate: date("dueDate"), // للتوافق العكسي
   
-  // بيانات المدفوع له
+  // الطرف: "استلمنا من" لسند القبض / "صرفنا إلى" لسند الصرف
+  partyName: varchar("partyName", { length: 255 }),
+  partyType: mysqlEnum("partyType", ["branch", "employee", "supplier", "customer", "owner", "other"]),
+  partyId: int("partyId"),
+
+  // بيانات المدفوع له (في سند القبض: المستلم الفعلي للمبلغ)
   payeeName: varchar("payeeName", { length: 255 }).notNull(),
   payeeAddress: text("payeeAddress"),
   payeePhone: varchar("payeePhone", { length: 20 }),
   payeeEmail: varchar("payeeEmail", { length: 320 }),
-  
+
   // بيانات الفرع
   branchId: int("branchId"),
   branchName: varchar("branchName", { length: 100 }),
@@ -1773,13 +1781,32 @@ export const receiptVouchers = mysqlTable("receiptVouchers", {
     "bank_transfer", // تحويل بنكي
     "check",         // شيك
     "credit_card",   // بطاقة ائتمان
-    "other"          // أخرى
+    "other",         // أخرى
+    "mixed"          // مختلط (أكثر من طريقة)
   ]).default("cash"),
-  
-  // معرفات التوقيع
+
+  // توزيع المبلغ على طرق الدفع (المجموع = totalAmount)
+  cashAmount: decimal("cashAmount", { precision: 12, scale: 2 }).default('0').notNull(),
+  bankAmount: decimal("bankAmount", { precision: 12, scale: 2 }).default('0').notNull(),
+  checkAmount: decimal("checkAmount", { precision: 12, scale: 2 }).default('0').notNull(),
+  // تفاصيل الحوالة البنكية
+  bankName: varchar("bankName", { length: 100 }),
+  bankReference: varchar("bankReference", { length: 100 }),
+  // تفاصيل الشيك
+  checkNumber: varchar("checkNumber", { length: 50 }),
+  checkDate: date("checkDate"),
+  checkBank: varchar("checkBank", { length: 100 }),
+
+  // معرفات التوقيع (تُحفظ أسماء الموقعين لحظة الاعتماد)
   signedBy1: varchar("signedBy1", { length: 255 }), // سالم الوادعي
   signedBy2: varchar("signedBy2", { length: 255 }), // عمر المطيري
-  
+
+  // بيانات الإلغاء
+  cancelledBy: int("cancelledBy"),
+  cancelledByName: varchar("cancelledByName", { length: 255 }),
+  cancelledAt: timestamp("cancelledAt"),
+  cancellationReason: text("cancellationReason"),
+
   // المستخدم الذي أنشأ السند
   createdBy: int("createdBy").notNull(),
   createdByName: varchar("createdByName", { length: 255 }).notNull(),
@@ -1806,7 +1833,11 @@ export const receiptVoucherItems = mysqlTable("receiptVoucherItems", {
   
   // وصف البند
   description: varchar("description", { length: 500 }).notNull(),
-  
+
+  // الكمية وسعر الوحدة (المبلغ = الكمية × سعر الوحدة عند تحديده)
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).default('1').notNull(),
+  unitPrice: decimal("unitPrice", { precision: 12, scale: 2 }),
+
   // المبلغ
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
   
