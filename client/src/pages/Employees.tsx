@@ -1,18 +1,58 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useIsMobile } from "@/hooks/useMobile";
-import { MobileCard, MobileCardList, Trash2 as Trash2Icon } from "@/components/ui/mobile-card-view";
+import {
+  MobileCard,
+  MobileCardList,
+  Trash2 as Trash2Icon,
+} from "@/components/ui/mobile-card-view";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Building2, FolderOpen, IdCard, Loader2, Plus, Search, Trash2, UserCircle, Users } from "lucide-react";
+import {
+  Building2,
+  FolderOpen,
+  IdCard,
+  Loader2,
+  Plus,
+  Search,
+  Trash2,
+  UserCircle,
+  Users,
+} from "lucide-react";
 import {
   DOCUMENT_KIND_LABELS,
   DOCUMENT_STATUS_LABELS,
@@ -64,7 +104,10 @@ type EmployeeRow = EmployeeListItem & {
   worstStatus: DocumentStatus;
 };
 
-const EXPIRY_FIELD: Record<ExpiringDocumentKind, "iqamaExpiryDate" | "healthCertExpiryDate" | "contractExpiryDate"> = {
+const EXPIRY_FIELD: Record<
+  ExpiringDocumentKind,
+  "iqamaExpiryDate" | "healthCertExpiryDate" | "contractExpiryDate"
+> = {
   iqama: "iqamaExpiryDate",
   health: "healthCertExpiryDate",
   contract: "contractExpiryDate",
@@ -76,7 +119,10 @@ function PortalBadge({ employee }: { employee: EmployeeListItem }) {
   }
   if (employee.username) {
     return (
-      <Badge variant="outline" className="border-red-300 text-red-700 dark:text-red-300">
+      <Badge
+        variant="outline"
+        className="border-red-300 text-red-700 dark:text-red-300"
+      >
         موقوف
       </Badge>
     );
@@ -107,15 +153,25 @@ export default function Employees() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBranchId, setFilterBranchId] = useState("all");
-  const [filterDocStatus, setFilterDocStatus] = useState<"all" | DocumentStatus>("all");
-  const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("active");
+  const [filterDocStatus, setFilterDocStatus] = useState<
+    "all" | DocumentStatus
+  >("all");
+  const [filterActive, setFilterActive] = useState<
+    "all" | "active" | "inactive"
+  >("active");
   const [fileEmployeeId, setFileEmployeeId] = useState<number | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [newEmployee, setNewEmployee] = useState<NewEmployeeForm>(EMPTY_NEW_EMPLOYEE);
+  const [newEmployee, setNewEmployee] =
+    useState<NewEmployeeForm>(EMPTY_NEW_EMPLOYEE);
   const [deleting, setDeleting] = useState<EmployeeListItem | null>(null);
 
-  const employeesQuery = trpc.employees.list.useQuery({ withImages: true }, { enabled: canOpen });
-  const branchesQuery = trpc.branches.list.useQuery(undefined, { enabled: canOpen });
+  const employeesQuery = trpc.employees.list.useQuery(
+    { withImages: true },
+    { enabled: canOpen }
+  );
+  const branchesQuery = trpc.branches.list.useQuery(undefined, {
+    enabled: canOpen,
+  });
   const utils = trpc.useUtils();
 
   const createMutation = trpc.employees.create.useMutation({
@@ -123,7 +179,10 @@ export default function Employees() {
       toast.success("تم إضافة الموظف بنجاح");
       setShowAddDialog(false);
       setNewEmployee(EMPTY_NEW_EMPLOYEE);
-      await Promise.all([utils.employees.list.invalidate(), utils.employees.getDocumentsOverview.invalidate()]);
+      await Promise.all([
+        utils.employees.list.invalidate(),
+        utils.employees.getDocumentsOverview.invalidate(),
+      ]);
     },
     onError: error => toast.error(errorMessage(error, "فشل إضافة الموظف")),
   });
@@ -132,7 +191,10 @@ export default function Employees() {
     onSuccess: async () => {
       toast.success("تم حذف الموظف بنجاح");
       setDeleting(null);
-      await Promise.all([utils.employees.list.invalidate(), utils.employees.getDocumentsOverview.invalidate()]);
+      await Promise.all([
+        utils.employees.list.invalidate(),
+        utils.employees.getDocumentsOverview.invalidate(),
+      ]);
     },
     onError: error => toast.error(errorMessage(error, "فشل حذف الموظف")),
   });
@@ -141,12 +203,17 @@ export default function Employees() {
   const rows = useMemo<EmployeeRow[]>(() => {
     return (employeesQuery.data ?? []).map(employee => {
       const docs = Object.fromEntries(
-        EXPIRING_DOCUMENT_KINDS.map(kind => [kind, describeDocumentExpiry(kind, employee[EXPIRY_FIELD[kind]])])
+        EXPIRING_DOCUMENT_KINDS.map(kind => [
+          kind,
+          describeDocumentExpiry(kind, employee[EXPIRY_FIELD[kind]]),
+        ])
       ) as EmployeeRow["docs"];
       return {
         ...employee,
         docs,
-        worstStatus: worstDocumentStatus(EXPIRING_DOCUMENT_KINDS.map(kind => docs[kind].status)),
+        worstStatus: worstDocumentStatus(
+          EXPIRING_DOCUMENT_KINDS.map(kind => docs[kind].status)
+        ),
       };
     });
   }, [employeesQuery.data]);
@@ -162,17 +229,30 @@ export default function Employees() {
           (row.phone ?? "").toLowerCase().includes(term) ||
           (row.iqamaNumber ?? "").includes(term) ||
           (row.position ?? "").toLowerCase().includes(term);
-        const matchesBranch = filterBranchId === "all" || String(row.branchId) === filterBranchId;
-        const matchesStatus = filterDocStatus === "all" || row.worstStatus === filterDocStatus;
+        const matchesBranch =
+          filterBranchId === "all" || String(row.branchId) === filterBranchId;
+        const matchesStatus =
+          filterDocStatus === "all" || row.worstStatus === filterDocStatus;
         const matchesActive =
-          filterActive === "all" || (filterActive === "active" ? row.isActive : !row.isActive);
+          filterActive === "all" ||
+          (filterActive === "active" ? row.isActive : !row.isActive);
         return matchesSearch && matchesBranch && matchesStatus && matchesActive;
       })
-      .sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.name.localeCompare(b.name, "ar"));
+      .sort(
+        (a, b) =>
+          Number(b.isActive) - Number(a.isActive) ||
+          a.name.localeCompare(b.name, "ar")
+      );
   }, [rows, searchTerm, filterBranchId, filterDocStatus, filterActive]);
 
   const statusCounts = useMemo(() => {
-    const counts: Record<DocumentStatus, number> = { expired: 0, critical: 0, warning: 0, missing: 0, valid: 0 };
+    const counts: Record<DocumentStatus, number> = {
+      expired: 0,
+      critical: 0,
+      warning: 0,
+      missing: 0,
+      valid: 0,
+    };
     rows.filter(r => r.isActive).forEach(r => counts[r.worstStatus]++);
     return counts;
   }, [rows]);
@@ -202,7 +282,9 @@ export default function Employees() {
         <CardContent className="p-12 text-center">
           <Users className="mx-auto mb-4 h-16 w-16 text-destructive" />
           <h3 className="mb-2 text-lg font-medium">غير مصرح</h3>
-          <p className="text-muted-foreground">هذه الصفحة متاحة للمسؤول والمدير ومشرف الفرع فقط</p>
+          <p className="text-muted-foreground">
+            هذه الصفحة متاحة للمسؤول والمدير ومشرف الفرع فقط
+          </p>
         </CardContent>
       </Card>
     );
@@ -224,7 +306,9 @@ export default function Employees() {
           </div>
           <div>
             <h1 className="text-2xl font-bold">إدارة الموظفين</h1>
-            <p className="text-sm text-muted-foreground">ملف كل موظف: البيانات والوثائق والراتب وحساب البوابة</p>
+            <p className="text-sm text-muted-foreground">
+              ملف كل موظف: البيانات والوثائق والراتب وحساب البوابة
+            </p>
           </div>
         </div>
         {canManage && (
@@ -244,11 +328,23 @@ export default function Employees() {
       {/* ملخص حالة الوثائق (الموظفون النشطون) */}
       {employeesQuery.data && (
         <div className="flex flex-wrap gap-2">
-          {(["expired", "critical", "warning", "missing", "valid"] as DocumentStatus[]).map(status => (
+          {(
+            [
+              "expired",
+              "critical",
+              "warning",
+              "missing",
+              "valid",
+            ] as DocumentStatus[]
+          ).map(status => (
             <button
               key={status}
               type="button"
-              onClick={() => setFilterDocStatus(current => (current === status ? "all" : status))}
+              onClick={() =>
+                setFilterDocStatus(current =>
+                  current === status ? "all" : status
+                )
+              }
               aria-pressed={filterDocStatus === status}
               className={`flex items-center gap-1 rounded-md border px-2 py-1 transition-opacity ${filterDocStatus !== "all" && filterDocStatus !== status ? "opacity-50" : ""}`}
             >
@@ -287,20 +383,38 @@ export default function Employees() {
                 </SelectContent>
               </Select>
             )}
-            <Select value={filterDocStatus} onValueChange={value => setFilterDocStatus(value as typeof filterDocStatus)}>
+            <Select
+              value={filterDocStatus}
+              onValueChange={value =>
+                setFilterDocStatus(value as typeof filterDocStatus)
+              }
+            >
               <SelectTrigger className="w-full lg:w-48">
                 <SelectValue placeholder="حالة الوثائق" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">كل حالات الوثائق</SelectItem>
-                {(["expired", "critical", "warning", "missing", "valid"] as DocumentStatus[]).map(status => (
+                {(
+                  [
+                    "expired",
+                    "critical",
+                    "warning",
+                    "missing",
+                    "valid",
+                  ] as DocumentStatus[]
+                ).map(status => (
                   <SelectItem key={status} value={status}>
                     {DOCUMENT_STATUS_LABELS[status]}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterActive} onValueChange={value => setFilterActive(value as typeof filterActive)}>
+            <Select
+              value={filterActive}
+              onValueChange={value =>
+                setFilterActive(value as typeof filterActive)
+              }
+            >
               <SelectTrigger className="w-full lg:w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -314,7 +428,11 @@ export default function Employees() {
           {branchesQuery.isError && showBranchFilter && (
             <p className="mt-2 text-xs text-red-600">
               تعذر تحميل الفروع.{" "}
-              <button type="button" className="underline" onClick={() => branchesQuery.refetch()}>
+              <button
+                type="button"
+                className="underline"
+                onClick={() => branchesQuery.refetch()}
+              >
                 إعادة المحاولة
               </button>
             </p>
@@ -333,7 +451,10 @@ export default function Employees() {
               </CardTitle>
               <CardDescription>{filteredRows.length} موظف</CardDescription>
             </div>
-            <Badge variant="outline" className="border-blue-500/20 bg-blue-500/10 text-blue-500">
+            <Badge
+              variant="outline"
+              className="border-blue-500/20 bg-blue-500/10 text-blue-500"
+            >
               {activeCount} نشط
             </Badge>
           </div>
@@ -351,8 +472,12 @@ export default function Employees() {
           ) : filteredRows.length === 0 ? (
             <div className="py-12 text-center">
               <Users className="mx-auto mb-4 h-16 w-16 text-muted-foreground/50" />
-              <h3 className="mb-2 text-lg font-medium">لا يوجد موظفون مطابقون</h3>
-              <p className="text-muted-foreground">غيّر البحث أو الفلاتر{canManage ? " أو أضف موظفاً جديداً" : ""}</p>
+              <h3 className="mb-2 text-lg font-medium">
+                لا يوجد موظفون مطابقون
+              </h3>
+              <p className="text-muted-foreground">
+                غيّر البحث أو الفلاتر{canManage ? " أو أضف موظفاً جديداً" : ""}
+              </p>
             </div>
           ) : isMobile ? (
             <MobileCardList
@@ -368,15 +493,27 @@ export default function Employees() {
                     { label: "الكود", value: employee.code, isSubtitle: true },
                     { label: "الفرع", value: employee.branchName ?? "-" },
                     { label: "المسمى", value: employee.position || "-" },
-                    { label: "الوثائق", value: <DocumentStatusBadge status={employee.worstStatus} /> },
-                    { label: "البوابة", value: <PortalBadge employee={employee} /> },
+                    {
+                      label: "الوثائق",
+                      value: (
+                        <DocumentStatusBadge status={employee.worstStatus} />
+                      ),
+                    },
+                    {
+                      label: "البوابة",
+                      value: <PortalBadge employee={employee} />,
+                    },
                   ]}
                   statusBadge={{
                     label: employee.isActive ? "نشط" : "غير نشط",
                     variant: employee.isActive ? "default" : "secondary",
                   }}
                   actions={[
-                    { label: "ملف الموظف", icon: <FolderOpen className="h-4 w-4" />, onClick: () => openFile(employee.id) },
+                    {
+                      label: "ملف الموظف",
+                      icon: <FolderOpen className="h-4 w-4" />,
+                      onClick: () => openFile(employee.id),
+                    },
                     ...(canManage
                       ? [
                           {
@@ -414,10 +551,15 @@ export default function Employees() {
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <EmployeeAvatar name={employee.name} photoUrl={employee.photoUrl} />
+                          <EmployeeAvatar
+                            name={employee.name}
+                            photoUrl={employee.photoUrl}
+                          />
                           <div>
                             <div className="font-medium">{employee.name}</div>
-                            <div className="font-mono text-xs text-muted-foreground">{employee.code}</div>
+                            <div className="font-mono text-xs text-muted-foreground">
+                              {employee.code}
+                            </div>
                           </div>
                         </div>
                       </TableCell>
@@ -438,13 +580,20 @@ export default function Employees() {
                         <PortalBadge employee={employee} />
                       </TableCell>
                       <TableCell>
-                        <Badge variant={employee.isActive ? "default" : "secondary"}>
+                        <Badge
+                          variant={employee.isActive ? "default" : "secondary"}
+                        >
                           {employee.isActive ? "نشط" : "غير نشط"}
                         </Badge>
                       </TableCell>
                       <TableCell onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
-                          <Button variant="outline" size="sm" onClick={() => openFile(employee.id)} className="gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openFile(employee.id)}
+                            className="gap-1"
+                          >
                             <FolderOpen className="h-4 w-4" />
                             ملف الموظف
                           </Button>
@@ -489,7 +638,8 @@ export default function Employees() {
               إضافة موظف جديد
             </DialogTitle>
             <DialogDescription>
-              بعد الإضافة افتح "ملف الموظف" لرفع الصورة والوثائق وضبط الراتب وحساب البوابة
+              بعد الإضافة افتح "ملف الموظف" لرفع الصورة والوثائق وضبط الراتب
+              وحساب البوابة
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -499,7 +649,9 @@ export default function Employees() {
                 id="new-code"
                 value={newEmployee.code}
                 maxLength={50}
-                onChange={e => setNewEmployee({ ...newEmployee, code: e.target.value })}
+                onChange={e =>
+                  setNewEmployee({ ...newEmployee, code: e.target.value })
+                }
                 placeholder="EMP001"
               />
             </div>
@@ -509,14 +661,25 @@ export default function Employees() {
                 id="new-name"
                 value={newEmployee.name}
                 maxLength={255}
-                onChange={e => setNewEmployee({ ...newEmployee, name: e.target.value })}
+                onChange={e =>
+                  setNewEmployee({ ...newEmployee, name: e.target.value })
+                }
               />
             </div>
             <div className="space-y-2">
               <Label>الفرع</Label>
-              <Select value={newEmployee.branchId || undefined} onValueChange={value => setNewEmployee({ ...newEmployee, branchId: value })}>
+              <Select
+                value={newEmployee.branchId || undefined}
+                onValueChange={value =>
+                  setNewEmployee({ ...newEmployee, branchId: value })
+                }
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder={branchesQuery.isLoading ? "جاري التحميل..." : "اختر الفرع"} />
+                  <SelectValue
+                    placeholder={
+                      branchesQuery.isLoading ? "جاري التحميل..." : "اختر الفرع"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {branches.map(branch => (
@@ -533,7 +696,9 @@ export default function Employees() {
                 id="new-position"
                 value={newEmployee.position}
                 maxLength={100}
-                onChange={e => setNewEmployee({ ...newEmployee, position: e.target.value })}
+                onChange={e =>
+                  setNewEmployee({ ...newEmployee, position: e.target.value })
+                }
               />
             </div>
             <div className="space-y-2">
@@ -543,7 +708,9 @@ export default function Employees() {
                 dir="ltr"
                 value={newEmployee.phone}
                 maxLength={50}
-                onChange={e => setNewEmployee({ ...newEmployee, phone: e.target.value })}
+                onChange={e =>
+                  setNewEmployee({ ...newEmployee, phone: e.target.value })
+                }
               />
             </div>
             <div className="space-y-2">
@@ -552,7 +719,12 @@ export default function Employees() {
                 id="new-nationality"
                 value={newEmployee.nationality}
                 maxLength={100}
-                onChange={e => setNewEmployee({ ...newEmployee, nationality: e.target.value })}
+                onChange={e =>
+                  setNewEmployee({
+                    ...newEmployee,
+                    nationality: e.target.value,
+                  })
+                }
               />
             </div>
             <div className="space-y-2">
@@ -561,16 +733,26 @@ export default function Employees() {
                 id="new-hireDate"
                 type="date"
                 value={newEmployee.hireDate}
-                onChange={e => setNewEmployee({ ...newEmployee, hireDate: e.target.value })}
+                onChange={e =>
+                  setNewEmployee({ ...newEmployee, hireDate: e.target.value })
+                }
               />
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowAddDialog(false)} disabled={createMutation.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => setShowAddDialog(false)}
+              disabled={createMutation.isPending}
+            >
               إلغاء
             </Button>
             <Button onClick={handleCreate} disabled={createMutation.isPending}>
-              {createMutation.isPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Plus className="ml-2 h-4 w-4" />}
+              {createMutation.isPending ? (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="ml-2 h-4 w-4" />
+              )}
               {createMutation.isPending ? "جاري الإضافة..." : "إضافة"}
             </Button>
           </DialogFooter>
@@ -578,7 +760,10 @@ export default function Employees() {
       </Dialog>
 
       {/* تأكيد الحذف */}
-      <Dialog open={!!deleting} onOpenChange={open => !open && setDeleting(null)}>
+      <Dialog
+        open={!!deleting}
+        onOpenChange={open => !open && setDeleting(null)}
+      >
         <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -586,17 +771,24 @@ export default function Employees() {
               حذف الموظف
             </DialogTitle>
             <DialogDescription>
-              هل أنت متأكد من حذف {deleting?.name}؟ لا يمكن التراجع عن هذا الإجراء. لإيقاف موظف ترك العمل
-              يُفضّل تعطيله من ملفه بدلاً من الحذف.
+              هل أنت متأكد من حذف {deleting?.name}؟ لا يمكن التراجع عن هذا
+              الإجراء. لإيقاف موظف ترك العمل يُفضّل تعطيله من ملفه بدلاً من
+              الحذف.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleting(null)} disabled={deleteMutation.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleting(null)}
+              disabled={deleteMutation.isPending}
+            >
               إلغاء
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deleting && deleteMutation.mutate({ id: deleting.id })}
+              onClick={() =>
+                deleting && deleteMutation.mutate({ id: deleting.id })
+              }
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? "جاري الحذف..." : "حذف"}

@@ -158,12 +158,15 @@ export function DocumentFileActions({
   url,
   canEdit,
   compact = false,
+  iconOnly = false,
 }: {
   employeeId: number;
   kind: EmployeeDocumentKind;
   url: string | null;
   canEdit: boolean;
   compact?: boolean;
+  /** للجداول: أيقونات عرض ورفع فقط (الإزالة من ملف الموظف) */
+  iconOnly?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preparing, setPreparing] = useState(false);
@@ -206,6 +209,59 @@ export function DocumentFileActions({
   };
 
   const size = compact ? "sm" : "default";
+
+  if (iconOnly) {
+    return (
+      <div className="flex items-center gap-1">
+        {url && (
+          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`عرض ${label}`}
+              aria-label={`عرض ${label}`}
+            >
+              {isPdfUrl(url) ? (
+                <FileText className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </a>
+          </Button>
+        )}
+        {canEdit && (
+          <>
+            <input
+              ref={inputRef}
+              type="file"
+              accept={fileAcceptAttribute(kind)}
+              className="hidden"
+              onChange={onFileChosen}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              disabled={busy}
+              onClick={() => inputRef.current?.click()}
+              title={url ? `استبدال ${label}` : `رفع ${label}`}
+              aria-label={url ? `استبدال ${label}` : `رفع ${label}`}
+            >
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+            </Button>
+          </>
+        )}
+        {!url && !canEdit && (
+          <span className="text-xs text-muted-foreground">لا يوجد ملف</span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
