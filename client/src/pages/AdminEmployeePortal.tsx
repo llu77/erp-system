@@ -156,10 +156,17 @@ export default function AdminEmployeePortal() {
   };
 
   // جلب الفروع (نطاق الفروع يحدده الخادم من الجلسة)
-  const { data: branches } = trpc.portalAdmin.getBranches.useQuery(undefined, {
+  const branchesQuery = trpc.portalAdmin.getBranches.useQuery(undefined, {
     enabled: hasAccess,
     retry: shouldRetryQuery,
   });
+  const { data: branches } = branchesQuery;
+  // قائمة الفروع في الفلاتر: عند فشل التحميل يظهر بند معطل بدلاً من قائمة فارغة
+  const branchesErrorItem = branchesQuery.error ? (
+    <SelectItem value="__branches_error" disabled>
+      تعذر تحميل الفروع - اضغط تحديث
+    </SelectItem>
+  ) : null;
 
   // جلب الموظفين
   const employeesQuery = trpc.portalAdmin.getEmployees.useQuery(
@@ -862,6 +869,7 @@ export default function AdminEmployeePortal() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">جميع الفروع</SelectItem>
+                        {branchesErrorItem}
                         {branches?.map((branch: any) => (
                           <SelectItem key={branch.id} value={branch.id.toString()}>
                             {branch.name}
@@ -874,7 +882,10 @@ export default function AdminEmployeePortal() {
                   <Button 
                     variant="outline" 
                     className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                    onClick={() => refetchRequests()}
+                    onClick={() => {
+                      refetchRequests();
+                      if (branchesQuery.error) branchesQuery.refetch();
+                    }}
                   >
                     <RefreshCw className="h-4 w-4 ml-2" />
                     تحديث
@@ -988,6 +999,7 @@ export default function AdminEmployeePortal() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">جميع الفروع</SelectItem>
+                        {branchesErrorItem}
                         {branches?.map((branch: any) => (
                           <SelectItem key={branch.id} value={branch.id.toString()}>
                             {branch.name}
