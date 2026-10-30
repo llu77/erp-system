@@ -17,6 +17,7 @@ import { getBusinessDayKey, getCurrentBonusPeriod, getWeekDateRange } from "./ca
 import { pickWeeklyBonusRow } from "./recomputePlan";
 import { getRequestBlocker } from "./workflow";
 import { loadActiveBonusTiers } from "./tiers";
+import { bonusLogger } from "../utils/logger";
 
 function toNumber(value: unknown): number {
   const n = Number(value ?? 0);
@@ -53,8 +54,13 @@ function bonusActorNames(row: BonusActorIds, userNames: Map<number, string>) {
 async function loadActorNames(row: BonusActorIds): Promise<Map<number, string>> {
   const ids = Array.from(new Set([row.requestedBy, row.approvedBy, row.rejectedBy, row.paidBy].filter((id): id is number => !!id)));
   const names = new Map<number, string>();
-  for (const user of await Promise.all(ids.map(id => db.getUserById(id)))) {
-    if (user) names.set(user.id, user.name || user.username || `#${user.id}`);
+  // الأسماء للعرض فقط: فشل قراءتها لا يُسقط عرض البونص (تظهر "-")
+  try {
+    for (const user of await Promise.all(ids.map(id => db.getUserById(id)))) {
+      if (user) names.set(user.id, user.name || user.username || `#${user.id}`);
+    }
+  } catch (error) {
+    bonusLogger.error("تعذر تحميل أسماء منفذي إجراءات البونص", error);
   }
   return names;
 }
