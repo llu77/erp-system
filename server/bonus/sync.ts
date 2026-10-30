@@ -4,6 +4,7 @@
  * @version 3.0.0
  * - دالة واحدة recomputeWeeklyBonus(branchId, year, month, weekNumber) داخل معاملة واحدة
  * - قفل صف الفرع (SELECT ... FOR UPDATE) لمنع التكرار عند الكتابة المتزامنة لنفس الفرع
+ * - قفل صف البونص الأسبوعي (FOR UPDATE) وتحديث الإجمالي مشروط بالحالة (لا يُستبدل إجمالي فترة طُلب صرفها للتو)
  * - المستويات من إعدادات المدير (bonusTierSettings)
  * - الفترات المقفلة (requested / approved / paid) لا تتغير ويُسجل الفرق في سجل التدقيق
  * - الفترة المرفوضة يُعاد احتسابها وتعود "قيد الاحتساب"
@@ -109,6 +110,22 @@ function toNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function affectedRows(result: unknown): number {
+  const header = Array.isArray(result) ? result[0] : result;
+  return Number((header as { affectedRows?: number } | undefined)?.affectedRows ?? 0);
+}
+
+/** الحالات التي يُسمح فيها بتعديل مبالغ الفترة */
+const RECOMPUTABLE_STATUSES: WeeklyBonusStatus[] = ["pending", "rejected"];
+
+/** أُقفلت الفترة (طلب صرف) أثناء إعادة الاحتساب - يُرمى للتراجع عن كل تعديلات المعاملة */
+class PeriodLockedDuringRecomputeError extends Error {
+  constructor(weeklyBonusId: number) {
+    super(`PERIOD_LOCKED: أُقفلت فترة البونص ${weeklyBonusId} أثناء إعادة الاحتساب`);
+    this.name = "PeriodLockedDuringRecomputeError";
+  }
+}
+
 function emptyResult(branchId: number, year: number, month: number, weekNumber: number, message: string): RecomputeResult {
   return {
     success: false,
@@ -152,7 +169,7 @@ export async function recomputeWeeklyBonus(
     const tiers = options.tiers ?? (await loadActiveBonusTiers()).tiers;
     const { start, end } = getWeekDateRange(weekNumber, month, year);
 
-    return await db.transaction(async (tx) => {
+    const runInTransaction = () => db.transaction(async (tx) => {
       const branchExists = await lockBranchRow(tx, branchId);
       if (!branchExists) {
         throw new Error("NOT_FOUND: الفرع غير موجود");
@@ -215,8 +232,8 @@ export async function recomputeWeeklyBonus(
       if (!daysValidation.isValid) warnings.push(daysValidation.message);
 
       // ===== 6. سجل البونص الأسبوعي =====
-      const existingRows = await tx
-        .select()
+      const periodRowIds = await tx
+        .select({ id: weeklyBonuses.id })
         .from(weeklyBonuses)
         .where(
           and(
@@ -226,6 +243,16 @@ export async function recomputeWeeklyBonus(
             eq(weeklyBonuses.weekNumber, weekNumber)
           )
         );
+      // قفل صفوف الفترة (FOR UPDATE) وقراءة حالتها الحالية: القراءة العادية قد تُظهر حالة قديمة
+      // إذا طُلب صرف البونص للتو، فيُستبدل إجمالي بونص مقفل. القفل بالمفتاح الأساسي فقط
+      // (لا يوجد فهرس على الفرع/الفترة، والقفل بشرطها يقفل الجدول كاملاً)
+      const existingRows = periodRowIds.length
+        ? await tx
+            .select()
+            .from(weeklyBonuses)
+            .where(inArray(weeklyBonuses.id, periodRowIds.map(r => r.id)))
+            .for("update")
+        : [];
       if (existingRows.length > 1) {
         warnings.push(`يوجد ${existingRows.length} سجلات مكررة لنفس الفترة - تم استخدام سجل واحد فقط`);
       }
@@ -361,7 +388,7 @@ export async function recomputeWeeklyBonus(
       const totalAmount = toNumber(sumRow?.total);
 
       const statusReset = action === "reset_rejected";
-      await tx
+      const updateResult = await tx
         .update(weeklyBonuses)
         .set({
           totalAmount: totalAmount.toFixed(2),
@@ -370,7 +397,11 @@ export async function recomputeWeeklyBonus(
           ...(statusReset ? { status: "pending" as const } : {}),
           updatedAt: new Date(),
         })
-        .where(eq(weeklyBonuses.id, weeklyBonusId));
+        .where(and(eq(weeklyBonuses.id, weeklyBonusId), inArray(weeklyBonuses.status, RECOMPUTABLE_STATUSES)));
+      if (affectedRows(updateResult) !== 1) {
+        // أُقفلت الفترة أثناء الاحتساب: التراجع عن كل التعديلات ثم معاملتها كفترة مقفلة
+        throw new PeriodLockedDuringRecomputeError(weeklyBonusId);
+      }
 
       if (statusReset) {
         await tx.insert(bonusAuditLog).values({
@@ -396,6 +427,14 @@ export async function recomputeWeeklyBonus(
         warnings,
       };
     });
+
+    try {
+      return await runInTransaction();
+    } catch (error) {
+      if (!(error instanceof PeriodLockedDuringRecomputeError)) throw error;
+      // تم التراجع عن المعاملة؛ إعادة المحاولة تقرأ الحالة المقفلة وتسلك مسار الفترة المقفلة (تسجيل الفرق فقط)
+      return await runInTransaction();
+    }
   } catch (error) {
     console.error("[Bonus Recompute] Error:", error);
     const message = error instanceof Error ? error.message : "خطأ غير معروف";
