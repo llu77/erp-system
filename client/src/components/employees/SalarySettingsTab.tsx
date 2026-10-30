@@ -102,7 +102,7 @@ export function SalarySettingsTab({
       acceptNext();
       const synced =
         result.openPayrollsUpdated > 0
-          ? ` وتحديث ${result.openPayrollsUpdated} مسيرة مفتوحة`
+          ? ` وتحديث ${result.openPayrollsUpdated} مسير مفتوح`
           : "";
       toast.success(`تم حفظ إعدادات الراتب${synced}`);
       if (result.openPayrollsFailed > 0) {
@@ -264,7 +264,7 @@ export function SalarySettingsTab({
           </Label>
         </div>
         <p className="text-xs text-muted-foreground">
-          يستحق حافز المشرف في المسيرة، ويمنحه صلاحية مراجعة طلبات موظفي فرعه في
+          يستحق حافز المشرف في المسير، ويمنحه صلاحية مراجعة طلبات موظفي فرعه في
           بوابة الموظفين
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -364,7 +364,7 @@ export function SalarySettingsTab({
           </span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          قبل الغياب والسلف والمخالفات (تُحسب في المسيرة)
+          قبل الغياب والسلف والمخالفات (تُحسب في المسير)
         </p>
       </div>
 

@@ -228,7 +228,7 @@ function deductionText(
   }
   const done = d.status === "approved" || d.status === "paid";
   const verb = done ? "خُصمت السلفة من" : "أُدرجت السلفة للخصم في";
-  return `${verb} مسيرة رواتب ${d.period ? `شهر ${esc(d.period)} ` : ""}رقم <b class="ltr">${esc(d.reference)}</b>`;
+  return `${verb} مسير رواتب ${d.period ? `شهر ${esc(d.period)} ` : ""}رقم <b class="ltr">${esc(d.reference)}</b>`;
 }
 
 function renderDecision(

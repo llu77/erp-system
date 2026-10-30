@@ -1262,7 +1262,7 @@ async function linkSettledItems(
       );
     if (affectedRows(res) !== advanceIds.length) {
       throw new EndOfServiceError(
-        "تغيرت سلف الموظف أثناء الاعتماد (خُصم بعضها في مسيرة أو أُلغي)، يرجى إعادة المحاولة",
+        "تغيرت سلف الموظف أثناء الاعتماد (خُصم بعضها في مسير أو أُلغي)، يرجى إعادة المحاولة",
         "CONFLICT"
       );
     }
@@ -1288,7 +1288,7 @@ async function linkSettledItems(
       );
     if (affectedRows(res) !== violationIds.length) {
       throw new EndOfServiceError(
-        "تغيرت مخالفات الموظف أثناء الاعتماد (خُصم بعضها في مسيرة أو أُلغي)، يرجى إعادة المحاولة",
+        "تغيرت مخالفات الموظف أثناء الاعتماد (خُصم بعضها في مسير أو أُلغي)، يرجى إعادة المحاولة",
         "CONFLICT"
       );
     }

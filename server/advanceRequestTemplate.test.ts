@@ -187,7 +187,7 @@ describe("قالب طلب السلفة", () => {
     );
     expect(text).toContain("ملاحظات الاعتماد: تُخصم على ثلاثة أشهر");
     expect(text).toContain(
-      "خُصمت السلفة من مسيرة رواتب شهر أكتوبر 2026 رقم PAY-2026-10-0003"
+      "خُصمت السلفة من مسير رواتب شهر أكتوبر 2026 رقم PAY-2026-10-0003"
     );
     expect(html).toContain(ASSETS.stamp);
     expect(html).toContain(ASSETS.managerSignature);
@@ -211,7 +211,7 @@ describe("قالب طلب السلفة", () => {
           },
         })
       )
-    ).toContain("أُدرجت السلفة للخصم في مسيرة رواتب شهر نوفمبر 2026 رقم P1");
+    ).toContain("أُدرجت السلفة للخصم في مسير رواتب شهر نوفمبر 2026 رقم P1");
     expect(
       visible(
         render(request(), { settlement: { settlementNumber: "EOS-2026-0001" } })

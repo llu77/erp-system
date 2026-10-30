@@ -149,7 +149,7 @@ export default function EmployeeViolations() {
             مخالفات الموظفين
           </h1>
           <p className="text-sm text-muted-foreground">
-            المخالفات المعتمدة تُخصم تلقائياً من راتب الموظف في مسيرة الشهر الذي وقعت فيه (أو أول مسيرة مفتوحة بعده)
+            المخالفات المعتمدة تُخصم تلقائياً من راتب الموظف في مسير الشهر الذي وقعت فيه (أو أول مسير مفتوح بعده)
           </p>
         </div>
         {canCreate && (
@@ -240,9 +240,9 @@ export default function EmployeeViolations() {
                       <TableCell><Badge className={`text-[10px] ${STATUS_COLORS[v.status]}`}>{STATUS_LABELS[v.status]}</Badge></TableCell>
                       <TableCell>
                         {v.isDeductedFromSalary && v.payrollNumber ? (
-                          <span className="text-green-500">في المسيرة {v.payrollNumber}</span>
+                          <span className="text-green-500">في المسير {v.payrollNumber}</span>
                         ) : v.status === "approved" ? (
-                          <span className="text-orange-500">بانتظار المسيرة</span>
+                          <span className="text-orange-500">بانتظار المسير</span>
                         ) : "-"}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{v.createdByName}</TableCell>
@@ -267,7 +267,7 @@ export default function EmployeeViolations() {
                           {isManager && v.status === "approved" && v.payrollStatus !== "approved" && v.payrollStatus !== "paid" && (
                             <Button variant="ghost" size="icon" className="h-7 w-7" title="إلغاء المخالفة"
                               onClick={() => {
-                                if (confirm("إلغاء المخالفة؟ إذا كانت في مسيرة مفتوحة سيُعاد حساب راتب الموظف.")) {
+                                if (confirm("إلغاء المخالفة؟ إذا كانت في مسير مفتوح سيُعاد حساب راتب الموظف.")) {
                                   reviewMutation.mutate({ id: v.id, status: "cancelled" });
                                 }
                               }}>

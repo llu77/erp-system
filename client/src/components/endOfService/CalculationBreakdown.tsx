@@ -193,7 +193,7 @@ export function CalculationBreakdown({
       return `${formatDays(c.salaryDays)} يوم (يدوي)${notes.salaryNote ? ` - ${notes.salaryNote}` : ""} - المحسوب ${formatDays(c.computedSalaryDays)} يوم`;
     }
     if (c.salaryCoveredByPayroll)
-      return "مشمول بمسيرة رواتب لشهر آخر يوم عمل - لا أجر إضافي";
+      return "مشمول بمسير رواتب لشهر آخر يوم عمل - لا أجر إضافي";
     if (c.salaryFromDate)
       return `${formatDays(c.salaryDays)} يوم من ${formatVoucherDate(c.salaryFromDate)} (بنظام 30 يوماً للشهر)`;
     return `${formatDays(c.salaryDays)} يوم`;
@@ -237,7 +237,7 @@ export function CalculationBreakdown({
               {salaryHint}
               {lastPayroll && (
                 <span className="block">
-                  آخر مسيرة شملت الموظف: {formatPayrollMonth(lastPayroll)}
+                  آخر مسير شمل الموظف: {formatPayrollMonth(lastPayroll)}
                   {lastPayroll.payrollNumber
                     ? ` (${lastPayroll.payrollNumber})`
                     : ""}
