@@ -52,6 +52,8 @@ const CashFlowReport = lazy(() => import("./pages/CashFlowReport"));
 const ReceiptVoucher = lazy(() => import("./pages/ReceiptVoucher"));
 const ReceiptVoucherReports = lazy(() => import("./pages/ReceiptVoucherReports"));
 const VouchersReport = lazy(() => import("./pages/VouchersReport"));
+const EndOfService = lazy(() => import("./pages/EndOfService"));
+const EndOfServiceDetail = lazy(() => import("./pages/EndOfServiceDetail"));
 
 // HR & Payroll
 const Employees = lazy(() => import("./pages/Employees"));
@@ -557,6 +559,18 @@ function Router() {
       <Route path="/vouchers-report">
         <DashboardLayout>
           <LazyPage component={VouchersReport} />
+        </DashboardLayout>
+      </Route>
+
+      {/* إنهاء الخدمة (انتهاء العقد وعدم التجديد) والمخالصات النهائية */}
+      <Route path="/end-of-service/:id">
+        <DashboardLayout>
+          <LazyPage component={EndOfServiceDetail} />
+        </DashboardLayout>
+      </Route>
+      <Route path="/end-of-service">
+        <DashboardLayout>
+          <LazyPage component={EndOfService} />
         </DashboardLayout>
       </Route>
       
