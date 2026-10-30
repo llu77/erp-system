@@ -153,3 +153,4 @@ temp/
 # Manus local config overrides (may contain secrets)
 manus.config.local.json
 manus.secrets.json
+.project-config.json
