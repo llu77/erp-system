@@ -1644,6 +1644,14 @@ export async function getPayrollDetails(payrollId: number) {
     .orderBy(payrollDetails.employeeName);
 }
 
+// الحصول على سطر مسيرة بالمعرف
+export async function getPayrollDetailById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(payrollDetails).where(eq(payrollDetails.id, id)).limit(1);
+  return result[0];
+}
+
 // إنشاء تفاصيل راتب موظف
 export async function createPayrollDetail(data: InsertPayrollDetail) {
   const db = await getDb();
@@ -1880,323 +1888,8 @@ export async function getPendingExpenses() {
 
 // ==================== دوال حساب الرواتب ====================
 
-// حساب راتب موظف (محدث مع أيام العمل)
-export function calculateEmployeeSalary(
-  baseSalary: number,
-  overtimeEnabled: boolean,
-  overtimeRate: number,
-  workDays: number,
-  incentiveAmount: number,
-  deductions: number,
-  advanceDeduction: number
-) {
-  // الساعات الإضافية (1000 إذا مفعل)
-  const overtime = overtimeEnabled ? overtimeRate : 0;
-  
-  // حساب الراتب اليومي (الأساسي + الساعات الإضافية) / 30
-  const dailyRate = (baseSalary + overtime) / 30;
-  
-  // حساب خصم الغياب (إذا أقل من 30 يوم)
-  const absentDays = 30 - workDays;
-  const absentDeduction = absentDays > 0 ? dailyRate * absentDays : 0;
-  
-  // إجمالي الراتب قبل الخصومات
-  const grossSalary = baseSalary + overtime + incentiveAmount;
-  
-  // إجمالي الخصومات
-  const totalDeductions = deductions + advanceDeduction + absentDeduction;
-  
-  // صافي الراتب
-  const netSalary = grossSalary - totalDeductions;
-  
-  return {
-    baseSalary,
-    overtimeAmount: overtime,
-    workDays,
-    absentDays,
-    absentDeduction,
-    incentiveAmount,
-    grossSalary,
-    totalDeductions,
-    netSalary,
-  };
-}
 
-// إنشاء مسيرة رواتب شهرية لفرع
-export async function generateMonthlyPayroll(
-  branchId: number,
-  branchName: string,
-  year: number,
-  month: number,
-  createdBy: number,
-  createdByName: string
-) {
-  const db = await getDb();
-  if (!db) return null;
-  
-  // التحقق من عدم وجود مسيرة سابقة
-  const existing = await getPayrollByBranchAndMonth(branchId, year, month);
-  if (existing) {
-    throw new Error("توجد مسيرة رواتب لهذا الشهر بالفعل");
-  }
-  
-  // الحصول على موظفي الفرع
-  const branchEmployees = await getEmployeesByBranch(branchId);
-  if (branchEmployees.length === 0) {
-    throw new Error("لا يوجد موظفين في هذا الفرع");
-  }
-  
-  // الحصول على إعدادات الرواتب
-  const salarySettings = await getAllEmployeeSalarySettings();
-  const settingsMap = new Map(salarySettings.map(s => [s.employeeId, s]));
-  
-  // الحصول على السلف الموافق عليها لهذا الشهر
-  const approvedAdvances = await db.select().from(employeeRequests)
-    .where(and(
-      eq(employeeRequests.requestType, "advance"),
-      eq(employeeRequests.status, "approved")
-    ));
-  
-  const advancesMap = new Map<number, number>();
-  approvedAdvances.forEach(adv => {
-    const current = advancesMap.get(adv.employeeId) || 0;
-    advancesMap.set(adv.employeeId, current + parseFloat(adv.advanceAmount || "0"));
-  });
-  
-  // حساب الرواتب
-  const payrollNumber = await generatePayrollNumber();
-  const periodStart = new Date(year, month - 1, 1);
-  const periodEnd = new Date(year, month, 0);
-  
-  let totalBaseSalary = 0;
-  let totalOvertime = 0;
-  let totalIncentives = 0;
-  let totalDeductions = 0;
-  let totalNetSalary = 0;
-  
-  const details: InsertPayrollDetail[] = [];
-  
-  for (const emp of branchEmployees) {
-    const settings = settingsMap.get(emp.id) || {
-      baseSalary: "2000.00",
-      overtimeEnabled: false,
-      overtimeRate: "1000.00",
-      isSupervisor: false,
-      supervisorIncentive: "400.00",
-      fixedDeduction: "0.00",
-    };
-    
-    const advanceDeduction = advancesMap.get(emp.id) || 0;
-    
-    // حساب الحوافز (للمشرف 400)
-    const incentive = settings.isSupervisor ? parseFloat(settings.supervisorIncentive as string) : 0;
-    
-    const salary = calculateEmployeeSalary(
-      parseFloat(settings.baseSalary as string),
-      settings.overtimeEnabled as boolean,
-      parseFloat(settings.overtimeRate as string),
-      30, // أيام العمل الافتراضية
-      incentive,
-      parseFloat(settings.fixedDeduction as string),
-      advanceDeduction
-    );
-    
-    totalBaseSalary += salary.baseSalary;
-    totalOvertime += salary.overtimeAmount;
-    totalIncentives += salary.incentiveAmount;
-    totalDeductions += salary.totalDeductions;
-    totalNetSalary += salary.netSalary;
-    
-    details.push({
-      payrollId: 0, // سيتم تحديثه بعد إنشاء المسيرة
-      employeeId: emp.id,
-      employeeName: emp.name,
-      employeeCode: emp.code,
-      position: emp.position,
-      baseSalary: salary.baseSalary.toFixed(2),
-      overtimeAmount: salary.overtimeAmount.toFixed(2),
-      overtimeEnabled: settings.overtimeEnabled as boolean,
-      incentiveAmount: salary.incentiveAmount.toFixed(2),
-      isSupervisor: settings.isSupervisor as boolean,
-      deductionAmount: parseFloat(settings.fixedDeduction as string).toFixed(2),
-      advanceDeduction: advanceDeduction.toFixed(2),
-      grossSalary: salary.grossSalary.toFixed(2),
-      totalDeductions: salary.totalDeductions.toFixed(2),
-      netSalary: salary.netSalary.toFixed(2),
-    });
-  }
-  
-  // إنشاء المسيرة
-  await db.insert(payrolls).values({
-    payrollNumber,
-    branchId,
-    branchName,
-    year,
-    month,
-    periodStart,
-    periodEnd,
-    totalBaseSalary: totalBaseSalary.toFixed(2),
-    totalOvertime: totalOvertime.toFixed(2),
-    totalIncentives: totalIncentives.toFixed(2),
-    totalDeductions: totalDeductions.toFixed(2),
-    totalNetSalary: totalNetSalary.toFixed(2),
-    employeeCount: branchEmployees.length,
-    status: "draft",
-    createdBy,
-    createdByName,
-  });
-  
-  // الحصول على معرف المسيرة
-  const newPayroll = await getPayrollByBranchAndMonth(branchId, year, month);
-  if (!newPayroll) {
-    throw new Error("فشل في إنشاء مسيرة الرواتب");
-  }
-  
-  // إضافة التفاصيل
-  const detailsWithPayrollId = details.map(d => ({ ...d, payrollId: newPayroll.id }));
-  await createPayrollDetails(detailsWithPayrollId);
-  
-  return newPayroll;
-}
 
-// إنشاء مسيرة رواتب مع التفاصيل (النموذج الجديد)
-export async function createPayrollWithDetails(
-  branchId: number,
-  branchName: string,
-  year: number,
-  month: number,
-  totalBaseSalary: number,
-  totalOvertime: number,
-  totalIncentives: number,
-  totalDeductions: number,
-  totalNetSalary: number,
-  employeeCount: number,
-  details: any[],
-  createdBy: number,
-  createdByName: string
-) {
-  const db = await getDb();
-  if (!db) return null;
-  
-  // التحقق من عدم وجود مسيرة سابقة
-  const existing = await getPayrollByBranchAndMonth(branchId, year, month);
-  if (existing) {
-    throw new Error("توجد مسيرة رواتب لهذا الشهر بالفعل");
-  }
-  
-  // إنشاء رقم المسيرة
-  const payrollNumber = await generatePayrollNumber();
-  const periodStart = new Date(year, month - 1, 1);
-  const periodEnd = new Date(year, month, 0);
-  
-  // إنشاء المسيرة بحالة "تحت الإجراء"
-  await db.insert(payrolls).values({
-    payrollNumber,
-    branchId,
-    branchName,
-    year,
-    month,
-    periodStart,
-    periodEnd,
-    totalBaseSalary: totalBaseSalary.toFixed(2),
-    totalOvertime: totalOvertime.toFixed(2),
-    totalIncentives: totalIncentives.toFixed(2),
-    totalDeductions: totalDeductions.toFixed(2),
-    totalNetSalary: totalNetSalary.toFixed(2),
-    employeeCount,
-    status: "pending", // تحت الإجراء لحين الموافقة
-    createdBy,
-    createdByName,
-  });
-  
-  // الحصول على معرف المسيرة
-  const newPayroll = await getPayrollByBranchAndMonth(branchId, year, month);
-  if (!newPayroll) {
-    throw new Error("فشل في إنشاء مسيرة الرواتب");
-  }
-  
-  // جلب الإجازات المعتمدة لجميع موظفي الفرع
-  const branchLeaves = await getApprovedLeavesForBranch(branchId, year, month);
-  
-  // جلب الفواتير السالبة للموظفين في هذا الشهر
-  const negativeInvoices = await getNegativeInvoicesForMonth(branchId, year, month);
-  
-  // إضافة التفاصيل مع الإجازات والفواتير السالبة
-  const detailsWithPayrollId = details.map(d => {
-    const empLeaves = branchLeaves.get(d.employeeId);
-    const empNegativeInvoices = negativeInvoices.get(d.employeeId);
-    let leaveDays = 0;
-    let leaveDeduction = 0;
-    let leaveType = '';
-    let leaveDetails = '';
-    
-    if (empLeaves && empLeaves.totalDays > 0) {
-      leaveDays = empLeaves.totalDays;
-      // حساب الخصم لكل إجازة
-      const baseSalaryNum = parseFloat(d.baseSalary) || 2000;
-      for (const leave of empLeaves.leaves) {
-        leaveDeduction += calculateLeaveDeduction(baseSalaryNum, leave.days, leave.type, d.workDays || 30);
-      }
-      // تجميع أنواع الإجازات
-      const types = Array.from(new Set(empLeaves.leaves.map(l => l.type)));
-      leaveType = types.join('، ');
-      leaveDetails = JSON.stringify(empLeaves.leaves);
-    }
-    
-    // حساب خصم الفواتير السالبة
-    // ملاحظة: الفواتير السالبة موجودة بالفعل في d.negativeInvoicesDeduction من الواجهة
-    // لذلك نستخدمها فقط لتحديث التفاصيل وليس لإعادة الحساب
-    let negativeInvoicesDeduction = parseFloat(d.negativeInvoicesDeduction) || 0;
-    let negativeInvoicesDetails = '';
-    
-    if (empNegativeInvoices && empNegativeInvoices.total > 0) {
-      // استخدام القيمة المرسلة من الواجهة (لأنها محسوبة بالفعل)
-      negativeInvoicesDetails = JSON.stringify(empNegativeInvoices.invoices.map(inv => ({
-        invoiceNumber: inv.invoiceNumber,
-        amount: inv.amount,
-        reason: inv.reason,
-        date: inv.invoiceDate,
-      })));
-    }
-    
-    // تحديث الخصومات والصافي (فقط الإجازات - الفواتير السالبة محسوبة بالفعل في الواجهة)
-    const currentTotalDeductions = parseFloat(d.totalDeductions) || 0;
-    const currentNetSalary = parseFloat(d.netSalary) || 0;
-    // إضافة خصم الإجازة فقط (الفواتير السالبة موجودة بالفعل في currentTotalDeductions)
-    const newTotalDeductions = currentTotalDeductions + leaveDeduction;
-    const newNetSalary = currentNetSalary - leaveDeduction;
-    
-    return {
-      payrollId: newPayroll.id,
-      employeeId: d.employeeId,
-      employeeName: d.employeeName,
-      employeeCode: d.employeeCode,
-      position: d.position || '',
-      baseSalary: d.baseSalary,
-      overtimeEnabled: d.overtimeEnabled,
-      overtimeAmount: d.overtimeAmount,
-      workDays: d.workDays,
-      absentDays: d.absentDays,
-      absentDeduction: d.absentDeduction,
-      incentiveAmount: d.incentiveAmount,
-      deductionAmount: d.deductionAmount,
-      advanceDeduction: d.advanceDeduction,
-      negativeInvoicesDeduction: negativeInvoicesDeduction.toFixed(2),
-      negativeInvoicesDetails: negativeInvoicesDetails || null,
-      leaveDays,
-      leaveDeduction: leaveDeduction.toFixed(2),
-      leaveType: leaveType || null,
-      leaveDetails: leaveDetails || null,
-      grossSalary: d.grossSalary,
-      totalDeductions: newTotalDeductions.toFixed(2),
-      netSalary: newNetSalary.toFixed(2),
-    };
-  });
-  
-  await createPayrollDetails(detailsWithPayrollId);
-  
-  return newPayroll;
-}
 
 // جلب الفواتير السالبة للموظفين في شهر معين
 export async function getNegativeInvoicesForMonth(
@@ -7026,6 +6719,7 @@ export async function getAllApprovedAdvances(branchId?: number): Promise<Array<{
   approvedBy: string | null;
   isDeducted: boolean;
   deductedAt: Date | null;
+  deductedInPayrollId: number | null;
   createdAt: Date;
 }>> {
   const db = await getDb();
@@ -7053,6 +6747,7 @@ export async function getAllApprovedAdvances(branchId?: number): Promise<Array<{
     approvedBy: employeeRequests.reviewedByName,
     isDeducted: employeeRequests.isDeductedFromSalary,
     deductedAt: employeeRequests.deductedAt,
+    deductedInPayrollId: employeeRequests.deductedInPayrollId,
     createdAt: employeeRequests.createdAt,
   })
     .from(employeeRequests)
@@ -9024,43 +8719,6 @@ export function calculateLeaveDeduction(
   }
 }
 
-// تحديث تفاصيل الراتب بالإجازات
-export async function updatePayrollDetailWithLeaves(
-  payrollDetailId: number,
-  leaveDays: number,
-  leaveDeduction: number,
-  leaveType: string,
-  leaveDetails: string
-): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-
-  // جلب تفاصيل الراتب الحالية
-  const detail = await db.select().from(payrollDetails)
-    .where(eq(payrollDetails.id, payrollDetailId))
-    .limit(1);
-
-  if (detail.length === 0) return;
-
-  const currentDetail = detail[0];
-  const currentTotalDeductions = parseFloat(currentDetail.totalDeductions as string) || 0;
-  const currentNetSalary = parseFloat(currentDetail.netSalary as string) || 0;
-
-  // تحديث الخصومات والصافي
-  const newTotalDeductions = currentTotalDeductions + leaveDeduction;
-  const newNetSalary = currentNetSalary - leaveDeduction;
-
-  await db.update(payrollDetails)
-    .set({
-      leaveDays,
-      leaveDeduction: leaveDeduction.toFixed(2),
-      leaveType,
-      leaveDetails,
-      totalDeductions: newTotalDeductions.toFixed(2),
-      netSalary: newNetSalary.toFixed(2),
-    })
-    .where(eq(payrollDetails.id, payrollDetailId));
-}
 
 
 // ==================== دوال بوابة الموظفين ====================

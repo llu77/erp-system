@@ -68,7 +68,7 @@ import {
   Sparkles,
   Bell,
 } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
@@ -152,6 +152,7 @@ const menuStructure: MenuItem[] = [
       { icon: Receipt, label: "المصاريف", path: "/expenses", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Gift, label: "البونص", path: "/bonuses", roles: ["admin", "manager", "employee", "supervisor", "viewer"] },
       { icon: Wallet, label: "مسيرات الرواتب", path: "/payrolls", roles: ["admin", "manager", "supervisor", "viewer"] },
+      { icon: FileWarning, label: "مخالفات الموظفين", path: "/violations", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: FileText, label: "سند قبض", path: "/receipt-voucher", roles: ["admin", "manager", "supervisor"] },
       { icon: BarChart3, label: "تقارير السندات", path: "/receipt-voucher-reports", roles: ["admin", "manager", "supervisor", "viewer"] },
       { icon: Wallet, label: "التدفق النقدي", path: "/cash-flow", roles: ["admin", "manager"] },
@@ -274,11 +275,15 @@ const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 400;
 
+// يمنع تكرار القائمة الجانبية عندما تُغلّف الصفحة بـ DashboardLayout داخل مسار مغلّف به أصلاً
+const DashboardLayoutNestingContext = createContext(false);
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const isNested = useContext(DashboardLayoutNestingContext);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
@@ -288,6 +293,10 @@ export default function DashboardLayout({
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
+
+  if (isNested) {
+    return <>{children}</>;
+  }
 
   if (loading) {
     return <DashboardLayoutSkeleton />;
@@ -299,6 +308,7 @@ export default function DashboardLayout({
   }
 
   return (
+    <DashboardLayoutNestingContext.Provider value={true}>
     <SidebarProvider
       style={
         {
@@ -310,6 +320,7 @@ export default function DashboardLayout({
         {children}
       </DashboardLayoutContent>
     </SidebarProvider>
+    </DashboardLayoutNestingContext.Provider>
   );
 }
 

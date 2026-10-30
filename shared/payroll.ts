@@ -231,6 +231,107 @@ export function countOverlapDays(
   return Math.min(PAYROLL_MONTH_DAYS, e - s + 1);
 }
 
+// ==================== التواريخ بتوقيت السعودية ====================
+
+/** توقيت السعودية UTC+3 بدون توقيت صيفي */
+export const KSA_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+export interface DateParts {
+  year: number;
+  month: number;
+  day: number;
+}
+
+/** مكونات التاريخ (سنة/شهر/يوم) بتوقيت السعودية */
+export function toKsaDateParts(date: Date | string | number): DateParts {
+  const d = new Date(new Date(date).getTime() + KSA_OFFSET_MS);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+}
+
+export function addDaysToParts(parts: DateParts, days: number): DateParts {
+  const d = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+}
+
+export function formatDateParts(parts: DateParts): string {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+/** بداية الشهر ونهايته (حصرية) كلحظات زمنية حسب توقيت السعودية */
+export function ksaMonthBounds(year: number, month: number): { start: Date; endExclusive: Date } {
+  return {
+    start: new Date(Date.UTC(year, month - 1, 1) - KSA_OFFSET_MS),
+    endExclusive: new Date(Date.UTC(year, month, 1) - KSA_OFFSET_MS),
+  };
+}
+
+// ==================== البنود المرتبطة بالمسيرة (سلف/مخالفات) ====================
+
+export interface PayrollLinkedItems<T> {
+  items: T[];
+  /** بنود أجّلها المدير إلى مسيرة لاحقة */
+  deferredIds: number[];
+}
+
+export interface PayrollAdvanceItem {
+  id: number;
+  amount: number;
+  title: string;
+  approvedAt: string | null;
+}
+
+export interface PayrollViolationItem {
+  id: number;
+  amount: number;
+  violationType: string;
+  violationDate: string;
+  description: string | null;
+}
+
+export interface PayrollLeaveItem {
+  requestId: number;
+  type: string;
+  kind: LeaveKind;
+  days: number;
+  startDate: string;
+  endDate: string;
+}
+
+export interface PayrollNegativeInvoiceItem {
+  id: number;
+  invoiceNumber: string;
+  amount: number;
+  reason: string | null;
+  invoiceDate: string;
+}
+
+/** قراءة JSON محفوظ في تفاصيل المسيرة بأمان (يدعم الصيغة القديمة: مصفوفة فقط) */
+export function parseLinkedItems<T>(raw: string | null | undefined): PayrollLinkedItems<T> {
+  if (!raw) return { items: [], deferredIds: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return { items: parsed as T[], deferredIds: [] };
+    return {
+      items: Array.isArray(parsed?.items) ? (parsed.items as T[]) : [],
+      deferredIds: Array.isArray(parsed?.deferredIds)
+        ? parsed.deferredIds.filter((n: unknown) => Number.isInteger(n))
+        : [],
+    };
+  } catch {
+    return { items: [], deferredIds: [] };
+  }
+}
+
+export function parseJsonArray<T>(raw: string | null | undefined): T[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 /** الحالات المسموح الانتقال إليها لكل حالة مسيرة */
 export const PAYROLL_STATUS_TRANSITIONS: Record<string, string[]> = {
   draft: ["pending", "cancelled"],

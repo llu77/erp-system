@@ -56,6 +56,7 @@ const VouchersReport = lazy(() => import("./pages/VouchersReport"));
 // HR & Payroll
 const Employees = lazy(() => import("./pages/Employees"));
 const Payrolls = lazy(() => import("./pages/Payrolls"));
+const EmployeeViolations = lazy(() => import("./pages/EmployeeViolations"));
 const Bonuses = lazy(() => import("./pages/Bonuses"));
 const BonusRequests = lazy(() => import("./pages/BonusRequests"));
 const SubmitRequest = lazy(() => import("./pages/SubmitRequest"));
@@ -373,6 +374,13 @@ function Router() {
       <Route path="/payrolls">
         <DashboardLayout>
           <LazyPage component={Payrolls} />
+        </DashboardLayout>
+      </Route>
+
+      {/* مخالفات الموظفين */}
+      <Route path="/violations">
+        <DashboardLayout>
+          <LazyPage component={EmployeeViolations} />
         </DashboardLayout>
       </Route>
       

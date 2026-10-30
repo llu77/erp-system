@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo, Fragment } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -28,6 +29,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Plus,
@@ -36,7 +38,6 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  Download,
   Printer,
   DollarSign,
   Users,
@@ -46,9 +47,31 @@ import {
   Clock,
   AlertCircle,
   Trash2,
+  ChevronDown,
+  ChevronLeft,
+  RefreshCw,
+  Pencil,
+  RotateCcw,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { PDF_COLORS, SIGNATURES, PDF_BASE_STYLES } from "@/utils/pdfTemplates";
+import {
+  calculatePayrollLine,
+  sumPayrollTotals,
+  isPayrollEditable,
+  parseLinkedItems,
+  parseJsonArray,
+  LEAVE_KIND_LABELS,
+  type PayrollLineResult,
+  type PayrollLeaveItem,
+  type PayrollAdvanceItem,
+  type PayrollViolationItem,
+} from "@shared/payroll";
+import {
+  buildPayrollSheetHtml,
+  buildPayslipHtml,
+  openPrintWindow,
+  writeAndPrint,
+} from "@/lib/payrollPrint";
 
 // أسماء الأشهر بالعربية
 const arabicMonths = [
@@ -56,7 +79,7 @@ const arabicMonths = [
   "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
 ];
 
-// أسماء الحالات بالعربية
+// أسماء الحالات
 const statusNames: Record<string, string> = {
   draft: "مسودة",
   pending: "تحت الإجراء",
@@ -74,1257 +97,273 @@ const statusColors: Record<string, string> = {
   cancelled: "bg-red-500/20 text-red-400",
 };
 
-// نوع بيانات الإجازة
-interface LeaveData {
-  type: string;
-  days: number;
+// المدخلات اليدوية لكل موظف في نموذج الإنشاء
+interface LineInputs {
+  overtimeEnabled: boolean;
+  workDays: number;
+  incentiveAmount: number;
+  otherDeduction: number;
+  otherDeductionReason: string | null;
+  deferredAdvanceIds: number[];
+  deferredViolationIds: number[];
 }
 
-// نوع بيانات الموظف في النموذج
-interface EmployeePayrollData {
+type PreviewLine = {
   employeeId: number;
   employeeName: string;
   employeeCode: string;
-  position: string;
-  baseSalary: number;
-  overtimeEnabled: boolean;
-  overtimeAmount: number;
-  workDays: number;
-  absentDays: number;
-  absentDeduction: number;
-  incentiveAmount: number;
-  deductionAmount: number;
-  advanceDeduction: number;
-  negativeInvoicesDeduction: number;
-  negativeInvoicesDetails: string | null;
-  unpaidLeaveDeduction: number;
-  unpaidLeaveDays: number;
-  leavesData: LeaveData[]; // بيانات الإجازات الخام لإعادة الحساب
-  grossSalary: number;
-  totalDeductions: number;
-  netSalary: number;
+  position: string | null;
+  isSupervisor: boolean;
+  overtimeRate: number;
+  inputs: LineInputs & { notes: string | null };
+  advances: Array<PayrollAdvanceItem & { deferred: boolean }>;
+  violations: Array<PayrollViolationItem & { deferred: boolean }>;
+  leaves: Array<{ requestId: number; kind: keyof typeof LEAVE_KIND_LABELS; type: string; days: number; startDate: string; endDate: string }>;
+  negativeInvoices: Array<{ id: number; invoiceNumber: string; amount: number; reason: string | null; invoiceDate: string }>;
+  calc: PayrollLineResult;
+};
+
+/** نفس معادلة الخادم لحساب السطر فوراً أثناء التعديل */
+function recomputeLine(line: PreviewLine, inputs: LineInputs): PayrollLineResult {
+  const deferredAdv = new Set(inputs.deferredAdvanceIds);
+  const deferredVio = new Set(inputs.deferredViolationIds);
+  return calculatePayrollLine({
+    baseSalary: line.calc.baseSalary,
+    overtimeEnabled: inputs.overtimeEnabled,
+    overtimeRate: line.overtimeRate,
+    workDays: inputs.workDays,
+    incentiveAmount: inputs.incentiveAmount,
+    otherDeduction: inputs.otherDeduction,
+    advanceDeduction: line.advances.filter(a => !deferredAdv.has(a.id)).reduce((s, a) => s + a.amount, 0),
+    violationsDeduction: line.violations.filter(v => !deferredVio.has(v.id)).reduce((s, v) => s + v.amount, 0),
+    negativeInvoicesDeduction: line.negativeInvoices.reduce((s, i) => s + i.amount, 0),
+    leaves: line.leaves.map(l => ({ type: l.kind, days: l.days })),
+  });
 }
 
-// الراتب الأساسي الثابت
-const BASE_SALARY = 2000;
-// قيمة الساعات الإضافية
-const OVERTIME_AMOUNT = 1000;
+const toggleId = (list: number[], id: number) => (list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
 
 export default function Payrolls() {
   const { user } = useAuth();
-  const [selectedBranch, setSelectedBranch] = useState<number | null>(null);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const utils = trpc.useUtils();
+  const currentYear = new Date().getFullYear();
+  const [selectedBranch, setSelectedBranch] = useState<number | null>(
+    user?.role === 'supervisor' && user?.branchId ? user.branchId : null
+  );
+  const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [selectedPayroll, setSelectedPayroll] = useState<number | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [employeesData, setEmployeesData] = useState<EmployeePayrollData[]>([]);
   const [step, setStep] = useState<'select' | 'form'>('select');
+  const [inputsByEmployee, setInputsByEmployee] = useState<Record<number, LineInputs>>({});
+  const [expandedEmployee, setExpandedEmployee] = useState<number | null>(null);
+  const [editingDetail, setEditingDetail] = useState<any | null>(null);
+  const [editInputs, setEditInputs] = useState<(LineInputs & { notes: string | null }) | null>(null);
+
+  const role = user?.role;
+  const isManager = role === 'admin' || role === 'manager';
+  const canEdit = isManager || role === 'supervisor';
 
   // جلب البيانات
   const { data: branches } = trpc.branches.list.useQuery();
   const { data: payrolls, isLoading, refetch } = trpc.payrolls.list.useQuery();
-  const { data: payrollDetails } = trpc.payrolls.details.useQuery(
+  const { data: payrollDetails, refetch: refetchDetails } = trpc.payrolls.details.useQuery(
     { payrollId: selectedPayroll! },
     { enabled: !!selectedPayroll }
   );
-  const { data: branchEmployees } = trpc.employees.listByBranch.useQuery(
-    { branchId: selectedBranch! },
-    { enabled: !!selectedBranch && step === 'form' }
-  );
-  
-  // جلب السلف غير المخصومة للفرع
-  const { data: branchAdvances } = trpc.advancesForPayroll.getForBranch.useQuery(
-    { branchId: selectedBranch! },
-    { enabled: !!selectedBranch && step === 'form' }
-  );
-  
-  // جلب الفواتير السالبة والإجازات بدون راتب
-  const { data: deductionsPreview, isLoading: deductionsLoading } = trpc.payrolls.getDeductionsPreview.useQuery(
+
+  // المعاينة محسوبة في الخادم (الإعدادات + السلف + المخالفات + الإجازات + الفواتير السالبة)
+  const previewQuery = trpc.payrolls.preview.useQuery(
     { branchId: selectedBranch!, year: selectedYear, month: selectedMonth },
-    { enabled: !!selectedBranch && step === 'form' }
+    { enabled: !!selectedBranch && step === 'form', refetchOnWindowFocus: false, staleTime: 60_000 }
   );
-  
-  // جلب إعدادات رواتب الموظفين
-  const { data: salarySettings } = trpc.salarySettings.list.useQuery(
-    undefined,
-    { enabled: !!selectedBranch && step === 'form' }
-  );
+  const previewLines = (previewQuery.data?.lines ?? []) as PreviewLine[];
 
-  // تهيئة بيانات الموظفين عند تحميلهم مع السلف والفواتير السالبة والإجازات تلقائياً
-  useEffect(() => {
-    if (branchEmployees && branchEmployees.length > 0) {
-      const initialData: EmployeePayrollData[] = branchEmployees.map((emp: any) => {
-        // جلب إعدادات الراتب للموظف من قاعدة البيانات
-        const empSettings = salarySettings?.find(s => s.employeeId === emp.id);
-        const baseSalary = empSettings?.baseSalary ? parseFloat(empSettings.baseSalary) : BASE_SALARY;
-        // استخدام إعدادات الساعات الإضافية المحفوظة للموظف
-        const overtimeEnabled = empSettings?.overtimeEnabled || false;
-        const overtimeAmount = overtimeEnabled ? OVERTIME_AMOUNT : 0;
-        const workDays = 30;
-        const absentDays = 0;
-        const absentDeduction = 0;
-        const incentiveAmount = 0;
-        const deductionAmount = 0;
-        
-        // جلب السلف غير المخصومة للموظف تلقائياً
-        const employeeAdvances = branchAdvances?.find(a => a.employeeId === emp.id);
-        const advanceDeduction = employeeAdvances?.totalAdvances || 0;
-        
-        // جلب الفواتير السالبة للموظف تلقائياً
-        const employeeNegativeInvoices = deductionsPreview?.negativeInvoices?.[emp.id];
-        const negativeInvoicesDeduction = employeeNegativeInvoices?.total || 0;
-        const negativeInvoicesDetails = employeeNegativeInvoices?.invoices?.length 
-          ? `فواتير سالبة: ${employeeNegativeInvoices.invoices.map((inv: any) => `${inv.amount} ر.س (${inv.note || 'بدون ملاحظة'})`).join(' | ')}`
-          : null;
-        
-        // جلب الإجازات بدون راتب للموظف تلقائياً
-        const employeeLeaves = deductionsPreview?.leaves?.[emp.id];
-        // تخزين بيانات الإجازات الخام لإعادة الحساب عند تغيير الساعات الإضافية
-        const leavesData: LeaveData[] = employeeLeaves?.leaves?.map((leave: any) => ({
-          type: leave.type,
-          days: leave.days
-        })) || [];
-        
-        // حساب خصم الإجازة بناءً على نوعها مع مراعاة الساعات الإضافية
-        // الراتب اليومي = (الراتب الأساسي + الساعات الإضافية) / 30
-        // مثال: مع ساعات إضافية: (2000 + 1000) / 30 = 100 ر.س/يوم
-        // بدون ساعات إضافية: 2000 / 30 = 66.67 ر.س/يوم
-        let unpaidLeaveDeduction = 0;
-        if (leavesData.length > 0) {
-          const dailySalary = (baseSalary + overtimeAmount) / 30; // يشمل الساعات الإضافية إذا كانت مفعلة
-          for (const leave of leavesData) {
-            const leaveType = leave.type?.toLowerCase().trim();
-            // إجازة سنوية أو مرضية - مدفوعة بالكامل
-            if (leaveType === 'annual' || leaveType === 'سنوية' || leaveType === 'sick' || leaveType === 'مرضية') {
-              continue;
-            }
-            // إجازة طارئة - خصم 50%
-            if (leaveType === 'emergency' || leaveType === 'طارئة') {
-              unpaidLeaveDeduction += dailySalary * leave.days * 0.5;
-            } else {
-              // إجازة بدون راتب - خصم كامل
-              unpaidLeaveDeduction += dailySalary * leave.days;
-            }
-          }
-        }
-        
-        const grossSalary = baseSalary + overtimeAmount;
-        const totalDeductions = advanceDeduction + negativeInvoicesDeduction + unpaidLeaveDeduction;
-        const netSalary = grossSalary - totalDeductions;
-
-        return {
-          employeeId: emp.id,
-          employeeName: emp.name,
-          employeeCode: emp.code,
-          position: emp.position || '',
-          baseSalary,
-          overtimeEnabled,
-          overtimeAmount: overtimeAmount,
-          workDays,
-          absentDays,
-          absentDeduction,
-          incentiveAmount,
-          deductionAmount,
-          advanceDeduction,
-          negativeInvoicesDeduction,
-          negativeInvoicesDetails,
-          unpaidLeaveDeduction: unpaidLeaveDeduction,
-          unpaidLeaveDays: employeeLeaves?.totalDays || 0,
-          leavesData,
-          grossSalary,
-          totalDeductions,
-          netSalary,
-        };
-      });
-      setEmployeesData(initialData);
-    }
-  }, [branchEmployees, branchAdvances, deductionsPreview, salarySettings]);
-
-  // حساب الراتب لموظف معين
-  const calculateSalary = (data: EmployeePayrollData): EmployeePayrollData => {
-    const overtime = data.overtimeEnabled ? OVERTIME_AMOUNT : 0;
-    const dailyRate = (data.baseSalary + overtime) / 30;
-    const absentDays = 30 - data.workDays;
-    const absentDeduction = absentDays > 0 ? dailyRate * absentDays : 0;
-    const grossSalary = data.baseSalary + overtime + data.incentiveAmount;
-    const negativeInvoicesDeduction = data.negativeInvoicesDeduction || 0;
-    
-    // إعادة حساب خصم الإجازة بناءً على حالة الساعات الإضافية
-    // مع ساعات إضافية: (2000 + 1000) / 30 = 100 ر.س/يوم
-    // بدون ساعات إضافية: 2000 / 30 = 66.67 ر.س/يوم
-    let unpaidLeaveDeduction = 0;
-    if (data.leavesData && data.leavesData.length > 0) {
-      for (const leave of data.leavesData) {
-        const leaveType = leave.type?.toLowerCase().trim();
-        // إجازة سنوية أو مرضية - مدفوعة بالكامل
-        if (leaveType === 'annual' || leaveType === 'سنوية' || leaveType === 'sick' || leaveType === 'مرضية') {
-          continue;
-        }
-        // إجازة طارئة - خصم 50%
-        if (leaveType === 'emergency' || leaveType === 'طارئة') {
-          unpaidLeaveDeduction += dailyRate * leave.days * 0.5;
-        } else {
-          // إجازة بدون راتب - خصم كامل
-          unpaidLeaveDeduction += dailyRate * leave.days;
-        }
-      }
-    }
-    
-    const totalDeductions = data.deductionAmount + data.advanceDeduction + absentDeduction + negativeInvoicesDeduction + unpaidLeaveDeduction;
-    const netSalary = grossSalary - totalDeductions;
-
-    return {
-      ...data,
-      overtimeAmount: overtime,
-      absentDays,
-      absentDeduction,
-      unpaidLeaveDeduction,
-      grossSalary,
-      totalDeductions,
-      netSalary,
-    };
+  const getInputs = (line: PreviewLine): LineInputs => inputsByEmployee[line.employeeId] ?? {
+    overtimeEnabled: line.inputs.overtimeEnabled,
+    workDays: line.inputs.workDays,
+    incentiveAmount: line.inputs.incentiveAmount,
+    otherDeduction: line.inputs.otherDeduction,
+    otherDeductionReason: line.inputs.otherDeductionReason,
+    deferredAdvanceIds: line.inputs.deferredAdvanceIds,
+    deferredViolationIds: line.inputs.deferredViolationIds,
   };
 
-  // تحديث بيانات موظف
-  const updateEmployeeData = (index: number, field: keyof EmployeePayrollData, value: any) => {
-    setEmployeesData(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      updated[index] = calculateSalary(updated[index]);
-      return updated;
-    });
+  const updateInputs = (line: PreviewLine, patch: Partial<LineInputs>) => {
+    setInputsByEmployee(prev => ({ ...prev, [line.employeeId]: { ...getInputs(line), ...patch } }));
+  };
+
+  const formRows = useMemo(
+    () => previewLines.map(line => {
+      const inputs = getInputs(line);
+      return { line, inputs, calc: recomputeLine(line, inputs) };
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [previewLines, inputsByEmployee]
+  );
+  const formTotals = sumPayrollTotals(formRows.map(r => r.calc));
+
+  const resetForm = () => {
+    setStep('select');
+    setInputsByEmployee({});
+    setExpandedEmployee(null);
+    if (!(user?.role === 'supervisor' && user?.branchId)) setSelectedBranch(null);
   };
 
   // Mutations
-  const createPayrollMutation = trpc.payrolls.createWithDetails.useMutation({
-    onSuccess: () => {
-      toast.success("تم إنشاء مسيرة الرواتب بنجاح");
+  const createPayrollMutation = trpc.payrolls.create.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
       setIsGenerateOpen(false);
-      setStep('select');
-      setEmployeesData([]);
-      setSelectedBranch(null);
+      resetForm();
       refetch();
     },
-    onError: (error: any) => {
-      toast.error(error.message);
-    },
+    onError: (error: any) => toast.error(error.message),
   });
 
   const updateStatusMutation = trpc.payrolls.updateStatus.useMutation({
     onSuccess: (data) => {
       toast.success(data.message);
       refetch();
+      refetchDetails();
     },
-    onError: (error: any) => {
-      toast.error(error.message);
-    },
+    onError: (error: any) => toast.error(error.message),
   });
 
   const deleteMutation = trpc.payrolls.delete.useMutation({
-    onSuccess: () => {
-      toast.success("تم حذف مسيرة الرواتب بنجاح");
+    onSuccess: (data) => {
+      toast.success(data.message);
       refetch();
     },
-    onError: (error: any) => {
-      toast.error(error.message);
-    },
+    onError: (error: any) => toast.error(error.message),
   });
 
-  // إنشاء مسيرة رواتب
+  const recalculateMutation = trpc.payrolls.recalculate.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      refetch();
+      refetchDetails();
+    },
+    onError: (error: any) => toast.error(error.message),
+  });
+
+  const updateLineMutation = trpc.payrolls.updateLine.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      setEditingDetail(null);
+      setEditInputs(null);
+      refetch();
+      refetchDetails();
+    },
+    onError: (error: any) => toast.error(error.message),
+  });
+
+  // إنشاء مسيرة رواتب: إرسال المدخلات اليدوية فقط والخادم يحسب كل المبالغ
   const handleCreatePayroll = () => {
     if (!selectedBranch) {
       toast.error("يرجى اختيار الفرع");
       return;
     }
-    if (employeesData.length === 0) {
-      toast.error("لا يوجد موظفين في هذا الفرع");
+    if (formRows.length === 0) {
+      toast.error("لا يوجد موظفين نشطين في هذا الفرع");
       return;
     }
-
-    const branch = branches?.find(b => b.id === selectedBranch);
-    if (!branch) return;
-
-    // حساب الإجماليات
-    const totals = employeesData.reduce((acc, emp) => ({
-      totalBaseSalary: acc.totalBaseSalary + emp.baseSalary,
-      totalOvertime: acc.totalOvertime + emp.overtimeAmount,
-      totalIncentives: acc.totalIncentives + emp.incentiveAmount,
-      totalDeductions: acc.totalDeductions + emp.totalDeductions,
-      totalNetSalary: acc.totalNetSalary + emp.netSalary,
-    }), {
-      totalBaseSalary: 0,
-      totalOvertime: 0,
-      totalIncentives: 0,
-      totalDeductions: 0,
-      totalNetSalary: 0,
-    });
-
+    const missingReason = formRows.find(r => r.inputs.otherDeduction > 0 && !r.inputs.otherDeductionReason?.trim());
+    if (missingReason) {
+      toast.error(`يرجى كتابة سبب الخصم للموظف ${missingReason.line.employeeName}`);
+      setExpandedEmployee(missingReason.line.employeeId);
+      return;
+    }
     createPayrollMutation.mutate({
       branchId: selectedBranch,
-      branchName: branch.nameAr || branch.name,
       year: selectedYear,
       month: selectedMonth,
-      ...totals,
-      employeeCount: employeesData.length,
-      details: employeesData.map(emp => ({
-        employeeId: emp.employeeId,
-        employeeName: emp.employeeName,
-        employeeCode: emp.employeeCode,
-        position: emp.position,
-        baseSalary: emp.baseSalary.toFixed(2),
-        overtimeEnabled: emp.overtimeEnabled,
-        overtimeAmount: emp.overtimeAmount.toFixed(2),
-        workDays: emp.workDays,
-        absentDays: emp.absentDays,
-        absentDeduction: emp.absentDeduction.toFixed(2),
-        incentiveAmount: emp.incentiveAmount.toFixed(2),
-        deductionAmount: emp.deductionAmount.toFixed(2),
-        advanceDeduction: emp.advanceDeduction.toFixed(2),
-        negativeInvoicesDeduction: emp.negativeInvoicesDeduction.toFixed(2),
-        unpaidLeaveDeduction: emp.unpaidLeaveDeduction.toFixed(2),
-        grossSalary: emp.grossSalary.toFixed(2),
-        totalDeductions: emp.totalDeductions.toFixed(2),
-        netSalary: emp.netSalary.toFixed(2),
-      })),
+      adjustments: formRows.map(({ line, inputs }) => ({ employeeId: line.employeeId, ...inputs })),
     });
   };
 
-  // طباعة المسيرة
+  // طباعة المسيرة الكاملة
   const handlePrint = async (payrollId: number) => {
-    try {
-      // جلب بيانات المسيرة
-      const payroll = payrolls?.find(p => p.id === payrollId);
-      if (!payroll) {
-        toast.error("لم يتم العثور على المسيرة");
-        return;
-      }
-
-      // جلب تفاصيل المسيرة
-      const detailsResponse = await fetch(`/api/trpc/payrolls.details?input=${encodeURIComponent(JSON.stringify({ payrollId: payrollId }))}`);
-      const detailsData = await detailsResponse.json();
-      const details = detailsData?.result?.data || [];
-
-      const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-      const monthName = monthNames[payroll.month - 1];
-      const statusNames: Record<string, string> = {
-        draft: 'مسودة',
-        pending: 'تحت الإجراء',
-        approved: 'معتمدة',
-        paid: 'مدفوعة',
-      };
-
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        toast.error("يرجى السماح بالنوافذ المنبثقة");
-        return;
-      }
-
-      const html = `
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <title>مسيرة رواتب - ${payroll.branchName} - ${monthName} ${payroll.year}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800;900&display=swap');
-    body {
-      font-family: 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif;
-      font-size: 14px;
-      line-height: 1.6;
-      color: #000;
-      background: #fff;
-      padding: 20px;
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 3px solid #1e40af;
-      padding-bottom: 20px;
-      margin-bottom: 20px;
-    }
-    .company-info { display: flex; align-items: center; gap: 15px; }
-    .company-info img { height: 50px; width: auto; }
-    .company-info h1 { font-size: 24px; color: #000; font-weight: 800; }
-    .report-title { text-align: left; }
-    .report-title h2 { font-size: 18px; color: #000; font-weight: 700; }
-    .report-title p { color: #666; font-size: 11px; }
-    .info-section {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 15px;
-      background: #f8fafc;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-    }
-    .info-item { text-align: center; }
-    .info-item label { display: block; font-size: 10px; color: #666; margin-bottom: 3px; }
-    .info-item span { font-size: 22px; font-weight: 900; color: #000000; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th { background: #1a1a1a; color: white; padding: 12px 8px; font-size: 13px; font-weight: 700; text-align: center; }
-    td { padding: 10px 8px; border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 16px; font-weight: 700; color: #000000; }
-    tr:nth-child(even) { background: #f8fafc; }
-    .summary-section {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 15px;
-      background: #1a1a1a;
-      padding: 20px;
-      border-radius: 8px;
-      color: white;
-      margin-bottom: 20px;
-      border: 2px solid #000;
-    }
-    .summary-item { text-align: center; }
-    .summary-item label { display: block; font-size: 10px; opacity: 0.9; margin-bottom: 5px; }
-    .summary-item span { font-size: 24px; font-weight: 900; }
-    .footer { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 30px; padding-top: 20px; border-top: 2px dashed #e2e8f0; gap: 20px; }
-    .signature-box { text-align: center; flex: 1; padding: 15px; background: #f8f9fa; border: 2px solid #e0e0e0; border-radius: 8px; min-height: 160px; }
-    .signature-box.has-signature { border-color: #1b5e20; background: #e8f5e9; }
-    .signature-box .title { font-size: 10px; color: #607d8b; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; }
-    .signature-box .sig-image { height: 80px; display: flex; align-items: center; justify-content: center; }
-    .signature-box .sig-image img { max-height: 80px; max-width: 140px; object-fit: contain; }
-    .signature-box .line { border-top: 1px solid #333; margin-top: 10px; padding-top: 8px; }
-    .signature-box .name { font-size: 12px; font-weight: 700; color: #0f2744; }
-    .signature-box .role { font-size: 9px; color: #607d8b; margin-top: 2px; }
-    .stamp-box { flex: 0 0 140px; text-align: center; padding: 10px; }
-    .stamp-box img { width: 130px; height: 130px; object-fit: contain; }
-    .stamp-box .label { font-size: 9px; color: #607d8b; margin-top: 5px; }
-    .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; }
-    .status-approved { background: #dcfce7; color: #166534; }
-    .status-pending { background: #fef3c7; color: #92400e; }
-    .status-draft { background: #e2e8f0; color: #475569; }
-    .status-paid { background: #dbeafe; color: #1e40af; }
-    @media print { body { padding: 0; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="company-info">
-      <img src="/symbol-ai-logo.png" alt="Symbol AI" />
-      <div>
-        <h1>Symbol AI</h1>
-        <p>نظام إدارة الموارد البشرية</p>
-      </div>
-    </div>
-    <div class="report-title">
-      <h2>مسيرة رواتب</h2>
-      <p>رقم المسيرة: ${payroll.payrollNumber}</p>
-      <p>تاريخ الإنشاء: ${new Date(payroll.createdAt).toLocaleDateString('ar-SA')}</p>
-    </div>
-  </div>
-
-  <div class="info-section">
-    <div class="info-item">
-      <label>الفرع</label>
-      <span>${payroll.branchName}</span>
-    </div>
-    <div class="info-item">
-      <label>الشهر</label>
-      <span>${monthName} ${payroll.year}</span>
-    </div>
-    <div class="info-item">
-      <label>عدد الموظفين</label>
-      <span>${payroll.employeeCount}</span>
-    </div>
-    <div class="info-item">
-      <label>الحالة</label>
-      <span class="status-badge status-${payroll.status}">${statusNames[payroll.status] || payroll.status}</span>
-    </div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>اسم الموظف</th>
-        <th>الرمز</th>
-        <th>الأساسي</th>
-        <th>إضافي</th>
-        <th>أيام العمل</th>
-        <th>خصم غياب</th>
-        <th>حوافز</th>
-        <th>خصومات</th>
-        <th>سلف</th>
-        <th>صافي الراتب</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${details.map((d: any, i: number) => `
-        <tr>
-          <td>${i + 1}</td>
-          <td>${d.employeeName}</td>
-          <td>${d.employeeCode || '-'}</td>
-          <td>${parseFloat(d.baseSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
-          <td>${parseFloat(d.overtimeAmount || '0').toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
-          <td>${d.workDays || 30}</td>
-          <td>${parseFloat(d.absentDeduction || '0').toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
-          <td>${parseFloat(d.incentiveAmount || '0').toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
-          <td>${parseFloat(d.deductionAmount || '0').toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
-          <td>${parseFloat(d.advanceDeduction || '0').toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
-          <td style="font-weight: bold; color: #166534;">${parseFloat(d.netSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</td>
-        </tr>
-      `).join('')}
-    </tbody>
-  </table>
-
-  <div class="summary-section">
-    <div class="summary-item">
-      <label>إجمالي الرواتب الأساسية</label>
-      <span>${parseFloat(payroll.totalBaseSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
-    </div>
-    <div class="summary-item">
-      <label>إجمالي الإضافي</label>
-      <span>${parseFloat(payroll.totalOvertime).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
-    </div>
-    <div class="summary-item">
-      <label>إجمالي الحوافز</label>
-      <span>${parseFloat(payroll.totalIncentives).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
-    </div>
-    <div class="summary-item">
-      <label>إجمالي الخصومات</label>
-      <span>${parseFloat(payroll.totalDeductions).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
-    </div>
-    <div class="summary-item">
-      <label>صافي المسيرة</label>
-      <span>${parseFloat(payroll.totalNetSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س.</span>
-    </div>
-  </div>
-
-  <div class="footer">
-    <div class="signature-box ${payroll.status === 'approved' || payroll.status === 'paid' ? 'has-signature' : ''}">
-      <div class="title">توقيع المشرف العام</div>
-      <div class="sig-image">
-        ${payroll.status === 'approved' || payroll.status === 'paid' ? '<img src="/signatures/supervisor_signature.png" alt="توقيع المشرف" onerror="this.parentElement.innerHTML=\'<span style=color:#1b5e20>✓ موقّع</span>\'" />' : '<span style="color: #607d8b; font-size: 9px;">في انتظار التوقيع</span>'}
-      </div>
-      <div class="line">
-        <div class="name">سالم الوادعي</div>
-        <div class="role">المشرف العام</div>
-      </div>
-    </div>
-    <div class="stamp-box">
-      ${payroll.status === 'approved' || payroll.status === 'paid' ? '<img src="/signatures/company_stamp.png" alt="ختم الإدارة" onerror="this.style.display=\'none\'" />' : ''}
-      <div class="label">ختم الإدارة</div>
-    </div>
-    <div class="signature-box ${payroll.status === 'approved' || payroll.status === 'paid' ? 'has-signature' : ''}">
-      <div class="title">توقيع المدير العام</div>
-      <div class="sig-image">
-        ${payroll.status === 'approved' || payroll.status === 'paid' ? '<img src="/signatures/manager_signature.png" alt="توقيع المدير" onerror="this.parentElement.innerHTML=\'<span style=color:#1b5e20>✓ موقّع</span>\'" />' : '<span style="color: #607d8b; font-size: 9px;">في انتظار التوقيع</span>'}
-      </div>
-      <div class="line">
-        <div class="name">عمر المطيري</div>
-        <div class="role">المدير العام</div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>
-      `;
-
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.onload = () => {
-        printWindow.print();
-      };
-    } catch (error) {
-      console.error('Print error:', error);
-      toast.error("حدث خطأ أثناء الطباعة");
-    }
-  };
-
-  // طباعة قسيمة راتب فردية - تصميم احترافي موحد
-  const handlePrintPayslip = (detail: any, payroll: any) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error("يرجى السماح بالنوافذ المنبثقة");
+    const payroll = payrolls?.find(p => p.id === payrollId);
+    if (!payroll) {
+      toast.error("لم يتم العثور على المسيرة");
       return;
     }
-
-    const monthName = arabicMonths[payroll.month - 1];
-    const grossSalary = parseFloat(detail.baseSalary) + parseFloat(detail.overtimeAmount || '0') + parseFloat(detail.incentiveAmount || '0');
-    const totalDeductions = parseFloat(detail.absentDeduction || '0') + parseFloat(detail.deductionAmount || '0') + parseFloat(detail.advanceDeduction || '0');
-    const isApproved = payroll.status === 'approved';
-    
-    // التاريخ الهجري
-    const hijriDate = new Date().toLocaleDateString('ar-SA-u-ca-islamic', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-
-    const html = `
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <title>قسيمة راتب - ${detail.employeeName} - Symbol AI</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;600;700;800;900&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
-    
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    
-    body {
-      font-family: 'Tajawal', 'Cairo', 'Segoe UI', sans-serif;
-      font-size: 14px;
-      line-height: 1.6;
-      color: #000;
-      background: #fff;
-      padding: 15px;
+    // فتح النافذة مباشرة من حدث النقر لتجنب حظر النوافذ المنبثقة
+    const win = openPrintWindow();
+    if (!win) {
+      toast.error("يرجى السماح بالنوافذ المنبثقة للطباعة");
+      return;
     }
-    
-    .payslip {
-      max-width: 700px;
-      margin: 0 auto;
-      background: #fff;
-      position: relative;
+    try {
+      const details = await utils.payrolls.details.fetch({ payrollId });
+      if (!details || details.length === 0) {
+        win.close();
+        toast.error("لا توجد تفاصيل لهذه المسيرة");
+        return;
+      }
+      writeAndPrint(win, buildPayrollSheetHtml(payroll, details));
+    } catch (error: any) {
+      win.close();
+      toast.error(error?.message || "حدث خطأ أثناء الطباعة");
     }
-    
-    /* العلامة المائية */
-    .watermark {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-35deg);
-      font-size: 90px;
-      font-weight: 900;
-      color: rgba(27, 94, 32, 0.05);
-      pointer-events: none;
-      z-index: 0;
-      white-space: nowrap;
-      letter-spacing: 8px;
-    }
-    
-    /* الهيدر */
-    .header {
-      background: #1a1a1a;
-      color: white;
-      padding: 18px 20px;
-      border-radius: 8px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 15px;
-      position: relative;
-    }
-    
-    .status-badge {
-      position: absolute;
-      top: -6px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 4px 18px;
-      border-radius: 0 0 8px 8px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    }
-    
-    .status-approved { background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%); color: white; }
-    .status-pending { background: linear-gradient(135deg, #e65100 0%, #f57c00 100%); color: white; }
-    
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    
-    .logo {
-      width: 50px;
-      height: 50px;
-      background: white;
-      border-radius: 8px;
-      padding: 4px;
-      object-fit: contain;
-    }
-    
-    .company-name {
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: 1px;
-    }
-    
-    .company-subtitle {
-      font-size: 10px;
-      opacity: 0.85;
-      margin-top: 2px;
-    }
-    
-    .header-left {
-      text-align: left;
-      background: rgba(255,255,255,0.1);
-      padding: 10px 14px;
-      border-radius: 6px;
-    }
-    
-    .doc-title {
-      font-size: 14px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-    
-    .doc-number {
-      font-size: 10px;
-      font-family: 'Courier New', monospace;
-      background: rgba(0,0,0,0.2);
-      padding: 2px 8px;
-      border-radius: 4px;
-      display: inline-block;
-      margin-bottom: 3px;
-    }
-    
-    .doc-date {
-      font-size: 9px;
-      opacity: 0.8;
-    }
-    
-    /* معلومات الموظف */
-    .employee-info {
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 15px;
-    }
-    
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-    }
-    
-    .info-item {
-      text-align: center;
-      padding: 8px;
-      background: white;
-      border-radius: 6px;
-      border: 1px solid #e0e0e0;
-    }
-    
-    .info-label {
-      display: block;
-      font-size: 9px;
-      color: #607d8b;
-      margin-bottom: 3px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-    }
-    
-    .info-value {
-      font-size: 20px;
-      font-weight: 900;
-      color: #000000;
-    }
-    
-    /* تفاصيل الراتب */
-    .salary-section {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 15px;
-    }
-    
-    .earnings-box {
-      background: #e8f5e9;
-      border: 1px solid #a5d6a7;
-      border-radius: 8px;
-      padding: 12px;
-    }
-    
-    .deductions-box {
-      background: #ffebee;
-      border: 1px solid #ef9a9a;
-      border-radius: 8px;
-      padding: 12px;
-    }
-    
-    .section-title {
-      font-size: 11px;
-      font-weight: 700;
-      margin-bottom: 10px;
-      padding-bottom: 6px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    
-    .earnings-box .section-title {
-      color: #1b5e20;
-      border-bottom: 2px solid #1b5e20;
-    }
-    
-    .deductions-box .section-title {
-      color: #b71c1c;
-      border-bottom: 2px solid #b71c1c;
-    }
-    
-    .salary-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px dashed rgba(0,0,0,0.1);
-      font-size: 14px;
-    }
-    
-    .salary-row:last-child { border-bottom: none; }
-    
-    .salary-row .label { color: #000; font-weight: 600; }
-    .salary-row .value { font-weight: 900; color: #000000; font-size: 18px; }
-    .salary-row .value.positive { color: #000000; }
-    .salary-row .value.negative { color: #cc0000; }
-    
-    .total-row {
-      margin-top: 8px;
-      padding-top: 8px;
-      font-weight: 800;
-      font-size: 16px;
-    }
-    
-    .earnings-box .total-row { border-top: 2px solid #1b5e20; }
-    .deductions-box .total-row { border-top: 2px solid #b71c1c; }
-    
-    /* صافي الراتب */
-    .net-salary {
-      background: #1a1a1a;
-      color: white;
-      padding: 20px;
-      border-radius: 8px;
-      text-align: center;
-      margin-bottom: 15px;
-      border: 2px solid #000;
-    }
-    
-    .net-salary .label {
-      font-size: 11px;
-      opacity: 0.9;
-      margin-bottom: 4px;
-    }
-    
-    .net-salary .amount {
-      font-size: 38px;
-      font-weight: 900;
-      letter-spacing: -0.5px;
-    }
-    
-    /* قسم التوقيعات */
-    .approval-section {
-      border-top: 2px dashed #e0e0e0;
-      padding-top: 15px;
-      margin-top: 10px;
-    }
-    
-    .approval-header {
-      text-align: center;
-      margin-bottom: 15px;
-    }
-    
-    .approval-title {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 16px;
-      border-radius: 16px;
-      font-size: 11px;
-      font-weight: 700;
-    }
-    
-    .approval-title.approved {
-      background: #e8f5e9;
-      color: #1b5e20;
-      border: 1px solid #1b5e20;
-    }
-    
-    .approval-title.pending {
-      background: #fff3e0;
-      color: #e65100;
-      border: 1px solid #e65100;
-    }
-    
-    .signatures-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-    }
-    
-    .signature-box {
-      flex: 1;
-      text-align: center;
-      padding: 15px;
-      background: white;
-      border: 2px solid #e0e0e0;
-      border-radius: 8px;
-      min-height: 160px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-    
-    .signature-box.has-signature {
-      border-color: #1b5e20;
-      background: #e8f5e9;
-    }
-    
-    .signature-title {
-      font-size: 9px;
-      color: #607d8b;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-      margin-bottom: 8px;
-    }
-    
-    .signature-image-container {
-      height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .signature-image {
-      max-height: 80px;
-      max-width: 140px;
-      object-fit: contain;
-    }
-    
-    .signature-line {
-      width: 70%;
-      height: 1px;
-      background: #e0e0e0;
-      margin: 8px auto;
-    }
-    
-    .signature-name {
-      font-size: 11px;
-      font-weight: 700;
-      color: #0f2744;
-    }
-    
-    .signature-role {
-      font-size: 8px;
-      color: #607d8b;
-      margin-top: 2px;
-    }
-    
-    .stamp-box {
-      flex: 0 0 140px;
-      text-align: center;
-      padding: 8px;
-    }
-    
-    .stamp-image {
-      width: 130px;
-      height: 130px;
-      object-fit: contain;
-    }
-    
-    .stamp-label {
-      font-size: 8px;
-      color: #607d8b;
-      margin-top: 4px;
-    }
-    
-    .pending-signatures {
-      text-align: center;
-      padding: 20px;
-      color: #607d8b;
-    }
-    
-    .pending-signatures .icon {
-      font-size: 28px;
-      margin-bottom: 8px;
-    }
-    
-    .pending-signatures .text {
-      font-size: 11px;
-    }
-    
-    .pending-signatures .subtext {
-      font-size: 9px;
-      margin-top: 4px;
-      opacity: 0.8;
-    }
-    
-    /* التذييل */
-    .footer {
-      margin-top: 15px;
-      padding-top: 10px;
-      border-top: 1px solid #e0e0e0;
-    }
-    
-    .footer-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 8px;
-      color: #607d8b;
-    }
-    
-    .footer-logo {
-      height: 16px;
-      opacity: 0.5;
-    }
-    
-    @media print {
-      body { padding: 8px; }
-      .watermark { position: absolute; }
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-  </style>
-</head>
-<body>
-  ${isApproved ? '<div class="watermark">معتمد</div>' : ''}
-  
-  <div class="payslip">
-    <!-- الهيدر -->
-    <div class="header">
-      <div class="status-badge ${isApproved ? 'status-approved' : 'status-pending'}">
-        ${isApproved ? '✓ معتمد' : '⏳ قيد المراجعة'}
-      </div>
-      <div class="header-right">
-        <img src="/symbol-ai-logo.png" alt="Symbol AI" class="logo" onerror="this.style.display='none'" />
-        <div>
-          <div class="company-name">Symbol AI</div>
-          <div class="company-subtitle">صالونات قصه وتخفيف وفروعها</div>
-        </div>
-      </div>
-      <div class="header-left">
-        <div class="doc-number">${payroll.payrollNumber}</div>
-        <div class="doc-title">قسيمة راتب</div>
-        <div class="doc-date">${hijriDate}</div>
-        <div class="doc-date">${monthName} ${payroll.year}</div>
-      </div>
-    </div>
-    
-    <!-- معلومات الموظف -->
-    <div class="employee-info">
-      <div class="info-grid">
-        <div class="info-item">
-          <span class="info-label">اسم الموظف</span>
-          <span class="info-value">${detail.employeeName}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">رقم الموظف</span>
-          <span class="info-value">${detail.employeeCode || '-'}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">الفرع</span>
-          <span class="info-value">${payroll.branchName}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">الفترة</span>
-          <span class="info-value">${monthName} ${payroll.year}</span>
-        </div>
-      </div>
-    </div>
-    
-    <!-- تفاصيل الراتب -->
-    <div class="salary-section">
-      <div class="earnings-box">
-        <div class="section-title">▲ المستحقات</div>
-        <div class="salary-row">
-          <span class="label">الراتب الأساسي</span>
-          <span class="value positive">${parseFloat(detail.baseSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-        </div>
-        ${parseFloat(detail.overtimeAmount || '0') > 0 ? `
-        <div class="salary-row">
-          <span class="label">بدل ساعات إضافية</span>
-          <span class="value positive">${parseFloat(detail.overtimeAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-        </div>` : ''}
-        ${parseFloat(detail.incentiveAmount || '0') > 0 ? `
-        <div class="salary-row">
-          <span class="label">حوافز</span>
-          <span class="value positive">${parseFloat(detail.incentiveAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-        </div>` : ''}
-        <div class="salary-row total-row">
-          <span class="label">إجمالي المستحقات</span>
-          <span class="value positive">${grossSalary.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-        </div>
-      </div>
-      
-      <div class="deductions-box">
-        <div class="section-title">▼ الاستقطاعات</div>
-        ${parseFloat(detail.absentDeduction || '0') > 0 ? `
-        <div class="salary-row">
-          <span class="label">خصم غياب (${detail.absentDays || 0} يوم)</span>
-          <span class="value negative">-${parseFloat(detail.absentDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-        </div>` : ''}
-        ${parseFloat(detail.deductionAmount || '0') > 0 ? `
-        <div class="salary-row">
-          <span class="label">خصومات أخرى</span>
-          <span class="value negative">-${parseFloat(detail.deductionAmount).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-        </div>` : ''}
-        ${parseFloat(detail.advanceDeduction || '0') > 0 ? `
-        <div class="salary-row">
-          <span class="label">سلف مستردة</span>
-          <span class="value negative">-${parseFloat(detail.advanceDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-        </div>` : ''}
-        ${parseFloat((detail as any).negativeInvoicesDeduction || '0') > 0 ? `
-        <div class="salary-row">
-          <span class="label">فواتير سالبة</span>
-          <span class="value negative">-${parseFloat((detail as any).negativeInvoicesDeduction).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-        </div>` : ''}
-        ${totalDeductions === 0 ? `
-        <div class="salary-row">
-          <span class="label" style="color: #1b5e20;">لا توجد استقطاعات</span>
-          <span class="value">0.00 ر.س</span>
-        </div>` : ''}
-        <div class="salary-row total-row">
-          <span class="label">إجمالي الاستقطاعات</span>
-          <span class="value negative">-${totalDeductions.toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</span>
-        </div>
-      </div>
-    </div>
-    
-    <!-- صافي الراتب -->
-    <div class="net-salary">
-      <div class="label">صافي الراتب</div>
-      <div class="amount">${parseFloat(detail.netSalary).toLocaleString('ar-SA', { minimumFractionDigits: 2 })} ر.س</div>
-    </div>
-    
-    <!-- قسم التوقيعات والختم -->
-    <div class="approval-section">
-      <div class="approval-header">
-        <div class="approval-title ${isApproved ? 'approved' : 'pending'}">
-          ${isApproved ? '✓ تم الاعتماد' : '⏳ قيد المراجعة والاعتماد'}
-        </div>
-      </div>
-      
-      ${isApproved ? `
-      <div class="signatures-row">
-        <div class="signature-box has-signature">
-          <div class="signature-title">توقيع المشرف العام</div>
-          <div class="signature-image-container">
-            <img src="${SIGNATURES.supervisor.image}" alt="توقيع المشرف" class="signature-image" onerror="this.parentElement.innerHTML='<span style=\\'color:#1b5e20\\'>✓ موقّع</span>'" />
-          </div>
-          <div class="signature-line"></div>
-          <div class="signature-name">${SIGNATURES.supervisor.name}</div>
-          <div class="signature-role">${SIGNATURES.supervisor.title}</div>
-        </div>
-        
-        <div class="stamp-box">
-          <img src="${SIGNATURES.stamp.image}" alt="ختم الإدارة" class="stamp-image" onerror="this.style.display='none'" />
-          <div class="stamp-label">ختم الإدارة</div>
-        </div>
-        
-        <div class="signature-box has-signature">
-          <div class="signature-title">توقيع المدير العام</div>
-          <div class="signature-image-container">
-            <img src="${SIGNATURES.manager.image}" alt="توقيع المدير" class="signature-image" onerror="this.parentElement.innerHTML='<span style=\\'color:#1b5e20\\'>✓ موقّع</span>'" />
-          </div>
-          <div class="signature-line"></div>
-          <div class="signature-name">${SIGNATURES.manager.name}</div>
-          <div class="signature-role">${SIGNATURES.manager.title}</div>
-        </div>
-      </div>
-      ` : `
-      <div class="signatures-row">
-        <div class="signature-box">
-          <div class="signature-title">توقيع المشرف العام</div>
-          <div class="signature-image-container">
-            <span style="color: #607d8b; font-size: 9px;">في انتظار التوقيع</span>
-          </div>
-          <div class="signature-line"></div>
-          <div class="signature-name">${SIGNATURES.supervisor.name}</div>
-          <div class="signature-role">${SIGNATURES.supervisor.title}</div>
-        </div>
-        
-        <div class="stamp-box">
-          <div style="width: 95px; height: 95px; border: 2px dashed #e0e0e0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
-            <span style="color: #607d8b; font-size: 9px;">الختم</span>
-          </div>
-          <div class="stamp-label">ختم الإدارة</div>
-        </div>
-        
-        <div class="signature-box">
-          <div class="signature-title">توقيع المدير العام</div>
-          <div class="signature-image-container">
-            <span style="color: #607d8b; font-size: 9px;">في انتظار التوقيع</span>
-          </div>
-          <div class="signature-line"></div>
-          <div class="signature-name">${SIGNATURES.manager.name}</div>
-          <div class="signature-role">${SIGNATURES.manager.title}</div>
-        </div>
-      </div>
-      `}
-    </div>
-    
-    <!-- التذييل -->
-    <div class="footer">
-      <div class="footer-content">
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <img src="/symbol-ai-logo.png" alt="Logo" class="footer-logo" onerror="this.style.display='none'" />
-          <span>Symbol AI - صالونات قصه وتخفيف وفروعها</span>
-        </div>
-        <div>جميع الحقوق محفوظة © ${new Date().getFullYear()}</div>
-        <div>تم الطباعة: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}</div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>
-    `;
-
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.print();
-    };
   };
 
-  // تصدير PDF
-  const handleExportPDF = async (payrollId: number) => {
-    try {
-      const response = await fetch(`/api/payroll/export/${payrollId}`);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `payroll-${payrollId}.pdf`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-        toast.success("تم تصدير الملف بنجاح");
-      } else {
-        toast.error("فشل في تصدير الملف");
-      }
-    } catch {
-      toast.error("حدث خطأ أثناء التصدير");
+  // طباعة قسيمة راتب فردية
+  const handlePrintPayslip = (detail: any, payroll: any) => {
+    const win = openPrintWindow();
+    if (!win) {
+      toast.error("يرجى السماح بالنوافذ المنبثقة للطباعة");
+      return;
     }
+    writeAndPrint(win, buildPayslipHtml(payroll, detail));
+  };
+
+  const openEditDetail = (detail: any) => {
+    setEditingDetail(detail);
+    setEditInputs({
+      overtimeEnabled: !!detail.overtimeEnabled,
+      workDays: detail.workDays ?? 30,
+      incentiveAmount: parseFloat(detail.incentiveAmount || '0'),
+      otherDeduction: parseFloat(detail.deductionAmount || '0'),
+      otherDeductionReason: detail.deductionReason ?? null,
+      deferredAdvanceIds: parseLinkedItems<PayrollAdvanceItem>(detail.advanceDetails).deferredIds,
+      deferredViolationIds: parseLinkedItems<PayrollViolationItem>(detail.violationsDetails).deferredIds,
+      notes: detail.notes ?? null,
+    });
+  };
+
+  const saveEditDetail = () => {
+    if (!editingDetail || !editInputs) return;
+    if (editInputs.otherDeduction > 0 && !editInputs.otherDeductionReason?.trim()) {
+      toast.error("يرجى كتابة سبب الخصومات الأخرى");
+      return;
+    }
+    updateLineMutation.mutate({ detailId: editingDetail.id, ...editInputs });
   };
 
   // تنسيق المبلغ
-  const formatAmount = (amount: string | number) => {
-    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return num.toLocaleString('ar-SA', { minimumFractionDigits: 2 });
+  const formatAmount = (amount: string | number | null | undefined) => {
+    const num = typeof amount === 'string' ? parseFloat(amount) : (amount ?? 0);
+    return (Number.isFinite(num) ? num : 0).toLocaleString('ar-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  const deduction = (amount: string | number | null | undefined) => {
+    const num = typeof amount === 'string' ? parseFloat(amount) : (amount ?? 0);
+    return num && num > 0 ? `-${formatAmount(num)}` : '-';
   };
 
   // تنسيق التاريخ
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString('ar-SA');
-  };
+  const formatDate = (date: Date | string) => new Date(date).toLocaleDateString('ar-SA');
 
-  // حساب الإحصائيات
   // تصفية المسيرات حسب الفترة الزمنية
   const filteredPayrolls = payrolls?.filter(p => {
     if (!filterDateFrom && !filterDateTo) return true;
     const payrollDate = new Date(p.year, p.month - 1, 1);
-    if (filterDateFrom) {
-      const fromDate = new Date(filterDateFrom);
-      if (payrollDate < fromDate) return false;
-    }
-    if (filterDateTo) {
-      const toDate = new Date(filterDateTo);
-      if (payrollDate > toDate) return false;
-    }
+    if (filterDateFrom && payrollDate < new Date(filterDateFrom)) return false;
+    if (filterDateTo && payrollDate > new Date(filterDateTo)) return false;
     return true;
   });
 
@@ -1334,29 +373,32 @@ export default function Payrolls() {
     pending: filteredPayrolls?.filter(p => p.status === 'pending').length || 0,
     approved: filteredPayrolls?.filter(p => p.status === 'approved').length || 0,
     paid: filteredPayrolls?.filter(p => p.status === 'paid').length || 0,
-    totalAmount: filteredPayrolls?.reduce((sum, p) => sum + parseFloat(p.totalNetSalary), 0) || 0,
+    // المبالغ للمسيرات المعتمدة والمدفوعة فقط
+    totalAmount: filteredPayrolls
+      ?.filter(p => p.status === 'approved' || p.status === 'paid')
+      .reduce((sum, p) => sum + parseFloat(p.totalNetSalary), 0) || 0,
   };
 
-  // هل الفلتر مفعل؟
   const isFiltered = filterDateFrom || filterDateTo;
+  const currentPayroll = payrolls?.find(p => p.id === selectedPayroll);
+  const currentEditable = !!currentPayroll && isPayrollEditable(currentPayroll.status) && canEdit;
+  const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
 
-  // حساب إجماليات النموذج
-  const formTotals = employeesData.reduce((acc, emp) => ({
-    totalBaseSalary: acc.totalBaseSalary + emp.baseSalary,
-    totalOvertime: acc.totalOvertime + emp.overtimeAmount,
-    totalIncentives: acc.totalIncentives + emp.incentiveAmount,
-    totalDeductions: acc.totalDeductions + emp.totalDeductions,
-    totalNetSalary: acc.totalNetSalary + emp.netSalary,
-  }), {
-    totalBaseSalary: 0,
-    totalOvertime: 0,
-    totalIncentives: 0,
-    totalDeductions: 0,
-    totalNetSalary: 0,
-  });
-
-  // التحقق من صلاحية الموافقة
-  const canApprove = user?.role === 'admin' || user?.role === 'supervisor';
+  const editPreview = editingDetail && editInputs ? calculatePayrollLine({
+    baseSalary: parseFloat(editingDetail.baseSalary || '0'),
+    overtimeEnabled: editInputs.overtimeEnabled,
+    // عند تفعيل الإضافي من التعديل يُعتمد المبلغ النهائي من إعدادات الموظف في الخادم
+    overtimeRate: parseFloat(editingDetail.overtimeAmount || '0') > 0 ? parseFloat(editingDetail.overtimeAmount) : 1000,
+    workDays: editInputs.workDays,
+    incentiveAmount: editInputs.incentiveAmount,
+    otherDeduction: editInputs.otherDeduction,
+    advanceDeduction: parseLinkedItems<PayrollAdvanceItem>(editingDetail.advanceDetails).items
+      .filter(a => !editInputs.deferredAdvanceIds.includes(a.id)).reduce((s, a) => s + a.amount, 0),
+    violationsDeduction: parseLinkedItems<PayrollViolationItem>(editingDetail.violationsDetails).items
+      .filter(v => !editInputs.deferredViolationIds.includes(v.id)).reduce((s, v) => s + v.amount, 0),
+    negativeInvoicesDeduction: parseFloat(editingDetail.negativeInvoicesDeduction || '0'),
+    leaves: parseJsonArray<PayrollLeaveItem>(editingDetail.leaveDetails).map(l => ({ type: l.kind, days: l.days })),
+  }) : null;
 
   return (
     <DashboardLayout>
@@ -1365,301 +407,354 @@ export default function Payrolls() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-xl font-bold">مسيرات الرواتب</h1>
-            <p className="text-sm text-muted-foreground">إدارة وإنشاء مسيرات رواتب الموظفين</p>
+            <p className="text-sm text-muted-foreground">
+              تُحسب الرواتب تلقائياً: الساعات الإضافية، السلف المعتمدة، المخالفات، الإجازات، والفواتير السالبة
+            </p>
           </div>
-          <Dialog open={isGenerateOpen} onOpenChange={(open) => {
-            setIsGenerateOpen(open);
-            if (!open) {
-              setStep('select');
-              setEmployeesData([]);
-              setSelectedBranch(null);
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="ml-2 h-4 w-4" />
-                إنشاء مسيرة جديدة
-              </Button>
-            </DialogTrigger>
-            <DialogContent className={step === 'form' ? "max-w-6xl max-h-[90vh] overflow-y-auto" : "sm:max-w-md"}>
-              <DialogHeader>
-                <DialogTitle>
-                  {step === 'select' ? 'إنشاء مسيرة رواتب جديدة' : `مسيرة رواتب ${arabicMonths[selectedMonth - 1]} ${selectedYear}`}
-                </DialogTitle>
-              </DialogHeader>
-              
-              {step === 'select' ? (
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">الفرع</label>
-                    <Select
-                      value={selectedBranch?.toString() || ""}
-                      onValueChange={(v) => setSelectedBranch(parseInt(v))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر الفرع" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches?.map((branch) => {
-                          const hasPayroll = payrolls?.some(
-                            (p: any) => p.branchId === branch.id && p.year === selectedYear && p.month === selectedMonth
-                          );
-                          return (
-                            <SelectItem 
-                              key={branch.id} 
-                              value={branch.id.toString()}
-                              disabled={hasPayroll}
-                            >
-                              {branch.nameAr || branch.name}
-                              {hasPayroll && " (توجد مسيرة)"}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+          {canEdit && (
+            <Dialog open={isGenerateOpen} onOpenChange={(open) => {
+              setIsGenerateOpen(open);
+              if (!open) resetForm();
+            }}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="ml-2 h-4 w-4" />
+                  إنشاء مسيرة جديدة
+                </Button>
+              </DialogTrigger>
+              <DialogContent className={step === 'form' ? "max-w-7xl max-h-[92vh] overflow-y-auto" : "sm:max-w-md"}>
+                <DialogHeader>
+                  <DialogTitle>
+                    {step === 'select' ? 'إنشاء مسيرة رواتب جديدة' : `مسيرة رواتب ${arabicMonths[selectedMonth - 1]} ${selectedYear}`}
+                  </DialogTitle>
+                </DialogHeader>
+
+                {step === 'select' ? (
+                  <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">السنة</label>
+                      <label className="text-sm font-medium">الفرع</label>
                       <Select
-                        value={selectedYear.toString()}
-                        onValueChange={(v) => setSelectedYear(parseInt(v))}
+                        value={selectedBranch?.toString() || ""}
+                        onValueChange={(v) => setSelectedBranch(parseInt(v))}
+                        disabled={user?.role === 'supervisor' && !!user?.branchId}
                       >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue placeholder="اختر الفرع" />
                         </SelectTrigger>
                         <SelectContent>
-                          {[2024, 2025, 2026].map((year) => (
-                            <SelectItem key={year} value={year.toString()}>
-                              {year}
-                            </SelectItem>
-                          ))}
+                          {branches?.map((branch) => {
+                            const hasPayroll = payrolls?.some(
+                              (p: any) => p.branchId === branch.id && p.year === selectedYear && p.month === selectedMonth && p.status !== 'cancelled'
+                            );
+                            return (
+                              <SelectItem key={branch.id} value={branch.id.toString()} disabled={hasPayroll}>
+                                {branch.nameAr || branch.name}
+                                {hasPayroll && " (توجد مسيرة)"}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">الشهر</label>
-                      <Select
-                        value={selectedMonth.toString()}
-                        onValueChange={(v) => setSelectedMonth(parseInt(v))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {arabicMonths.map((month, index) => (
-                            <SelectItem key={index} value={(index + 1).toString()}>
-                              {month}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <Button
-                    className="w-full"
-                    onClick={() => {
-                      if (!selectedBranch) {
-                        toast.error("يرجى اختيار الفرع");
-                        return;
-                      }
-                      // التحقق من عدم وجود مسيرة لهذا الفرع والشهر
-                      const existingPayroll = payrolls?.find(
-                        (p: any) => p.branchId === selectedBranch && p.year === selectedYear && p.month === selectedMonth
-                      );
-                      if (existingPayroll) {
-                        toast.error(`توجد مسيرة رواتب لهذا الفرع في ${arabicMonths[selectedMonth - 1]} ${selectedYear}`);
-                        return;
-                      }
-                      setStep('form');
-                    }}
-                  >
-                    <Users className="ml-2 h-4 w-4" />
-                    عرض الموظفين
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* معلومات المسيرة */}
-                  <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                    <div className="flex items-center gap-4 flex-wrap">
-                      <span><strong>الفرع:</strong> {branches?.find(b => b.id === selectedBranch)?.nameAr}</span>
-                      <span><strong>الشهر:</strong> {arabicMonths[selectedMonth - 1]} {selectedYear}</span>
-                      <span><strong>عدد الموظفين:</strong> {employeesData.length}</span>
-                    </div>
-                  </div>
-
-                  {/* جدول الموظفين */}
-                  {employeesData.length > 0 ? (
-                    <div className="overflow-x-auto border rounded-lg">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="text-xs">
-                            <TableHead className="text-center w-8">#</TableHead>
-                            <TableHead className="min-w-[120px]">الموظف</TableHead>
-                            <TableHead className="text-center w-20">الأساسي</TableHead>
-                            <TableHead className="text-center w-20">ساعات إضافية</TableHead>
-                            <TableHead className="text-center w-16">أيام العمل</TableHead>
-                            <TableHead className="text-center w-20">خصم الغياب</TableHead>
-                            <TableHead className="text-center w-20">الحوافز</TableHead>
-                            <TableHead className="text-center w-20">الخصومات</TableHead>
-                            <TableHead className="text-center w-20">السلف</TableHead>
-                            <TableHead className="text-center w-20">فواتير سالبة</TableHead>
-                            <TableHead className="text-center w-20">إجازة بدون راتب</TableHead>
-                            <TableHead className="text-center w-24">المتبقي</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {employeesData.map((emp, index) => (
-                            <TableRow key={emp.employeeId} className="text-xs">
-                              <TableCell className="text-center">{index + 1}</TableCell>
-                              <TableCell>
-                                <div>
-                                  <div className="font-medium">{emp.employeeName}</div>
-                                  <div className="text-muted-foreground text-[10px]">{emp.employeeCode}</div>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center font-medium text-green-500">
-                                {formatAmount(emp.baseSalary)}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <div className="flex items-center justify-center gap-1">
-                                  <Checkbox
-                                    checked={emp.overtimeEnabled}
-                                    onCheckedChange={(checked) => updateEmployeeData(index, 'overtimeEnabled', checked)}
-                                  />
-                                  {emp.overtimeEnabled && (
-                                    <span className="text-blue-500 text-[10px]">+{OVERTIME_AMOUNT}</span>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="30"
-                                  value={emp.workDays}
-                                  onChange={(e) => updateEmployeeData(index, 'workDays', parseInt(e.target.value) || 0)}
-                                  className="w-14 h-7 text-center text-xs p-1"
-                                />
-                              </TableCell>
-                              <TableCell className="text-center text-red-500">
-                                {emp.absentDeduction > 0 ? `-${formatAmount(emp.absentDeduction)}` : '-'}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  value={emp.incentiveAmount}
-                                  onChange={(e) => updateEmployeeData(index, 'incentiveAmount', parseFloat(e.target.value) || 0)}
-                                  className="w-16 h-7 text-center text-xs p-1"
-                                />
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  value={emp.deductionAmount}
-                                  onChange={(e) => updateEmployeeData(index, 'deductionAmount', parseFloat(e.target.value) || 0)}
-                                  className="w-16 h-7 text-center text-xs p-1"
-                                />
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  value={emp.advanceDeduction}
-                                  onChange={(e) => updateEmployeeData(index, 'advanceDeduction', parseFloat(e.target.value) || 0)}
-                                  className="w-16 h-7 text-center text-xs p-1"
-                                />
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {emp.negativeInvoicesDeduction > 0 ? (
-                                  <div className="text-red-500 font-medium" title={emp.negativeInvoicesDetails || ''}>
-                                    -{formatAmount(emp.negativeInvoicesDeduction)}
-                                  </div>
-                                ) : (
-                                  <span className="text-muted-foreground">-</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {emp.unpaidLeaveDeduction > 0 ? (
-                                  <div className="text-orange-500 font-medium" title={`${emp.unpaidLeaveDays} يوم`}>
-                                    -{formatAmount(emp.unpaidLeaveDeduction)}
-                                  </div>
-                                ) : (
-                                  <span className="text-muted-foreground">-</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-center font-bold text-green-500">
-                                {formatAmount(emp.netSalary)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-                      <p>جاري تحميل بيانات الموظفين...</p>
-                    </div>
-                  )}
-
-                  {/* ملخص الإجماليات */}
-                  {employeesData.length > 0 && (
-                    <div className="bg-muted/50 rounded-lg p-3">
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
-                        <div className="text-center">
-                          <div className="text-muted-foreground text-xs">إجمالي الأساسي</div>
-                          <div className="font-bold">{formatAmount(formTotals.totalBaseSalary)}</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-muted-foreground text-xs">إجمالي الإضافي</div>
-                          <div className="font-bold text-blue-500">{formatAmount(formTotals.totalOvertime)}</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-muted-foreground text-xs">إجمالي الحوافز</div>
-                          <div className="font-bold text-green-500">{formatAmount(formTotals.totalIncentives)}</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-muted-foreground text-xs">إجمالي الخصومات</div>
-                          <div className="font-bold text-red-500">{formatAmount(formTotals.totalDeductions)}</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-muted-foreground text-xs">صافي المسيرة</div>
-                          <div className="font-bold text-xl text-green-500">{formatAmount(formTotals.totalNetSalary)} ر.س</div>
-                        </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">السنة</label>
+                        <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {yearOptions.map((year) => (
+                              <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">الشهر</label>
+                        <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {arabicMonths.map((month, index) => (
+                              <SelectItem key={index} value={(index + 1).toString()}>{month}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
-                  )}
-
-                  {/* أزرار الإجراءات */}
-                  <div className="flex gap-2">
                     <Button
-                      variant="outline"
-                      onClick={() => setStep('select')}
-                      className="flex-1"
+                      className="w-full"
+                      onClick={() => {
+                        if (!selectedBranch) {
+                          toast.error("يرجى اختيار الفرع");
+                          return;
+                        }
+                        const existingPayroll = payrolls?.find(
+                          (p: any) => p.branchId === selectedBranch && p.year === selectedYear && p.month === selectedMonth && p.status !== 'cancelled'
+                        );
+                        if (existingPayroll) {
+                          toast.error(`توجد مسيرة رواتب لهذا الفرع في ${arabicMonths[selectedMonth - 1]} ${selectedYear}`);
+                          return;
+                        }
+                        setInputsByEmployee({});
+                        setStep('form');
+                      }}
                     >
-                      رجوع
-                    </Button>
-                    <Button
-                      onClick={handleCreatePayroll}
-                      disabled={createPayrollMutation.isPending || employeesData.length === 0}
-                      className="flex-1"
-                    >
-                      {createPayrollMutation.isPending ? (
-                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="ml-2 h-4 w-4" />
-                      )}
-                      إرسال للمراجعة
+                      <Users className="ml-2 h-4 w-4" />
+                      عرض الموظفين
                     </Button>
                   </div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
+                ) : (
+                  <div className="space-y-4">
+                    {/* معلومات المسيرة */}
+                    <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <span><strong>الفرع:</strong> {branches?.find(b => b.id === selectedBranch)?.nameAr}</span>
+                        <span><strong>الشهر:</strong> {arabicMonths[selectedMonth - 1]} {selectedYear}</span>
+                        <span><strong>عدد الموظفين:</strong> {formRows.length}</span>
+                        <span className="text-xs text-muted-foreground">
+                          اضغط على اسم الموظف لعرض تفاصيل السلف والمخالفات والإجازات وتأجيل أي بند
+                        </span>
+                      </div>
+                    </div>
+
+                    {previewQuery.data?.existingPayroll && (
+                      <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400 flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4" />
+                        توجد مسيرة لهذا الشهر بالفعل: {previewQuery.data.existingPayroll.payrollNumber}
+                      </div>
+                    )}
+
+                    {/* جدول الموظفين */}
+                    {previewQuery.isLoading ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+                        <p>جاري احتساب الرواتب...</p>
+                      </div>
+                    ) : previewQuery.error ? (
+                      <div className="text-center py-8 text-red-400 text-sm">{previewQuery.error.message}</div>
+                    ) : formRows.length > 0 ? (
+                      <div className="overflow-x-auto border rounded-lg">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="text-xs">
+                              <TableHead className="text-center w-8">#</TableHead>
+                              <TableHead className="min-w-[140px]">الموظف</TableHead>
+                              <TableHead className="text-center">الأساسي</TableHead>
+                              <TableHead className="text-center">ساعات إضافية</TableHead>
+                              <TableHead className="text-center">الحوافز</TableHead>
+                              <TableHead className="text-center">أيام العمل</TableHead>
+                              <TableHead className="text-center">الغياب</TableHead>
+                              <TableHead className="text-center">الإجازات</TableHead>
+                              <TableHead className="text-center">السلف</TableHead>
+                              <TableHead className="text-center">المخالفات</TableHead>
+                              <TableHead className="text-center">فواتير سالبة</TableHead>
+                              <TableHead className="text-center">خصومات أخرى</TableHead>
+                              <TableHead className="text-center">الصافي</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {formRows.map(({ line, inputs, calc }, index) => {
+                              const expanded = expandedEmployee === line.employeeId;
+                              return (
+                                <Fragment key={line.employeeId}>
+                                  <TableRow className="text-xs">
+                                    <TableCell className="text-center">{index + 1}</TableCell>
+                                    <TableCell>
+                                      <button
+                                        type="button"
+                                        className="flex items-center gap-1 text-right"
+                                        onClick={() => setExpandedEmployee(expanded ? null : line.employeeId)}
+                                      >
+                                        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+                                        <div>
+                                          <div className="font-medium">{line.employeeName}</div>
+                                          <div className="text-muted-foreground text-[10px]">{line.employeeCode}{line.isSupervisor ? ' - مشرف' : ''}</div>
+                                        </div>
+                                      </button>
+                                    </TableCell>
+                                    <TableCell className="text-center font-medium">{formatAmount(calc.baseSalary)}</TableCell>
+                                    <TableCell className="text-center">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <Checkbox
+                                          checked={inputs.overtimeEnabled}
+                                          onCheckedChange={(checked) => updateInputs(line, { overtimeEnabled: checked === true })}
+                                        />
+                                        {inputs.overtimeEnabled && (
+                                          <span className="text-blue-500 text-[10px]">+{formatAmount(line.overtimeRate)}</span>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        value={inputs.incentiveAmount}
+                                        onChange={(e) => updateInputs(line, { incentiveAmount: Math.max(0, parseFloat(e.target.value) || 0) })}
+                                        className="w-16 h-7 text-center text-xs p-1"
+                                      />
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        max="30"
+                                        value={inputs.workDays}
+                                        onChange={(e) => updateInputs(line, { workDays: Math.min(30, Math.max(0, parseInt(e.target.value) || 0)) })}
+                                        className="w-14 h-7 text-center text-xs p-1"
+                                      />
+                                    </TableCell>
+                                    <TableCell className="text-center text-red-500">{deduction(calc.absentDeduction)}</TableCell>
+                                    <TableCell className="text-center text-orange-500" title={line.leaves.map(l => `${LEAVE_KIND_LABELS[l.kind]}: ${l.days} يوم`).join(' | ')}>
+                                      {calc.leaveDays > 0 ? (
+                                        <div className="flex flex-col items-center">
+                                          <span>{deduction(calc.leaveDeduction)}</span>
+                                          <span className="text-[9px] text-muted-foreground">{calc.leaveDays} يوم</span>
+                                        </div>
+                                      ) : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-center text-red-500">
+                                      {line.advances.length > 0 ? (
+                                        <div className="flex flex-col items-center">
+                                          <span>{deduction(calc.advanceDeduction)}</span>
+                                          <span className="text-[9px] text-muted-foreground">{line.advances.length - inputs.deferredAdvanceIds.length} سلفة</span>
+                                        </div>
+                                      ) : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-center text-red-500">{deduction(calc.violationsDeduction)}</TableCell>
+                                    <TableCell className="text-center text-red-500">{deduction(calc.negativeInvoicesDeduction)}</TableCell>
+                                    <TableCell className="text-center">
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        value={inputs.otherDeduction}
+                                        onChange={(e) => {
+                                          updateInputs(line, { otherDeduction: Math.max(0, parseFloat(e.target.value) || 0) });
+                                          if ((parseFloat(e.target.value) || 0) > 0) setExpandedEmployee(line.employeeId);
+                                        }}
+                                        className="w-16 h-7 text-center text-xs p-1"
+                                      />
+                                    </TableCell>
+                                    <TableCell className={`text-center font-bold ${calc.netSalary < 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                      {formatAmount(calc.netSalary)}
+                                    </TableCell>
+                                  </TableRow>
+                                  {expanded && (
+                                    <TableRow className="bg-muted/30">
+                                      <TableCell colSpan={13}>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs p-2">
+                                          <div>
+                                            <div className="font-bold mb-1">السلف المعتمدة</div>
+                                            {line.advances.length === 0 ? <div className="text-muted-foreground">لا توجد سلف</div> : line.advances.map(a => (
+                                              <label key={a.id} className="flex items-center gap-2 py-0.5">
+                                                <Checkbox
+                                                  checked={!inputs.deferredAdvanceIds.includes(a.id)}
+                                                  onCheckedChange={() => updateInputs(line, { deferredAdvanceIds: toggleId(inputs.deferredAdvanceIds, a.id) })}
+                                                  disabled={!isManager}
+                                                />
+                                                <span>{a.title} — {formatAmount(a.amount)} ر.س</span>
+                                                {inputs.deferredAdvanceIds.includes(a.id) && <Badge variant="outline" className="text-[9px]">مؤجلة</Badge>}
+                                              </label>
+                                            ))}
+                                          </div>
+                                          <div>
+                                            <div className="font-bold mb-1">المخالفات المعتمدة</div>
+                                            {line.violations.length === 0 ? <div className="text-muted-foreground">لا توجد مخالفات</div> : line.violations.map(v => (
+                                              <label key={v.id} className="flex items-center gap-2 py-0.5">
+                                                <Checkbox
+                                                  checked={!inputs.deferredViolationIds.includes(v.id)}
+                                                  onCheckedChange={() => updateInputs(line, { deferredViolationIds: toggleId(inputs.deferredViolationIds, v.id) })}
+                                                  disabled={!isManager}
+                                                />
+                                                <span>{v.violationType} ({v.violationDate}) — {formatAmount(v.amount)} ر.س</span>
+                                              </label>
+                                            ))}
+                                          </div>
+                                          <div>
+                                            <div className="font-bold mb-1">الإجازات والفواتير السالبة</div>
+                                            {line.leaves.map(l => (
+                                              <div key={l.requestId}>إجازة {LEAVE_KIND_LABELS[l.kind]}: {l.days} يوم ({l.startDate} → {l.endDate})</div>
+                                            ))}
+                                            {line.negativeInvoices.map(i => (
+                                              <div key={i.id}>فاتورة {i.invoiceNumber}: {formatAmount(i.amount)} ر.س {i.reason ? `- ${i.reason}` : ''}</div>
+                                            ))}
+                                            {line.leaves.length === 0 && line.negativeInvoices.length === 0 && <div className="text-muted-foreground">لا يوجد</div>}
+                                          </div>
+                                          <div className="space-y-1">
+                                            <div className="font-bold">سبب الخصومات الأخرى {inputs.otherDeduction > 0 && <span className="text-red-500">*</span>}</div>
+                                            <Input
+                                              value={inputs.otherDeductionReason ?? ''}
+                                              placeholder="مثال: تلف أدوات"
+                                              onChange={(e) => updateInputs(line, { otherDeductionReason: e.target.value })}
+                                              className="h-7 text-xs"
+                                            />
+                                            <div className="text-muted-foreground">
+                                              الإجمالي {formatAmount(calc.grossSalary)} − الخصومات {formatAmount(calc.totalDeductions)} = {formatAmount(calc.netSalary)}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </Fragment>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">لا يوجد موظفين نشطين في هذا الفرع</div>
+                    )}
+
+                    {/* ملخص الإجماليات */}
+                    {formRows.length > 0 && (
+                      <div className="bg-muted/50 rounded-lg p-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+                          <div className="text-center">
+                            <div className="text-muted-foreground text-xs">إجمالي الأساسي</div>
+                            <div className="font-bold">{formatAmount(formTotals.totalBaseSalary)}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-muted-foreground text-xs">إجمالي الإضافي</div>
+                            <div className="font-bold text-blue-500">{formatAmount(formTotals.totalOvertime)}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-muted-foreground text-xs">إجمالي الحوافز</div>
+                            <div className="font-bold text-green-500">{formatAmount(formTotals.totalIncentives)}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-muted-foreground text-xs">إجمالي الخصومات</div>
+                            <div className="font-bold text-red-500">{formatAmount(formTotals.totalDeductions)}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-muted-foreground text-xs">صافي المسيرة</div>
+                            <div className="font-bold text-xl text-green-500">{formatAmount(formTotals.totalNetSalary)} ر.س</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* أزرار الإجراءات */}
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => { setStep('select'); setInputsByEmployee({}); }} className="flex-1">
+                        رجوع
+                      </Button>
+                      <Button
+                        onClick={handleCreatePayroll}
+                        disabled={createPayrollMutation.isPending || previewQuery.isFetching || formRows.length === 0 || !!previewQuery.data?.existingPayroll}
+                        className="flex-1"
+                      >
+                        {createPayrollMutation.isPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Send className="ml-2 h-4 w-4" />}
+                        إرسال للمراجعة
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         {/* الإحصائيات */}
@@ -1674,10 +769,7 @@ export default function Payrolls() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setFilterDateFrom('');
-                setFilterDateTo('');
-              }}
+              onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }}
               className="text-xs text-blue-400 hover:text-blue-300"
             >
               عرض الكل
@@ -1685,71 +777,27 @@ export default function Payrolls() {
           </div>
         )}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <Card className="bg-card/50">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-blue-500/20 rounded-lg">
-                  <FileText className="h-4 w-4 text-blue-400" />
+          {[
+            { label: 'الإجمالي', value: stats.total, icon: FileText, bg: 'bg-blue-500/20', fg: 'text-blue-400' },
+            { label: 'مسودات', value: stats.draft, icon: Calendar, bg: 'bg-gray-500/20', fg: 'text-gray-400' },
+            { label: 'تحت الإجراء', value: stats.pending, icon: Clock, bg: 'bg-yellow-500/20', fg: 'text-yellow-400' },
+            { label: 'معتمدة', value: stats.approved, icon: CheckCircle, bg: 'bg-green-500/20', fg: 'text-green-400' },
+            { label: 'مدفوعة', value: stats.paid, icon: DollarSign, bg: 'bg-blue-500/20', fg: 'text-blue-400' },
+          ].map(({ label, value, icon: Icon, bg, fg }) => (
+            <Card key={label} className="bg-card/50">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 ${bg} rounded-lg`}>
+                    <Icon className={`h-4 w-4 ${fg}`} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="text-lg font-bold">{value}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">الإجمالي</p>
-                  <p className="text-lg font-bold">{stats.total}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card/50">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-gray-500/20 rounded-lg">
-                  <Calendar className="h-4 w-4 text-gray-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">مسودات</p>
-                  <p className="text-lg font-bold">{stats.draft}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card/50">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-yellow-500/20 rounded-lg">
-                  <Clock className="h-4 w-4 text-yellow-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">تحت الإجراء</p>
-                  <p className="text-lg font-bold">{stats.pending}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card/50">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-green-500/20 rounded-lg">
-                  <CheckCircle className="h-4 w-4 text-green-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">معتمدة</p>
-                  <p className="text-lg font-bold">{stats.approved}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card/50">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-blue-500/20 rounded-lg">
-                  <DollarSign className="h-4 w-4 text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">مدفوعة</p>
-                  <p className="text-lg font-bold">{stats.paid}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ))}
           <Card className="bg-card/50">
             <CardContent className="p-3">
               <div className="flex items-center gap-2">
@@ -1757,7 +805,7 @@ export default function Payrolls() {
                   <DollarSign className="h-4 w-4 text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">إجمالي المبالغ</p>
+                  <p className="text-xs text-muted-foreground">المعتمد والمدفوع</p>
                   <p className="text-sm font-bold">{formatAmount(stats.totalAmount)}</p>
                 </div>
               </div>
@@ -1776,31 +824,13 @@ export default function Payrolls() {
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">من:</span>
-                  <Input
-                    type="date"
-                    value={filterDateFrom}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="w-[140px] h-8 text-sm"
-                  />
+                  <Input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="w-[140px] h-8 text-sm" />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">إلى:</span>
-                  <Input
-                    type="date"
-                    value={filterDateTo}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="w-[140px] h-8 text-sm"
-                  />
+                  <Input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="w-[140px] h-8 text-sm" />
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setFilterDateFrom('');
-                    setFilterDateTo('');
-                  }}
-                  className="h-8"
-                >
+                <Button variant="outline" size="sm" onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }} className="h-8">
                   إعادة تعيين
                 </Button>
               </div>
@@ -1814,10 +844,8 @@ export default function Payrolls() {
             <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="h-4 w-4" />
               قائمة مسيرات الرواتب
-              {(filterDateFrom || filterDateTo) && (
-                <span className="text-xs text-muted-foreground font-normal">
-                  ({filteredPayrolls?.length || 0} مسيرة)
-                </span>
+              {isFiltered && (
+                <span className="text-xs text-muted-foreground font-normal">({filteredPayrolls?.length || 0} مسيرة)</span>
               )}
             </CardTitle>
           </CardHeader>
@@ -1835,6 +863,8 @@ export default function Payrolls() {
                       <TableHead>الفرع</TableHead>
                       <TableHead>الشهر</TableHead>
                       <TableHead className="text-center">الموظفين</TableHead>
+                      <TableHead>الإضافي</TableHead>
+                      <TableHead>الخصومات</TableHead>
                       <TableHead>صافي المسيرة</TableHead>
                       <TableHead>الحالة</TableHead>
                       <TableHead>التاريخ</TableHead>
@@ -1842,7 +872,7 @@ export default function Payrolls() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredPayrolls?.map((payroll) => (
+                    {filteredPayrolls.map((payroll) => (
                       <TableRow key={payroll.id} className="text-sm">
                         <TableCell className="font-medium">{payroll.payrollNumber}</TableCell>
                         <TableCell>
@@ -1851,65 +881,37 @@ export default function Payrolls() {
                             <span className="text-xs">{payroll.branchName}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs">
-                          {arabicMonths[payroll.month - 1]} {payroll.year}
-                        </TableCell>
+                        <TableCell className="text-xs">{arabicMonths[payroll.month - 1]} {payroll.year}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-1">
                             <Users className="h-3 w-3 text-muted-foreground" />
                             {payroll.employeeCount}
                           </div>
                         </TableCell>
-                        <TableCell className="font-bold text-green-500">
-                          {formatAmount(payroll.totalNetSalary)} ر.س
-                        </TableCell>
+                        <TableCell className="text-xs text-blue-500">{formatAmount(payroll.totalOvertime)}</TableCell>
+                        <TableCell className="text-xs text-red-500">{formatAmount(payroll.totalDeductions)}</TableCell>
+                        <TableCell className="font-bold text-green-500">{formatAmount(payroll.totalNetSalary)} ر.س</TableCell>
                         <TableCell>
-                          <Badge className={`text-xs ${statusColors[payroll.status]}`}>
-                            {statusNames[payroll.status]}
-                          </Badge>
+                          <Badge className={`text-xs ${statusColors[payroll.status]}`}>{statusNames[payroll.status]}</Badge>
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {formatDate(payroll.createdAt)}
-                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{formatDate(payroll.createdAt)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-0.5">
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7"
-                              onClick={() => {
-                                setSelectedPayroll(payroll.id);
-                                setIsDetailsOpen(true);
-                              }}
+                              onClick={() => { setSelectedPayroll(payroll.id); setIsDetailsOpen(true); }}
                               title="عرض التفاصيل"
                             >
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
-                            {/* أزرار الطباعة والتصدير - فقط للمعتمدة والمدفوعة */}
-                            {(payroll.status === 'approved' || payroll.status === 'paid') && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => handlePrint(payroll.id)}
-                                  title="طباعة"
-                                >
-                                  <Printer className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => handleExportPDF(payroll.id)}
-                                  title="تصدير PDF"
-                                >
-                                  <Download className="h-3.5 w-3.5" />
-                                </Button>
-                              </>
+                            {payroll.status !== 'cancelled' && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handlePrint(payroll.id)} title="طباعة المسيرة">
+                                <Printer className="h-3.5 w-3.5" />
+                              </Button>
                             )}
-                            {/* إرسال للمراجعة - للمسودات */}
-                            {payroll.status === 'draft' && (
+                            {payroll.status === 'draft' && canEdit && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1920,8 +922,7 @@ export default function Payrolls() {
                                 <Send className="h-3.5 w-3.5 text-yellow-500" />
                               </Button>
                             )}
-                            {/* الموافقة/الرفض - للمشرف العام والأدمن فقط */}
-                            {payroll.status === 'pending' && canApprove && (
+                            {payroll.status === 'pending' && isManager && (
                               <>
                                 <Button
                                   variant="ghost"
@@ -1936,22 +937,24 @@ export default function Payrolls() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7"
-                                  onClick={() => updateStatusMutation.mutate({ id: payroll.id, status: 'cancelled' })}
+                                  onClick={() => {
+                                    if (confirm('سيتم رفض المسيرة وتحرير السلف والمخالفات المرتبطة بها. متابعة؟')) {
+                                      updateStatusMutation.mutate({ id: payroll.id, status: 'cancelled' });
+                                    }
+                                  }}
                                   title="رفض"
                                 >
                                   <XCircle className="h-3.5 w-3.5 text-red-500" />
                                 </Button>
                               </>
                             )}
-                            {/* تحت الإجراء - رسالة للمستخدم العادي */}
-                            {payroll.status === 'pending' && !canApprove && (
+                            {payroll.status === 'pending' && !isManager && (
                               <span className="text-xs text-yellow-500 flex items-center gap-1">
                                 <AlertCircle className="h-3 w-3" />
-                                بانتظار الموافقة
+                                بانتظار الاعتماد
                               </span>
                             )}
-                            {/* تأكيد الدفع - للمعتمدة */}
-                            {payroll.status === 'approved' && canApprove && (
+                            {payroll.status === 'approved' && isManager && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1962,14 +965,13 @@ export default function Payrolls() {
                                 <DollarSign className="h-3.5 w-3.5 text-blue-500" />
                               </Button>
                             )}
-                            {/* حذف - للأدمن فقط */}
-                            {user?.role === 'admin' && (
+                            {user?.role === 'admin' && payroll.status !== 'paid' && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7"
                                 onClick={() => {
-                                  if (confirm('هل أنت متأكد من حذف هذه المسيرة؟')) {
+                                  if (confirm('هل أنت متأكد من حذف هذه المسيرة؟ سيتم تحرير السلف والمخالفات المرتبطة بها.')) {
                                     deleteMutation.mutate({ id: payroll.id });
                                   }
                                 }}
@@ -1997,10 +999,34 @@ export default function Payrolls() {
 
         {/* نافذة تفاصيل المسيرة */}
         <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-7xl max-h-[92vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>تفاصيل مسيرة الرواتب</DialogTitle>
+              <DialogTitle className="flex items-center gap-2 flex-wrap">
+                تفاصيل مسيرة الرواتب
+                {currentPayroll && (
+                  <>
+                    <span className="text-sm text-muted-foreground">{currentPayroll.payrollNumber} — {currentPayroll.branchName} — {arabicMonths[currentPayroll.month - 1]} {currentPayroll.year}</span>
+                    <Badge className={`text-xs ${statusColors[currentPayroll.status]}`}>{statusNames[currentPayroll.status]}</Badge>
+                  </>
+                )}
+              </DialogTitle>
             </DialogHeader>
+            {currentEditable && (
+              <div className="flex items-center justify-between gap-2 bg-muted/40 rounded-lg p-2 text-xs">
+                <span className="text-muted-foreground">
+                  المسيرة مفتوحة: أي سلفة أو مخالفة أو إجازة تُعتمد الآن تُضاف تلقائياً. يمكنك أيضاً تعديل سطر أي موظف.
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={recalculateMutation.isPending}
+                  onClick={() => currentPayroll && recalculateMutation.mutate({ id: currentPayroll.id })}
+                >
+                  {recalculateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <RefreshCw className="h-3 w-3 ml-1" />}
+                  إعادة الحساب
+                </Button>
+              </div>
+            )}
             {payrollDetails && payrollDetails.length > 0 ? (
               <div className="space-y-4">
                 <div className="overflow-x-auto">
@@ -2011,15 +1037,17 @@ export default function Payrolls() {
                         <TableHead>الموظف</TableHead>
                         <TableHead className="text-center">الأساسي</TableHead>
                         <TableHead className="text-center">إضافي</TableHead>
-                        <TableHead className="text-center">أيام العمل</TableHead>
-                        <TableHead className="text-center">خصم غياب</TableHead>
                         <TableHead className="text-center">حوافز</TableHead>
-                        <TableHead className="text-center">خصومات</TableHead>
-                        <TableHead className="text-center">سلف</TableHead>
-                        <TableHead className="text-center">فواتير سالبة</TableHead>
+                        <TableHead className="text-center">الإجمالي</TableHead>
+                        <TableHead className="text-center">أيام العمل</TableHead>
+                        <TableHead className="text-center">غياب</TableHead>
                         <TableHead className="text-center">إجازات</TableHead>
+                        <TableHead className="text-center">سلف</TableHead>
+                        <TableHead className="text-center">مخالفات</TableHead>
+                        <TableHead className="text-center">فواتير سالبة</TableHead>
+                        <TableHead className="text-center">أخرى</TableHead>
                         <TableHead className="text-center">الصافي</TableHead>
-                        <TableHead className="text-center">طباعة</TableHead>
+                        <TableHead className="text-center">إجراءات</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -2027,96 +1055,85 @@ export default function Payrolls() {
                         <TableRow key={detail.id} className="text-xs">
                           <TableCell className="text-center">{index + 1}</TableCell>
                           <TableCell>
-                            <div>
-                              <div className="font-medium">{detail.employeeName}</div>
-                              <div className="text-muted-foreground text-[10px]">{detail.employeeCode}</div>
-                            </div>
+                            <div className="font-medium">{detail.employeeName}</div>
+                            <div className="text-muted-foreground text-[10px]">{detail.employeeCode}</div>
+                            {detail.notes && <div className="text-muted-foreground text-[10px]">{detail.notes}</div>}
                           </TableCell>
                           <TableCell className="text-center">{formatAmount(detail.baseSalary)}</TableCell>
-                          <TableCell className="text-center text-blue-500">
-                            {parseFloat(detail.overtimeAmount) > 0 ? formatAmount(detail.overtimeAmount) : '-'}
-                          </TableCell>
-                          <TableCell className="text-center">{(detail as any).workDays || 30}</TableCell>
-                          <TableCell className="text-center text-red-500">
-                            {parseFloat((detail as any).absentDeduction || '0') > 0 ? `-${formatAmount((detail as any).absentDeduction)}` : '-'}
-                          </TableCell>
-                          <TableCell className="text-center text-green-500">
-                            {parseFloat(detail.incentiveAmount) > 0 ? formatAmount(detail.incentiveAmount) : '-'}
-                          </TableCell>
-                          <TableCell className="text-center text-red-500">
-                            {parseFloat(detail.deductionAmount) > 0 ? `-${formatAmount(detail.deductionAmount)}` : '-'}
-                          </TableCell>
-                          <TableCell className="text-center text-red-500">
-                            {parseFloat(detail.advanceDeduction) > 0 ? `-${formatAmount(detail.advanceDeduction)}` : '-'}
-                          </TableCell>
-                          <TableCell className="text-center text-orange-500">
-                            {parseFloat((detail as any).negativeInvoicesDeduction || '0') > 0 ? (
-                              <div className="flex flex-col items-center">
-                                <span className="font-medium">-{formatAmount((detail as any).negativeInvoicesDeduction)}</span>
-                                <span className="text-[9px] text-muted-foreground">فواتير سالبة</span>
-                              </div>
-                            ) : '-'}
-                          </TableCell>
+                          <TableCell className="text-center text-blue-500">{parseFloat(detail.overtimeAmount) > 0 ? formatAmount(detail.overtimeAmount) : '-'}</TableCell>
+                          <TableCell className="text-center text-green-500">{parseFloat(detail.incentiveAmount) > 0 ? formatAmount(detail.incentiveAmount) : '-'}</TableCell>
+                          <TableCell className="text-center font-medium">{formatAmount(detail.grossSalary)}</TableCell>
+                          <TableCell className="text-center">{detail.workDays}</TableCell>
+                          <TableCell className="text-center text-red-500">{deduction(detail.absentDeduction)}</TableCell>
                           <TableCell className="text-center">
-                            {(detail as any).leaveDays > 0 ? (
+                            {detail.leaveDays > 0 ? (
                               <div className="flex flex-col items-center">
-                                <span className="text-orange-500 font-medium">{(detail as any).leaveDays} يوم</span>
-                                <span className="text-red-500 text-[10px]">-{formatAmount((detail as any).leaveDeduction || '0')}</span>
-                                {(detail as any).leaveType && (
-                                  <span className="text-muted-foreground text-[9px]">{(detail as any).leaveType}</span>
-                                )}
+                                <span className="text-orange-500">{deduction(detail.leaveDeduction)}</span>
+                                <span className="text-muted-foreground text-[9px]">{detail.leaveDays} يوم {detail.leaveType || ''}</span>
                               </div>
                             ) : '-'}
                           </TableCell>
-                          <TableCell className="text-center font-bold text-green-500">
+                          <TableCell className="text-center text-red-500" title={parseLinkedItems<PayrollAdvanceItem>(detail.advanceDetails).items.map(a => `${a.title}: ${a.amount}`).join(' | ')}>
+                            {deduction(detail.advanceDeduction)}
+                          </TableCell>
+                          <TableCell className="text-center text-red-500" title={parseLinkedItems<PayrollViolationItem>(detail.violationsDetails).items.map(v => `${v.violationType}: ${v.amount}`).join(' | ')}>
+                            {deduction(detail.violationsDeduction)}
+                          </TableCell>
+                          <TableCell className="text-center text-orange-500">{deduction(detail.negativeInvoicesDeduction)}</TableCell>
+                          <TableCell className="text-center text-red-500" title={detail.deductionReason || ''}>{deduction(detail.deductionAmount)}</TableCell>
+                          <TableCell className={`text-center font-bold ${parseFloat(detail.netSalary) < 0 ? 'text-red-500' : 'text-green-500'}`}>
                             {formatAmount(detail.netSalary)}
                           </TableCell>
                           <TableCell className="text-center">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => {
-                                const currentPayroll = payrolls?.find(p => p.id === selectedPayroll);
-                                if (currentPayroll) {
-                                  handlePrintPayslip(detail, currentPayroll);
-                                }
-                              }}
-                              title="طباعة قسيمة الراتب"
-                            >
-                              <Printer className="h-3.5 w-3.5 text-blue-500" />
-                            </Button>
+                            <div className="flex items-center justify-center gap-0.5">
+                              {currentEditable && (
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDetail(detail)} title="تعديل">
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => currentPayroll && handlePrintPayslip(detail, currentPayroll)}
+                                title="طباعة قسيمة الراتب"
+                              >
+                                <Printer className="h-3.5 w-3.5 text-blue-500" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
-                {/* إجماليات التفاصيل */}
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
-                    <div className="text-center">
-                      <div className="text-muted-foreground text-xs">إجمالي الأساسي</div>
-                      <div className="font-bold">{formatAmount(payrollDetails.reduce((sum, d) => sum + parseFloat(d.baseSalary), 0))}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-muted-foreground text-xs">إجمالي الإضافي</div>
-                      <div className="font-bold text-blue-500">{formatAmount(payrollDetails.reduce((sum, d) => sum + parseFloat(d.overtimeAmount), 0))}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-muted-foreground text-xs">إجمالي الخصومات</div>
-                      <div className="font-bold text-red-500">{formatAmount(payrollDetails.reduce((sum, d) => sum + parseFloat(d.totalDeductions), 0))}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-muted-foreground text-xs">خصم الإجازات</div>
-                      <div className="font-bold text-orange-500">{formatAmount(payrollDetails.reduce((sum, d) => sum + parseFloat((d as any).leaveDeduction || '0'), 0))}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-muted-foreground text-xs">صافي المسيرة</div>
-                      <div className="font-bold text-xl text-green-500">{formatAmount(payrollDetails.reduce((sum, d) => sum + parseFloat(d.netSalary), 0))} ر.س</div>
+                {/* إجماليات التفاصيل - مطابقة لإجماليات المسيرة */}
+                {currentPayroll && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+                      <div className="text-center">
+                        <div className="text-muted-foreground text-xs">إجمالي الأساسي</div>
+                        <div className="font-bold">{formatAmount(currentPayroll.totalBaseSalary)}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-muted-foreground text-xs">إجمالي الإضافي</div>
+                        <div className="font-bold text-blue-500">{formatAmount(currentPayroll.totalOvertime)}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-muted-foreground text-xs">إجمالي الحوافز</div>
+                        <div className="font-bold text-green-500">{formatAmount(currentPayroll.totalIncentives)}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-muted-foreground text-xs">إجمالي الخصومات</div>
+                        <div className="font-bold text-red-500">{formatAmount(currentPayroll.totalDeductions)}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-muted-foreground text-xs">صافي المسيرة</div>
+                        <div className="font-bold text-xl text-green-500">{formatAmount(currentPayroll.totalNetSalary)} ر.س</div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
@@ -2124,6 +1141,122 @@ export default function Payrolls() {
                 <p>جاري تحميل التفاصيل...</p>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* نافذة تعديل سطر موظف */}
+        <Dialog open={!!editingDetail} onOpenChange={(open) => { if (!open) { setEditingDetail(null); setEditInputs(null); } }}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>تعديل راتب {editingDetail?.employeeName}</DialogTitle>
+            </DialogHeader>
+            {editingDetail && editInputs && (
+              <div className="space-y-3 text-sm">
+                <label className="flex items-center gap-2">
+                  <Checkbox
+                    checked={editInputs.overtimeEnabled}
+                    onCheckedChange={(c) => setEditInputs({ ...editInputs, overtimeEnabled: c === true })}
+                  />
+                  ساعات إضافية (حسب إعدادات الموظف)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">أيام العمل (0-30)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="30"
+                      value={editInputs.workDays}
+                      onChange={(e) => setEditInputs({ ...editInputs, workDays: Math.min(30, Math.max(0, parseInt(e.target.value) || 0)) })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">الحوافز</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={editInputs.incentiveAmount}
+                      onChange={(e) => setEditInputs({ ...editInputs, incentiveAmount: Math.max(0, parseFloat(e.target.value) || 0) })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">خصومات أخرى</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={editInputs.otherDeduction}
+                      onChange={(e) => setEditInputs({ ...editInputs, otherDeduction: Math.max(0, parseFloat(e.target.value) || 0) })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">سبب الخصم</label>
+                    <Input
+                      value={editInputs.otherDeductionReason ?? ''}
+                      onChange={(e) => setEditInputs({ ...editInputs, otherDeductionReason: e.target.value })}
+                    />
+                  </div>
+                </div>
+                {isManager && parseLinkedItems<PayrollAdvanceItem>(editingDetail.advanceDetails).items.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-bold">السلف المخصومة (ألغِ التحديد لتأجيل السلفة لمسيرة لاحقة)</div>
+                    {parseLinkedItems<PayrollAdvanceItem>(editingDetail.advanceDetails).items.map(a => (
+                      <label key={a.id} className="flex items-center gap-2 text-xs">
+                        <Checkbox
+                          checked={!editInputs.deferredAdvanceIds.includes(a.id)}
+                          onCheckedChange={() => setEditInputs({ ...editInputs, deferredAdvanceIds: toggleId(editInputs.deferredAdvanceIds, a.id) })}
+                        />
+                        {a.title} — {formatAmount(a.amount)} ر.س
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {isManager && parseLinkedItems<PayrollViolationItem>(editingDetail.violationsDetails).items.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-bold">المخالفات المخصومة</div>
+                    {parseLinkedItems<PayrollViolationItem>(editingDetail.violationsDetails).items.map(v => (
+                      <label key={v.id} className="flex items-center gap-2 text-xs">
+                        <Checkbox
+                          checked={!editInputs.deferredViolationIds.includes(v.id)}
+                          onCheckedChange={() => setEditInputs({ ...editInputs, deferredViolationIds: toggleId(editInputs.deferredViolationIds, v.id) })}
+                        />
+                        {v.violationType} ({v.violationDate}) — {formatAmount(v.amount)} ر.س
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {isManager && (editInputs.deferredAdvanceIds.length > 0 || editInputs.deferredViolationIds.length > 0) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditInputs({ ...editInputs, deferredAdvanceIds: [], deferredViolationIds: [] })}
+                  >
+                    <RotateCcw className="h-3 w-3 ml-1" />
+                    إلغاء تأجيل جميع البنود المؤجلة
+                  </Button>
+                )}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">ملاحظات</label>
+                  <Textarea
+                    rows={2}
+                    value={editInputs.notes ?? ''}
+                    onChange={(e) => setEditInputs({ ...editInputs, notes: e.target.value })}
+                  />
+                </div>
+                {editPreview && (
+                  <div className="bg-muted/50 rounded p-2 text-xs">
+                    الصافي المتوقع بعد التعديل: <b>{formatAmount(editPreview.netSalary)} ر.س</b>
+                    <span className="text-muted-foreground"> (يُعتمد الرقم النهائي بعد الحفظ من الخادم)</span>
+                  </div>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setEditingDetail(null); setEditInputs(null); }}>إلغاء</Button>
+              <Button onClick={saveEditDetail} disabled={updateLineMutation.isPending}>
+                {updateLineMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-1" />}
+                حفظ وإعادة الحساب
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

@@ -631,9 +631,10 @@ export type InsertPayroll = typeof payrolls.$inferInsert;
 // ==================== جدول تفاصيل الرواتب ====================
 /**
  * Payroll Details - تفاصيل راتب كل موظف
- * الراتب الأساسي: 2000 ريال
- * ساعات إضافية: 1000 ريال (إذا مفعل)
- * حوافز المشرف: 400 ريال
+ * تُحسب جميع القيم في الخادم عبر shared/payroll.ts (calculatePayrollLine)
+ * الراتب الأساسي: من إعدادات الموظف (افتراضي 2000)
+ * ساعات إضافية: overtimeRate من إعدادات الموظف (افتراضي 1000) عند تفعيلها
+ * حوافز المشرف: supervisorIncentive (افتراضي 400)
  */
 export const payrollDetails = mysqlTable("payrollDetails", {
   id: int("id").autoincrement().primaryKey(),
@@ -665,7 +666,12 @@ export const payrollDetails = mysqlTable("payrollDetails", {
   
   // السلف المخصومة
   advanceDeduction: decimal("advanceDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
-  
+  advanceDetails: text("advanceDetails"), // السلف المرتبطة بالمسيرة (JSON: {items:[{id,amount,title,approvedAt}], deferredIds:[]})
+
+  // خصم المخالفات المعتمدة
+  violationsDeduction: decimal("violationsDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
+  violationsDetails: text("violationsDetails"), // JSON: {items:[{id,amount,violationType,violationDate,description}], deferredIds:[]}
+
   // خصم فواتير الموظفين السالبة
   negativeInvoicesDeduction: decimal("negativeInvoicesDeduction", { precision: 12, scale: 2 }).default("0.00").notNull(),
   negativeInvoicesDetails: text("negativeInvoicesDetails"), // تفاصيل الفواتير السالبة (JSON)
@@ -729,6 +735,40 @@ export const employeeSalarySettings = mysqlTable("employeeSalarySettings", {
 
 export type EmployeeSalarySetting = typeof employeeSalarySettings.$inferSelect;
 export type InsertEmployeeSalarySetting = typeof employeeSalarySettings.$inferInsert;
+
+// ==================== جدول مخالفات الموظفين ====================
+/**
+ * Employee Violations - مخالفات/جزاءات الموظفين
+ * - يسجلها مشرف الفرع (بانتظار الاعتماد) أو المدير (معتمدة مباشرة)
+ * - المخالفات المعتمدة تُخصم تلقائياً في مسيرة الرواتب للشهر الذي وقعت فيه أو بعده
+ * - ترتبط بالمسيرة عبر deductedInPayrollId وتُحرر عند إلغاء/حذف المسيرة
+ */
+export const employeeViolations = mysqlTable("employeeViolations", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  employeeName: varchar("employeeName", { length: 255 }).notNull(),
+  branchId: int("branchId").notNull(),
+  branchName: varchar("branchName", { length: 255 }),
+  violationDate: timestamp("violationDate").notNull(),
+  violationType: varchar("violationType", { length: 100 }).notNull(),
+  description: text("description"),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "cancelled"]).default("pending").notNull(),
+  createdBy: int("createdBy").notNull(),
+  createdByName: varchar("createdByName", { length: 255 }),
+  reviewedBy: int("reviewedBy"),
+  reviewedByName: varchar("reviewedByName", { length: 255 }),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewNotes: text("reviewNotes"),
+  isDeductedFromSalary: boolean("isDeductedFromSalary").default(false).notNull(),
+  deductedInPayrollId: int("deductedInPayrollId"),
+  deductedAt: timestamp("deductedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmployeeViolation = typeof employeeViolations.$inferSelect;
+export type InsertEmployeeViolation = typeof employeeViolations.$inferInsert;
 
 // ==================== جدول المصاريف ====================
 /**

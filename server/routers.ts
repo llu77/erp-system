@@ -6,6 +6,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
+import * as payrollService from "./payroll/service";
 import { notifyOwner } from "./_core/notification";
 import { sendWeeklyReport, sendLowStockAlert, sendMonthlyProfitReport } from "./email/scheduledReports";
 import * as advancedNotifications from "./notifications/advancedNotificationService";
@@ -101,6 +102,60 @@ function checkBranchAccess(userBranchId: number | null, targetBranchId: number):
   // التحقق من تطابق الفرع
   return userBranchId === targetBranchId;
 }
+
+// ==================== صلاحيات مسيرات الرواتب ====================
+
+// عرض المسيرات: المسؤول والمدير والمشرف العام ومشرف الفرع (فرعه فقط) - بدون الموظفين
+const payrollViewProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (!['admin', 'manager', 'supervisor', 'viewer'].includes(ctx.user.role)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بعرض مسيرات الرواتب' });
+  }
+  return next({ ctx });
+});
+
+// إنشاء وتعديل المسيرات: المسؤول والمدير ومشرف الفرع (فرعه فقط)
+const payrollEditProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (!['admin', 'manager', 'supervisor'].includes(ctx.user.role)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بتعديل مسيرات الرواتب' });
+  }
+  return next({ ctx });
+});
+
+function assertPayrollBranchAccess(user: { role: string; branchId: number | null }, branchId: number) {
+  if (user.role === 'supervisor' && !checkBranchAccess(user.branchId ?? null, branchId)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك الوصول لمسيرات فرع آخر' });
+  }
+}
+
+function payrollActor(user: { id: number; name: string | null; role: string; branchId: number | null }): payrollService.PayrollActor {
+  return { id: user.id, name: user.name, role: user.role, branchId: user.branchId ?? null };
+}
+
+// تحويل أخطاء خدمة الرواتب إلى أخطاء tRPC مفهومة
+async function runPayrollAction<T>(action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error: any) {
+    if (error instanceof TRPCError) throw error;
+    if (error instanceof payrollService.PayrollError) {
+      throw new TRPCError({ code: error.code, message: error.message });
+    }
+    payrollLogger.error('خطأ في عملية مسيرة الرواتب', error);
+    throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message || 'حدث خطأ غير متوقع' });
+  }
+}
+
+// المدخلات اليدوية القابلة للتعديل في سطر الراتب
+const payrollAdjustmentSchema = z.object({
+  overtimeEnabled: z.boolean().optional(),
+  workDays: z.number().int().min(0).max(30).optional(),
+  incentiveAmount: z.number().min(0).max(100000).optional(),
+  otherDeduction: z.number().min(0).max(100000).optional(),
+  otherDeductionReason: z.string().max(500).nullable().optional(),
+  deferredAdvanceIds: z.array(z.number()).optional(),
+  deferredViolationIds: z.array(z.number()).optional(),
+  notes: z.string().max(1000).nullable().optional(),
+});
 
 export const appRouter = router({
   system: systemRouter,
@@ -3416,8 +3471,18 @@ ${discrepancyRows}
         }
 
         const oldStatus = request.status;
+
+        // مشرف الفرع يعتمد طلبات فرعه فقط
+        if (ctx.user.role === 'supervisor' && request.branchId && !checkBranchAccess(ctx.user.branchId ?? null, request.branchId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك اعتماد طلبات فرع آخر' });
+        }
+
+        // لا يمكن إلغاء/رفض سلفة مخصومة في مسيرة معتمدة أو مدفوعة
+        if (request.requestType === 'advance' && oldStatus === 'approved' && input.status !== 'approved') {
+          await runPayrollAction(() => payrollService.assertSourceNotLocked('advance', input.id));
+        }
         
-        await db.updateEmployeeRequestStatus(
+        const statusResult = await db.updateEmployeeRequestStatus(
           input.id,
           input.status,
           ctx.user.id,
@@ -3425,6 +3490,18 @@ ${discrepancyRows}
           input.reviewNotes,
           input.rejectionReason
         );
+        if (statusResult && !statusResult.success) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: statusResult.error || 'فشل في تحديث حالة الطلب' });
+        }
+
+        // السلف والإجازات تنعكس مباشرة على مسيرة الرواتب المفتوحة للموظف
+        if (request.requestType === 'advance' || request.requestType === 'vacation') {
+          try {
+            await payrollService.syncOpenPayrollsForEmployee(request.employeeId);
+          } catch (error) {
+            payrollLogger.error('خطأ في تحديث مسيرة الرواتب بعد تغيير حالة الطلب', error);
+          }
+        }
 
         // تسجيل التغيير
         await db.createEmployeeRequestLog({
@@ -3517,7 +3594,15 @@ ${discrepancyRows}
     delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
+        const request = await db.getEmployeeRequestById(input.id);
+        if (request?.requestType === 'advance') {
+          await runPayrollAction(() => payrollService.assertSourceNotLocked('advance', input.id));
+        }
         await db.deleteEmployeeRequest(input.id);
+        if (request && (request.requestType === 'advance' || request.requestType === 'vacation')) {
+          await payrollService.syncOpenPayrollsForEmployee(request.employeeId).catch(error =>
+            payrollLogger.error('خطأ في تحديث مسيرة الرواتب بعد حذف الطلب', error));
+        }
         return { success: true, message: 'تم حذف الطلب بنجاح' };
       }),
 
@@ -3531,320 +3616,272 @@ ${discrepancyRows}
 
   // ==================== مسيرات الرواتب ====================
   payrolls: router({
-    // الحصول على جميع المسيرات (متاح للمشرفين أيضاً)
-    list: supervisorInputProcedure.query(async ({ ctx }) => {
-      // المشرف يرى مسيرات فرعه فقط
+    // قائمة المسيرات (المشرف يرى فرعه فقط)
+    list: payrollViewProcedure.query(async ({ ctx }) => {
       if (ctx.user.role === 'supervisor' && ctx.user.branchId) {
         return await db.getPayrollsByBranch(ctx.user.branchId);
       }
       return await db.getAllPayrolls();
     }),
 
-    // الحصول على مسيرات فرع معين (متاح للمشرفين أيضاً)
-    byBranch: supervisorInputProcedure
+    byBranch: payrollViewProcedure
       .input(z.object({ branchId: z.number() }))
       .query(async ({ input, ctx }) => {
-        // المشرف يمكنه رؤية مسيرات فرعه فقط
-        if (ctx.user.role === 'supervisor' && ctx.user.branchId && ctx.user.branchId !== input.branchId) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك عرض مسيرات فرع آخر' });
-        }
+        assertPayrollBranchAccess(ctx.user, input.branchId);
         return await db.getPayrollsByBranch(input.branchId);
       }),
 
-    // الحصول على مسيرة بالمعرف (متاح للمشرفين أيضاً)
-    getById: supervisorInputProcedure
+    getById: payrollViewProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return await db.getPayrollById(input.id);
+      .query(async ({ input, ctx }) => {
+        const payroll = await db.getPayrollById(input.id);
+        if (payroll) assertPayrollBranchAccess(ctx.user, payroll.branchId);
+        return payroll;
       }),
 
-    // الحصول على تفاصيل المسيرة (متاح للمشرفين أيضاً)
-    details: supervisorInputProcedure
+    details: payrollViewProcedure
       .input(z.object({ payrollId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        const payroll = await db.getPayrollById(input.payrollId);
+        if (!payroll) return [];
+        assertPayrollBranchAccess(ctx.user, payroll.branchId);
         return await db.getPayrollDetails(input.payrollId);
       }),
 
-    // إنشاء مسيرة رواتب شهرية (متاح للمشرفين أيضاً)
-    generate: supervisorInputProcedure
+    // معاينة المسيرة محسوبة في الخادم (الإعدادات، السلف، المخالفات، الإجازات، الفواتير السالبة)
+    preview: payrollEditProcedure
+      .input(z.object({ branchId: z.number(), year: z.number().int().min(2020).max(2100), month: z.number().int().min(1).max(12) }))
+      .query(async ({ input, ctx }) => {
+        assertPayrollBranchAccess(ctx.user, input.branchId);
+        return await runPayrollAction(() => payrollService.previewPayroll(input.branchId, input.year, input.month));
+      }),
+
+    // إنشاء مسيرة: الواجهة ترسل المدخلات اليدوية فقط والخادم يحسب كل المبالغ
+    create: payrollEditProcedure
       .input(z.object({
         branchId: z.number(),
-        branchName: z.string(),
-        year: z.number(),
-        month: z.number(),
+        year: z.number().int().min(2020).max(2100),
+        month: z.number().int().min(1).max(12),
+        adjustments: z.array(payrollAdjustmentSchema.extend({ employeeId: z.number() })).default([]),
       }))
       .mutation(async ({ input, ctx }) => {
-        try {
-          // التحقق من صلاحية المشرف - يمكنه إنشاء مسيرة لفرعه فقط
-          if (ctx.user.role === 'supervisor' && ctx.user.branchId && ctx.user.branchId !== input.branchId) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك إنشاء مسيرة رواتب لفرع آخر' });
-          }
-          
-          const payroll = await db.generateMonthlyPayroll(
-            input.branchId,
-            input.branchName,
-            input.year,
-            input.month,
-            ctx.user.id,
-            ctx.user.name || 'مسؤول'
-          );
-          
-          // إرسال إشعار بريدي للأدمن عند إنشاء مسيرة جديدة
-          const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-          const roleNames: Record<string, string> = {
-            admin: 'مسؤول',
-            manager: 'مدير',
-            supervisor: 'مشرف',
-            viewer: 'مشاهد',
-            employee: 'موظف',
-          };
-          
-          if (payroll) {
-            emailNotifications.notifyNewPayrollCreated({
-              createdByName: ctx.user.name || 'مستخدم',
-              createdByRole: roleNames[ctx.user.role] || ctx.user.role,
-              branchId: input.branchId,
-              branchName: input.branchName,
-              month: monthNames[input.month - 1] || `شهر ${input.month}`,
-              year: input.year,
-              employeeCount: payroll.employeeCount || 0,
-              totalNetSalary: parseFloat(payroll.totalNetSalary || '0'),
-            }).catch(err => payrollLogger.error('خطأ في إرسال إشعار مسيرة الرواتب', err));
-          }
-          
-          return { success: true, message: 'تم إنشاء مسيرة الرواتب بنجاح', payroll };
-        } catch (error: any) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
-        }
+        assertPayrollBranchAccess(ctx.user, input.branchId);
+        const branch = await db.getBranchById(input.branchId);
+        if (!branch) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفرع غير موجود' });
+        const payroll = await runPayrollAction(() => payrollService.createPayroll({
+          branchId: input.branchId,
+          branchName: branch.nameAr || branch.name,
+          year: input.year,
+          month: input.month,
+          adjustments: input.adjustments,
+          actor: payrollActor(ctx.user),
+        }));
+
+        const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+        const roleNames: Record<string, string> = { admin: 'مسؤول', manager: 'مدير', supervisor: 'مشرف', viewer: 'مشاهد', employee: 'موظف' };
+        emailNotifications.notifyNewPayrollCreated({
+          createdByName: ctx.user.name || 'مستخدم',
+          createdByRole: roleNames[ctx.user.role] || ctx.user.role,
+          branchId: input.branchId,
+          branchName: payroll.branchName,
+          month: monthNames[input.month - 1] || `شهر ${input.month}`,
+          year: input.year,
+          employeeCount: payroll.employeeCount || 0,
+          totalNetSalary: parseFloat(payroll.totalNetSalary || '0'),
+        }).catch(err => payrollLogger.error('خطأ في إرسال إشعار مسيرة الرواتب', err));
+
+        return { success: true, message: 'تم إنشاء مسيرة الرواتب وإرسالها للمراجعة', payroll };
       }),
 
-    // تحديث حالة المسيرة (الاعتماد للأدمن فقط)
-    updateStatus: supervisorInputProcedure
-      .input(z.object({
-        id: z.number(),
-        status: z.enum(['draft', 'pending', 'approved', 'paid', 'cancelled']),
-      }))
+    // تعديل المدخلات اليدوية لموظف في مسيرة مفتوحة ثم إعادة الحساب
+    updateLine: payrollEditProcedure
+      .input(payrollAdjustmentSchema.extend({ detailId: z.number() }))
       .mutation(async ({ input, ctx }) => {
-        // الاعتماد والدفع للأدمن فقط
-        if ((input.status === 'approved' || input.status === 'paid') && ctx.user.role !== 'admin') {
-          throw new TRPCError({ 
-            code: 'FORBIDDEN', 
-            message: 'فقط المسؤول يمكنه اعتماد أو تأكيد دفع المسيرة' 
-          });
-        }
-        
-        // الإلغاء للأدمن والمدير فقط
-        if (input.status === 'cancelled' && ctx.user.role !== 'admin' && ctx.user.role !== 'manager') {
-          throw new TRPCError({ 
-            code: 'FORBIDDEN', 
-            message: 'فقط المسؤول أو المدير يمكنه إلغاء المسيرة' 
-          });
-        }
-        
-        const updateData: any = { status: input.status };
-        
-        if (input.status === 'approved') {
-          updateData.approvedBy = ctx.user.id;
-          updateData.approvedByName = ctx.user.name;
-          updateData.approvedAt = new Date();
-        } else if (input.status === 'paid') {
-          updateData.paidAt = new Date();
-        }
-        
-        await db.updatePayroll(input.id, updateData);
-        
-        // إرسال إشعارات الراتب للموظفين عند الاعتماد
-        if (input.status === 'approved') {
-          try {
-            // جلب بيانات المسيرة والتفاصيل
-            const payroll = await db.getPayrollById(input.id);
-            const details = await db.getPayrollDetails(input.id);
-            
-            if (payroll && details.length > 0) {
-              // تحويل الشهر للعربية
-              const monthNames = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-              const monthName = monthNames[payroll.month] || `شهر ${payroll.month}`;
-              
-              // تجهيز بيانات الموظفين للإشعار
-              const employeesData = details.map((d: any) => ({
-                employeeId: d.employeeId,
-                employeeName: d.employeeName || 'موظف',
-                employeeCode: d.employeeCode,
-                email: d.employeeEmail,
-                baseSalary: parseFloat(d.baseSalary || '0'),
-                overtimeAmount: parseFloat(d.overtimeAmount || '0'),
-                incentiveAmount: parseFloat(d.incentiveAmount || '0'),
-                absentDeduction: parseFloat(d.absentDeduction || '0'),
-                deductionAmount: parseFloat(d.deductionAmount || '0'),
-                advanceDeduction: parseFloat(d.advanceDeduction || '0'),
-                netSalary: parseFloat(d.netSalary || '0'),
-                workDays: d.workDays,
-                absentDays: d.absentDays,
-              }));
-              
-              // إرسال الإشعارات
-              emailNotifications.notifyEmployeesPayslip({
-                payrollId: input.id,
-                payrollNumber: payroll.payrollNumber || `PAY-${input.id}`,
-                branchName: payroll.branchName || 'غير محدد',
-                month: monthName,
-                year: payroll.year,
-                employees: employeesData,
-              });
-            }
-          } catch (error) {
-            payrollLogger.error('خطأ في إرسال إشعارات الراتب', error);
-            // لا نريد إيقاف العملية بسبب فشل الإشعار
-          }
-        }
-        
-        const statusNames: Record<string, string> = {
-          draft: 'مسودة',
-          pending: 'قيد المراجعة',
-          approved: 'معتمدة',
-          paid: 'مدفوعة',
-          cancelled: 'ملغاة',
-        };
-        
-        return { success: true, message: `تم تحديث الحالة إلى: ${statusNames[input.status]}` };
+        const { detailId, ...adjustment } = input;
+        const detail = await db.getPayrollDetailById(detailId);
+        if (!detail) throw new TRPCError({ code: 'NOT_FOUND', message: 'سطر المسيرة غير موجود' });
+        const payroll = await db.getPayrollById(detail.payrollId);
+        if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
+        assertPayrollBranchAccess(ctx.user, payroll.branchId);
+        await runPayrollAction(() => payrollService.updatePayrollLine(detailId, adjustment));
+        return { success: true, message: 'تم تحديث بيانات الراتب وإعادة الحساب' };
       }),
 
-    // حذف مسيرة
-    delete: adminProcedure
-      .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        await db.deletePayroll(input.id);
-        return { success: true, message: 'تم حذف مسيرة الرواتب بنجاح' };
-      }),
-
-    // تحديث تفاصيل راتب موظف
-    updateDetail: adminProcedure
+    // للتوافق مع الاستدعاءات القديمة: تعديل الخصومات الأخرى
+    updateDetail: payrollEditProcedure
       .input(z.object({
         id: z.number(),
         deductionAmount: z.string().optional(),
         deductionReason: z.string().optional(),
         notes: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
-        const { id, ...data } = input;
-        await db.updatePayrollDetail(id, data);
+      .mutation(async ({ input, ctx }) => {
+        const detail = await db.getPayrollDetailById(input.id);
+        if (!detail) throw new TRPCError({ code: 'NOT_FOUND', message: 'سطر المسيرة غير موجود' });
+        const payroll = await db.getPayrollById(detail.payrollId);
+        if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
+        assertPayrollBranchAccess(ctx.user, payroll.branchId);
+        await runPayrollAction(() => payrollService.updatePayrollLine(input.id, {
+          otherDeduction: input.deductionAmount !== undefined ? parseFloat(input.deductionAmount) || 0 : undefined,
+          otherDeductionReason: input.deductionReason,
+          notes: input.notes,
+        }));
         return { success: true, message: 'تم تحديث بيانات الراتب بنجاح' };
       }),
 
-    // إنشاء مسيرة رواتب مع التفاصيل (النموذج الجديد)
-    createWithDetails: supervisorInputProcedure
+    // إعادة حساب مسيرة مفتوحة (سحب السلف والمخالفات والإجازات المعتمدة حديثاً)
+    recalculate: payrollEditProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const payroll = await db.getPayrollById(input.id);
+        if (!payroll) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
+        assertPayrollBranchAccess(ctx.user, payroll.branchId);
+        await runPayrollAction(() => payrollService.recalculatePayroll(input.id));
+        return { success: true, message: 'تمت إعادة حساب المسيرة' };
+      }),
+
+    // تحديث حالة المسيرة وفق مسار الاعتماد: مسودة ← تحت الإجراء ← معتمدة ← مدفوعة
+    updateStatus: payrollEditProcedure
       .input(z.object({
-        branchId: z.number(),
-        branchName: z.string(),
-        year: z.number(),
-        month: z.number(),
-        totalBaseSalary: z.number(),
-        totalOvertime: z.number(),
-        totalIncentives: z.number(),
-        totalDeductions: z.number(),
-        totalNetSalary: z.number(),
-        employeeCount: z.number(),
-        details: z.array(z.object({
-          employeeId: z.number(),
-          employeeName: z.string(),
-          employeeCode: z.string(),
-          position: z.string().optional(),
-          baseSalary: z.string(),
-          overtimeEnabled: z.boolean(),
-          overtimeAmount: z.string(),
-          workDays: z.number(),
-          absentDays: z.number(),
-          absentDeduction: z.string(),
-          incentiveAmount: z.string(),
-          deductionAmount: z.string(),
-          advanceDeduction: z.string(),
-          negativeInvoicesDeduction: z.string().optional(),
-          unpaidLeaveDeduction: z.string().optional(),
-          grossSalary: z.string(),
-          totalDeductions: z.string(),
-          netSalary: z.string(),
-        })),
+        id: z.number(),
+        status: z.enum(['draft', 'pending', 'approved', 'paid', 'cancelled']),
       }))
       .mutation(async ({ input, ctx }) => {
-        try {
-          const payroll = await db.createPayrollWithDetails(
-            input.branchId,
-            input.branchName,
-            input.year,
-            input.month,
-            input.totalBaseSalary,
-            input.totalOvertime,
-            input.totalIncentives,
-            input.totalDeductions,
-            input.totalNetSalary,
-            input.employeeCount,
-            input.details,
-            ctx.user.id,
-            ctx.user.name || 'موظف'
-          );
-          return { success: true, message: 'تم إنشاء مسيرة الرواتب وإرسالها للمراجعة', payroll };
-        } catch (error: any) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+        const existing = await db.getPayrollById(input.id);
+        if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'المسيرة غير موجودة' });
+        assertPayrollBranchAccess(ctx.user, existing.branchId);
+        await runPayrollAction(() => payrollService.transitionPayrollStatus(input.id, input.status, payrollActor(ctx.user)));
+
+        // إرسال قسائم الرواتب للموظفين عند الاعتماد
+        if (input.status === 'approved') {
+          try {
+            const payroll = await db.getPayrollById(input.id);
+            const rows = await payrollService.getPayrollDetailsWithEmails(input.id);
+            if (payroll && rows.length > 0) {
+              const monthNames = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+              emailNotifications.notifyEmployeesPayslip({
+                payrollId: input.id,
+                payrollNumber: payroll.payrollNumber || `PAY-${input.id}`,
+                branchName: payroll.branchName || 'غير محدد',
+                month: monthNames[payroll.month] || `شهر ${payroll.month}`,
+                year: payroll.year,
+                employees: rows.map(({ detail: d, email }) => ({
+                  employeeId: d.employeeId,
+                  employeeName: d.employeeName || 'موظف',
+                  employeeCode: d.employeeCode,
+                  email: email || undefined,
+                  baseSalary: parseFloat(d.baseSalary || '0'),
+                  overtimeAmount: parseFloat(d.overtimeAmount || '0'),
+                  incentiveAmount: parseFloat(d.incentiveAmount || '0'),
+                  absentDeduction: parseFloat(d.absentDeduction || '0'),
+                  // باقي الخصومات (إجازات، مخالفات، فواتير سالبة، أخرى) مجمعة حتى يطابق الصافي
+                  deductionAmount: Math.round((parseFloat(d.totalDeductions || '0') - parseFloat(d.absentDeduction || '0') - parseFloat(d.advanceDeduction || '0')) * 100) / 100,
+                  advanceDeduction: parseFloat(d.advanceDeduction || '0'),
+                  netSalary: parseFloat(d.netSalary || '0'),
+                  workDays: d.workDays,
+                  absentDays: d.absentDays,
+                })),
+              }).catch(err => payrollLogger.error('خطأ في إرسال قسائم الرواتب', err));
+            }
+          } catch (error) {
+            payrollLogger.error('خطأ في إرسال إشعارات الراتب', error);
+          }
         }
-      }),
-    // جلب الفواتير السالبة والإجازات بدون راتب للفرع في شهر معين
-    getDeductionsPreview: supervisorInputProcedure
-      .input(z.object({
-        branchId: z.number(),
-        year: z.number(),
-        month: z.number(),
-      }))
-      .query(async ({ input }) => {
-        const negativeInvoices = await db.getNegativeInvoicesForMonth(input.branchId, input.year, input.month);
-        const leaves = await db.getApprovedLeavesForBranch(input.branchId, input.year, input.month);
-        
-        // تحويل Map إلى Object للإرسال
-        const invoicesObj: Record<number, { total: number; invoices: any[] }> = {};
-        negativeInvoices.forEach((value, key) => {
-          invoicesObj[key] = value;
-        });
-        
-        const leavesObj: Record<number, { totalDays: number; totalDeduction: number; leaves: any[] }> = {};
-        leaves.forEach((value, key) => {
-          leavesObj[key] = value;
-        });
-        
-        return {
-          negativeInvoices: invoicesObj,
-          leaves: leavesObj,
+
+        const statusNames: Record<string, string> = {
+          draft: 'مسودة',
+          pending: 'تحت الإجراء',
+          approved: 'معتمدة',
+          paid: 'مدفوعة',
+          cancelled: 'ملغاة',
         };
+        return { success: true, message: `تم تحديث الحالة إلى: ${statusNames[input.status]}` };
+      }),
+
+    // حذف مسيرة (غير مدفوعة) مع تحرير السلف والمخالفات المرتبطة بها
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await runPayrollAction(() => payrollService.deletePayrollSafely(input.id));
+        return { success: true, message: 'تم حذف مسيرة الرواتب وتحرير السلف والمخالفات المرتبطة بها' };
       }),
   }),
 
-  // ==================== إعدادات رواتب الموظفين ====================
-  
-  // الحصول على السلف غير المخصومة لفرع
+  // ==================== السلف غير المخصومة (للعرض) ====================
   advancesForPayroll: router({
-    // الحصول على السلف غير المخصومة لفرع
-    getForBranch: supervisorInputProcedure
+    getForBranch: payrollViewProcedure
       .input(z.object({ branchId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        assertPayrollBranchAccess(ctx.user, input.branchId);
         return await db.getUndeductedAdvancesForBranch(input.branchId);
       }),
 
-    // الحصول على السلف غير المخصومة لموظف
-    getForEmployee: supervisorInputProcedure
+    getForEmployee: payrollViewProcedure
       .input(z.object({ employeeId: z.number() }))
       .query(async ({ input }) => {
         return await db.getUndeductedAdvancesForEmployee(input.employeeId);
       }),
+  }),
 
-    // تحديث حالة السلفة كمخصومة (عند اعتماد المسيرة)
-    markAsDeducted: adminProcedure
+  // ==================== مخالفات الموظفين ====================
+  violations: router({
+    list: payrollViewProcedure
       .input(z.object({
-        advanceIds: z.array(z.number()),
-        payrollId: z.number(),
+        branchId: z.number().optional(),
+        employeeId: z.number().optional(),
+        status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(),
+      }).optional())
+      .query(async ({ input, ctx }) => {
+        const branchId = ctx.user.role === 'supervisor' && ctx.user.branchId ? ctx.user.branchId : input?.branchId;
+        return await runPayrollAction(() => payrollService.listViolations({ ...input, branchId }));
+      }),
+
+    create: payrollEditProcedure
+      .input(z.object({
+        employeeId: z.number(),
+        violationDate: z.string().min(1),
+        violationType: z.string().min(1).max(100),
+        description: z.string().max(2000).optional(),
+        amount: z.number().positive().max(100000),
       }))
+      .mutation(async ({ input, ctx }) => {
+        const employee = await db.getEmployeeById(input.employeeId);
+        if (!employee) throw new TRPCError({ code: 'NOT_FOUND', message: 'الموظف غير موجود' });
+        assertPayrollBranchAccess(ctx.user, employee.branchId);
+        const branch = await db.getBranchById(employee.branchId);
+        const result = await runPayrollAction(() => payrollService.createViolation({
+          employeeId: input.employeeId,
+          violationDate: new Date(input.violationDate),
+          violationType: input.violationType,
+          description: input.description,
+          amount: input.amount,
+          actor: payrollActor(ctx.user),
+          branchName: branch ? branch.nameAr || branch.name : null,
+        }));
+        return {
+          success: true,
+          ...result,
+          message: result.status === 'approved' ? 'تم تسجيل المخالفة واعتمادها، وستُخصم في مسيرة الرواتب' : 'تم تسجيل المخالفة وإرسالها للمدير للاعتماد',
+        };
+      }),
+
+    review: managerProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(['approved', 'rejected', 'cancelled']),
+        notes: z.string().max(1000).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        await runPayrollAction(() => payrollService.reviewViolation(input.id, input.status, payrollActor(ctx.user), input.notes));
+        const labels = { approved: 'اعتماد', rejected: 'رفض', cancelled: 'إلغاء' } as const;
+        return { success: true, message: `تم ${labels[input.status]} المخالفة` };
+      }),
+
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
-        for (const advanceId of input.advanceIds) {
-          await db.markAdvanceAsDeducted(advanceId, input.payrollId);
-        }
-        return { success: true, message: `تم تحديث ${input.advanceIds.length} سلفة كمخصومة` };
+        await runPayrollAction(() => payrollService.deleteViolation(input.id));
+        return { success: true, message: 'تم حذف المخالفة' };
       }),
   }),
 
@@ -4221,7 +4258,15 @@ ${discrepancyRows}
     deleteAdvance: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
+        const request = await db.getEmployeeRequestById(input.id);
+        if (!request || request.requestType !== 'advance') {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'السلفة غير موجودة' });
+        }
+        // لا يمكن حذف سلفة مخصومة في مسيرة معتمدة أو مدفوعة
+        await runPayrollAction(() => payrollService.assertSourceNotLocked('advance', input.id));
         await db.deleteEmployeeRequest(input.id);
+        await payrollService.syncOpenPayrollsForEmployee(request.employeeId).catch(error =>
+          payrollLogger.error('خطأ في تحديث مسيرة الرواتب بعد حذف السلفة', error));
         return { success: true, message: 'تم حذف السلفة بنجاح' };
       }),
   }),
@@ -8599,6 +8644,11 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
           throw new TRPCError({ code: 'FORBIDDEN', message: 'غير مصرح لك بالوصول' });
         }
         
+        const existingRequest = await db.getEmployeeRequestById(input.requestId);
+        if (existingRequest?.requestType === 'advance' && existingRequest.status === 'approved' && input.status !== 'approved') {
+          await runPayrollAction(() => payrollService.assertSourceNotLocked('advance', input.requestId));
+        }
+
         const result = await db.updateEmployeeRequestStatus(
           input.requestId,
           input.status,
@@ -8609,6 +8659,12 @@ ${input.employeeContext?.employeeId ? `**الموظف الحالي:** ${input.em
         
         if (!result.success) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: result.error || 'فشل في تحديث الطلب' });
+        }
+
+        // السلف والإجازات تنعكس مباشرة على مسيرة الرواتب المفتوحة للموظف
+        if (existingRequest && (existingRequest.requestType === 'advance' || existingRequest.requestType === 'vacation')) {
+          await payrollService.syncOpenPayrollsForEmployee(existingRequest.employeeId).catch(error =>
+            payrollLogger.error('خطأ في تحديث مسيرة الرواتب بعد تغيير حالة الطلب', error));
         }
         
         return { success: true };
