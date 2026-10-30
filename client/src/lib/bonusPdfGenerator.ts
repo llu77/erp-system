@@ -14,6 +14,7 @@ import {
   getTierColorHex,
   getTierDisplayName,
   isFinalBonusStatus,
+  isLockedBonusStatus,
 } from "@shared/bonusHelpers";
 import { getReadableTextColor } from "./bonusUi";
 
@@ -141,9 +142,10 @@ export function buildBonusReportHtml(request: BonusPdfRequest, options: BonusPdf
     })
     .join("");
 
-  // دليل المستويات (من إعدادات المدير)
+  // دليل المستويات (من إعدادات المدير الحالية): لا يُطبع لفترة مقفلة لأن مبالغها
+  // احتُسبت بمستويات وقت الطلب وقد تكون الإعدادات تغيرت بعدها
   const legend =
-    tiers && tiers.length > 0
+    tiers && tiers.length > 0 && !isLockedBonusStatus(request.status)
       ? `
         <div class="legend">
           <div class="legend-title">مستويات البونص (إيراد الموظف في الفترة)</div>

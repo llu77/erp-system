@@ -10668,8 +10668,9 @@ export async function getVouchersForReport(filters: VoucherReportFilters): Promi
       },
     };
   } catch (error) {
+    // فشل القراءة يُرفع للمستدعي حتى لا يظهر التقرير فارغاً كأنه لا توجد سندات
     console.error('Error getting vouchers for report:', error);
-    return null;
+    throw new Error('تعذر تحميل تقرير السندات من قاعدة البيانات');
   }
 }
 

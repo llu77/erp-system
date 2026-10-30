@@ -71,6 +71,18 @@ function formatDate(value: Date | string | null | undefined): string {
   return format(new Date(value), "d/M/yyyy", { locale: ar });
 }
 
+// فشل التحميل يُعرض كخطأ مع إعادة المحاولة، لا كقائمة فارغة
+function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="text-center py-8 space-y-3">
+      <p className="text-sm text-destructive">تعذر التحميل: {message}</p>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        إعادة المحاولة
+      </Button>
+    </div>
+  );
+}
+
 export default function Bonuses() {
   const { user, loading: authLoading } = useAuth();
   const isMobile = useIsMobile();
@@ -97,7 +109,12 @@ export default function Bonuses() {
   // ==================== الفرع ====================
 
   // قائمة الفروع لمن يمكنه اختيار الفرع (مشرف الفرع مقيد بفرعه)
-  const { data: branches, isLoading: branchesLoading } = trpc.branches.list.useQuery(undefined, { enabled: canPickBranch });
+  const {
+    data: branches,
+    isLoading: branchesLoading,
+    error: branchesError,
+    refetch: refetchBranches,
+  } = trpc.branches.list.useQuery(undefined, { enabled: canPickBranch });
   const activeBranches = useMemo(() => (branches ?? []).filter(b => b.isActive !== false), [branches]);
   const effectiveBranchId = canPickBranch ? selectedBranchId ?? activeBranches[0]?.id ?? null : user?.branchId ?? null;
   const selectedBranchName = activeBranches.find(b => b.id === effectiveBranchId)?.nameAr;
@@ -324,6 +341,16 @@ export default function Bonuses() {
     );
   }
 
+  if (canPickBranch && branchesError) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <LoadError message={branchesError.message} onRetry={() => refetchBranches()} />
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!effectiveBranchId) {
     return (
       <Card>
@@ -547,7 +574,9 @@ export default function Bonuses() {
           <CardContent>
             {allDiscrepanciesQuery.isLoading ? (
               <Skeleton className="h-64 w-full" />
-            ) : allDiscrepanciesQuery.data && allDiscrepanciesQuery.data.allBranches.length > 0 ? (
+            ) : allDiscrepanciesQuery.error ? (
+              <LoadError message={allDiscrepanciesQuery.error.message} onRetry={() => allDiscrepanciesQuery.refetch()} />
+            ) : allDiscrepanciesQuery.data &&allDiscrepanciesQuery.data.allBranches.length > 0 ? (
               <div className="space-y-6">
                 <div className={`grid gap-3 ${isMobile ? "grid-cols-1" : "grid-cols-3"}`}>
                   <div className="bg-background rounded-lg p-4 border">
@@ -934,7 +963,9 @@ export default function Bonuses() {
           <CardContent>
             {auditQuery.isLoading ? (
               <Skeleton className="h-48 w-full" />
-            ) : auditQuery.data && auditQuery.data.length > 0 ? (
+            ) : auditQuery.error ? (
+              <LoadError message={auditQuery.error.message} onRetry={() => auditQuery.refetch()} />
+            ) : auditQuery.data &&auditQuery.data.length > 0 ? (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -991,7 +1022,9 @@ export default function Bonuses() {
         <CardContent>
           {historyQuery.isLoading ? (
             <Skeleton className="h-48 w-full" />
-          ) : historyQuery.data && historyQuery.data.length > 0 ? (
+          ) : historyQuery.error ? (
+            <LoadError message={historyQuery.error.message} onRetry={() => historyQuery.refetch()} />
+          ) : historyQuery.data &&historyQuery.data.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>

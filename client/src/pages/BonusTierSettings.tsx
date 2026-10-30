@@ -120,7 +120,9 @@ export default function BonusTierSettings() {
 
   const saveMutation = trpc.bonuses.saveTiers.useMutation({
     onSuccess: async (result) => {
-      toast.success(result.message);
+      // الحفظ نجح لكن إعادة الاحتساب فشلت: تنبيه لا رسالة نجاح
+      if (result.recalculationError) toast.warning(result.recalculationError);
+      else toast.success(result.message);
       if (result.recalculation && result.recalculation.failed > 0) {
         toast.warning(`تعذرت إعادة احتساب ${result.recalculation.failed} فترة - يمكن إعادة احتسابها من صفحة البونص`);
       }
@@ -132,6 +134,9 @@ export default function BonusTierSettings() {
     },
     onError: (error) => {
       toast.error(error.message || "فشل حفظ المستويات");
+      // قد يكون مدير آخر غيّر المستويات: نعرض الحالة الفعلية المحفوظة
+      void utils.bonuses.getTiers.invalidate();
+      void utils.bonuses.getTierAuditLogs.invalidate();
     },
   });
 

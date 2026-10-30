@@ -1124,6 +1124,10 @@ interface VoucherReportPDFData {
     draftAmount: number;
     approvedAmount: number;
     paidAmount: number;
+    receiptCount?: number;
+    receiptAmount?: number;
+    paymentCount?: number;
+    paymentAmount?: number;
   };
   filters: {
     startDate: string;
@@ -1578,11 +1582,32 @@ export async function generateVouchersReportPDF(data: VoucherReportPDFData): Pro
     
     <!-- بطاقات الإحصائيات -->
     <div class="stats-grid">
+      ${
+        // عند عرض النوعين معاً: المقبوضات والمصروفات منفصلة مع الصافي، بدلاً من جمعهما في رقم واحد
+        (data.filters.voucherType ?? 'all') === 'all'
+          ? `
+      <div class="stat-card primary">
+        <div class="stat-label">سندات القبض (مقبوضات)</div>
+        <div class="stat-value">${data.statistics.receiptCount ?? 0}</div>
+        <div class="stat-amount">${formatCurrencyLocal(data.statistics.receiptAmount ?? 0)}</div>
+      </div>
+      <div class="stat-card primary">
+        <div class="stat-label">سندات الصرف (مصروفات)</div>
+        <div class="stat-value">${data.statistics.paymentCount ?? 0}</div>
+        <div class="stat-amount">${formatCurrencyLocal(data.statistics.paymentAmount ?? 0)}</div>
+      </div>
+      <div class="stat-card primary">
+        <div class="stat-label">الصافي (مقبوضات - مصروفات)</div>
+        <div class="stat-value">&nbsp;</div>
+        <div class="stat-amount">${formatCurrencyLocal((data.statistics.receiptAmount ?? 0) - (data.statistics.paymentAmount ?? 0))}</div>
+      </div>`
+          : `
       <div class="stat-card primary">
         <div class="stat-label">إجمالي السندات</div>
         <div class="stat-value">${data.statistics.totalCount}</div>
         <div class="stat-amount">${formatCurrencyLocal(data.statistics.totalAmount)}</div>
-      </div>
+      </div>`
+      }
       <div class="stat-card">
         <div class="stat-label">المسودات</div>
         <div class="stat-value">${data.statistics.draftCount}</div>

@@ -69,14 +69,25 @@ describe("buildBonusReportHtml", () => {
     expect(html).not.toContain("<td class=\"name-cell\">أحمد");
   });
 
-  it("يعرض دليل المستويات من الإعدادات", () => {
-    const html = buildBonusReportHtml(makeRequest("approved"), {
-      tiers: [
-        { tierKey: "tier_1", tierName: "البرونزي", minRevenue: 1450, maxRevenue: 1749.99, bonusAmount: 35, color: "orange" },
-        { tierKey: "tier_2", tierName: "الذهبي", minRevenue: 1750, maxRevenue: null, bonusAmount: 55, color: "yellow" },
-      ],
-    });
+  const legendTiers = [
+    { tierKey: "tier_1", tierName: "البرونزي", minRevenue: 1450, maxRevenue: 1749.99, bonusAmount: 35, color: "orange" },
+    { tierKey: "tier_2", tierName: "الذهبي", minRevenue: 1750, maxRevenue: null, bonusAmount: 55, color: "yellow" },
+  ];
+
+  it("يعرض دليل المستويات من الإعدادات لفترة غير مقفلة", () => {
+    const html = buildBonusReportHtml(makeRequest("pending"), { tiers: legendTiers });
+    expect(html).toContain('class="legend"');
     expect(html).toContain("1450 - 1749.99");
     expect(html).toContain("1750 فأكثر");
+  });
+
+  it("لا يعرض المستويات الحالية لفترة مقفلة (احتُسبت بمستويات وقتها)", () => {
+    for (const status of ["requested", "approved", "paid"]) {
+      const html = buildBonusReportHtml(makeRequest(status), { tiers: legendTiers });
+      expect(html).not.toContain('class="legend"');
+      expect(html).not.toContain("1750 فأكثر");
+      // أسماء المستويات المحفوظة وقت الاحتساب تبقى في الجدول
+      expect(html).toContain("الذهبي");
+    }
   });
 });

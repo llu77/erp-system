@@ -121,7 +121,7 @@ function bi(ar: string, en: string): string {
   return `<span class="ar">${ar}</span><span class="sep"> / </span><span class="en">${en}</span>`;
 }
 
-function textOrDash(value: unknown): string {
+function textOrBlank(value: unknown): string {
   const s = value === null || value === undefined ? "" : String(value).trim();
   return s ? escapeHtml(s) : "&nbsp;";
 }
@@ -196,17 +196,17 @@ function renderPayment(v: VoucherTemplateData): string {
         ${box(used.has("bank_transfer"))}
         <span class="pm-label">${bi(PAYMENT_METHOD_LABELS.bank_transfer.ar, PAYMENT_METHOD_LABELS.bank_transfer.en)}</span>
         ${amountCell("bank_transfer")}
-        <span class="pm-detail">${bi("البنك", "Bank")}: <b>${textOrDash(used.has("bank_transfer") ? v.bankName : "")}</b></span>
-        <span class="pm-detail">${bi("رقم المرجع / العملية", "Ref. / Txn ID")}: <b>${textOrDash(used.has("bank_transfer") ? v.bankReference : "")}</b></span>
+        <span class="pm-detail">${bi("البنك", "Bank")}: <b>${textOrBlank(used.has("bank_transfer") ? v.bankName : "")}</b></span>
+        <span class="pm-detail">${bi("رقم المرجع / العملية", "Ref. / Txn ID")}: <b>${textOrBlank(used.has("bank_transfer") ? v.bankReference : "")}</b></span>
       </div>`);
   rows.push(`
       <div class="pm-row">
         ${box(used.has("check"))}
         <span class="pm-label">${bi(PAYMENT_METHOD_LABELS.check.ar, PAYMENT_METHOD_LABELS.check.en)}</span>
         ${amountCell("check")}
-        <span class="pm-detail">${bi("رقم الشيك", "Cheque No.")}: <b>${textOrDash(used.has("check") ? v.checkNumber : "")}</b></span>
+        <span class="pm-detail">${bi("رقم الشيك", "Cheque No.")}: <b>${textOrBlank(used.has("check") ? v.checkNumber : "")}</b></span>
         <span class="pm-detail">${bi("التاريخ", "Date")}: <b>${used.has("check") && v.checkDate ? escapeHtml(formatVoucherDate(v.checkDate)) : "&nbsp;"}</b></span>
-        <span class="pm-detail">${bi("البنك", "Bank")}: <b>${textOrDash(used.has("check") ? (v.checkBank || v.bankName) : "")}</b></span>
+        <span class="pm-detail">${bi("البنك", "Bank")}: <b>${textOrBlank(used.has("check") ? v.checkBank : "")}</b></span>
       </div>`);
   for (const other of ["credit_card", "other"] as const) {
     if (used.has(other)) {
@@ -259,7 +259,7 @@ function renderSignatures(v: VoucherTemplateData, type: VoucherType, assets: Ret
         <div class="sig-title">${bi("المحاسب / المُعِد", "Prepared By")}</div>
         <div class="sig-area"></div>
         <div class="sig-line"></div>
-        <div class="sig-name">${textOrDash(v.createdByName)}</div>
+        <div class="sig-name">${textOrBlank(v.createdByName)}</div>
         <div class="sig-name-en">${v.createdAt ? escapeHtml(formatVoucherDateTime(v.createdAt)) : "&nbsp;"}</div>
       </div>`;
 
@@ -487,14 +487,14 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
 
       <div class="meta-row">
         <div class="meta-cell"><div class="lbl">${bi("التاريخ", "Date")}</div><div class="val">${escapeHtml(formatVoucherDate(v.voucherDate))}</div></div>
-        <div class="meta-cell"><div class="lbl">${bi("الفرع", "Branch")}</div><div class="val">${textOrDash(v.branchName)}</div></div>
+        <div class="meta-cell"><div class="lbl">${bi("الفرع", "Branch")}</div><div class="val">${textOrBlank(v.branchName)}</div></div>
         ${period ? `<div class="meta-cell"><div class="lbl">${bi("الفترة", "Period")}</div><div class="val">${escapeHtml(period)}</div></div>` : ""}
         <div class="meta-cell"><div class="lbl">${bi("الحالة", "Status")}</div><div class="val"><span class="status-badge status-${escapeHtml(status)}">${escapeHtml(statusLabel.ar)}</span></div></div>
       </div>
 
       <div class="field">
         <div class="lbl">${bi(titles.partyAr, titles.partyEn)}:</div>
-        <div class="fill">${textOrDash(v.partyName || (type === "payment" ? v.payeeName : ""))}</div>
+        <div class="fill">${textOrBlank(v.partyName || (type === "payment" ? v.payeeName : ""))}</div>
       </div>
       ${showReceivedBy ? `
       <div class="field">
@@ -507,7 +507,7 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
       </div>
       <div class="field">
         <div class="lbl">${bi("وذلك عن", "Being for")}:</div>
-        <div class="fill">${textOrDash(purpose)}</div>
+        <div class="fill">${textOrBlank(purpose)}</div>
       </div>
 
       ${renderItems(v)}
@@ -522,7 +522,7 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
 
       ${status === "cancelled" ? `
       <div class="cancel-box">
-        <b>${bi("سبب الإلغاء", "Cancellation Reason")}:</b> ${textOrDash(v.cancellationReason)}
+        <b>${bi("سبب الإلغاء", "Cancellation Reason")}:</b> ${textOrBlank(v.cancellationReason)}
         ${v.cancelledByName ? ` &nbsp;|&nbsp; ${bi("ألغي بواسطة", "Cancelled by")}: ${escapeHtml(v.cancelledByName)}` : ""}
         ${v.cancelledAt ? ` &nbsp;|&nbsp; ${escapeHtml(formatVoucherDateTime(v.cancelledAt))}` : ""}
       </div>` : ""}
@@ -530,7 +530,7 @@ export function renderVoucherHtml(v: VoucherTemplateData, options: VoucherTempla
       ${renderSignatures(v, type, assets)}
 
       <div class="footer">
-        <span>${bi("أُعد بواسطة", "Prepared by")}: ${textOrDash(v.createdByName)}</span>
+        <span>${bi("أُعد بواسطة", "Prepared by")}: ${textOrBlank(v.createdByName)}</span>
         <span>${bi("تاريخ الطباعة", "Printed")}: ${escapeHtml(formatVoucherDateTime(options.printedAt ?? new Date()))}</span>
         <span>${escapeHtml(company.name)} - ${escapeHtml(titles.ar)}</span>
       </div>

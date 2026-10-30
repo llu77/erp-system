@@ -84,7 +84,7 @@ export default function VouchersReport() {
   const { data: branches } = trpc.branches.list.useQuery();
 
   // جلب بيانات التقرير
-  const { data: reportData, isLoading, refetch } = trpc.receiptVoucher.getMonthlyReport.useQuery({
+  const { data: reportData, isLoading, refetch, error: reportError } = trpc.receiptVoucher.getMonthlyReport.useQuery({
     startDate: filters.startDate,
     endDate: filters.endDate,
     voucherType: filters.voucherType,
@@ -181,7 +181,7 @@ export default function VouchersReport() {
         </div>
         <Button
           onClick={handleGeneratePDF}
-          disabled={generatePDFMutation.isPending || !reportData?.vouchers?.length}
+          disabled={generatePDFMutation.isPending || !!reportError || !reportData?.vouchers?.length}
           className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
         >
           {generatePDFMutation.isPending ? (
@@ -286,8 +286,18 @@ export default function VouchersReport() {
         </CardContent>
       </Card>
 
+      {/* خطأ في تحميل التقرير: لا يُعرض كتقرير فارغ */}
+      {reportError && (
+        <Card className="border-red-500/40 bg-red-500/10">
+          <CardContent className="py-6 flex flex-col items-center gap-3 text-center">
+            <p className="text-red-400">تعذر تحميل تقرير السندات: {reportError.message}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>إعادة المحاولة</Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* بطاقات الإحصائيات */}
-      {isLoading ? (
+      {reportError ? null : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-32 bg-gray-700/50" />
@@ -374,7 +384,9 @@ export default function VouchersReport() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {reportError ? (
+            <p className="text-center py-8 text-red-400">تعذر تحميل السندات</p>
+          ) : isLoading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
                 <Skeleton key={i} className="h-12 bg-gray-700/50" />

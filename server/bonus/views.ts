@@ -37,6 +37,28 @@ function decorateDetail(detail: DetailRow, tiers: BonusTierRule[], showNextTier:
   };
 }
 
+type BonusActorIds = Pick<WeeklyBonus, "requestedBy" | "approvedBy" | "rejectedBy" | "paidBy">;
+
+/** أسماء من طلب واعتمد ورفض وصرف (تظهر في التقرير المطبوع) */
+function bonusActorNames(row: BonusActorIds, userNames: Map<number, string>) {
+  const nameOf = (id: number | null) => (id ? userNames.get(id) ?? null : null);
+  return {
+    requestedByName: nameOf(row.requestedBy),
+    approvedByName: nameOf(row.approvedBy),
+    rejectedByName: nameOf(row.rejectedBy),
+    paidByName: nameOf(row.paidBy),
+  };
+}
+
+async function loadActorNames(row: BonusActorIds): Promise<Map<number, string>> {
+  const ids = Array.from(new Set([row.requestedBy, row.approvedBy, row.rejectedBy, row.paidBy].filter((id): id is number => !!id)));
+  const names = new Map<number, string>();
+  for (const user of await Promise.all(ids.map(id => db.getUserById(id)))) {
+    if (user) names.set(user.id, user.name || user.username || `#${user.id}`);
+  }
+  return names;
+}
+
 /** سجل الفترة (مع معالجة السجلات المكررة القديمة) */
 export async function findWeeklyBonus(branchId: number, year: number, month: number, weekNumber: number): Promise<WeeklyBonus | null> {
   const database = await db.getDb();
@@ -116,6 +138,10 @@ export async function getBonusPeriodView(branchId: number, year: number, month: 
       paidAt: null as Date | null,
       paymentMethod: null as string | null,
       paymentReference: null as string | null,
+      requestedByName: null as string | null,
+      approvedByName: null as string | null,
+      rejectedByName: null as string | null,
+      paidByName: null as string | null,
       details,
       eligibleCount: 0,
       totalEmployees: details.length,
@@ -135,9 +161,11 @@ export async function getBonusPeriodView(branchId: number, year: number, month: 
   const details = rawDetails.map(d => decorateDetail(d, tiers, !locked && !periodEnded));
   const totalRevenue = details.reduce((sum, d) => sum + toNumber(d.weeklyRevenue), 0);
   const requestBlocker = getRequestBlocker(weekly, todayKey);
+  const actorNames = bonusActorNames(weekly, await loadActorNames(weekly));
 
   return {
     ...weekly,
+    ...actorNames,
     exists: true,
     branchName,
     periodLabel,
@@ -174,10 +202,7 @@ export async function enrichWeeklyBonusRows(rows: WeeklyBonus[]) {
       branchName: branchNames.get(row.branchId) || "غير محدد",
       periodLabel: formatBonusPeriodLabel(row.weekNumber, row.month, row.year),
       statusLabel: getBonusStatusLabel(row.status),
-      requestedByName: row.requestedBy ? userNames.get(row.requestedBy) ?? null : null,
-      approvedByName: row.approvedBy ? userNames.get(row.approvedBy) ?? null : null,
-      rejectedByName: row.rejectedBy ? userNames.get(row.rejectedBy) ?? null : null,
-      paidByName: row.paidBy ? userNames.get(row.paidBy) ?? null : null,
+      ...bonusActorNames(row, userNames),
       details: details.map(d => ({ ...d, tierLabel: getTierDisplayName(d.bonusTier, d.tierName) })),
       eligibleCount: details.filter(d => d.isEligible).length,
       totalEmployees: details.length,

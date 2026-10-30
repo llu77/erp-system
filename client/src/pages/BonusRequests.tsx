@@ -79,15 +79,15 @@ export default function BonusRequests() {
   const [exportingPDF, setExportingPDF] = useState<number | null>(null);
 
   // الطلبات بانتظار الموافقة
-  const { data: pendingRequests, isLoading: pendingLoading } = trpc.bonuses.pending.useQuery(undefined, { enabled: isManager });
+  const { data: pendingRequests, isLoading: pendingLoading, error: pendingError, refetch: refetchPending } = trpc.bonuses.pending.useQuery(undefined, { enabled: isManager });
   // الموافق عليها بانتظار الصرف
-  const { data: approvedRequests, isLoading: approvedLoading } = trpc.bonuses.approvedForPayment.useQuery(undefined, { enabled: isManager });
+  const { data: approvedRequests, isLoading: approvedLoading, error: approvedError, refetch: refetchApproved } = trpc.bonuses.approvedForPayment.useQuery(undefined, { enabled: isManager });
   // المصروفة
-  const { data: paidRequests, isLoading: paidLoading } = trpc.bonuses.paidHistory.useQuery({ limit: 50 }, { enabled: isManager });
+  const { data: paidRequests, isLoading: paidLoading, error: paidError, refetch: refetchPaid } = trpc.bonuses.paidHistory.useQuery({ limit: 50 }, { enabled: isManager });
   // السجل الكامل
-  const { data: allRequests, isLoading: allLoading } = trpc.bonuses.all.useQuery({ limit: 100 }, { enabled: isManager });
+  const { data: allRequests, isLoading: allLoading, error: allError, refetch: refetchAll } = trpc.bonuses.all.useQuery({ limit: 100 }, { enabled: isManager });
   // الإحصائيات
-  const { data: bonusStats, isLoading: statsLoading } = trpc.bonuses.stats.useQuery(undefined, { enabled: isManager });
+  const { data: bonusStats, isLoading: statsLoading, error: statsError } = trpc.bonuses.stats.useQuery(undefined, { enabled: isManager });
   // المستويات الحالية (ألوان الشارات ودليل التقرير)
   const { data: tiersData } = trpc.bonuses.getTiers.useQuery(undefined, { enabled: isManager });
   const tiers = tiersData?.tiers ?? null;
@@ -409,8 +409,20 @@ export default function BonusRequests() {
   const renderList = (
     rows: BonusRow[] | undefined,
     loading: boolean,
-    empty: { icon: typeof Gift; title: string; description: string }
+    empty: { icon: typeof Gift; title: string; description: string },
+    failure?: { error: { message: string } | null; retry: () => void }
   ) => {
+    // فشل التحميل لا يُعرض كقائمة فارغة ("تمت معالجة جميع الطلبات")
+    if (failure?.error) {
+      return (
+        <Card className="border-destructive/50">
+          <CardContent className="p-8 text-center space-y-3">
+            <p className="text-destructive">تعذر تحميل البيانات: {failure.error.message}</p>
+            <Button variant="outline" size="sm" onClick={failure.retry}>إعادة المحاولة</Button>
+          </CardContent>
+        </Card>
+      );
+    }
     if (loading) {
       return (
         <div className="space-y-4">
@@ -459,7 +471,7 @@ export default function BonusRequests() {
               <Skeleton className="h-8 w-24" />
             ) : (
               <>
-                <div className="text-2xl font-bold text-green-600">{formatSar(bonusStats?.totalPaidThisMonth)}</div>
+                <div className="text-2xl font-bold text-green-600">{statsError ? 'تعذر التحميل' : formatSar(bonusStats?.totalPaidThisMonth)}</div>
                 <p className="text-xs text-muted-foreground mt-1">{bonusStats?.totalBeneficiariesThisMonth || 0} موظف مستفيد</p>
               </>
             )}
@@ -478,7 +490,7 @@ export default function BonusRequests() {
               <Skeleton className="h-8 w-24" />
             ) : (
               <>
-                <div className="text-2xl font-bold text-blue-600">{formatSar(bonusStats?.totalPaidThisYear)}</div>
+                <div className="text-2xl font-bold text-blue-600">{statsError ? 'تعذر التحميل' : formatSar(bonusStats?.totalPaidThisYear)}</div>
                 <p className="text-xs text-muted-foreground mt-1">{bonusStats?.totalBeneficiariesThisYear || 0} موظف مستفيد</p>
               </>
             )}
@@ -497,7 +509,7 @@ export default function BonusRequests() {
               <Skeleton className="h-8 w-16" />
             ) : (
               <>
-                <div className="text-2xl font-bold text-orange-600">{bonusStats?.pendingRequestsCount || 0}</div>
+                <div className="text-2xl font-bold text-orange-600">{statsError ? '—' : bonusStats?.pendingRequestsCount || 0}</div>
                 <p className="text-xs text-muted-foreground mt-1">بقيمة {formatSar(bonusStats?.pendingRequestsAmount)}</p>
               </>
             )}
@@ -516,7 +528,7 @@ export default function BonusRequests() {
               <Skeleton className="h-8 w-16" />
             ) : (
               <>
-                <div className="text-2xl font-bold text-purple-600">{bonusStats?.approvedNotPaidCount || 0}</div>
+                <div className="text-2xl font-bold text-purple-600">{statsError ? '—' : bonusStats?.approvedNotPaidCount || 0}</div>
                 <p className="text-xs text-muted-foreground mt-1">بقيمة {formatSar(bonusStats?.approvedNotPaidAmount)}</p>
               </>
             )}
@@ -558,7 +570,7 @@ export default function BonusRequests() {
             icon: Gift,
             title: "لا توجد طلبات بانتظار الموافقة",
             description: "جميع طلبات صرف البونص تمت معالجتها",
-          })}
+          }, { error: pendingError, retry: () => refetchPending() })}
         </TabsContent>
 
         <TabsContent value="approved" className="mt-4">
@@ -566,7 +578,7 @@ export default function BonusRequests() {
             icon: Banknote,
             title: "لا يوجد بونص بانتظار الصرف",
             description: "سيظهر هنا البونص بعد الموافقة عليه لتأكيد صرفه",
-          })}
+          }, { error: approvedError, retry: () => refetchApproved() })}
         </TabsContent>
 
         <TabsContent value="paid" className="mt-4">
@@ -574,7 +586,7 @@ export default function BonusRequests() {
             icon: Gift,
             title: "لا يوجد بونص مصروف",
             description: "لم يتم تسجيل صرف أي بونص بعد",
-          })}
+          }, { error: paidError, retry: () => refetchPaid() })}
         </TabsContent>
 
         <TabsContent value="history" className="mt-4">
@@ -582,7 +594,7 @@ export default function BonusRequests() {
             icon: History,
             title: "لا يوجد سجل",
             description: "لم يتم احتساب أي بونص بعد",
-          })}
+          }, { error: allError, retry: () => refetchAll() })}
         </TabsContent>
       </Tabs>
 

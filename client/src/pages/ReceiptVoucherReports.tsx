@@ -6,11 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/lib/trpc';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO, isWithinInterval, isValid } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO, isValid } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Download, FileText, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getVoucherStatusLabel } from '@shared/vouchers';
+import { getVoucherStatusLabel, toVoucherDateString } from '@shared/vouchers';
 
 type PeriodType = 'day' | 'week' | 'month';
 type VoucherTypeFilter = 'all' | 'receipt' | 'payment';
@@ -59,6 +59,11 @@ function safeFormatDate(dateValue: any, formatStr: string = 'yyyy-MM-dd'): strin
   }
 }
 
+/** منع تنفيذ الصيغ عند فتح الملف في Excel: الخلايا التي تبدأ بـ = + - @ أو Tab تُسبق بفاصلة عليا */
+export function neutralizeCsvCell(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 export default function ReceiptVoucherReports() {
   const [periodType, setPeriodType] = useState<PeriodType>('month');
   // التاريخ الافتراضي من أجزاء التاريخ المحلية (toISOString يُزيح اليوم في توقيت +3)
@@ -83,7 +88,7 @@ export default function ReceiptVoucherReports() {
   }, [selectedDate, periodType]);
 
   // الفترة والنوع يُطبقان على الخادم
-  const { data: receipts = [], isLoading } = trpc.receiptVoucher.getAll.useQuery({
+  const { data: receipts = [], isLoading, error: receiptsError, refetch: refetchReceipts } = trpc.receiptVoucher.getAll.useQuery({
     limit: 500,
     offset: 0,
     voucherType,
@@ -114,7 +119,9 @@ export default function ReceiptVoucherReports() {
         return matchesSearch && matchesBranch;
       }
       
-      const inRange = isWithinInterval(receiptDate, dateRange);
+      // مقارنة بمفتاح اليوم (YYYY-MM-DD): تاريخ السند يصل منتصف الليل UTC فيقع خارج نطاق اليوم المحلي في توقيت +3
+      const dayKey = toVoucherDateString(receipt.voucherDate) ?? '';
+      const inRange = dayKey >= format(dateRange.start, 'yyyy-MM-dd') && dayKey <= format(dateRange.end, 'yyyy-MM-dd');
       const matchesSearch = searchTerm === '' || 
         receipt.voucherId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         receipt.payeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -165,7 +172,7 @@ export default function ReceiptVoucherReports() {
     let csv = '\uFEFF'; // BOM للعربية
     csv += headers.join(',') + '\n';
     data.forEach(row => {
-      csv += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + '\n';
+      csv += row.map(cell => `"${neutralizeCsvCell(String(cell)).replace(/"/g, '""')}"`).join(',') + '\n';
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -362,7 +369,7 @@ export default function ReceiptVoucherReports() {
 
       {/* أزرار التصدير */}
       <div className="flex gap-2">
-        <Button onClick={exportToExcel} variant="outline" className="gap-2">
+        <Button onClick={exportToExcel} variant="outline" className="gap-2" disabled={!!receiptsError || isLoading}>
           <Download className="w-4 h-4" />
           تصدير Excel
         </Button>
@@ -370,7 +377,7 @@ export default function ReceiptVoucherReports() {
           onClick={exportToPDF} 
           variant="default" 
           className="gap-2 bg-red-600 hover:bg-red-700"
-          disabled={isGeneratingPDF}
+          disabled={isGeneratingPDF || !!receiptsError || isLoading}
         >
           {isGeneratingPDF ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -392,6 +399,11 @@ export default function ReceiptVoucherReports() {
         <CardContent>
           {isLoading ? (
             <div className="text-center py-8">جاري التحميل...</div>
+          ) : receiptsError ? (
+            <div className="text-center py-8 space-y-3">
+              <p className="text-red-600">تعذر تحميل السندات: {receiptsError.message}</p>
+              <Button variant="outline" size="sm" onClick={() => refetchReceipts()}>إعادة المحاولة</Button>
+            </div>
           ) : filteredReceipts.length === 0 ? (
             <div className="text-center py-8 text-gray-500">لا توجد سندات في الفترة المحددة</div>
           ) : (

@@ -156,6 +156,9 @@ function downloadBase64Pdf(base64: string, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** الحد الأقصى لعدد السندات في القائمة */
+const VOUCHER_LIST_LIMIT = 300;
+
 export default function ReceiptVoucher({ initialType }: { initialType?: VoucherType } = {}) {
   const { user } = useAuth();
   const [location] = useLocation();
@@ -179,6 +182,11 @@ export default function ReceiptVoucher({ initialType }: { initialType?: VoucherT
 
   // الفلاتر
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  // سندات القبض ليس لها حالة "تم الصرف": إعادة الفلتر عند التبديل حتى لا تظهر القائمة فارغة بدون فلتر ظاهر
+  const switchVoucherType = (type: VoucherType) => {
+    setActiveType(type);
+    if (type === 'receipt' && statusFilter === 'paid') setStatusFilter('all');
+  };
   const [branchFilter, setBranchFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -206,7 +214,7 @@ export default function ReceiptVoucher({ initialType }: { initialType?: VoucherT
     startDate: startDate || undefined,
     endDate: endDate || undefined,
     search: searchText.trim() || undefined,
-    limit: 300,
+    limit: VOUCHER_LIST_LIMIT,
     offset: 0,
   };
   const vouchersQuery = trpc.receiptVoucher.getAll.useQuery(listInput);
@@ -443,7 +451,7 @@ export default function ReceiptVoucher({ initialType }: { initialType?: VoucherT
         </div>
 
         {/* التبويبات */}
-        <Tabs value={activeType} onValueChange={value => setActiveType(value as VoucherType)}>
+        <Tabs value={activeType} onValueChange={value => switchVoucherType(value as VoucherType)}>
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="receipt" className="gap-2">
               <ArrowDownCircle className="w-4 h-4" />
@@ -545,6 +553,11 @@ export default function ReceiptVoucher({ initialType }: { initialType?: VoucherT
           <CardHeader>
             <CardTitle>{activeType === 'receipt' ? 'قائمة سندات القبض' : 'قائمة سندات الصرف'}</CardTitle>
             <CardDescription>{vouchers.length} سند</CardDescription>
+            {vouchers.length >= VOUCHER_LIST_LIMIT && (
+              <p className="text-xs text-yellow-600">
+                يُعرض أحدث {VOUCHER_LIST_LIMIT} سند فقط، والملخص أعلاه يشملها وحدها. ضيّق نطاق التاريخ لعرض النتائج كاملة.
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             {vouchersQuery.isLoading ? (
